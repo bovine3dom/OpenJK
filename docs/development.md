@@ -68,6 +68,20 @@ If `~/.local/bin` is on `PATH`, use `openjk-play`. Extra arguments go to the eng
 openjk-play +devmap t2_wedge +exec krildor-route.cfg
 ```
 
+Select desktop resolution with widescreen world FOV adjustment:
+
+```bash
+openjk-play --desktop
+openjk-play --resolution 3840x2160
+```
+
+These options select fullscreen mode. Put display options before engine arguments.
+Append `+set r_fullscreen 0` for a window. New profiles default to desktop mode and
+aspect-adjusted FOV. Existing saved display preferences are retained unless an
+explicit option is supplied. The old video menus do not list desktop/custom 4K
+modes and can reset the resolution when applying a quality preset. HUD/menu
+stretching is separate from world FOV correction.
+
 The updater resolves the server's `build/ready` link once, then transfers that
 fixed package into the same local directory on every run. Rsync uses existing
 files for delta transfers and removes obsolete package files. It does not build
@@ -131,6 +145,17 @@ paths, navigator-selected movement, visibility loss, and probe cleanup. The suit
 uses `krildor-traverse.cfg`, which clears native NPCs in fresh test sessions.
 Use `--case north` or another documented case to repeat one check. Python 3 and
 the existing smoke-test dependencies are required. Run headless cases sequentially.
+
+`bash scripts/test-display-sp.sh` checks an actual 3840x2160 scene and rejects an
+almost-black screenshot. It needs FFprobe as well as FFmpeg, uses four software
+rasterizer threads by default, and allows up to 600 seconds. Builds still use
+one job. Set `LP_NUM_THREADS` to change rasterizer threads. General smoke tests
+default to one thread, 640x480, and 120 seconds; `OJK_SMOKE_DISPLAY`,
+`OJK_SMOKE_WAIT`, and `OJK_SMOKE_TIMEOUT` provide explicit test overrides.
+
+SP Rend2 development progress and build commands are in `rend2-sp.md` in the
+package, or `docs/rend2-sp.md` in the repository. The current development target
+is not a playable SP renderer.
 
 Run `python3 scripts/test-ai-memory.py` for sight, shared-memory, target-switch,
 and search-expiry checks. Use `--case shared-async` to repeat the two-member case.

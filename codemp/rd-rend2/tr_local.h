@@ -29,6 +29,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "qcommon/qcommon.h"
 #include "rd-common/tr_public.h"
 #include "rd-common/tr_common.h"
+#ifdef REND2_SP
+static_assert(REF_API_VERSION == 18, "Rend2 SP requires the SP private header path");
+struct skin_t;
+#endif
 #include "tr_allocator.h"
 #include "tr_extratypes.h"
 #include "tr_extramath.h"
@@ -2148,7 +2152,9 @@ typedef struct model_s {
 	{
 		bmodel_t		*bmodel;			// type == MOD_BRUSH
 		mdvModel_t		*mdv[MD3_MAX_LODS];	// type == MOD_MESH
+#ifndef REND2_SP
 		mdrHeader_t		*mdr;				// type == MOD_MDR
+#endif
 		iqmData_t		*iqm;				// type == MOD_IQM
 		mdxmData_t		*glm;				// type == MOD_MDXM
 		mdxaHeader_t	*gla;				// type == MOD_MDXA
@@ -2905,7 +2911,9 @@ void	GL_Draw( GLenum primitiveType, int firstVertex, int numVertices, int numIns
 extern glconfig_t  glConfig;
 extern glconfigExt_t	glConfigExt;
 
+#ifndef REND2_SP
 typedef _skinSurface_t skinSurface_t;
+#endif
 
 void	RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);
 void	RE_UploadCinematic (int cols, int rows, const byte *data, int client, qboolean dirty);
@@ -3282,7 +3290,9 @@ void R_InitNextFrame( void );
 
 void RE_ClearScene( void );
 void RE_AddRefEntityToScene( const refEntity_t *ent );
+#ifndef REND2_SP
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *miniRefEnt );
+#endif
 void RE_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *verts, int num );
 void RE_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, float g, float b );
@@ -3318,7 +3328,9 @@ ANIMATED MODELS
 */
 
 void R_MDRAddAnimSurfaces( trRefEntity_t *ent, int entityNum );
+#ifndef REND2_SP
 void RB_MDRSurfaceAnim( mdrSurface_t *surface );
+#endif
 qboolean R_LoadIQM (model_t *mod, void *buffer, int filesize, const char *name );
 void R_AddIQMSurfaces( trRefEntity_t *ent, int entityNum );
 void RB_IQMSurfaceAnim( surfaceType_t *surface );

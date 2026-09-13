@@ -36,6 +36,7 @@ void QDECL Com_Printf( const char *msg, ... )
 	ri.Printf(PRINT_ALL, "%s", text);
 }
 
+#ifndef REND2_SP
 void QDECL Com_OPrintf( const char *msg, ... )
 {
 	va_list         argptr;
@@ -47,6 +48,7 @@ void QDECL Com_OPrintf( const char *msg, ... )
 
 	ri.OPrintf("%s", text);
 }
+#endif
 
 void QDECL Com_Error( int level, const char *error, ... )
 {
@@ -61,6 +63,7 @@ void QDECL Com_Error( int level, const char *error, ... )
 }
 
 // HUNK
+#ifndef REND2_SP
 void *Hunk_AllocateTempMemory( int size ) {
 	return ri.Hunk_AllocateTempMemory( size );
 }
@@ -76,15 +79,26 @@ void *Hunk_Alloc( int size, ha_pref preference ) {
 int Hunk_MemoryRemaining( void ) {
 	return ri.Hunk_MemoryRemaining();
 }
+#endif
 
 // ZONE
 void *Z_Malloc( int iSize, memtag_t eTag, qboolean bZeroit, int iAlign ) {
+#ifdef REND2_SP
+	return ri.Malloc( iSize, eTag, bZeroit, iAlign );
+#else
 	return ri.Z_Malloc( iSize, eTag, bZeroit, iAlign );
+#endif
 }
 
+#ifdef REND2_SP
+int Z_Free( void *ptr ) {
+	return ri.Z_Free( ptr );
+}
+#else
 void Z_Free( void *ptr ) {
 	ri.Z_Free( ptr );
 }
+#endif
 
 int Z_MemSize( memtag_t eTag ) {
 	return ri.Z_MemSize( eTag );

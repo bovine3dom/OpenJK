@@ -24,6 +24,12 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_allocator.h"
 #include "glsl_shaders.h"
 
+#ifdef REND2_SP
+static const memtag_t shaderProgramTag = TAG_SHADERTEXT;
+#else
+static const memtag_t shaderProgramTag = TAG_GENERAL;
+#endif
+
 void GLSL_BindNullProgram(void);
 
 const uniformBlockInfo_t uniformBlocksInfo[UNIFORM_BLOCK_COUNT] = {
@@ -756,7 +762,7 @@ bool ShaderProgramBuilder::AddShader( const GPUShaderDesc& shaderDesc, const cha
 bool ShaderProgramBuilder::Build( shaderProgram_t *shaderProgram )
 {
 	const size_t nameBufferSize = strlen(name) + 1;
-	shaderProgram->name = (char *)Z_Malloc(nameBufferSize, TAG_GENERAL);
+	shaderProgram->name = (char *)Z_Malloc(nameBufferSize, shaderProgramTag);
 	Q_strncpyz(shaderProgram->name, name, nameBufferSize);
 
 	shaderProgram->program = program;
@@ -807,9 +813,9 @@ static bool GLSL_LoadGPUShader(
 void GLSL_InitUniforms(shaderProgram_t *program)
 {
 	program->uniforms = (GLint *)Z_Malloc(
-			UNIFORM_COUNT * sizeof(*program->uniforms), TAG_GENERAL);
+			UNIFORM_COUNT * sizeof(*program->uniforms), shaderProgramTag);
 	program->uniformBufferOffsets = (short *)Z_Malloc(
-			UNIFORM_COUNT * sizeof(*program->uniformBufferOffsets), TAG_GENERAL);
+			UNIFORM_COUNT * sizeof(*program->uniformBufferOffsets), shaderProgramTag);
 
 	GLint *uniforms = program->uniforms;
 	int size = 0;
@@ -1386,7 +1392,7 @@ void GLSL_InitSplashScreenShader()
 
 	size_t splashLen = strlen("splash");
 	tr.splashScreenShader.program = program;
-	tr.splashScreenShader.name = (char *)Z_Malloc(splashLen + 1, TAG_GENERAL);
+	tr.splashScreenShader.name = (char *)Z_Malloc(splashLen + 1, shaderProgramTag);
 	Q_strncpyz(tr.splashScreenShader.name, "splash", splashLen + 1);
 }
 
@@ -1515,7 +1521,7 @@ static int GLSL_LoadGPUProgramFogPass(
 		if (i & FOGDEF_USE_VERTEX_ANIMATION)
 		{
 			Q_strcat(extradefines, sizeof(extradefines), "#define USE_VERTEX_ANIMATION\n");
-			attribs |= ATTR_POSITION2 | ATTR_NORMAL2
+			attribs |= ATTR_POSITION2 | ATTR_NORMAL2;
 		}
 #endif // REND2_SP
 		if (i & FOGDEF_USE_SKELETAL_ANIMATION)

@@ -139,15 +139,17 @@ set(MPRend2Libraries ${MPRend2Libraries} ${OPENGL_LIBRARIES})
 
 source_group("renderer"
 	FILES
-	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
+	${Rend2GLSLDir}/glsl_shaders.h
+	${Rend2GLSLDir}/glsl_shaders.cpp)
 set(MPRend2Files
 	${MPRend2Files}
-	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-	${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp)
+	${Rend2GLSLDir}/glsl_shaders.h
+	${Rend2GLSLDir}/glsl_shaders.cpp)
+set_source_files_properties(${Rend2GLSLDir}/glsl_shaders.cpp ${Rend2GLSLDir}/glsl_shaders.h PROPERTIES GENERATED TRUE)
 
 set(MPRend2IncludeDirectories ${MPRend2IncludeDirectories} ${OpenJKLibDir})
 add_library(${MPRend2} SHARED ${MPRend2Files})
+add_dependencies(${MPRend2} rend2_glsl)
 
 if(NOT MSVC)
 	# remove "lib" prefix for .so/.dylib files
@@ -180,41 +182,4 @@ set_property(TARGET ${MPRend2} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILI
 set_target_properties(${MPRend2} PROPERTIES INCLUDE_DIRECTORIES "${MPRend2IncludeDirectories}")
 set_target_properties(${MPRend2} PROPERTIES PROJECT_LABEL "MP Rend2 Renderer")
 target_link_libraries(${MPRend2} ${MPRend2Libraries})
-target_include_directories(${MPRend2} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-
-# GLSL shader file generator
-add_executable(compact_glsl
-	${MPDir}/rd-rend2/glsl/compact.cpp
-	${MPDir}/rd-rend2/tr_allocator.cpp
-	${MPDir}/rd-rend2/tr_allocator.h
-	${MPDir}/rd-rend2/tr_glsl_parse.cpp)
-target_compile_definitions(compact_glsl PRIVATE "GLSL_BUILDTOOL" "NOMINMAX")
-if (NOT WIN32 AND NOT APPLE)
-	target_compile_definitions(compact_glsl PRIVATE "ARCH_STRING=\"${Architecture}\"")
-endif()
-target_include_directories(compact_glsl PRIVATE "${MPRend2IncludeDirectories}")
-if (WIN32 OR APPLE)
-add_custom_command(
-	OUTPUT
-		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
-		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-	COMMAND
-		compact_glsl
-			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
-			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-			${MPRend2GLSLFiles}
-	DEPENDS
-		compact_glsl ${MPRend2GLSLFiles})
-else()
-add_custom_command(
-	OUTPUT
-		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
-		${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-	COMMAND
-		${CMAKE_BINARY_DIR}/compact_glsl
-			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.cpp
-			${CMAKE_CURRENT_BINARY_DIR}/glsl_shaders.h
-			${MPRend2GLSLFiles}
-	DEPENDS
-		compact_glsl ${MPRend2GLSLFiles})
-endif()
+target_include_directories(${MPRend2} PRIVATE ${Rend2GLSLDir})

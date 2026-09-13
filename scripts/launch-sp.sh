@@ -19,6 +19,30 @@ done
 profile=${OJK_PROFILE:-${XDG_DATA_HOME:-$HOME/.local/share}/openjk-dev}
 mkdir -p -- "$profile"
 profile=$(realpath -- "$profile")
+display=()
+if [[ ! -f "$profile/OpenJK/openjk_sp.cfg" && ! -f "$profile/base/openjk_sp.cfg" ]]; then
+    display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+fi
+case ${1:-} in
+    --desktop)
+        display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+        shift
+        ;;
+    --resolution)
+        if [[ ! ${2:-} =~ ^([1-9][0-9]{1,4})x([1-9][0-9]{1,4})$ ]]; then
+            printf 'Use --resolution WIDTHxHEIGHT\n' >&2
+            exit 1
+        fi
+        width=${BASH_REMATCH[1]}
+        height=${BASH_REMATCH[2]}
+        if (( width < 64 || width > 16384 || height < 64 || height > 16384 )); then
+            printf 'Display dimensions must be between 64 and 16384\n' >&2
+            exit 1
+        fi
+        display=(+set r_mode -1 +set r_customwidth "$width" +set r_customheight "$height" +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+        shift 2
+        ;;
+esac
 printf 'Package: %s\nProfile: %s\n' "$package" "$profile"
 if [[ -f "$package/build-id.txt" ]]; then
     cat -- "$package/build-id.txt"
@@ -26,4 +50,4 @@ fi
 cd -- "$package"
 exec ./openjk_sp.x86_64 \
     +set fs_basepath "$package" +set fs_cdpath "$assets" \
-    +set fs_homepath "$profile" +set fs_game OpenJK "$@"
+    +set fs_homepath "$profile" +set fs_game OpenJK "${display[@]}" "$@"

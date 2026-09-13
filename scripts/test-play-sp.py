@@ -205,6 +205,29 @@ class DesktopUpdateTests(unittest.TestCase):
         self.run_play()
         self.assertTrue(self.launch.exists())
 
+    def test_display_defaults_and_explicit_modes(self):
+        self.run_play()
+        args = json.loads(self.launch.read_text())
+        self.assertEqual(args[args.index("r_mode") + 1], "-2")
+        self.assertEqual(args[args.index("cg_fovAspectAdjust") + 1], "1")
+        profile = Path(self.env["OJK_PROFILE"]) / "OpenJK"
+        profile.mkdir()
+        (profile / "openjk_sp.cfg").write_text("saved preferences")
+        self.run_play()
+        self.assertNotIn("r_mode", json.loads(self.launch.read_text()))
+        self.run_play("--resolution", "3840x2160", "+set", "r_fullscreen", "0")
+        args = json.loads(self.launch.read_text())
+        self.assertEqual(args[args.index("r_mode") + 1], "-1")
+        self.assertEqual(args[args.index("r_customwidth") + 1], "3840")
+        self.assertEqual(args[args.index("r_customheight") + 1], "2160")
+        self.assertEqual(args[-3:], ["+set", "r_fullscreen", "0"])
+        self.run_play("--desktop")
+        args = json.loads(self.launch.read_text())
+        self.assertEqual(args[args.index("r_mode") + 1], "-2")
+        self.launch.unlink()
+        self.run_play("--resolution", "0x2160", success=False)
+        self.assertFalse(self.launch.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

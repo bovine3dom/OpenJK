@@ -98,3 +98,17 @@ was needed for the automated checks on the build machine.
 
 Use `roadmap.md` for detailed acceptance checks. Investigate the raster-only Rend2
 port separately after the vanilla build and deployment workflow are reliable.
+
+## Display Follow-up
+
+- [x] Expose desktop and custom resolutions through `openjk-play --desktop` and `--resolution WIDTHxHEIGHT`, with aspect-adjusted world FOV.
+- [x] Render and validate a non-black 3840x2160 screenshot. Keep existing profile settings unless an override is requested.
+- [ ] Replace the legacy resolution menu list and investigate widescreen HUD/menu layout separately.
+
+## Rend2 Port
+
+- [x] Add an opt-in SP-native object target for shared shader, allocator, math, and tangent-space sources, with one shared shader generator.
+- [x] Build the SP objects, MP Rend2, and SP vanilla on Linux with one job.
+- [ ] Adapt scene/entity submission and integrate SP Ghoul2 ownership, animation, collision, and skinning.
+- [ ] Complete the SP renderer interface and resource lifetime, then link and load a real `rdsp-rend2` module.
+- [ ] Verify renderer identity, representative SP maps, visual effects, and performance on the GTX 1080 Ti. Do not add ray tracing.

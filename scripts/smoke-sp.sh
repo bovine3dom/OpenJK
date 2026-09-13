@@ -7,19 +7,26 @@ map=${2:-t1_sour}
 shift "$(( $# > 1 ? 2 : 1 ))"
 [[ "$map" =~ ^[a-zA-Z0-9_]+$ ]] || { printf 'Invalid map name\n' >&2; exit 1; }
 assets=${OJK_ASSETS:-$root/GameData}
+display=${OJK_SMOKE_DISPLAY:-640x480}
+wait_count=${OJK_SMOKE_WAIT:-100}
+timeout_seconds=${OJK_SMOKE_TIMEOUT:-120}
+[[ "$display" =~ ^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$ && "$wait_count" =~ ^[1-9][0-9]{0,3}$ && "$timeout_seconds" =~ ^[1-9][0-9]{0,3}$ ]] || {
+    printf 'Invalid smoke display size, wait count, or timeout\n' >&2
+    exit 1
+}
 output=${OJK_SMOKE_ROOT:-$root/build/smoke}
 mkdir -p -- "$output"
 run=$(mktemp -d "$output/$map.XXXXXXXX")
 printf 'Smoke-test output: %s\n' "$run"
 
 # A fresh profile prevents a stale screenshot from passing a failed run.
-command=(timeout --kill-after=5s 120s xvfb-run -a -s '-screen 0 640x480x24' \
-    env LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1 SDL_AUDIODRIVER=dummy \
+command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run -a -s "-screen 0 ${display}x24" \
+    env LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS="${LP_NUM_THREADS:-1}" SDL_AUDIODRIVER=dummy \
     OJK_PROFILE="$run/profile" bash "$package/launch-sp.sh" "$assets" \
     +safe +set r_fullscreen 0 +set r_mode 3 +set r_swapInterval 0 \
     +set com_maxfps 60 +set s_initsound 0 +set developer 1 \
     +set logfile 2 +devmap "$map" "$@" \
-    +wait 100 +screenshot_png smoke +wait 10 +quit)
+    +wait "$wait_count" +screenshot_png smoke +wait 10 +quit)
 printf '%q ' "${command[@]}" > "$run/command.txt"
 if ! "${command[@]}" > "$run/console.log" 2>&1; then
     printf 'FAIL: process failed or timed out. See %s/console.log\n' "$run" >&2
