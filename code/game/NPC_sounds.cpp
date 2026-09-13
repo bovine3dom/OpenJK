@@ -45,23 +45,28 @@ void NPC_AngerSound (void)
 extern void G_SpeechEvent( gentity_t *self, int event );
 void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 {
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_request ent=%d voice=%d debounce=%d\n", self->s.number, event, speakDebounceTime );
 	if ( !self->NPC )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=no_npc\n", self->s.number, event );
 		return;
 	}
 
 	if ( !self->client || self->client->ps.pm_type >= PM_DEAD )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=no_client_or_dead\n", self->s.number, event );
 		return;
 	}
 
 	if ( self->NPC->blockedSpeechDebounceTime > level.time )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=blocked_debounce\n", self->s.number, event );
 		return;
 	}
 
 	if ( Q3_TaskIDPending( self, TID_CHAN_VOICE ) )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=script_voice\n", self->s.number, event );
 		return;
 	}
 
@@ -74,11 +79,13 @@ void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 			if ( (event >= EV_ANGER1 && event <= EV_VICTORY3)
 				|| (event >= EV_CHASE1 && event <= EV_SUSPICIOUS5) )
 			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=cloaked_combat\n", self->s.number, event );
 				return;
 			}
 
 			if ( event >= EV_GIVEUP1 && event <= EV_SUSPICIOUS5 )
 			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=cloaked_alert\n", self->s.number, event );
 				return;
 			}
 		}
@@ -86,11 +93,13 @@ void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 
 	if ( (self->NPC->scriptFlags&SCF_NO_COMBAT_TALK) && ( (event >= EV_ANGER1 && event <= EV_VICTORY3) || (event >= EV_CHASE1 && event <= EV_SUSPICIOUS5) ) )//(event < EV_FF_1A || event > EV_FF_3C) && (event < EV_RESPOND1 || event > EV_MISSION3) )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=no_combat_talk\n", self->s.number, event );
 		return;
 	}
 
 	if ( (self->NPC->scriptFlags&SCF_NO_ALERT_TALK) && (event >= EV_GIVEUP1 && event <= EV_SUSPICIOUS5) )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=voice_suppress ent=%d voice=%d reason=no_alert_talk\n", self->s.number, event );
 		return;
 	}
 	//FIXME: Also needs to check for teammates. Don't want
@@ -99,6 +108,7 @@ void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime )
 	//NOTE: was losing too many speech events, so we do it directly now, screw networking!
 	//G_AddEvent( self, event, 0 );
 	G_SpeechEvent( self, event );
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=voice_dispatch ent=%d voice=%d\n", self->s.number, event );
 
 	//won't speak again for 5 seconds (unless otherwise specified)
 	self->NPC->blockedSpeechDebounceTime = level.time + ((speakDebounceTime==0) ? 5000 : speakDebounceTime);

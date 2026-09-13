@@ -230,6 +230,7 @@ void AI_InsertGroupMember( AIGroupInfo_t *group, gentity_t *member )
 	{//add him in
 		group->member[group->numGroup++].number = member->s.number;
 		group->numState[member->NPC->squadState]++;
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=group_insert group=%d ent=%d members=%d state=%d\n", (int)(group-level.groups), member->s.number, group->numGroup, member->NPC->squadState );
 	}
 	if ( !group->commander || (member->NPC->rank > group->commander->NPC->rank) )
 	{//keep track of highest rank
@@ -551,6 +552,7 @@ void AI_SetNewGroupCommander( AIGroupInfo_t *group )
 
 void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 {
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=group_delete group=%d ent=%d members_before=%d\n", (int)(group-level.groups), group->member[memberNum].number, group->numGroup );
 	if ( group->commander && group->commander->s.number == group->member[memberNum].number )
 	{
 		group->commander = NULL;
@@ -696,6 +698,10 @@ void AI_GroupUpdateSquadstates( AIGroupInfo_t *group, gentity_t *member, int new
 {
 	if ( !group )
 	{
+		if ( member->NPC->squadState != newSquadState )
+		{
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=state_change group=-1 ent=%d old=%d new=%d\n", member->s.number, member->NPC->squadState, newSquadState );
+		}
 		member->NPC->squadState = newSquadState;
 		return;
 	}
@@ -705,6 +711,10 @@ void AI_GroupUpdateSquadstates( AIGroupInfo_t *group, gentity_t *member, int new
 		if ( group->member[i].number == member->s.number )
 		{
 			group->numState[member->NPC->squadState]--;
+			if ( member->NPC->squadState != newSquadState )
+			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=state_change group=%d ent=%d old=%d new=%d\n", (int)(group-level.groups), member->s.number, member->NPC->squadState, newSquadState );
+			}
 			member->NPC->squadState = newSquadState;
 			group->numState[member->NPC->squadState]++;
 			return;

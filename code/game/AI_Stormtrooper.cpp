@@ -207,6 +207,7 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 {
 	if ( Q_flrand(0.0f, 1.0f) < failChance )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=speech_suppress ent=%d speech=%d reason=chance\n", self->s.number, speechType );
 		return;
 	}
 
@@ -216,6 +217,7 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 		{//group AI speech debounce timer
 			if ( self->NPC->group->speechDebounceTime > level.time )
 			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=speech_suppress ent=%d speech=%d reason=group_debounce\n", self->s.number, speechType );
 				return;
 			}
 			/*
@@ -230,11 +232,13 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 		}
 		else if ( !TIMER_Done( self, "chatter" ) )
 		{//personal timer
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=speech_suppress ent=%d speech=%d reason=chatter\n", self->s.number, speechType );
 			return;
 		}
 		else if ( groupSpeechDebounceTime[self->client->playerTeam] > level.time )
 		{//for those not in group AI
 			//FIXME: let certain speech types interrupt others?  Let closer NPCs interrupt farther away ones?
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=speech_suppress ent=%d speech=%d reason=team_debounce\n", self->s.number, speechType );
 			return;
 		}
 	}
@@ -252,6 +256,7 @@ static void ST_Speech( gentity_t *self, int speechType, float failChance )
 
 	if ( self->NPC->blockedSpeechDebounceTime > level.time )
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=speech_suppress ent=%d speech=%d reason=blocked_debounce\n", self->s.number, speechType );
 		return;
 	}
 
@@ -390,10 +395,12 @@ void NPC_ST_SayMovementSpeech( void )
 		NPCInfo->group->commander->client->NPC_class == CLASS_IMPERIAL &&
 		!Q_irand( 0, 3 ) )
 	{//imperial (commander) gives the order
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=movement_speech_consume ent=%d speaker=%d speech=%d chance=%.2f\n", NPC->s.number, NPCInfo->group->commander->s.number, NPCInfo->movementSpeech, NPCInfo->movementSpeechChance );
 		ST_Speech( NPCInfo->group->commander, NPCInfo->movementSpeech, NPCInfo->movementSpeechChance );
 	}
 	else
 	{//really don't want to say this unless we can actually get there...
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=movement_speech_consume ent=%d speaker=%d speech=%d chance=%.2f\n", NPC->s.number, NPC->s.number, NPCInfo->movementSpeech, NPCInfo->movementSpeechChance );
 		ST_Speech( NPC, NPCInfo->movementSpeech, NPCInfo->movementSpeechChance );
 	}
 
@@ -403,6 +410,7 @@ void NPC_ST_SayMovementSpeech( void )
 
 void NPC_ST_StoreMovementSpeech( int speech, float chance )
 {
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=movement_speech_store ent=%d speech=%d chance=%.2f previous=%d\n", NPC->s.number, speech, chance, NPCInfo->movementSpeech );
 	NPCInfo->movementSpeech = speech;
 	NPCInfo->movementSpeechChance = chance;
 }
@@ -419,6 +427,7 @@ static qboolean ST_Move( void )
 	qboolean	moved = NPC_MoveToGoal( qtrue );
 	if (moved==qfalse)
 	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=move_failed ent=%d cp=%d goal=%d\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity ? NPCInfo->goalEntity->s.number : -1 );
 		ST_HoldPosition();
 	}
 
@@ -1413,6 +1422,7 @@ static void ST_CheckMoveState( void )
 			(enemyLOS && (NPCInfo->aiFlags&NPCAI_STOP_AT_LOS) && !Q3_TaskIDPending(NPC, TID_MOVE_NAV))
 			)
 		{//either hit our navgoal or our navgoal was not a crucial (scripted) one (maybe a combat point) and we're scouting and found our enemy
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=goal_complete ent=%d cp=%d goal=%d reason=reached_or_stop_at_los\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity->s.number );
 			int	newSquadState = SQUAD_STAND_AND_SHOOT;
 			//we got where we wanted to go, set timers based on why we were running
 			switch ( NPCInfo->squadState )
@@ -1860,9 +1870,11 @@ void ST_Commander( void )
 	float		avoidDist;
 
 	group->processed = qtrue;
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_pass group=%d ent=%d commander=%d enemy=%d members=%d active=%d async=%d\n", (int)(group-level.groups), NPC->s.number, group->commander ? group->commander->s.number : -1, group->enemy ? group->enemy->s.number : -1, group->numGroup, group->activeMemberNum, d_asynchronousGroupAI->integer );
 
 	if ( group->enemy == NULL || group->enemy->client == NULL )
 	{//hmm, no enemy...?!
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d reason=no_client_enemy\n", (int)(group-level.groups) );
 		return;
 	}
 
@@ -1876,6 +1888,7 @@ void ST_Commander( void )
 
 	if ( group->lastSeenEnemyTime < level.time - 180000 )
 	{//dissolve the group
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=lost_track group=%d enemy=%d action=dissolve source=enemy_current age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), group->enemy->s.number, level.time-group->lastSeenEnemyTime, group->enemy->currentOrigin[0], group->enemy->currentOrigin[1], group->enemy->currentOrigin[2] );
 		ST_Speech( NPC, SPEECH_LOST, 0.0f );
 		group->enemy->waypoint = NAV::GetNearestNode(group->enemy);
 		for ( i = 0; i < group->numGroup; i++ )
@@ -1884,10 +1897,12 @@ void ST_Commander( void )
 			SetNPCGlobals( member );
 			if ( Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
 			{//running somewhere that a script requires us to go, don't break from that
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=dissolve_script_move\n", (int)(group-level.groups), NPC->s.number );
 				continue;
 			}
 			if ( !(NPCInfo->scriptFlags&SCF_CHASE_ENEMIES) )
 			{//not allowed to doMove on my own
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=dissolve_no_chase\n", (int)(group-level.groups), NPC->s.number );
 				continue;
 			}
 			//Lost enemy for three minutes?  go into search mode?
@@ -1960,17 +1975,20 @@ void ST_Commander( void )
 		member = &g_entities[group->member[i].number];
 		if ( !member->enemy )
 		{//don't include guys that aren't angry
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=no_enemy\n", (int)(group-level.groups), member->s.number );
 			continue;
 		}
 		SetNPCGlobals( member );
 
 		if ( !TIMER_Done( NPC, "flee" ) )
 		{//running away
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=flee\n", (int)(group-level.groups), NPC->s.number );
 			continue;
 		}
 
 		if ( Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
 		{//running somewhere that a script requires us to go
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=script_move\n", (int)(group-level.groups), NPC->s.number );
 			continue;
 		}
 
@@ -1979,18 +1997,21 @@ void ST_Commander( void )
 			&& NPCInfo->goalEntity == NPCInfo->tempGoal
 			&& NPCInfo->goalEntity->s.eType == ET_ITEM )
 		{//running to pick up a gun, don't do other logic
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=weapon_pickup\n", (int)(group-level.groups), NPC->s.number );
 			continue;
 		}
 
 
 		if ( !(NPCInfo->scriptFlags&SCF_CHASE_ENEMIES) )
 		{//not allowed to do combat-movement
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=no_chase\n", (int)(group-level.groups), NPC->s.number );
 			continue;
 		}
 
 
 		if ( NPC->client->ps.weapon == WP_NONE )
 		{//weaponless, should be hiding
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=weaponless\n", (int)(group-level.groups), NPC->s.number );
 			if ( NPCInfo->goalEntity == NULL || NPCInfo->goalEntity->enemy == NULL || NPCInfo->goalEntity->enemy->s.eType != ET_ITEM )
 			{//not running after a pickup
 				if ( TIMER_Done( NPC, "hideTime" ) || (DistanceSquared( group->enemy->currentOrigin, NPC->currentOrigin ) < 65536 && NPC_ClearLOS( NPC->enemy )) )
@@ -2004,12 +2025,14 @@ void ST_Commander( void )
 
 		if (enemyLost && NAV::InSameRegion(NPC, NPC->enemy->currentOrigin))
 		{
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=lost_track group=%d ent=%d enemy=%d action=track source=enemy_current age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), NPC->s.number, NPC->enemy->s.number, level.time-group->lastSeenEnemyTime, NPC->enemy->currentOrigin[0], NPC->enemy->currentOrigin[1], NPC->enemy->currentOrigin[2] );
 			ST_TrackEnemy( NPC, NPC->enemy->currentOrigin );
 			continue;
 		}
 
 		if (!NPC->enemy)
 		{
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=enemy_cleared\n", (int)(group-level.groups), NPC->s.number );
 			continue;
 		}
 
@@ -2063,6 +2086,7 @@ void ST_Commander( void )
 			}
 			if (fled)
 			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=grenade\n", (int)(group-level.groups), NPC->s.number );
 				continue;
 			}
 		}
@@ -2135,7 +2159,9 @@ void ST_Commander( void )
 			//now get a combat point
 			if ( cp == -1 )
 			{//may have had sone set above
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_request group=%d ent=%d flags=%d avoid=%.1f failed_cp=%d source=self_current\n", (int)(group-level.groups), NPC->s.number, cpFlags, avoidDist, NPCInfo->lastFailedCombatPoint );
 				cp = NPC_FindCombatPointRetry( NPC->currentOrigin, NPC->currentOrigin, NPC->currentOrigin, &cpFlags, avoidDist, NPCInfo->lastFailedCombatPoint );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_result group=%d ent=%d cp=%d flags=%d\n", (int)(group-level.groups), NPC->s.number, cp, cpFlags );
 			}
 
 			//see if we got a valid one

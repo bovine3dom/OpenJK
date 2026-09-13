@@ -3063,6 +3063,7 @@ qboolean NPC_ReserveCombatPoint( int combatPointID )
 
 	//Reserve it
 	level.combatPoints[combatPointID].occupied = qtrue;
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_reserve cp=%d\n", combatPointID );
 
 	return qtrue;
 }
@@ -3089,6 +3090,7 @@ qboolean NPC_FreeCombatPoint( int combatPointID, qboolean failed )
 
 	//Free it
 	level.combatPoints[combatPointID].occupied = qfalse;
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_release cp=%d failed=%d\n", combatPointID, failed );
 
 	return qtrue;
 }
