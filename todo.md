@@ -99,6 +99,12 @@ was needed for the automated checks on the build machine.
 Use `roadmap.md` for detailed acceptance checks. Investigate the raster-only Rend2
 port separately after the vanilla build and deployment workflow are reliable.
 
+## Door Follow-up
+
+- [x] Reproduce the Kril'dor hangar controller-selection defect and allow eligible alternate NPC triggers.
+- [x] Verify hangar traversal both ways, an ordinary automatic door, a locked control, and remembered-target approach with restored contact.
+- [ ] Test additional player-use, Force-use, inactive, team/named-NPC, and one-sided trigger combinations. Investigate threshold attachment if other doors still fail.
+
 ## Display Follow-up
 
 - [x] Expose desktop and custom resolutions through `openjk-play --desktop` and `--resolution WIDTHxHEIGHT`, with aspect-adjusted world FOV.

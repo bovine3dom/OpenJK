@@ -16,6 +16,8 @@ def main():
     parser.add_argument("map", help="Map name without extension")
     parser.add_argument("--assets", type=pathlib.Path, default=pathlib.Path("GameData/base"))
     parser.add_argument("--classes", default="", help="Class-name regular expression; omit for counts only")
+    parser.add_argument("--match", default="", help="Regular expression to match any entity value")
+    parser.add_argument("--bounds", action="store_true", help="Include brush-model bounds in model-local coordinates")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_]+", args.map):
         parser.error("Invalid map name")
@@ -59,10 +61,23 @@ def main():
         "entity_source": source + (":external .ent" if "ent" in found else ":BSP lump 0"),
         "classes": dict(sorted(collections.Counter(e.get("classname", "") for e in entities).items())),
     }
-    if args.classes:
+    if args.classes or args.match:
         pattern = re.compile(args.classes, re.IGNORECASE)
-        result["entities"] = [dict(bsp_entity=i, **e) for i, e in enumerate(entities)
-                              if pattern.search(e.get("classname", ""))]
+        match = re.compile(args.match, re.IGNORECASE)
+        selected: list[dict] = [dict(bsp_entity=i, **e) for i, e in enumerate(entities)
+                                if pattern.search(e.get("classname", "")) and any(match.search(v) for v in e.values())]
+        result["entities"] = selected
+        if args.bounds:
+            offset, length = struct.unpack_from("<ii", bsp, 8 + 7 * 8)
+            if offset < 152 or length < 0 or length % 40 or offset + length > len(bsp):
+                parser.error("Invalid model lump range")
+            for entity in selected:
+                model = entity.get("model", "")
+                if re.fullmatch(r"\*\d+", model):
+                    index = int(model[1:])
+                    if index >= length // 40:
+                        parser.error("Invalid brush model index")
+                    entity["model_bounds"] = struct.unpack_from("<6f", bsp, offset + index * 40)
     print(json.dumps(result, indent=2))
 
 

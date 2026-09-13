@@ -596,34 +596,58 @@ public:
 					//---------------------------------------------------------------
 					if (Closed)
 					{
-						gentity_t*	owner	= &g_entities[Edge.mOwnerNum];
-						if (owner)
+						if (ent->svFlags & SVF_INACTIVE)
+							return false;
+						const auto canUse = [this, ent](gentity_t *controller)
 						{
-							// Check To See If The Owner Is Inactive Or Locked, Or Unavailable To The NPC
-							//----------------------------------------------------------------------------
-							if ((owner->svFlags & SVF_INACTIVE) ||
-								(owner==ent && (owner->spawnflags & (MOVER_PLAYER_USE|MOVER_FORCE_ACTIVATE|MOVER_LOCKED))) ||
-								(owner!=ent && (owner->spawnflags & (1 /*PLAYERONLY*/|4 /*USE_BOTTON*/))))
-							{
+							if (!controller || !controller->inuse || (controller->svFlags & SVF_INACTIVE))
 								return false;
-							}
-
-
-							// Look For A Key
-							//----------------
-							if (mActor!=0 && (owner->spawnflags & MOVER_GOODIE))
+							if (controller == ent)
+								return !(ent->spawnflags & (MOVER_PLAYER_USE|MOVER_FORCE_ACTIVATE|MOVER_LOCKED));
+							if (!Q_stricmp(controller->classname, "trigger_door"))
+								return controller->owner == ent && !(ent->spawnflags & MOVER_LOCKED);
+							if ((Q_stricmp(controller->classname, "trigger_multiple") && Q_stricmp(controller->classname, "trigger_once"))
+								|| (controller->spawnflags & (1 /*PLAYERONLY*/|4 /*USE_BUTTON*/|8 /*FIRE_BUTTON*/)))
+								return false;
+							if (!ent->targetname || ((!controller->target || Q_stricmp(controller->target, ent->targetname))
+								&& (!controller->target2 || Q_stricmp(controller->target2, ent->targetname))))
+								return false;
+							if (controller->noDamageTeam && (!mActor || !mActor->client || mActor->client->playerTeam != controller->noDamageTeam))
+								return false;
+							if (controller->NPC_targetname && controller->NPC_targetname[0]
+								&& (!mActor || !mActor->script_targetname || Q_stricmp(controller->NPC_targetname, mActor->script_targetname)))
+								return false;
+							return !(controller->spawnflags & 16 /*NPCONLY*/) || !mActor || mActor->NPC != NULL;
+						};
+						gentity_t *owner = Edge.mOwnerNum < ENTITYNUM_WORLD && g_entities[Edge.mOwnerNum].inuse
+							? &g_entities[Edge.mOwnerNum] : NULL;
+						if (!canUse(owner))
+						{
+							// A door can have separate player and NPC triggers on each side.
+							owner = NULL;
+							if (ent->targetname)
 							{
-								int key = INV_GoodieKeyCheck(mActor);
-								if (!key)
+								const int fields[] = {FOFS(target), FOFS(target2)};
+								for (int field : fields)
 								{
-									return false;
+									gentity_t *candidate = NULL;
+									while ((candidate = G_Find(candidate, field, ent->targetname)) != NULL)
+									{
+										if (canUse(candidate))
+										{
+											owner = candidate;
+											break;
+										}
+									}
+									if (owner)
+										break;
 								}
 							}
+							if (!owner)
+								return false;
+							Edge.mOwnerNum = owner->s.number;
 						}
-
-						// No Owner?  This Must Be A Scripted Door Or Other Contraption
-						//--------------------------------------------------------------
-						else
+						if (mActor && (ent->spawnflags & MOVER_GOODIE) && !INV_GoodieKeyCheck(mActor))
 						{
 							return false;
 						}
@@ -5561,7 +5585,3 @@ void	ClearAllNavStructures(void)
 	}
 	mEntEdgeMap.clear();
 }
-
-
-
-

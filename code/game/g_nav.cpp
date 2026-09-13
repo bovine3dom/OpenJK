@@ -682,6 +682,21 @@ void Svcmd_Nav_f( void )
 	{
 		NAV::DumpLocalGraph(g_entities[0].currentOrigin);
 	}
+	else if ( Q_stricmp( cmd, "doors" ) == 0 )
+	{
+		for (int i = 0; i < ENTITYNUM_WORLD; ++i)
+		{
+			gentity_t *door = &g_entities[i];
+			if (!door->inuse || !G_EntIsDoor(i))
+				continue;
+			if (gi.argc() > 2 && (!door->targetname || Q_stricmp(door->targetname, gi.argv(2))))
+				continue;
+			bool closed = (door->spawnflags & 1) ? door->moverState == MOVER_POS2 : door->moverState == MOVER_POS1;
+			gi.Printf("navdoor entity=%d name=%s model=%s flags=%d inactive=%d closed=%d state=%d\n", i,
+				door->targetname ? door->targetname : "-", door->model ? door->model : "-",
+				door->spawnflags, !!(door->svFlags & SVF_INACTIVE), closed, door->moverState);
+		}
+	}
 	else
 	{
 		//Print the available commands
@@ -692,6 +707,7 @@ void Svcmd_Nav_f( void )
 		Com_Printf("gotonum\n ---\n" );
 		Com_Printf("totals\n ---\n" );
 		Com_Printf("dump - print navigation within 1200 units of the player\n" );
+		Com_Printf("doors [targetname] - print door activation state\n" );
 		Com_Printf("set\n - testgoal\n---\n" );
 	}
 }

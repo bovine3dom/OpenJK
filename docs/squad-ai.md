@@ -102,9 +102,10 @@ python3 scripts/test-ai-memory.py
 python3 scripts/test-ai-memory.py --case shared-async
 ```
 
-Seven cases pass: single-member loss/reacquisition in both commander modes,
+Eight cases pass: single-member loss/reacquisition in both commander modes,
 unseen enemy assignment, search expiry, shared observations in both modes, and
-target switching. The tests check simulation timestamps, positions, group
+target switching, plus remembered-target pursuit through an automatic-door
+approach. The tests check simulation timestamps, positions, group
 identity, and movement goals, not just event presence.
 
 The `ai-memory*.cfg` fixtures use the cleared Kril'dor room. They spawn named
@@ -135,3 +136,7 @@ Controls refuse pending scripted movement. Do not use these fixtures as ordinary
 campaign sessions. Rejected alert acquisition, blocked-shot sight, no-route holds,
 merge ordering, and competing combat-point reuse still need dedicated runtime
 cases. The broader campaign also needs manual regression testing.
+
+The door case requires the NPC to approach and reopen a closed door after contact
+loss. It may stop once a firing line is restored. See `door-navigation.md` for
+separate tests that require full physical traversal and preserve a locked control.

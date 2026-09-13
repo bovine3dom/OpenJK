@@ -27,7 +27,8 @@ def main():
              "search": ("ai-memory-search.cfg", 1),
              "shared-async": ("ai-memory-shared.cfg", 1),
              "shared-sync": ("ai-memory-shared.cfg", 0),
-             "switch": ("ai-memory-switch.cfg", 1)}
+             "switch": ("ai-memory-switch.cfg", 1),
+             "door": ("ai-memory-door.cfg", 1)}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--case", choices=cases)
@@ -55,7 +56,22 @@ def main():
                 all_samples.setdefault(phase, {})[sample["name"]] = sample
         samples = {phase: actors["_memory_a"] for phase, actors in all_samples.items()}
         check("aimemory event=rejected" not in text, f"Fixture control rejected: {logs[0]}")
-        if case.startswith("shared-") or case == "switch":
+        if case == "door":
+            visible, hidden, followed = (samples[phase] for phase in ("DOOR_VISIBLE", "DOOR_HIDDEN", "DOOR_FOLLOW"))
+            # The door may start closing before the first snapshot is printed.
+            check(0 <= int(visible["time"]) - int(visible["group_time"]) < 2000, str(visible))
+            check(point(visible, "seen") == point(visible, "shared") == point(visible, "target"), str(visible))
+            check(hidden["los"] == "0", str(hidden))
+            check(int(hidden["time"]) - int(hidden["group_time"]) > 7000, str(hidden))
+            check(point(hidden, "shared") == point(visible, "target"), str(hidden))
+            check(hidden["group"] == visible["group"] != "-1", str(hidden))
+            # Ranged AI can stop when opening the door restores a clear shot.
+            check(point(followed, "pos")[0] < 6188 and followed["los"] == "1", str(followed))
+            check(int(followed["group_time"]) > int(hidden["time"]), str(followed))
+            check("action=track source=group_last_seen" in text, "No remembered-position pursuit")
+            hidden_log = text.split("OJK_MEMORY_DOOR_HIDDEN", 1)[1].split("OJK_MEMORY_DOOR_FOLLOW", 1)[0]
+            check(re.search(r"navdoor .*name=Hanger_door1 .*closed=1", hidden_log), "Door was not closed before pursuit")
+        elif case.startswith("shared-") or case == "switch":
             initial = all_samples["SHARED_INITIAL"]
             hidden = all_samples["SHARED_HIDDEN"]
             updated = all_samples["SHARED_MEMBER"]

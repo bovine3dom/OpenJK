@@ -146,6 +146,10 @@ uses `krildor-traverse.cfg`, which clears native NPCs in fresh test sessions.
 Use `--case north` or another documented case to repeat one check. Python 3 and
 the existing smoke-test dependencies are required. Run headless cases sequentially.
 
+`python3 scripts/test-doors-sp.py` verifies automatic-door traversal and a locked
+control. See `door-navigation.md` in the package, or `docs/door-navigation.md` in
+the repository, for the confirmed controller-selection bug.
+
 `bash scripts/test-display-sp.sh` checks an actual 3840x2160 scene and rejects an
 almost-black screenshot. It needs FFprobe as well as FFmpeg, uses four software
 rasterizer threads by default, and allows up to 600 seconds. Builds still use
