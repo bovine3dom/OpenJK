@@ -363,6 +363,12 @@ public:
 
 	int			localState;		//Tracking information local to entity
 	int			squadState;		//Tracking information for team level interaction
+	int			tacticRole;		//0: none, 1/2: regroup move/hold, 3/4: flank move/hold, 5: support
+	int			tacticCP;
+	int			tacticEnemy;		//Entity number, not a saved pointer
+	int			tacticDeadline;
+	vec3_t		tacticGoal;
+	vec3_t		tacticThreat;
 
 	//JWEIER ADDITIONS END
 	//
@@ -493,6 +499,12 @@ public:
 		saved_game.write<int32_t>(standTime);
 		saved_game.write<int32_t>(localState);
 		saved_game.write<int32_t>(squadState);
+		saved_game.write<int32_t>(tacticRole);
+		saved_game.write<int32_t>(tacticCP);
+		saved_game.write<int32_t>(tacticEnemy);
+		saved_game.write<int32_t>(tacticDeadline);
+		saved_game.write<float>(tacticGoal);
+		saved_game.write<float>(tacticThreat);
 		saved_game.write<int32_t>(confusionTime);
 		saved_game.write<int32_t>(charmedTime);
 		saved_game.write<int32_t>(controlledTime);
@@ -615,6 +627,12 @@ public:
 		saved_game.read<int32_t>(standTime);
 		saved_game.read<int32_t>(localState);
 		saved_game.read<int32_t>(squadState);
+		saved_game.read<int32_t>(tacticRole);
+		saved_game.read<int32_t>(tacticCP);
+		saved_game.read<int32_t>(tacticEnemy);
+		saved_game.read<int32_t>(tacticDeadline);
+		saved_game.read<float>(tacticGoal);
+		saved_game.read<float>(tacticThreat);
 		saved_game.read<int32_t>(confusionTime);
 		saved_game.read<int32_t>(charmedTime);
 		saved_game.read<int32_t>(controlledTime);

@@ -33,7 +33,25 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define	DEFAULT_RADIUS		45
 
 extern cvar_t		*d_noGroupAI;
-qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member );
+extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
+
+qboolean AI_LocalGroupContact( gentity_t *source, gentity_t *recipient )
+{
+	if ( !source || !recipient || !source->inuse || !recipient->inuse
+		|| !source->NPC || !recipient->NPC || !source->client || !recipient->client
+		|| source->health <= 0 || recipient->health <= 0 || source->client->playerTeam != recipient->client->playerTeam )
+		return qfalse;
+	float distance = DistanceSquared( source->currentOrigin, recipient->currentOrigin );
+	if ( distance > 512*512 )
+		return qfalse;
+	int from = NAV::GetNearestNode( source, true ), to = NAV::GetNearestNode( recipient, true );
+	if ( from == WAYPOINT_NONE || to == WAYPOINT_NONE || !NAV::InSameRegion( source, recipient )
+		|| !NAV::InSameRegion( recipient, source ) )
+		return qfalse;
+	qboolean los = G_ClearLOS( source, recipient );
+	// Edge handles can span a door. Do not use them for the short sound route.
+	return (los || (distance <= 256*256 && from > 0 && to > 0 && NAV::OnNeighboringPoints( from, to ))) ? qtrue : qfalse;
+}
 
 /*
 -------------------------
@@ -319,10 +337,10 @@ qboolean AI_ValidateNoEnemyGroupMember( AIGroupInfo_t *group, gentity_t *member 
 	return qtrue;
 }
 
-qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
+qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboolean report )
 {
 	//Validate ents
-	if ( member == NULL )
+	if ( !group || member == NULL || !member->inuse )
 		return qfalse;
 
 	//Validate clients
@@ -333,6 +351,37 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 	if ( member->NPC == NULL )
 		return qfalse;
 
+	if ( report )
+	{
+		if ( d_noGroupAI->integer || !group->enemy || !group->enemy->inuse || group->enemy->health <= 0
+			|| (group->enemy->flags & FL_NOTARGET) || !group->enemy->client
+			|| group->enemy->client->playerTeam == group->team
+			|| (member->svFlags & (SVF_IGNORE_ENEMIES|SVF_LOCKEDENEMY|SVF_ICARUS_FREEZE))
+			|| !(member->NPC->scriptFlags & SCF_LOOK_FOR_ENEMIES)
+			|| (member->NPC->scriptFlags & (SCF_IGNORE_ALERTS|SCF_FORCED_MARCH))
+			|| member->NPC->charmedTime > level.time || member->NPC->controlledTime > level.time
+			|| member->NPC->surrenderTime > level.time
+			|| (member->NPC->aiFlags & NPCAI_BOSS_CHARACTER)
+			|| member->NPC->behaviorState == BS_CINEMATIC || member->NPC->tempBehavior == BS_CINEMATIC
+			|| member->NPC->defaultBehavior == BS_CINEMATIC || Q3_TaskIDPending( member, TID_MOVE_NAV )
+			|| member->NPC->behaviorState == BS_FLEE || member->NPC->tempBehavior == BS_FLEE
+			|| member->client->ps.forcePowersKnown
+			|| member->client->ps.weapon == WP_STUN_BATON
+			|| member->client->ps.weapon == WP_TRIP_MINE || member->client->ps.weapon == WP_DET_PACK
+			|| (member->client->ps.weapon == WP_NONE
+				&& !(member->client->ps.stats[STAT_WEAPONS] & ((1<<WP_BLASTER)|(1<<WP_BLASTER_PISTOL))))
+			|| (member->client->ps.eFlags & (EF_FORCE_GRIPPED|EF_FORCE_DRAINED)) )
+			return qfalse;
+		switch ( member->client->NPC_class )
+		{
+		case CLASS_STORMTROOPER: case CLASS_SWAMPTROOPER: case CLASS_IMPERIAL:
+		case CLASS_REBEL: case CLASS_COMMANDO: case CLASS_BESPIN_COP:
+			break;
+		default:
+			return qfalse;
+		}
+	}
+
 	//must be aware
 	if ( member->NPC->confusionTime > level.time )
 		return qfalse;
@@ -342,7 +391,8 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 		return qfalse;
 
 	//Must not be in another group
-	if ( member->NPC->group != NULL && member->NPC->group != group )
+	if ( member->NPC->group != NULL && member->NPC->group != group
+		&& (!report || member->NPC->group->enemy || (member->enemy && member->enemy != group->enemy)) )
 	{//FIXME: if that group's enemy is mine, why not absorb that group into mine?
 		return qfalse;
 	}
@@ -404,7 +454,7 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 		{//he's fighting someone else, leave him out
 			return qfalse;
 		}
-		if ( !gi.inPVS( member->currentOrigin, group->enemy->currentOrigin ) )
+		if ( !report && !gi.inPVS( member->currentOrigin, group->enemy->currentOrigin ) )
 		{//not within PVS of the group enemy
 			return qfalse;
 		}
@@ -417,6 +467,11 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 		}
 	}
 	//must be actually in combat mode
+	if ( !report && group->enemy && member->NPC->group != group
+		&& (!member->enemy || member->NPC->enemyLastSeenTime <= 0
+			|| level.time-member->NPC->enemyLastSeenTime > 7000
+			|| !AI_LocalGroupContact( group->commander, member )) )
+		return qfalse;
 	if ( !TIMER_Done( member, "interrogating" ) )
 		return qfalse;
 	//FIXME: need to have a route to enemy and/or clear shot?
@@ -575,6 +630,14 @@ void AI_SetNewGroupCommander( AIGroupInfo_t *group )
 
 void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 {
+	TIMER_Remove( &g_entities[group->member[memberNum].number], "reportAck" );
+	ST_ClearTactic( &g_entities[group->member[memberNum].number] );
+	if ( g_entities[group->member[memberNum].number].NPC )
+	{
+		int state = g_entities[group->member[memberNum].number].NPC->squadState;
+		if ( group->numState[state] > 0 )
+			group->numState[state]--;
+	}
 	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=group_delete group=%d ent=%d members_before=%d\n", (int)(group-level.groups), group->member[memberNum].number, group->numGroup );
 	if ( group->commander && group->commander->s.number == group->member[memberNum].number )
 	{
@@ -759,10 +822,13 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 		}
 		else
 		{
-			if ( level.groups[i].enemy == group->enemy )
+			if ( level.groups[i].enemy == group->enemy && level.groups[i].team == group->team
+				&& (!group->enemy || AI_LocalGroupContact( group->commander, level.groups[i].commander )) )
 			{//2 groups with same enemy
 				if ( level.groups[i].numGroup+group->numGroup < (MAX_GROUP_MEMBERS - 1) )
 				{//combining the members would fit in one group
+					if ( group->nextReportTime > level.groups[i].nextReportTime )
+						level.groups[i].nextReportTime = group->nextReportTime;
 					if ( group->enemy && group->lastSeenEnemyTime > level.groups[i].lastSeenEnemyTime )
 					{
 						level.groups[i].lastSeenEnemyTime = group->lastSeenEnemyTime;
@@ -797,12 +863,6 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 			}
 		}
 	}
-	//clear numStates
-	for ( i = 0; i < NUM_SQUAD_STATES; i++ )
-	{
-		group->numState[i] = 0;
-	}
-
 	//go through group and validate each membership
 	group->commander = NULL;
 	for ( i = 0; i < group->numGroup; i++ )
@@ -830,6 +890,13 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 		member = &g_entities[group->member[i].number];
 
 		//Must be alive
+		if ( member->NPC && member->NPC->tacticRole
+			&& (!AI_ValidateGroupMember( group, member, qtrue )
+				|| !(member->NPC->scriptFlags & SCF_CHASE_ENEMIES)
+				|| !member->enemy || member->enemy->s.number != member->NPC->tacticEnemy) )
+		{
+			ST_ClearTactic( member );
+		}
 		if ( member->health <= 0 )
 		{
 			AI_DeleteGroupMember( group, i );
@@ -845,14 +912,15 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 		}
 		else
 		{//membership is valid
-			//keep track of squadStates
-			group->numState[member->NPC->squadState]++;
 			if ( !group->commander || member->NPC->rank > group->commander->NPC->rank )
 			{//keep track of highest rank
 				group->commander = member;
 			}
 		}
 	}
+	memset( group->numState, 0, sizeof( group->numState ) );
+	for ( i = 0; i < group->numGroup; i++ )
+		group->numState[g_entities[group->member[i].number].NPC->squadState]++;
 	if ( group->memberValidateTime < level.time )
 	{
 		group->memberValidateTime = level.time + Q_irand( 500, 2500 );

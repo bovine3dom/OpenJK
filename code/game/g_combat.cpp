@@ -567,8 +567,7 @@ void G_AlertTeam( gentity_t *victim, gentity_t *attacker, float radius, float so
 				}
 			}
 
-			//FIXME: This can have a nasty cascading effect if setup wrong...
-			G_SetEnemy( radiusEnts[i], attacker );
+			G_SetEnemyNoAlert( radiusEnts[i], attacker );
 		}
 	}
 }
@@ -3773,6 +3772,7 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 		{//ambushing trooper
 			self->client->noclip = false;
 		}
+		ST_ClearTactic( self );
 		NPC_FreeCombatPoint( self->NPC->combatPoint );
 		if ( self->NPC->group )
 		{

@@ -63,6 +63,12 @@ void G_ClearEnemy (gentity_t *self)
 		//FIXME: set last enemy?
 	}
 
+	if ( self->NPC && self->NPC->tacticRole )
+	{
+		ST_ClearTactic( self, "target_changed" );
+	}
+	if ( self->NPC )
+		TIMER_Remove( self, "reportAck" );
 	self->enemy = NULL;
 }
 
@@ -400,7 +406,7 @@ extern gentity_t *G_CheckControlledTurretEnemy(gentity_t *self,  gentity_t *enem
 
 void Saboteur_Cloak( gentity_t *self );
 void G_AimSet( gentity_t *self, int aim );
-void G_SetEnemy( gentity_t *self, gentity_t *enemy )
+static void G_SetEnemyInternal( gentity_t *self, gentity_t *enemy, qboolean propagate )
 {
 	int	event = 0;
 
@@ -477,7 +483,7 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 		self->enemy = enemy;
 		if (self->client && self->client->NPC_class == CLASS_SABOTEUR)
 		{
-			Saboteur_Cloak(NPC);					// Cloak
+			Saboteur_Cloak(self);					// Cloak
 			TIMER_Set(self, "decloakwait", 3000);	// Wait 3 sec before decloak and attack
 		}
 
@@ -589,7 +595,7 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 		//Alert anyone else in the area
 		if ( Q_stricmp( "desperado", self->NPC_type ) != 0 && Q_stricmp( "paladin", self->NPC_type ) != 0 )
 		{//special holodeck enemies exception
-			if ( !(self->client->ps.eFlags&EF_FORCE_GRIPPED) )
+			if ( propagate && !(self->client->ps.eFlags&EF_FORCE_GRIPPED) )
 			{//gripped people can't call for help
 				G_AngerAlert( self );
 			}
@@ -630,10 +636,20 @@ void G_SetEnemy( gentity_t *self, gentity_t *enemy )
 	}
 
 	//Take the enemy
-	G_ClearEnemy(self);
+	if ( self->enemy != enemy || !self->NPC->tacticRole )
+		G_ClearEnemy(self);
 	self->enemy = enemy;
 }
 
+void G_SetEnemy( gentity_t *self, gentity_t *enemy )
+{
+	G_SetEnemyInternal( self, enemy, qtrue );
+}
+
+void G_SetEnemyNoAlert( gentity_t *self, gentity_t *enemy )
+{
+	G_SetEnemyInternal( self, enemy, qfalse );
+}
 
 /*
 int ChooseBestWeapon( void )
@@ -2718,7 +2734,7 @@ NPC_FindCombatPoint
 #define MIN_AVOID_DISTANCE_SQUARED	( MIN_AVOID_DISTANCE * MIN_AVOID_DISTANCE )
 #define	CP_COLLECT_RADIUS			512.0f
 
-int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3_t destPosition, const int flags, float avoidDist, const int ignorePoint )
+int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3_t destPosition, const int flags, float avoidDist, const int ignorePoint, const vec3_t knownThreat )
 {
 	combatPoint_m			points;
 	combatPoint_m::iterator	cpi;
@@ -2739,7 +2755,11 @@ int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3
 	float					visRangeSq = (NPCInfo->stats.visrange*NPCInfo->stats.visrange);
 	bool					useHorizDist = (NPC->s.weapon==WP_THERMAL) || (flags & CP_HORZ_DIST_COLL);
 
-	if (NPC->enemy)
+	if ( knownThreat )
+	{
+		VectorCopy( knownThreat, enemyPosition );
+	}
+	else if (NPC->enemy)
 	{
 		VectorCopy(NPC->enemy->currentOrigin, enemyPosition);
 	}
@@ -2776,6 +2796,10 @@ int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3
 	for ( cpi = points.begin(); cpi != points.end(); ++cpi )
 	{
 		const int i = (*cpi).second;
+		if ( knownThreat && (flags & CP_FLANK)
+			&& (DistanceSquared( position, level.combatPoints[i].origin ) < 128*128
+				|| DistanceSquared( position, level.combatPoints[i].origin ) > 512*512) )
+			continue;
 
 		//Must not be one we want to ignore
 		if ( i == ignorePoint )
@@ -2856,7 +2880,7 @@ int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3
 
 			// otherwise, if currently safe and the path is not safe, ignore this point
 	  		if (distSqNPCToEnemy>(avoidDist) &&
- 				!NAV::SafePathExists(position, level.combatPoints[i].origin, enemyPosition, avoidDist))
+				!NAV::SafePathExists(position, level.combatPoints[i].origin, enemyPosition, avoidDist, knownThreat ? NPC : NULL))
 			{
 				continue;
 			}
@@ -2869,7 +2893,18 @@ int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3
 			continue;
 		}
 
-		if (NPC->enemy)
+		if ( knownThreat )
+		{
+			CalcEntitySpot( NPC, SPOT_WEAPON, weaponOffset );
+			VectorSubtract( weaponOffset, NPC->currentOrigin, weaponOffset );
+			VectorAdd( weaponOffset, level.combatPoints[i].origin, weaponOffset );
+			if ( ((flags & CP_CLEAR) && !NPC_ClearLOS( weaponOffset, enemyPosition ))
+				|| ((flags & CP_COVER) && NPC_ClearLOS( weaponOffset, enemyPosition )) )
+			{
+				continue;
+			}
+		}
+		else if (NPC->enemy)
 		{
 			// Ignore Points That Do Not Have A Clear LOS To The Player
 			if ( (flags & CP_CLEAR) )
@@ -3090,6 +3125,17 @@ qboolean NPC_FreeCombatPoint( int combatPointID, qboolean failed )
 
 	//Free it
 	level.combatPoints[combatPointID].occupied = qfalse;
+	// Invalidate tactic ownership before this slot can be reserved again.
+	for ( int i = 0; i < globals.num_entities; i++ )
+	{
+		gentity_t *owner = &g_entities[i];
+		if ( owner->inuse && owner->NPC && owner->NPC->tacticRole && owner->NPC->tacticCP == combatPointID )
+		{
+			if ( owner->NPC->combatPoint == combatPointID )
+				owner->NPC->combatPoint = -1;
+			ST_ClearTactic( owner );
+		}
+	}
 	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_release cp=%d failed=%d\n", combatPointID, failed );
 
 	return qtrue;

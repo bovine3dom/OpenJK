@@ -91,9 +91,12 @@ was needed for the automated checks on the build machine.
 - [ ] Audit existing cover, flank, and lost-contact voice clips. Map suitable clips to real squad events.
 - [x] Add default-off traces for existing membership, squad states, commander decisions, combat-point searches and reservations, movement, and bark requests, suppression, and dispatch.
 - [x] Check trace levels 0, 3, and 4 with `bash scripts/test-squad-sp.sh`. This is a diagnostic fixture, not a coordinated-flank test.
-- [ ] Extend diagnostics to new observation confidence, tactical roles, and plan phases when those systems are implemented.
-- [ ] Implement one engage-and-flank plan with unchanged enemy health and damage. Include tactical orders, acknowledgements, and failure barks from the start.
-- [ ] Test completed and disrupted plans, lost sight, blocked routes, casualties, and script control. Add automated assertions where practical.
+- [x] Add local report and tactical-role diagnostics, including fixed goal/threat positions and cleanup events.
+- [x] Implement report-backed recruitment, one supported flank per group, and bounded regrouping without increasing production NPC health or damage.
+- [x] Use contact calls, delayed acknowledgement attempts, and action-linked outflank/cover barks under existing speech restrictions.
+- [x] Verify nine tactical cases, including hidden recruitment, completed flanks in both modes, wounded/solo regrouping, support loss, ignore/no-group controls, and save/load.
+- [ ] Add large-chain/range, mixed-team, grenade, additional script-control, and competing combat-point lifecycle tests.
+- [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information.
 
 Use `roadmap.md` for detailed acceptance checks. Investigate the raster-only Rend2

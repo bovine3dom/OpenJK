@@ -545,9 +545,12 @@ static void MemoryCommand( void )
 			}
 			G_SetEnemy(actor, target);
 		}
-		else if ( !Q_stricmp(action, "hold") || !Q_stricmp(action, "chase") )
+		else if ( !Q_stricmp(action, "hold") || !Q_stricmp(action, "chase") || !Q_stricmp(action, "fight") )
 		{
-			actor->NPC->scriptFlags |= SCF_DONT_FIRE;
+			if ( !Q_stricmp(action, "fight") )
+				actor->NPC->scriptFlags &= ~SCF_DONT_FIRE;
+			else
+				actor->NPC->scriptFlags |= SCF_DONT_FIRE;
 			if ( !Q_stricmp(action, "hold") )
 			{
 				actor->NPC->scriptFlags &= ~SCF_CHASE_ENEMIES;
@@ -561,6 +564,19 @@ static void MemoryCommand( void )
 			else
 				actor->NPC->scriptFlags |= SCF_CHASE_ENEMIES;
 		}
+		else if ( !Q_stricmp(action, "protect") )
+			actor->flags |= FL_GODMODE;
+		else if ( !Q_stricmp(action, "wound") )
+		{
+			actor->health = Q_max(1, actor->max_health / 4);
+			actor->client->ps.stats[STAT_HEALTH] = actor->health;
+		}
+		else if ( !Q_stricmp(action, "ignore") )
+			actor->NPC->scriptFlags |= SCF_IGNORE_ALERTS;
+		else if ( !Q_stricmp(action, "nogroups") )
+			actor->NPC->scriptFlags |= SCF_NO_GROUPS;
+		else if ( !Q_stricmp(action, "dontflee") )
+			actor->NPC->scriptFlags |= SCF_DONT_FLEE;
 		else
 		{
 			gi.Printf( "aimemory event=rejected reason=action\n" );
@@ -575,14 +591,17 @@ static void MemoryCommand( void )
 	const float *target = actor->enemy ? actor->enemy->currentOrigin : vec3_origin;
 	gentity_t *goal = actor->NPC->goalEntity;
 	const float *goalPos = goal ? goal->currentOrigin : vec3_origin;
-	gi.Printf( "aimemory event=sample name=%s time=%d ent=%d enemy=%d pos=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f los=%d pvs=%d seen_time=%d seen=%.3f,%.3f,%.3f group=%d group_enemy=%d group_time=%d shared=%.3f,%.3f,%.3f clear_time=%d members=%d goal=%d goal_pos=%.3f,%.3f,%.3f home=%d\n",
+	gi.Printf( "aimemory event=sample name=%s time=%d ent=%d enemy=%d pos=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f los=%d pvs=%d seen_time=%d seen=%.3f,%.3f,%.3f group=%d group_enemy=%d group_time=%d shared=%.3f,%.3f,%.3f clear_time=%d members=%d goal=%d goal_pos=%.3f,%.3f,%.3f home=%d health=%d role=%d cp=%d deadline=%d tactic_goal=%.3f,%.3f,%.3f tactic_threat=%.3f,%.3f,%.3f\n",
 		name, level.time, actor->s.number, actor->enemy ? actor->enemy->s.number : -1,
 		actor->currentOrigin[0], actor->currentOrigin[1], actor->currentOrigin[2], target[0], target[1], target[2],
 		actor->enemy ? G_ClearLOS(actor, actor->enemy) : 0, actor->enemy ? gi.inPVS(actor->currentOrigin, target) : 0,
 		actor->NPC->enemyLastSeenTime, seen[0], seen[1], seen[2], group ? (int)(group-level.groups) : -1,
 		group && group->enemy ? group->enemy->s.number : -1, group ? group->lastSeenEnemyTime : 0,
 		shared[0], shared[1], shared[2], group ? group->lastClearShotTime : 0, group ? group->numGroup : 0, goal ? goal->s.number : -1,
-		goalPos[0], goalPos[1], goalPos[2], actor->NPC->homeWp );
+		goalPos[0], goalPos[1], goalPos[2], actor->NPC->homeWp, actor->health,
+		actor->NPC->tacticRole, actor->NPC->tacticCP, actor->NPC->tacticDeadline,
+		actor->NPC->tacticGoal[0], actor->NPC->tacticGoal[1], actor->NPC->tacticGoal[2],
+		actor->NPC->tacticThreat[0], actor->NPC->tacticThreat[1], actor->NPC->tacticThreat[2] );
 }
 
 void Svcmd_Nav_f( void )
@@ -596,6 +615,21 @@ void Svcmd_Nav_f( void )
 	else if ( Q_stricmp( cmd, "test" ) == 0 )
 	{
 		RouteTestCommand();
+	}
+	else if ( Q_stricmp( cmd, "contact" ) == 0 )
+	{
+		gentity_t *source = G_Find(NULL, FOFS(targetname), gi.argv(2));
+		gentity_t *recipient = G_Find(NULL, FOFS(targetname), gi.argv(3));
+		if (gi.argc() != 4 || !source || !recipient || !source->NPC || !recipient->NPC
+			|| G_Find(source, FOFS(targetname), gi.argv(2)) || G_Find(recipient, FOFS(targetname), gi.argv(3)))
+		{
+			gi.Printf("squadcontact event=rejected\n");
+			return;
+		}
+		gi.Printf("squadcontact source=%d recipient=%d distance=%.1f los=%d contact=%d eligible=%d\n",
+			source->s.number, recipient->s.number, Distance(source->currentOrigin, recipient->currentOrigin),
+			G_ClearLOS(source, recipient), AI_LocalGroupContact(source, recipient),
+			AI_ValidateGroupMember(source->NPC->group, recipient, qtrue));
 	}
 	else if ( Q_stricmp( cmd, "show" ) == 0 )
 	{
@@ -701,7 +735,9 @@ void Svcmd_Nav_f( void )
 	{
 		//Print the available commands
 		Com_Printf("nav - valid commands\n---\n" );
+		Com_Printf("contact <source NPC name> <recipient NPC name> - inspect local report eligibility\n" );
 		Com_Printf("memory <unique NPC targetname> [hold|chase|enemy [targetname]] - inspect sight memory; controls require _memory_ names\n" );
+		Com_Printf("additional memory test controls: fight, protect, wound, ignore, nogroups, dontflee\n" );
 		Com_Printf("show\n - nodes\n - edges\n - testpath\n - enemypath\n - combatpoints\n - navgoals\n---\n");
 		Com_Printf("goto\n ---\n" );
 		Com_Printf("gotonum\n ---\n" );

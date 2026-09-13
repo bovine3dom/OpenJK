@@ -165,6 +165,11 @@ Run `python3 scripts/test-ai-memory.py` for sight, shared-memory, target-switch,
 and search-expiry checks. Use `--case shared-async` to repeat the two-member case.
 The fixtures and `nav memory` snapshot command are described in `squad-ai.md`.
 
+Run `python3 scripts/test-squad-tactics.py` for recruitment, concealed flanking,
+regrouping, interruption, and save/load checks. See `squad-tactics.md` in the
+package or `docs/squad-tactics.md` in the repository. This update requires a new
+mission: old Jedi Academy saves are rejected after the tactical save-format change.
+
 Both machines are x86-64 Arch Linux, but runtime library versions still need a
 desktop check. The package includes source and runtime manifests, debug symbols,
 and the tracked source diff. It does not bundle system libraries or proprietary

@@ -61,6 +61,7 @@ extern cvar_t		*debugNPCAI;			// used to print out debug info about the NPC AI
 extern cvar_t		*debugNPCFreeze;		// set to disable NPC ai and temporarily freeze them in place
 extern cvar_t		*debugNPCName;
 extern cvar_t		*d_JediAI;
+extern cvar_t		*d_squadTactics;
 extern cvar_t		*d_saberCombat;
 extern void NPC_Think ( gentity_t *self);
 extern void pitch_roll_for_slope( gentity_t *forwhom, vec3_t pass_slope = NULL, vec3_t storeAngles = NULL, qboolean keepPitch = qfalse );
@@ -107,6 +108,7 @@ extern void NPC_BSJump (void);
 extern void NPC_BSRemove (void);
 extern void NPC_BSSearch (void);
 extern void NPC_BSSearchStart (int	homeWp, bState_t bState);
+extern void NPC_BSSearchStart (gentity_t *self, int homeWp, bState_t bState);
 extern void NPC_BSWander (void);
 extern qboolean NPC_BSFlee( void );
 extern void NPC_StartFlee( gentity_t *enemy, vec3_t dangerPoint, int dangerLevel, int fleeTimeMin, int fleeTimeMax );
@@ -129,6 +131,7 @@ extern int NPC_AttackDebounceForWeapon (void);
 extern qboolean EntIsGlass (gentity_t *check);
 extern qboolean ShotThroughGlass (trace_t *tr, gentity_t *target, vec3_t spot, int mask);
 extern void G_ClearEnemy (gentity_t *self);
+extern void G_SetEnemyNoAlert( gentity_t *self, gentity_t *enemy );
 extern void G_SetEnemy (gentity_t *self, gentity_t *enemy);
 extern gentity_t *NPC_PickAlly ( qboolean facingEachOther, float range, qboolean ignoreGroup, qboolean movingOnly );
 extern void NPC_LostEnemyDecideChase(void);
@@ -265,7 +268,7 @@ inline qboolean NPC_ClearLOS( gentity_t *ent, const vec3_t end )
 
 extern qboolean NPC_ClearShot( gentity_t *ent );
 
-extern int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3_t enemyPosition, const int flags, const float avoidDist, const int ignorePoint = -1 );
+extern int NPC_FindCombatPoint( const vec3_t position, const vec3_t avoidPosition, vec3_t enemyPosition, const int flags, const float avoidDist, const int ignorePoint = -1, const vec3_t knownThreat = NULL );
 extern int NPC_FindCombatPointRetry( const vec3_t position,
 							 const vec3_t avoidPosition,
 							 vec3_t enemyPosition,

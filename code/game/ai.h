@@ -156,6 +156,8 @@ public:
 	int			speechDebounceTime;
 	int			lastClearShotTime;
 	int			lastSeenEnemyTime;
+	int			nextReportTime;
+	int			nextReportMember;
 	int			morale;
 	int			moraleAdjust;
 	int			moraleDebounce;
@@ -178,6 +180,8 @@ public:
 		saved_game.write<int32_t>(speechDebounceTime);
 		saved_game.write<int32_t>(lastClearShotTime);
 		saved_game.write<int32_t>(lastSeenEnemyTime);
+		saved_game.write<int32_t>(nextReportTime);
+		saved_game.write<int32_t>(nextReportMember);
 		saved_game.write<int32_t>(morale);
 		saved_game.write<int32_t>(moraleAdjust);
 		saved_game.write<int32_t>(moraleDebounce);
@@ -200,6 +204,8 @@ public:
 		saved_game.read<int32_t>(speechDebounceTime);
 		saved_game.read<int32_t>(lastClearShotTime);
 		saved_game.read<int32_t>(lastSeenEnemyTime);
+		saved_game.read<int32_t>(nextReportTime);
+		saved_game.read<int32_t>(nextReportMember);
 		saved_game.read<int32_t>(morale);
 		saved_game.read<int32_t>(moraleAdjust);
 		saved_game.read<int32_t>(moraleDebounce);
@@ -217,6 +223,11 @@ int	AI_GetGroupSize( vec3_t origin, int radius, team_t playerTeam, gentity_t *av
 int AI_GetGroupSize( gentity_t *ent, int radius );
 
 void AI_GetGroup( gentity_t *self );
+qboolean AI_LocalGroupContact( gentity_t *source, gentity_t *recipient );
+qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboolean report = qfalse );
+void AI_InsertGroupMember( AIGroupInfo_t *group, gentity_t *member );
+void AI_DeleteSelfFromGroup( gentity_t *self );
+void ST_ClearTactic( gentity_t *self, const char *reason = "interrupted" );
 
 gentity_t *AI_DistributeAttack( gentity_t *attacker, gentity_t *enemy, team_t team, int threshold );
 

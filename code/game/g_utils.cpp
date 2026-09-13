@@ -863,6 +863,13 @@ Marks the entity as free
 =================
 */
 void G_FreeEntity( gentity_t *ed ) {
+	for ( int i = 0; i < globals.num_entities; i++ )
+	{
+		gentity_t *member = &g_entities[i];
+		if ( member->inuse && member->NPC && member->NPC->tacticRole
+			&& (member == ed || member->NPC->tacticEnemy == ed->s.number) )
+			ST_ClearTactic( member, member == ed ? "interrupted" : "target_changed" );
+	}
 	bool routeTestRemoved = NAV_RouteTestFree( ed );
 	gi.unlinkentity (ed);		// unlink from world
 
@@ -2056,4 +2063,3 @@ void G_SetBoltSurfaceRemoval( const int entNum, const int modelIndex, const int 
 /*
 Ghoul2 Insert End
 */
-

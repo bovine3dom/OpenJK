@@ -925,14 +925,14 @@ qboolean G_ActivateBehavior (gentity_t *self, int bset )
 			//FIXME: Reimplement?
 			if( self->waypoint != WAYPOINT_NONE )
 			{
-				NPC_BSSearchStart( self->waypoint, bSID );
+				NPC_BSSearchStart( self, self->waypoint, bSID );
 			}
 			else
 			{
 				self->waypoint = NAV::GetNearestNode(self);
 				if( self->waypoint != WAYPOINT_NONE )
 				{
-					NPC_BSSearchStart( self->waypoint, bSID );
+					NPC_BSSearchStart( self, self->waypoint, bSID );
 				}
 			}
 		}

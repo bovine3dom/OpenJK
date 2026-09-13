@@ -7,7 +7,7 @@ mkdir -p "$root/build/smoke"
 suite=$(mktemp -d "$root/build/smoke/squad.XXXXXXXX")
 for level in 0 3 4; do
     OJK_SMOKE_ROOT="$suite/$level" bash "$root/scripts/smoke-sp.sh" "$package" t1_sour \
-        +set d_npcai "$level" +exec squad-smoke.cfg
+        +set d_npcai "$level" +set d_squadTactics 0 +exec squad-smoke.cfg
     logs=("$suite/$level"/t1_sour.*/console.log)
     log=${logs[0]}
     grep -q 'OJK_SQUAD_FIXTURE_COMPLETE' "$log" || {

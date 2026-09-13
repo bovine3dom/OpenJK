@@ -980,6 +980,8 @@ bool			NAV::GoTo(gentity_t* actor, TNodeHandle target, float MaxDangerLevel)
 	if (!HasPath)
 	{
 		HasPath = NAV::FindPath(actor, target, MaxDangerLevel);
+		if (HasPath && actor->NPC && (actor->NPC->tacticRole == 1 || actor->NPC->tacticRole == 3))
+			HasPath = NAV::UpdatePath(actor, target, MaxDangerLevel);
 	}
 
 	// If We Have A Path, Now Try To Follow It
@@ -1054,6 +1056,9 @@ bool			NAV::GoTo(gentity_t* actor, gentity_t* target, float MaxDangerLevel)
 		if (!HasPath)
 		{
 			HasPath = NAV::FindPath(actor, targetNode, MaxDangerLevel);
+			// Consume the start node before zero steering is treated as a failed move.
+			if (HasPath && actor->NPC && (actor->NPC->tacticRole == 1 || actor->NPC->tacticRole == 3))
+				HasPath = NAV::UpdatePath(actor, targetNode, MaxDangerLevel);
 		}
 
 		// If We Have A Path, Now Try To Follow It
@@ -1130,6 +1135,8 @@ bool			NAV::GoTo(gentity_t* actor, const vec3_t& position, float MaxDangerLevel)
 		if (!HasPath)
 		{
 			HasPath = NAV::FindPath(actor, targetNode, MaxDangerLevel);
+			if (HasPath && actor->NPC && (actor->NPC->tacticRole == 1 || actor->NPC->tacticRole == 3))
+				HasPath = NAV::UpdatePath(actor, targetNode, MaxDangerLevel);
 		}
 
 		// If We Have A Path, Now Try To Follow It
@@ -2432,6 +2439,38 @@ void			NAV::SpawnedPoint(gentity_t* ent, NAV::EPointType type)
 ////////////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////////////
+int NAV::GetNearbyGroundNodes(const vec3_t& position, TNodeHandle* nodes, int capacity)
+{
+	if (!nodes || capacity <= 0)
+		return 0;
+	capacity = Min(capacity, 64);
+	float distances[64];
+	int count = 0;
+	for (TGraph::TNodes::iterator it=mGraph.nodes_begin(); it!=mGraph.nodes_end(); ++it)
+	{
+		if (it->mType != PT_WAYNODE || it->mFlags.get_bit(CWayNode::WN_FLOATING))
+			continue;
+		float distance = DistanceSquared(position, it->mPoint.v);
+		if (distance > 512*512)
+			continue;
+		int slot = 0;
+		while (slot < count && distances[slot] <= distance)
+			++slot;
+		if (slot >= capacity)
+			continue;
+		if (count < capacity)
+			++count;
+		for (int i=count-1; i>slot; --i)
+		{
+			nodes[i] = nodes[i-1];
+			distances[i] = distances[i-1];
+		}
+		nodes[slot] = it.index();
+		distances[slot] = distance;
+	}
+	return count;
+}
+
 NAV::TNodeHandle		NAV::GetNearestNode(gentity_t* ent, bool forceRecalcNow, NAV::TNodeHandle goal)
 {
 	if (!ent)
@@ -2822,9 +2861,18 @@ NAV::TNodeHandle		NAV::ChooseFarthestNeighbor(gentity_t* actor, const vec3_t& ta
 ////////////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////////////
+static bool TacticCrossesDanger(gentity_t* actor, const CVec3& start, const CVec3& stop)
+{
+	if (!actor->NPC || (actor->NPC->tacticRole != 1 && actor->NPC->tacticRole != 3))
+		return false;
+	CVec3 danger(actor->NPC->tacticThreat);
+	return danger.Dist2(start) >= 128*128 && danger.DistToLine2(start, stop) < 128*128;
+}
+
 bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLevel)
 {
 	mUser.ClearActor();
+	bool tactic = actor->NPC && (actor->NPC->tacticRole == 1 || actor->NPC->tacticRole == 3);
 
 	// If Either Start Or End Is Invalid, We Can't Do Any Pathing
 	//------------------------------------------------------------
@@ -2843,7 +2891,9 @@ bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLev
 	//------------------------
 	if (start<0)
 	{
-		start = (Q_irand(0,1)==0)?(mGraph.get_edge(abs(start)).mNodeA):(mGraph.get_edge(abs(start)).mNodeB);
+		CWayEdge& edge = mGraph.get_edge(abs(start));
+		start = tactic ? (edge.PointA().Dist2(actor->currentOrigin) <= edge.PointB().Dist2(actor->currentOrigin) ? edge.mNodeA : edge.mNodeB)
+			: (Q_irand(0,1)==0 ? edge.mNodeA : edge.mNodeB);
 	}
 	if (target<0)
 	{
@@ -2901,7 +2951,11 @@ bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLev
 
 	// Now, Run A*
 	//-------------
-	if (actor->enemy && actor->enemy->client)
+	if (tactic)
+	{
+		mUser.SetDangerSpot(actor->NPC->tacticThreat, 128*128);
+	}
+	else if (actor->enemy && actor->enemy->client)
 	{
 		if (actor->enemy->client->ps.weapon==WP_SABER)
 		{
@@ -3011,7 +3065,7 @@ bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLev
 		float	AtOnEdgeScale = AtOnEdge.ProjectToLineSeg(PointA, PointB);
 		float	AtDistToEdge = AtOnEdge.Dist(At);
 
-		if (AtOnEdgeScale>0.1f && AtOnEdgeScale<0.9f)
+		if (AtOnEdgeScale>0.1f && AtOnEdgeScale<0.9f && !TacticCrossesDanger(actor, At, AtOnEdge))
 		{
 			if (AtDistToEdge<(radius) || (AtDistToEdge<(radius*20.0f) && MoveTrace(At, AtOnEdge, actor->mins, actor->maxs, actor->s.number, true, true, false)))
 			{
@@ -3088,8 +3142,13 @@ bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLev
 ////////////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////////////
-bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CVec3& danger, float dangerDistSq)
+bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CVec3& danger, float dangerDistSq, gentity_t* actor)
 {
+	struct RestoreGraphUser
+	{
+		CGraphUser saved;
+		~RestoreGraphUser() { mUser = saved; }
+	} restore = {mUser};
 	mUser.ClearActor();
 
 
@@ -3111,7 +3170,8 @@ bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CV
 	//------------------------
 	if (start<0)
 	{
-		start = mGraph.get_edge(abs(start)).mNodeA;
+		CWayEdge& edge = mGraph.get_edge(abs(start));
+		start = actor && edge.PointB().Dist2(startVec) < edge.PointA().Dist2(startVec) ? edge.mNodeB : edge.mNodeA;
 	}
 	if (target<0)
 	{
@@ -3119,19 +3179,23 @@ bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CV
 	}
 	if (start==target)
 	{
-		return true;
+		return !actor || danger.Dist2(startVec) < dangerDistSq || danger.DistToLine2(startVec, stopVec) >= dangerDistSq;
 	}
+	if (actor)
+		mUser.SetActor(actor);
 
 
 	// First Step: Find The Actor And Make Sure He Has A Path User Struct
 	//--------------------------------------------------------------------
 	SPathUser&	puser = mPathUserMaster;
 	puser.mLastUseTime = level.time;
+	if (actor)
+		puser.mLastAStarTime = 0;
 
 
 	// Now, Check To See If He Already Has Found A Path To This Target
 	//-----------------------------------------------------------------
-	if (puser.mEnd==target && level.time<puser.mLastAStarTime)
+	if (!actor && puser.mEnd==target && level.time<puser.mLastAStarTime)
 	{
 		return puser.mSuccess;
 	}
@@ -3155,11 +3219,12 @@ bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CV
 
 	// Now, Run A*
 	//-------------
-//	mUser.SetDangerSpot(danger, dangerDistSq);
+	if (actor)
+		mUser.SetDangerSpot(danger, dangerDistSq);
 	mGraph.astar(mSearch, mUser);
-//	mUser.ClearDangerSpot();
+	mUser.ClearDangerSpot();
 
-	puser.mLastAStarTime = level.time + Q_irand(3000, 6000);;
+	puser.mLastAStarTime = actor ? 0 : level.time + Q_irand(3000, 6000);
 	puser.mSuccess = mSearch.success();
 	if (!puser.mSuccess)
 	{
@@ -3174,7 +3239,7 @@ bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CV
 	for (mSearch.path_begin(); !mSearch.path_end(); mSearch.path_inc())
 	{
 		Next = mGraph.get_node(mSearch.path_at()).mPoint;
-		if (dangerDistSq > danger.DistToLine2(Next, Prev))
+		if (dangerDistSq > danger.DistToLine2(Next, Prev) && (!actor || danger.Dist2(Next) >= dangerDistSq))
 		{
 			puser.mSuccess = false;
 			break;
@@ -3184,7 +3249,7 @@ bool			NAV::SafePathExists(const CVec3& startVec, const CVec3& stopVec, const CV
 	if (puser.mSuccess)
 	{
 		Next = startVec;
-		if (dangerDistSq > danger.DistToLine2(Prev, Next))
+		if (dangerDistSq > danger.DistToLine2(Prev, Next) && (!actor || danger.Dist2(Next) >= dangerDistSq))
 		{
 			puser.mSuccess = false;
 		}
@@ -3598,6 +3663,8 @@ bool			NAV::UpdatePath(gentity_t* actor, TNodeHandle target, float MaxDangerLeve
 		}
 
 		InReachedRadius = (Dir.Len2()<PPoint.mReachedRadius);
+		if (InReachedRadius && path.size()>1 && TacticCrossesDanger(actor, At, path[path.size()-2].mPoint))
+			InReachedRadius = false;
 		if (InReachedRadius)
 		{
 			ReachedAnything = true;
@@ -4508,7 +4575,10 @@ bool			STEER::Active(gentity_t* actor)
 ////////////////////////////////////////////////////////////////////////////////////
 bool			STEER::SafeToGoTo(gentity_t* actor, const vec3_t& targetPosition, int targetNode)
 {
+	if (TacticCrossesDanger(actor, actor->currentOrigin, targetPosition))
+		return false;
 	int		actorNode				= NAV::GetNearestNode(actor, true, targetNode);
+	mUser.SetActor(actor);
 	float	actorToTargetDistance	= Distance(actor->currentOrigin,  targetPosition);
 
 
@@ -5109,6 +5179,8 @@ float			STEER::Path(gentity_t* actor)
 
 		// Otherwise, Go!
 		//----------------
+		if (TacticCrossesDanger(actor, actor->currentOrigin, NextPosition))
+			return 0.0f;
 		return Seek(actor, NextPosition, NextSlowingRadius);
 	}
 	return 0.0f;

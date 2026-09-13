@@ -145,11 +145,11 @@ combat balance. Sound remains disabled, so no claim is made about audible barks.
 Map scripts still run. Dedicated tests for goal replacement, direct entity
 freeing, and loading or changing maps during a probe remain to be added.
 
-This room now also hosts the lost-contact and shared-memory tests described in
-`squad-ai.md`. Commander lost-contact tracking uses recorded positions; other
-live-position uses remain listed there. Next, add temporary engage/flank roles,
-with barks tied to actual plan transitions. Combat-point reservation cleanup
-remains part of that later squad-plan test, not this locomotion probe.
+This room also hosts the memory tests in `squad-ai.md` and the report, flank,
+support, and regroup tests in `squad-tactics.md`. The tactical fixture verifies an
+unseen recruit taking the south route while its caller supports from the front.
+Manual checks should now assess pacing, awareness, and bark clarity. The simple
+locomotion probe remains separate from these group and reservation tests.
 
 ## Inspection Tools
 

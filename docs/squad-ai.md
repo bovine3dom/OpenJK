@@ -1,8 +1,9 @@
 # Squad AI and Memory
 
-These changes apply to Jedi Academy single-player. Squad diagnostics are joined
-by a bounded lost-contact memory fix. No tactical roles are added, and
-`ST_GetCPFlags` remains disabled.
+These changes apply to Jedi Academy single-player. Local reports and bounded
+flank/support/regroup roles now build on the lost-contact memory fix. See
+`squad-tactics.md` for the policy, tests, and save-format change. The dormant
+`ST_GetCPFlags` policy remains disabled.
 
 ## Sight Memory
 
@@ -68,13 +69,14 @@ starts with `squad event=`. Other diagnostics can use the same cvar.
 
 ## Existing Limits
 
-Squad states are existing movement and combat states, not tactical roles.
+Squad states are existing movement and combat states. New tactical roles are
+stored separately and shown by the memory snapshot command.
 The dormant `ST_GetCPFlags` policy is unsafe to enable without a separate review.
-These records do not validate that policy or add a squad plan.
+These records do not validate that dormant policy.
 Shared group, CP, and voice hooks can report NPCs outside stormtrooper groups.
-The diagnostic records do not add random calls. Memory uses the existing saved
-fields; no new serialized fields are added. Start fresh when comparing behaviour,
-because older saves can contain inconsistent sight records.
+The diagnostic records do not add random calls. Sight memory uses the existing
+fields, but tactical state adds serialized fields and requires save format 2.
+Start a fresh mission; old Jedi Academy saves are not compatible.
 
 This is not an engine-wide removal of hidden-target knowledge. Existing PVS-facing
 and aim logic, short-loss combat distance decisions, `SCF_NO_GROUPS` pursuit,
@@ -85,7 +87,8 @@ remain separate work items.
 ## Headless Check
 
 After packaging, run `bash scripts/test-squad-sp.sh` from the repository root.
-This checks trace levels 0, 3, and 4 in separate sessions. The fixture loads
+This checks trace levels 0, 3, and 4 in separate sessions with tactical movement
+disabled. The fixture loads
 `t1_sour`, skips the opening scene, enables player invulnerability, and spawns
 three stormtroopers. Existing allies can kill these enemies. This is a diagnostic
 fixture, not a balanced encounter or proof of coordinated flanking.
@@ -107,6 +110,8 @@ unseen enemy assignment, search expiry, shared observations in both modes, and
 target switching, plus remembered-target pursuit through an automatic-door
 approach. The tests check simulation timestamps, positions, group
 identity, and movement goals, not just event presence.
+These cases disable tactical movement to isolate the memory behaviour. Reports
+remain enabled.
 
 The `ai-memory*.cfg` fixtures use the cleared Kril'dor room. They spawn named
 stormtroopers, suppress firing, and hold their movement while normal combat AI
@@ -130,6 +135,7 @@ For test NPC names beginning with `_memory_`, optional controls are available:
 
 - `hold`: stop autonomous chasing, clear movement goals, and suppress firing without freezing perception.
 - `chase`: permit chasing again; firing remains suppressed.
+- `fight`: permit movement and firing for a tactical test.
 - `enemy [targetname]`: use the ordinary enemy-assignment function. Without a name, the target is the player. This does not force a sight record.
 
 Controls refuse pending scripted movement. Do not use these fixtures as ordinary

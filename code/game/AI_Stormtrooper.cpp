@@ -427,7 +427,7 @@ static qboolean ST_Move( void )
 	qboolean	moved = NPC_MoveToGoal( qtrue );
 	if (moved==qfalse)
 	{
-		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=move_failed ent=%d cp=%d goal=%d\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity ? NPCInfo->goalEntity->s.number : -1 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=move_failed ent=%d cp=%d goal=%d nodes=%d\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity ? NPCInfo->goalEntity->s.number : -1, NAV::PathNodesRemaining(NPC) );
 		ST_HoldPosition();
 	}
 
@@ -1432,6 +1432,11 @@ ST_CheckMoveState
 
 static void ST_CheckMoveState( void )
 {
+	if ( NPCInfo->tacticRole && !Q3_TaskIDPending(NPC, TID_MOVE_NAV) )
+	{
+		doMove = (NPCInfo->tacticRole == 1 || NPCInfo->tacticRole == 3) ? qtrue : qfalse;
+		return;
+	}
 	if ( Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
 	{//moving toward a goal that a script is waiting on, so don't stop for anything!
 		doMove = qtrue;
@@ -1747,6 +1752,8 @@ void ST_TransferTimers( gentity_t *self, gentity_t *other )
 
 void ST_TransferMoveGoal( gentity_t *self, gentity_t *other )
 {
+	if ( self->NPC->tacticRole || other->NPC->tacticRole )
+		return;
 	if ( Q3_TaskIDPending( self, TID_MOVE_NAV ) )
 	{//can't transfer movegoal when a script we're running is waiting to complete
 		return;
@@ -1881,6 +1888,366 @@ int ST_GetCPFlags( void )
 	return cpFlags;
 }
 
+static void ST_ReportNearby( AIGroupInfo_t *group )
+{
+	if ( group->nextReportTime > level.time )
+		return;
+	group->nextReportTime = level.time + 1000;
+	for ( int i = 0; i < group->numGroup; i++ )
+	{
+		gentity_t *member = &g_entities[group->member[i].number];
+		if ( TIMER_Exists( member, "reportAck" ) && TIMER_Done2( member, "reportAck", qtrue )
+			&& AI_ValidateGroupMember( group, member, qtrue ) && member->enemy == group->enemy )
+		{
+			Debug_Printf(debugNPCAI, DEBUG_LEVEL_INFO, "squad event=report_ack_attempt ent=%d\n", member->s.number);
+			ST_Speech( member, SPEECH_LOOK, 0 );
+		}
+	}
+	int observed = group->lastSeenEnemyTime;
+	if ( observed <= 0 || observed > level.time || level.time-observed > 1500 )
+		return;
+	vec3_t known;
+	VectorCopy( group->enemyLastSeenPos, known );
+	gentity_t *source = NULL, *enemy = group->enemy;
+	for ( int offset = 0; offset < group->numGroup; offset++ )
+	{
+		int i = (group->nextReportMember + offset) % group->numGroup;
+		gentity_t *member = &g_entities[group->member[i].number];
+		if ( AI_ValidateGroupMember( group, member, qtrue ) && member->enemy == enemy
+			&& member->NPC->enemyLastSeenTime == observed
+			&& VectorCompare( member->NPC->enemyLastSeenLocation, known ) )
+		{
+			source = member;
+			group->nextReportMember = (i + 1) % group->numGroup;
+			break;
+		}
+	}
+	if ( !source )
+		return;
+	vec3_t mins, maxs;
+	for ( int axis = 0; axis < 3; axis++ )
+	{
+		mins[axis] = source->currentOrigin[axis] - 512;
+		maxs[axis] = source->currentOrigin[axis] + 512;
+	}
+	gentity_t *nearby[128];
+	int count = gi.EntitiesInBox( mins, maxs, nearby, 128 ), attempts = 0;
+	for ( int i = 0; i < count && attempts < 2; i++ )
+	{
+		gentity_t *recipient = nearby[i];
+		if ( !AI_ValidateGroupMember( group, source, qtrue ) || source->NPC->group != group
+			|| source->enemy != enemy || group->enemy != enemy )
+			break;
+		if ( recipient == source || (recipient->NPC && recipient->NPC->group == group && recipient->enemy == enemy)
+			|| !AI_ValidateGroupMember( group, recipient, qtrue )
+			|| (recipient->NPC->group != group && group->numGroup >= MAX_GROUP_MEMBERS-1)
+			|| !AI_LocalGroupContact( source, recipient ) )
+			continue;
+		AIGroupInfo_t *previousGroup = recipient->NPC->group;
+		attempts++;
+		G_SetEnemyNoAlert( recipient, enemy );
+		if ( group->enemy != enemy || !source->inuse || !source->NPC || source->NPC->group != group
+			|| source->enemy != enemy || !AI_ValidateGroupMember( group, source, qtrue )
+			|| !AI_ValidateGroupMember( group, recipient, qtrue ) || recipient->enemy != enemy
+			|| recipient->NPC->group != previousGroup || !AI_LocalGroupContact( source, recipient ) )
+			continue;
+		if ( recipient->NPC->group != group )
+		{
+			if ( group->numGroup >= MAX_GROUP_MEMBERS-1 )
+				continue;
+			if ( recipient->NPC->group )
+				AI_DeleteSelfFromGroup( recipient );
+			AI_InsertGroupMember( group, recipient );
+		}
+		ST_Speech( source, SPEECH_DETECTED, 0 );
+		TIMER_Set( recipient, "reportAck", 3000 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=report_delivery source=%d recipient=%d observedtime=%d pos=%.1f,%.1f,%.1f\n", source->s.number, recipient->s.number, observed, known[0], known[1], known[2] );
+	}
+}
+
+void ST_ClearTactic( gentity_t *self, const char *reason )
+{
+	if ( !self || !self->NPC || !self->NPC->tacticRole )
+		return;
+	auto *info = self->NPC;
+	int role = info->tacticRole;
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_finish ent=%d role=%d cp=%d reason=%s knownposition=%.1f,%.1f,%.1f\n", self->s.number, role, info->tacticCP, reason, info->tacticThreat[0], info->tacticThreat[1], info->tacticThreat[2] );
+	info->tacticRole = 0;
+	if ( info->goalEntity == info->tempGoal && info->tempGoal
+		&& VectorCompare( info->tempGoal->currentOrigin, info->tacticGoal ) && !Q3_TaskIDPending( self, TID_MOVE_NAV ) )
+		info->goalEntity = NULL;
+	if ( !info->goalEntity && !Q3_TaskIDPending( self, TID_MOVE_NAV ) )
+	{
+		NAV::ClearPath( self );
+		info->aiFlags &= ~NPCAI_TOUCHED_GOAL;
+	}
+	if ( info->tacticCP >= 0 && info->combatPoint == info->tacticCP )
+	{
+		if ( (role == 1 || role == 3) && !Q_stricmp(reason, "timeout") )
+			info->lastFailedCombatPoint = info->tacticCP;
+		NPC_FreeCombatPoint( info->tacticCP );
+		info->combatPoint = -1;
+	}
+	info->tacticCP = -1;
+	AI_GroupUpdateSquadstates( info->group, self, SQUAD_STAND_AND_SHOOT );
+	TIMER_Set( self, "regroupRetry", 3000 );
+	if ( (role == 3 || role == 4) && info->group )
+	{
+		for ( int i = 0; i < info->group->numGroup; i++ )
+		{
+			gentity_t *other = &g_entities[info->group->member[i].number];
+			if ( other->NPC && other->NPC->tacticRole == 5 )
+				ST_ClearTactic( other, reason );
+		}
+	}
+}
+
+static qboolean ST_SeesKnownThreat( gentity_t *self, const vec3_t known )
+{
+	auto *info = self->NPC;
+	return (G_ClearLOS( self, known ) || (info->enemyLastSeenTime > 0 && info->enemyLastSeenTime <= level.time
+		&& level.time-info->enemyLastSeenTime <= 1500 && DistanceSquared( info->enemyLastSeenLocation, known ) <= 64*64)) ? qtrue : qfalse;
+}
+
+static qboolean ST_ReadySupport( gentity_t *self, const vec3_t known )
+{
+	auto *info = self->NPC;
+	return (self->client->ps.weapon != WP_NONE && self->health*2 >= self->max_health
+		&& self->painDebounceTime <= level.time && (info->tacticRole == 0 || info->tacticRole == 5)
+		&& (info->scriptFlags & SCF_CHASE_ENEMIES) && !(info->scriptFlags & SCF_DONT_FIRE)
+		&& (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_FIRING
+			|| self->client->ps.weaponstate == WEAPON_IDLE)
+		&& TIMER_Done( self, "attackDelay" ) && TIMER_Done( self, "flee" ) && !info->goalEntity
+		&& VectorCompare( self->client->ps.velocity, vec3_origin )
+		&& ST_SeesKnownThreat( self, known )) ? qtrue : qfalse;
+}
+
+static void ST_AssignTactic( gentity_t *self, int role, int cp, const vec3_t known, const vec3_t goal )
+{
+	auto *info = self->NPC;
+	info->tacticRole = role;
+	info->tacticCP = cp;
+	info->tacticEnemy = self->enemy->s.number;
+	info->tacticDeadline = level.time + (role == 5 ? 9000 : (role == 1 || role == 3) ? 6000 : 3000);
+	VectorCopy( goal, info->tacticGoal );
+	VectorCopy( known, info->tacticThreat );
+	info->aiFlags &= ~(NPCAI_STOP_AT_LOS|NPCAI_TOUCHED_GOAL);
+	info->movementSpeech = 0;
+	NAV::ClearPath( self );
+	AI_GroupUpdateSquadstates( info->group, self, role == 1 ? SQUAD_RETREAT : role == 3 ? SQUAD_TRANSITION : role == 2 ? SQUAD_COVER : SQUAD_STAND_AND_SHOOT );
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_assign ent=%d role=%d cp=%d knownposition=%.1f,%.1f,%.1f\n", self->s.number, role, cp, known[0], known[1], known[2] );
+}
+
+static qboolean ST_ValidFlankGoal( gentity_t *self, gentity_t *support, const vec3_t& goal, const vec3_t& known )
+{
+	float travel = DistanceSquared( self->currentOrigin, goal );
+	if ( travel < 128*128 || travel > 512*512 || DistanceSquared( goal, known ) < 128*128
+		|| DistanceSquared( support->currentOrigin, goal ) < 128*128 )
+		return qfalse;
+	vec3_t fromSupport, fromGoal, firing;
+	VectorSubtract( support->currentOrigin, known, fromSupport );
+	VectorSubtract( goal, known, fromGoal );
+	fromSupport[2] = fromGoal[2] = 0;
+	if ( VectorNormalize( fromSupport ) < 1 || VectorNormalize( fromGoal ) < 1
+		|| DotProduct( fromSupport, fromGoal ) > 0.5f )
+		return qfalse;
+	trace_t trace;
+	gi.trace( &trace, goal, self->mins, self->maxs, goal, self->s.number, self->clipmask, (EG2_Collision)0, 0 );
+	if ( trace.startsolid || trace.allsolid )
+		return qfalse;
+	CalcEntitySpot( self, SPOT_WEAPON, firing );
+	VectorSubtract( firing, self->currentOrigin, firing );
+	VectorAdd( firing, goal, firing );
+	return (G_ClearLOS( self, firing, known ) && NAV::GetNearestNode( goal ) != WAYPOINT_NONE
+		&& NAV::InSameRegion( self, goal ) && NAV::SafePathExists( self->currentOrigin, goal, known, 128*128, self )) ? qtrue : qfalse;
+}
+
+static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
+{
+	auto *info = self->NPC;
+	if ( !d_squadTactics->integer )
+	{
+		ST_ClearTactic( self, "disabled" );
+		return qfalse;
+	}
+	if ( info->tacticRole && (!self->enemy || self->enemy->s.number != info->tacticEnemy || self->enemy != group->enemy) )
+		ST_ClearTactic( self, "target_changed" );
+	if ( !AI_ValidateGroupMember( group, self, qtrue ) || self->enemy != group->enemy
+		|| !(info->scriptFlags & SCF_CHASE_ENEMIES) || !TIMER_Done( self, "flee" )
+		|| (info->goalEntity && (info->goalEntity->s.eType == ET_ITEM
+			|| (info->goalEntity->enemy && info->goalEntity->enemy->s.eType == ET_ITEM))) )
+	{
+		ST_ClearTactic( self );
+		return qfalse;
+	}
+	gentity_t *buddy = NULL, *support = NULL, *flanker = NULL;
+	qboolean availableBuddy = qfalse;
+	for ( int i = 0; i < group->numGroup; i++ )
+	{
+		gentity_t *other = &g_entities[group->member[i].number];
+		if ( other->NPC && (other->NPC->tacticRole == 3 || other->NPC->tacticRole == 4) )
+			flanker = other;
+		if ( other == self || !AI_ValidateGroupMember( group, other, qtrue ) || other->enemy != self->enemy
+			|| other->client->ps.weapon == WP_NONE || DistanceSquared( self->currentOrigin, other->currentOrigin ) > 512*512
+			|| NAV::GetNearestNode( self ) == WAYPOINT_NONE || NAV::GetNearestNode( other ) == WAYPOINT_NONE
+			|| !NAV::InSameRegion( self, other ) )
+			continue;
+		if ( !buddy || DistanceSquared( self->currentOrigin, other->currentOrigin ) < DistanceSquared( self->currentOrigin, buddy->currentOrigin ) )
+			buddy = other;
+		if (other->health*2 >= other->max_health && other->NPC->tacticRole != 1 && other->NPC->tacticRole != 2
+			&& !(other->NPC->scriptFlags & SCF_DONT_FIRE))
+			availableBuddy = qtrue;
+		if ( ST_ReadySupport( other, info->tacticRole ? info->tacticThreat : group->enemyLastSeenPos )
+			&& (!support || other->NPC->tacticRole == 5)
+			&& (info->tacticRole ? NAV::InSameRegion( self, other ) : AI_LocalGroupContact( self, other )) )
+			support = other;
+	}
+	qboolean lowHealth = self->health*2 < self->max_health ? qtrue : qfalse;
+	if ( info->tacticRole )
+	{
+		int role = info->tacticRole;
+		bool moving = role == 1 || role == 3;
+		if (moving && debugNPCAI->integer >= DEBUG_LEVEL_INFO && TIMER_Done(self, "tacticTrace"))
+		{
+			TIMER_Set(self, "tacticTrace", 250);
+			Debug_Printf(debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_step ent=%d role=%d pos=%.3f,%.3f,%.3f knownposition=%.3f,%.3f,%.3f\n", self->s.number, role,
+				self->currentOrigin[0], self->currentOrigin[1], self->currentOrigin[2], info->tacticThreat[0], info->tacticThreat[1], info->tacticThreat[2]);
+		}
+		bool arrived = moving && (DistanceSquared(self->currentOrigin, info->tacticGoal) < 16*16
+			|| G_BoundsOverlap(info->tacticGoal, info->tacticGoal, self->absmin, self->absmax));
+		if ( role == 1 && (info->scriptFlags & SCF_DONT_FLEE) )
+		{
+			ST_ClearTactic( self, "interrupted" );
+			return qtrue;
+		}
+		if ( (info->tacticCP >= 0 && info->combatPoint != info->tacticCP)
+			|| (moving && !info->goalEntity && !arrived)
+			|| (info->goalEntity && (info->goalEntity != info->tempGoal
+				|| !VectorCompare( info->tempGoal->currentOrigin, info->tacticGoal ))) )
+		{
+			ST_ClearTactic( self );
+			return qtrue;
+		}
+		if ( info->tacticRole == 5 && (!flanker || lowHealth || !ST_ReadySupport( self, info->tacticThreat )) )
+		{
+			Debug_Printf(debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=support_unready ent=%d weaponstate=%d attack_delay=%d pain=%d velocity=%.1f,%.1f,%.1f\n", self->s.number, self->client->ps.weaponstate, TIMER_Get(self, "attackDelay")-level.time, self->painDebounceTime-level.time, self->client->ps.velocity[0], self->client->ps.velocity[1], self->client->ps.velocity[2]);
+			ST_ClearTactic( self, "support_lost" );
+		}
+		else if ( (info->tacticRole == 3 || info->tacticRole == 4) && (lowHealth || !support || support->NPC->tacticRole != 5) )
+			ST_ClearTactic( self, "support_lost" );
+		else if ( info->tacticDeadline <= level.time )
+			ST_ClearTactic( self, info->tacticRole == 4 || (info->tacticRole == 2 && info->tacticCP >= 0) ? "arrival" : "timeout" );
+		else if ( arrived )
+		{
+			info->goalEntity = NULL;
+			ST_AssignTactic( self, info->tacticRole+1, info->tacticCP, info->tacticThreat, info->tacticGoal );
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_arrival ent=%d reason=arrival cp=%d\n", self->s.number, info->tacticCP );
+		}
+		if ( !info->tacticRole && lowHealth && role >= 3 )
+			TIMER_Set( self, "regroupRetry", 0 );
+		return qtrue;
+	}
+	if ( group->lastSeenEnemyTime <= 0 || group->lastSeenEnemyTime > level.time
+		|| level.time-group->lastSeenEnemyTime > 1500 )
+		return qfalse;
+	if ( !TIMER_Done( self, "regroupRetry" ) )
+		return qtrue;
+	qboolean flank = (!lowHealth && availableBuddy && support && !flanker) ? qtrue : qfalse;
+	if ( !lowHealth && availableBuddy && !flank )
+		return qfalse;
+	int cp = -1;
+	if ( (flank || (!(info->scriptFlags & SCF_DONT_FLEE) && ST_SeesKnownThreat( self, group->enemyLastSeenPos )))
+		&& info->tempGoal && NAV::GetNearestNode( self ) != WAYPOINT_NONE )
+	{
+		cp = NPC_FindCombatPoint( self->currentOrigin, group->enemyLastSeenPos,
+			flank || !buddy ? self->currentOrigin : buddy->currentOrigin,
+			(flank ? CP_CLEAR|CP_FLANK : CP_COVER|CP_RETREAT)|CP_AVOID_ENEMY|CP_HAS_ROUTE,
+			128, info->lastFailedCombatPoint, group->enemyLastSeenPos );
+		if ( cp >= 0 && (DistanceSquared( self->currentOrigin, level.combatPoints[cp].origin ) > 512*512
+			|| DistanceSquared( self->currentOrigin, level.combatPoints[cp].origin ) < (flank ? 128*128 : 32*32)
+			|| NAV::GetNearestNode( level.combatPoints[cp].origin ) == WAYPOINT_NONE
+			|| !NAV::InSameRegion( self, level.combatPoints[cp].origin )) )
+			cp = -1;
+		if ( flank && cp >= 0 && !ST_ValidFlankGoal( self, support, level.combatPoints[cp].origin, group->enemyLastSeenPos ) )
+			cp = -1;
+	}
+	vec3_t goal;
+	VectorCopy( cp >= 0 ? level.combatPoints[cp].origin : self->currentOrigin, goal );
+	bool move = cp >= 0;
+	if ( flank && !move && info->tempGoal && NAV::GetNearestNode( self ) != WAYPOINT_NONE )
+	{
+		NAV::TNodeHandle nodes[64];
+		int count = NAV::GetNearbyGroundNodes( self->currentOrigin, nodes, 64 );
+		for ( int i = 0; i < count; ++i )
+		{
+			const vec3_t& point = NAV::GetNodePosition( nodes[i] );
+			if ( ST_ValidFlankGoal( self, support, point, group->enemyLastSeenPos ) )
+			{
+				VectorCopy( point, goal );
+				move = true;
+				break; // The query orders candidates by travel distance.
+			}
+		}
+	}
+	if ( flank && !move )
+	{
+		TIMER_Set( self, "regroupRetry", 3000 );
+		return qfalse;
+	}
+	NPC_FreeCombatPoint( info->combatPoint );
+	info->combatPoint = -1;
+	info->goalEntity = NULL;
+	if ( cp >= 0 && !NPC_SetCombatPoint( cp ) )
+	{
+		cp = -1;
+		move = false;
+		VectorCopy( self->currentOrigin, goal );
+	}
+	if ( move )
+		NPC_SetMoveGoal( self, goal, 16, qtrue, cp );
+	ST_AssignTactic( self, flank && move ? 3 : move ? 1 : 2, cp, group->enemyLastSeenPos, goal );
+	if ( flank && move )
+	{
+		ST_AssignTactic( support, 5, -1, group->enemyLastSeenPos, support->currentOrigin );
+		ST_Speech( self, SPEECH_OUTFLANK, 0 );
+	}
+	else if ( move )
+		ST_Speech( self, SPEECH_COVER, 0 );
+	return qtrue;
+}
+
+static qboolean ST_CheckGrenade( void )
+{
+	if ( !TIMER_Done( NPC, "flee" ) || Q3_TaskIDPending( NPC, TID_MOVE_NAV )
+		|| !(NPCInfo->scriptFlags & SCF_CHASE_ENEMIES)
+		|| (NPCInfo->scriptFlags & (SCF_DONT_FLEE|SCF_FORCED_MARCH))
+		|| NPCInfo->behaviorState == BS_CINEMATIC || NPCInfo->tempBehavior == BS_CINEMATIC
+		|| NPCInfo->defaultBehavior == BS_CINEMATIC || !TIMER_Done( NPC, "checkGrenadeTooCloseDebouncer" ) )
+		return qfalse;
+	TIMER_Set( NPC, "checkGrenadeTooCloseDebouncer", Q_irand( 300, 600 ) );
+	vec3_t mins, maxs;
+	for ( int i = 0; i < 3; ++i )
+	{
+		mins[i] = NPC->currentOrigin[i] - 200;
+		maxs[i] = NPC->currentOrigin[i] + 200;
+	}
+	gentity_t *entities[MAX_GENTITIES];
+	int count = gi.EntitiesInBox( mins, maxs, entities, MAX_GENTITIES );
+	for ( int i = 0; i < count; ++i )
+	{
+		gentity_t *ent = entities[i];
+		if ( ent == NPC || ent->owner == NPC || !ent->inuse || ent->s.eType != ET_MISSILE
+			|| ent->s.weapon != WP_THERMAL || !ent->has_bounced || (ent->owner && OnSameTeam( ent->owner, NPC )) )
+			continue;
+		ST_ClearTactic( NPC, "interrupted" );
+		ST_Speech( NPC, SPEECH_COVER, 0 );
+		NPC_StartFlee( NPC->enemy, ent->currentOrigin, AEL_DANGER_GREAT, 1000, 2000 );
+		TIMER_Set( NPC, "checkGrenadeTooCloseDebouncer", Q_irand( 2000, 4000 ) );
+		return qtrue;
+	}
+	return qfalse;
+}
+
 /*
 -------------------------
 ST_Commander
@@ -1919,6 +2286,7 @@ void ST_Commander( void )
 	//FIXME: start fleeing when only a couple of you vs. a lightsaber, possibly give up if the only one left
 
 	SaveNPCGlobals();
+	ST_ReportNearby( group );
 
 	if ( group->lastSeenEnemyTime < level.time - 180000 )
 	{//dissolve the group
@@ -2022,6 +2390,13 @@ void ST_Commander( void )
 			continue;
 		}
 		SetNPCGlobals( member );
+		if ( ST_CheckGrenade() )
+		{
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=grenade\n", (int)(group-level.groups), NPC->s.number );
+			continue;
+		}
+		if ( ST_Tactics( member, group ) )
+			continue;
 
 		if ( !TIMER_Done( NPC, "flee" ) )
 		{//running away
@@ -2112,61 +2487,6 @@ void ST_Commander( void )
 		{
 			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=enemy_cleared\n", (int)(group-level.groups), NPC->s.number );
 			continue;
-		}
-
-
-		// Check To See We Have A Clear Shot To The Enemy Every Couple Seconds
-		//---------------------------------------------------------------------
-		if (TIMER_Done( NPC, "checkGrenadeTooCloseDebouncer" ))
-		{
-			TIMER_Set (NPC, "checkGrenadeTooCloseDebouncer", Q_irand(300, 600));
-
-			vec3_t		mins;
-			vec3_t		maxs;
-			bool		fled = false;
-			gentity_t*	ent;
-
-			gentity_t	*entityList[MAX_GENTITIES];
-
-			for (int i = 0 ; i < 3 ; i++ )
-			{
-				mins[i] = NPC->currentOrigin[i] - 200;
-				maxs[i] = NPC->currentOrigin[i] + 200;
-			}
-
-			int	numListedEntities = gi.EntitiesInBox( mins, maxs, entityList, MAX_GENTITIES );
-
-			for (int e = 0 ; e < numListedEntities ; e++ )
-			{
-				ent = entityList[ e ];
-
-				if (ent == NPC)
-					continue;
-				if (ent->owner == NPC)
-					continue;
-				if ( !(ent->inuse) )
-					continue;
-				if ( ent->s.eType == ET_MISSILE )
-				{
-					if ( ent->s.weapon == WP_THERMAL )
-					{//a thermal
-						if ( ent->has_bounced && (!ent->owner || !OnSameTeam(ent->owner, NPC)))
-						{//bounced and an enemy thermal
-							ST_Speech( NPC, SPEECH_COVER, 0 );//FIXME: flee sound?
-							NPC_StartFlee(NPC->enemy, ent->currentOrigin, AEL_DANGER_GREAT, 1000, 2000);
-							fled = true;
-//							cpFlags |= (CP_CLEAR|CP_COVER);	// NOPE, Can't See The Enemy, So Find A New Combat Point
-							TIMER_Set (NPC, "checkGrenadeTooCloseDebouncer", Q_irand(2000, 4000));
-							break;
-						}
-					}
-				}
-			}
-			if (fled)
-			{
-				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=grenade\n", (int)(group-level.groups), NPC->s.number );
-				continue;
-			}
 		}
 
 
@@ -2263,14 +2583,7 @@ void ST_Commander( void )
 				}
 
 				//okay, try a doMove right now to see if we can even get there
-				if ( (cpFlags&CP_FLANK) )
-				{
-					if ( group->numGroup > 1 )
-					{
-						NPC_ST_StoreMovementSpeech( SPEECH_OUTFLANK, -1 );
-					}
-				}
-				else if ( (cpFlags&CP_COVER) && !(cpFlags&CP_CLEAR) )
+				if ( (cpFlags&CP_COVER) && !(cpFlags&CP_CLEAR) )
 				{//going into hiding
 					NPC_ST_StoreMovementSpeech( SPEECH_COVER, -1 );
 				}
@@ -2278,14 +2591,7 @@ void ST_Commander( void )
 				{
 					if ( !Q_irand( 0, 20 ) )
 					{//hell, we're loading the sounds, use them every now and then!
-						if ( Q_irand( 0, 1 ) )
-						{
-							NPC_ST_StoreMovementSpeech( SPEECH_OUTFLANK, -1 );
-						}
-						else
-						{
-							NPC_ST_StoreMovementSpeech( SPEECH_ESCAPING, -1 );
-						}
+						NPC_ST_StoreMovementSpeech( SPEECH_ESCAPING, -1 );
 					}
 				}
 			}
@@ -2361,6 +2667,13 @@ NPC_BSST_Attack
 
 void NPC_BSST_Attack( void )
 {
+	if ( NPCInfo->tacticRole )
+	{
+		if ( NPCInfo->group )
+			ST_Tactics( NPC, NPCInfo->group );
+		else
+			ST_ClearTactic( NPC );
+	}
 	//Don't do anything if we're hurt
 	if ( NPC->painDebounceTime > level.time )
 	{
@@ -2599,7 +2912,7 @@ void NPC_BSST_Attack( void )
 		doMove = qfalse;
 	}
 
-	if ( !ucmd.rightmove )
+	if ( !NPCInfo->tacticRole && !ucmd.rightmove )
 	{//only if not already strafing for some strange reason...?
 		//NOTE: these are never set here, but can be set in AI_Jedi.cpp for those NPCs who are sort of Stormtrooper/Jedi hybrids
 		//NOTE: this stomps navigation movement entirely!
@@ -2634,6 +2947,12 @@ void NPC_BSST_Attack( void )
 		}
 	}
 
+	if ( NPCInfo->tacticRole == 2 || NPCInfo->tacticRole == 4 || NPCInfo->tacticRole == 5 )
+	{
+		ucmd.forwardmove = ucmd.rightmove = 0;
+		VectorClear( NPC->client->ps.moveDir );
+		doMove = qfalse;
+	}
 	if ( NPC->client->ps.legsAnim == BOTH_GUARD_LOOKAROUND1 )
 	{//don't doMove when doing silly look around thing
 		doMove = qfalse;

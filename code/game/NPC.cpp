@@ -71,6 +71,7 @@ cvar_t		*d_saberCombat;
 cvar_t		*d_JediAI;
 cvar_t		*d_noGroupAI;
 cvar_t		*d_asynchronousGroupAI;
+cvar_t		*d_squadTactics;
 cvar_t		*d_slowmodeath;
 
 extern qboolean	stop_icarus;
@@ -2364,6 +2365,8 @@ extern int AITime;
 #endif//	AI_TIMERS
 void NPC_Think ( gentity_t *self)//, int msec )
 {
+	if ( self->NPC && self->NPC->tacticRole && !d_squadTactics->integer )
+		ST_ClearTactic( self, "disabled" );
 	vec3_t	oldMoveDir;
 
 	self->nextthink = level.time + FRAMETIME/2;
@@ -2539,6 +2542,7 @@ void NPC_InitAI ( void )
 	d_JediAI = gi.cvar ( "d_JediAI", "0", CVAR_CHEAT );
 	d_noGroupAI = gi.cvar ( "d_noGroupAI", "0", CVAR_CHEAT );
 	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", CVAR_CHEAT );
+	d_squadTactics = gi.cvar ( "d_squadTactics", "1", CVAR_CHEAT );
 
 	//0 = never (BORING)
 	//1 = kyle only

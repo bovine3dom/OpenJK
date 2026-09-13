@@ -89,6 +89,8 @@ namespace NAV
 	////////////////////////////////////////////////////////////////////////////////////
 	TNodeHandle		GetNearestNode(gentity_t* ent, bool forceRecalcNow=false, NAV::TNodeHandle goal=0);
 	TNodeHandle		GetNearestNode(const vec3_t& position, TNodeHandle previous=0, NAV::TNodeHandle goal=0, int ignoreEnt=ENTITYNUM_NONE, bool allowZOffset=false);
+	// Return up to 64 nearest ground waypoints within 512 units.
+	int				GetNearbyGroundNodes(const vec3_t& position, TNodeHandle* nodes, int capacity);
 
 	TNodeHandle		ChooseRandomNeighbor(TNodeHandle NodeHandle);
 	TNodeHandle		ChooseRandomNeighbor(TNodeHandle NodeHandle, const vec3_t& position, float maxDistance);
@@ -131,7 +133,7 @@ namespace NAV
 	bool			FindPath(gentity_t* actor, gentity_t* target, float MaxDangerLevel=1.0f);
 	bool			FindPath(gentity_t* actor, const vec3_t& position, float MaxDangerLevel=1.0f);
 
-	bool			SafePathExists(const CVec3& start, const CVec3& stop, const CVec3& danger, float dangerDistSq);
+	bool			SafePathExists(const CVec3& start, const CVec3& stop, const CVec3& danger, float dangerDistSq, gentity_t* actor=NULL);
 
 	bool			HasPath(gentity_t* actor, TNodeHandle target=PT_NONE);
 	void			ClearPath(gentity_t* actor);

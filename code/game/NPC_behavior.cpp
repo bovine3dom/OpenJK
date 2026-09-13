@@ -1200,16 +1200,22 @@ NPC_BSSearchStart
 -------------------------
 */
 
+void NPC_BSSearchStart( gentity_t *self, int homeWp, bState_t bState )
+{
+	if ( !self || !self->NPC || !self->NPC->tempGoal )
+		return;
+	gNPC_t *info = self->NPC;
+	info->homeWp = homeWp;
+	info->tempBehavior = bState;
+	info->aiFlags |= NPCAI_ENROUTE_TO_HOMEWP;
+	info->investigateDebounceTime = 0;
+	NAV::GetNodePosition(homeWp, info->tempGoal->currentOrigin);
+	info->tempGoal->waypoint = homeWp;
+}
+
 void NPC_BSSearchStart( int homeWp, bState_t bState )
 {
-	//FIXME: Reimplement
-	NPCInfo->homeWp = homeWp;
-	NPCInfo->tempBehavior = bState;
-	NPCInfo->aiFlags |= NPCAI_ENROUTE_TO_HOMEWP;
-	NPCInfo->investigateDebounceTime = 0;
-	NAV::GetNodePosition(homeWp, NPCInfo->tempGoal->currentOrigin);
-	NPCInfo->tempGoal->waypoint = homeWp;
-	//gi.Printf("\nHeading for wp %d...\n", NPCInfo->homeWp);
+	NPC_BSSearchStart( NPC, homeWp, bState );
 }
 
 /*

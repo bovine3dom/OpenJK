@@ -41,7 +41,7 @@ def main():
         env = dict(os.environ, OJK_SMOKE_ROOT=str(suite / case))
         subprocess.run(["bash", str(root / "scripts/smoke-sp.sh"), str(args.package.resolve()),
                         "t2_wedge", "+set", "com_maxfps", "10", "+set", "d_asynchronousGroupAI",
-                        str(asynchronous), "+exec", config], env=env, check=True)
+                        str(asynchronous), "+set", "d_squadTactics", "0", "+exec", config], env=env, check=True)
         logs = list((suite / case).glob("t2_wedge.*/console.log"))
         check(len(logs) == 1, f"Missing unique log: {suite / case}")
         text = logs[0].read_text(errors="replace")
