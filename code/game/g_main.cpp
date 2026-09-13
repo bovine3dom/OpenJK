@@ -724,6 +724,7 @@ SavedGameJustLoaded_e g_eSavedGameJustLoaded;
 qboolean g_qbLoadTransition = qfalse;
 void InitGame(  const char *mapname, const char *spawntarget, int checkSum, const char *entities, int levelTime, int randomSeed, int globalTime, SavedGameJustLoaded_e eSavedGameJustLoaded, qboolean qbLoadTransition )
 {
+	NAV_RouteTestReset();
 	//rww - default this to 0, we will auto-set it to 1 if we run into a terrain ent
 	gi.cvar_set("RMG", "0");
 
@@ -826,6 +827,7 @@ ShutdownGame
 */
 void ShutdownGame( void )
 {
+	NAV_RouteTestReset( "shutdown" );
 	// write all the client session data so we can get it back
 	G_WriteSessionData();
 
@@ -1911,6 +1913,7 @@ void G_RunFrame( int levelTime ) {
 	level.time = levelTime;
 
 	//ResetTeamCounters();
+	NAV_RouteTestUpdate();
 	NAV::DecayDangerSenses();
 	Rail_Update();
 	Troop_Update();

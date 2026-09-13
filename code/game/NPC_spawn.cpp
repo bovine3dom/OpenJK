@@ -1649,6 +1649,11 @@ gentity_t *NPC_Spawn_Do( gentity_t *ent, qboolean fullSpawnNow )
 	if ( !NPC_ParseParms( ent->NPC_type, newent ) )
 	{
 		gi.Printf ( S_COLOR_RED "ERROR: Couldn't spawn NPC %s\n", ent->NPC_type );
+		if ( !Q_stricmp( ent->classname, "NPC_routetest" ) )
+		{
+			G_FreeEntity( newent->NPC->tempGoal );
+			newent->NPC->tempGoal = NULL;
+		}
 		G_FreeEntity( newent );
 		if ( ent->spawnflags & NSF_DROP_TO_FLOOR )
 		{

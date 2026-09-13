@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../cgame/cg_local.h"
 #include "Q3_Interface.h"
 #include "g_local.h"
+#include "g_nav.h"
 #include "fields.h"
 #include "objectives.h"
 #include "../cgame/cg_camera.h"
@@ -1252,6 +1253,7 @@ static void ReadGEntities(qboolean qbAutosave)
 
 void WriteLevel(qboolean qbAutosave)
 {
+	NAV_RouteTestReset( "save" );
 	if (!qbAutosave) //-always save the client
 	{
 		// write out one client - us!

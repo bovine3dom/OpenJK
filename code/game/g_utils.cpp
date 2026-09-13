@@ -863,6 +863,7 @@ Marks the entity as free
 =================
 */
 void G_FreeEntity( gentity_t *ed ) {
+	bool routeTestRemoved = NAV_RouteTestFree( ed );
 	gi.unlinkentity (ed);		// unlink from world
 
 	// Free the Game Element (the entity) and delete the Icarus ID.
@@ -991,6 +992,8 @@ void G_FreeEntity( gentity_t *ed ) {
 	ed->freetime = level.time;
 	ed->inuse = qfalse;
 	ClearInUse(ed);
+	if ( routeTestRemoved )
+		gi.Printf( "routetest event=cleanup remaining=0\n" );
 }
 
 /*

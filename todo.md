@@ -63,7 +63,8 @@ Desktop access and validation are postponed. No files have been transferred.
 - [ ] Copy game assets once, or use an existing desktop installation. Exclude assets from routine build transfers.
 - [x] Package `openjk_sp.x86_64`, `rdsp-vanilla_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
 - [x] Assign each package a unique identifier and source checksums, including uncommitted files. Publish only complete packages that passed the smoke test.
-- [ ] Add a desktop pull command. Transfer into a new directory and select it for launch only after transfer succeeds. Do not overwrite a running build.
+- [x] Add a configured desktop pull-and-launch command in `scripts/play-sp.sh`. Reuse one managed directory for rsync delta updates, resolve a fixed server package, and refuse updates while the game is running.
+- [x] Test delta reuse, transfer failure/retry, path protection, publication changes, and launcher locking locally. Actual desktop SSH and GPU validation remain pending.
 - [x] Retain older packages and use an external writable profile. Desktop validation remains pending.
 - [x] Provide normal and direct-map launches plus a diagnostic spawn fixture. Include the build identifier in test logs.
 - [x] Copy a package locally with rsync and pass the smoke test from the new path. This does not establish compatibility with the desktop's libraries or GPU.
@@ -77,7 +78,12 @@ Desktop access and validation are postponed. No files have been transferred.
 
 ## 5. First AI Encounter
 
-- [ ] Select a repeatable encounter with three or four ranged enemies and two usable routes. Record the map, start position, settings, and current behaviour.
+- [x] Select the `t2_wedge` central interior as the first candidate. Record two connected graph routes and a three-member enemy group in `docs/encounter-krildor.md`.
+- [x] Verify designated-trooper traversal of both routes, including measured arrivals. A final-goal-only test also exercises navigator-selected movement.
+- [x] Verify blocked and frozen timeouts, cancel/busy/restart, killed-actor cleanup, and save cancellation with `python3 scripts/test-traversal-sp.py`.
+- [x] Observe geometric line-of-sight loss around the pillar. This does not yet verify enemy perception or memory.
+- [ ] Add goal-replacement, direct-free, and active-probe load/map-change lifecycle cases.
+- [ ] Trace real enemy lost-contact behaviour in this room, then replace live hidden-position tracking with observation-based tracking.
 - [ ] Audit existing cover, flank, and lost-contact voice clips. Map suitable clips to real squad events.
 - [x] Add default-off traces for existing membership, squad states, commander decisions, combat-point searches and reservations, movement, and bark requests, suppression, and dispatch.
 - [x] Check trace levels 0, 3, and 4 with `bash scripts/test-squad-sp.sh`. This is a diagnostic fixture, not a coordinated-flank test.

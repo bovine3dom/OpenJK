@@ -41,12 +41,59 @@ bash scripts/test-squad-sp.sh
 
 ## Desktop Package
 
-Copy a completed package directory to the desktop with rsync over SSH. Use the
-versioned path printed by the build command, not a symlink that can change during
-transfer. Transfer into a new local directory. Keep an older package for comparison.
+Install the pull-and-launch command on the desktop once. Replace `BUILD_SERVER`
+with the SSH alias or `user@hostname` used to connect to this build machine:
+
+```bash
+mkdir -p ~/.local/bin
+scp BUILD_SERVER:/home/olie/projects/OpenJK/scripts/play-sp.sh ~/.local/bin/openjk-play
+chmod +x ~/.local/bin/openjk-play
+~/.local/bin/openjk-play --configure BUILD_SERVER /path/to/GameData
+```
+
+Then update and start the game with one command:
+
+```bash
+~/.local/bin/openjk-play
+```
+
+If `~/.local/bin` is on `PATH`, use `openjk-play`. Extra arguments go to the engine:
+
+```bash
+openjk-play +devmap t2_wedge +exec krildor-route.cfg
+```
+
+The updater resolves the server's `build/ready` link once, then transfers that
+fixed package into the same local directory on every run. Rsync uses existing
+files for delta transfers and removes obsolete package files. It does not build
+on either machine. The build server must publish with `scripts/build-sp.sh` first.
+
+Configuration is stored in `${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf`.
+It is a trusted Bash file. These settings are available:
+
+| Setting | Purpose and default |
+| --- | --- |
+| `OJK_HOST` | SSH alias or `user@hostname`. Use SSH config for ports and identity files. |
+| `OJK_ASSETS` | Desktop `GameData` directory, supplied during configuration. |
+| `OJK_REMOTE_ROOT` | Server repository, default `/home/olie/projects/OpenJK`. |
+| `OJK_DESKTOP_DIR` | Local work directory, default `${XDG_DATA_HOME:-$HOME/.local/share}/openjk-playtest`. The managed package is its `build/` subdirectory. |
+| `OJK_PROFILE` | Writable game profile, default `${XDG_DATA_HOME:-$HOME/.local/share}/openjk-dev`. |
+| `OJK_DESKTOP_CONFIG` | Optional alternative configuration-file path. Set it before running the command. |
+
+Keep assets, profiles, and the updater outside the managed build directory. The
+first update requires that directory to be empty. Later updates retain a local
+management marker. Do not add personal files there; rsync can delete them.
+
+The updater and package launcher share a lock held until the game exits. A second
+launch or update is refused while that lock is held. Run through these scripts,
+not the engine binary directly, to retain this protection. A failed transfer does
+not launch the game and leaves an incomplete-update marker. Run the updater again
+to repair it. Delayed updates reduce partial replacement, but do not provide a
+transactional rollback. Older server packages remain available for comparison.
 
 Assets are not included. Use an existing `GameData/base/assets*.pk3` installation
-or copy the assets once. Then run this command inside the downloaded package:
+or transfer the assets once. To launch the local package without an update, run
+this command inside its `build/` directory:
 
 ```bash
 bash launch-sp.sh /path/to/GameData
@@ -69,7 +116,22 @@ are preferred over cross-build saves.
 Add `+exec squad-smoke.cfg` for the diagnostic spawn fixture. It enables player
 invulnerability and adds three enemies; it is not a campaign playtest.
 
+For the first multi-route candidate, load `t2_wedge` and execute
+`krildor-route.cfg`. See `encounter-krildor.md` in the package or
+`docs/encounter-krildor.md` in the repository for coordinates and evidence limits.
+
+Run `python3 scripts/test-traversal-sp.py` to test actual NPC traversal of both
+paths, navigator-selected movement, visibility loss, and probe cleanup. The suite
+uses `krildor-traverse.cfg`, which clears native NPCs in fresh test sessions.
+Use `--case north` or another documented case to repeat one check. Python 3 and
+the existing smoke-test dependencies are required. Run headless cases sequentially.
+
 Both machines are x86-64 Arch Linux, but runtime library versions still need a
 desktop check. The package includes source and runtime manifests, debug symbols,
 and the tracked source diff. It does not bundle system libraries or proprietary
 game assets. No desktop validation has been performed yet.
+
+`python3 scripts/test-play-sp.py` tests the updater with real rsync, a local SSH
+stand-in, and a fake game. It checks delta reuse, argument quoting, publication
+changes, failed-transfer recovery, running-game locks, and path protection.
+These tests do not establish SSH access or graphics support on the desktop.

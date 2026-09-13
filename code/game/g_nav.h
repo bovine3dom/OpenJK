@@ -30,6 +30,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 extern	bool navCalculatePaths;
 
+void NAV_RouteTestUpdate( void );
+void NAV_RouteTestReset( const char *reason = NULL );
+bool NAV_RouteTestFree( gentity_t *ent );
+
 extern	bool NAVDEBUG_showNodes;
 extern	bool NAVDEBUG_showRadius;
 extern	bool NAVDEBUG_showEdges;

@@ -163,6 +163,7 @@ namespace NAV
 	////////////////////////////////////////////////////////////////////////////////////
 	void			ShowDebugInfo(const vec3_t& PlayerPosition, TNodeHandle PlayerWaypoint);
 	void			ShowStats();
+	void			DumpLocalGraph(const vec3_t& position);
 
 	void			TeleportTo(gentity_t* actor, const char* pointName);
 	void			TeleportTo(gentity_t* actor, int pointNum);

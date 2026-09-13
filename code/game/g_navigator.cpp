@@ -4007,8 +4007,34 @@ void			NAV::ShowDebugInfo(const vec3_t& PlayerPosition, int PlayerWaypoint)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
-// Show Stats
+// Local Graph Dump
 ////////////////////////////////////////////////////////////////////////////////////
+void NAV::DumpLocalGraph(const vec3_t& position)
+{
+	gi.Printf("navdump begin radius=1200 time=%d\n", level.time);
+	for (TGraph::TNodes::iterator it=mGraph.nodes_begin(); it!=mGraph.nodes_end(); it++)
+	{
+		CWayNode& node = *it;
+		if (node.mPoint.Dist2(position) <= 1200.0f*1200.0f)
+		{
+			gi.Printf("navdump node id=%d pos=%.1f,%.1f,%.1f type=%d\n", it.index(), node.mPoint[0], node.mPoint[1], node.mPoint[2], (int)node.mType);
+		}
+	}
+	for (TGraph::TEdges::iterator it=mGraph.edges_begin(); it!=mGraph.edges_end(); it++)
+	{
+		CWayEdge& edge = *it;
+		if (mGraph.get_node(edge.mNodeA).mPoint.Dist2(position) <= 1200.0f*1200.0f &&
+			mGraph.get_node(edge.mNodeB).mPoint.Dist2(position) <= 1200.0f*1200.0f)
+		{
+			// Report cached flags only: is_valid can trace and change edge state.
+			gi.Printf("navdump edge a=%d b=%d valid=%d jump=%d fly=%d blocking=%d entity=%d size=%d\n", edge.mNodeA, edge.mNodeB,
+				(int)edge.mFlags.get_bit(CWayEdge::WE_VALID), (int)edge.mFlags.get_bit(CWayEdge::WE_JUMPING),
+				(int)edge.mFlags.get_bit(CWayEdge::WE_FLYING), edge.Blocking(), (int)edge.mEntityNum, edge.Size());
+		}
+	}
+	gi.Printf("navdump end\n");
+}
+
 void			NAV::ShowStats()
 {
 #if !defined(FINAL_BUILD)
@@ -5535,9 +5561,6 @@ void	ClearAllNavStructures(void)
 	}
 	mEntEdgeMap.clear();
 }
-
-
-
 
 
 

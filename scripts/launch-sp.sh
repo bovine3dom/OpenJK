@@ -2,6 +2,15 @@
 set -euo pipefail
 
 package=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# Reuse the updater's lock, or take it when the launcher is run directly.
+if [[ ! "$package/.play-lock" -ef /proc/self/fd/9 ]]; then
+    exec 9>>"$package/.play-lock"
+fi
+flock -n 9 || { printf 'This build is already running or updating\n' >&2; exit 1; }
+if [[ -e "$package/.update-incomplete" ]]; then
+    printf 'The last update did not finish. Run the desktop updater again\n' >&2
+    exit 1
+fi
 assets=$(realpath -- "${1:?Usage: launch-sp.sh /path/to/GameData [engine arguments]}")
 shift
 for index in 0 1 2 3; do
