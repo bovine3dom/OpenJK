@@ -627,12 +627,24 @@ public:
 		saved_game.read<int32_t>(standTime);
 		saved_game.read<int32_t>(localState);
 		saved_game.read<int32_t>(squadState);
-		saved_game.read<int32_t>(tacticRole);
-		saved_game.read<int32_t>(tacticCP);
-		saved_game.read<int32_t>(tacticEnemy);
-		saved_game.read<int32_t>(tacticDeadline);
-		saved_game.read<float>(tacticGoal);
-		saved_game.read<float>(tacticThreat);
+		if (saved_game.get_version() == 1)
+		{
+			tacticRole = 0;
+			tacticCP = -1;
+			tacticEnemy = ENTITYNUM_NONE;
+			tacticDeadline = 0;
+			tacticGoal[0] = tacticGoal[1] = tacticGoal[2] = 0.0f;
+			tacticThreat[0] = tacticThreat[1] = tacticThreat[2] = 0.0f;
+		}
+		else
+		{
+			saved_game.read<int32_t>(tacticRole);
+			saved_game.read<int32_t>(tacticCP);
+			saved_game.read<int32_t>(tacticEnemy);
+			saved_game.read<int32_t>(tacticDeadline);
+			saved_game.read<float>(tacticGoal);
+			saved_game.read<float>(tacticThreat);
+		}
 		saved_game.read<int32_t>(confusionTime);
 		saved_game.read<int32_t>(charmedTime);
 		saved_game.read<int32_t>(controlledTime);

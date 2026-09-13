@@ -34,6 +34,11 @@ inline SavedGameHelper::SavedGameHelper(
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 // Public methods
 
+inline int SavedGameHelper::get_version() const
+{
+	return saved_game_->get_version();
+}
+
 inline void SavedGameHelper::read_chunk(
 	const uint32_t chunk_id)
 {

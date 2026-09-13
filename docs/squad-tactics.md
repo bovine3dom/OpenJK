@@ -8,9 +8,9 @@ imperials, rebels, commandos, and Bespin cops. Bosses, Force users, incompatible
 weapons, and script-controlled actors are excluded. It is not a replacement for
 every NPC behaviour.
 
-**Start a new mission. Jedi Academy saves now use format version 2.** Tactical
-ownership and report scheduling have new serialized fields. Version 1 saves are
-rejected rather than interpreted with the new layout. Jedi Outcast is unchanged.
+Jedi Academy saves now use format version 2. Supported pre-tactics v1 saves migrate
+on load, with the new tactical fields initialized. The original file is not
+rewritten. See `save-migration.md`. Jedi Outcast is unchanged.
 
 ## Local Reports
 

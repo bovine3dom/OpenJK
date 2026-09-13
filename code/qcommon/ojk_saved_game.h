@@ -43,6 +43,9 @@ public:
 	// Closes the current saved game file.
 	void close();
 
+	// Returns the file format version, or 0 if no file is open.
+	int get_version() const override;
+
 
 	// Reads a chunk from the file into the internal buffer.
 	bool read_chunk(
@@ -138,6 +141,9 @@ private:
 
 	// A handle to a file.
 	int32_t file_handle_;
+
+	// File format version.
+	int version_;
 
 	// I/O buffer.
 	Buffer io_buffer_;

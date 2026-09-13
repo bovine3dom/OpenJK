@@ -204,8 +204,16 @@ public:
 		saved_game.read<int32_t>(speechDebounceTime);
 		saved_game.read<int32_t>(lastClearShotTime);
 		saved_game.read<int32_t>(lastSeenEnemyTime);
-		saved_game.read<int32_t>(nextReportTime);
-		saved_game.read<int32_t>(nextReportMember);
+		if (saved_game.get_version() == 1)
+		{
+			nextReportTime = 0;
+			nextReportMember = 0;
+		}
+		else
+		{
+			saved_game.read<int32_t>(nextReportTime);
+			saved_game.read<int32_t>(nextReportMember);
+		}
 		saved_game.read<int32_t>(morale);
 		saved_game.read<int32_t>(moraleAdjust);
 		saved_game.read<int32_t>(moraleDebounce);

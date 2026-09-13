@@ -631,6 +631,15 @@ void Svcmd_Nav_f( void )
 			G_ClearLOS(source, recipient), AI_LocalGroupContact(source, recipient),
 			AI_ValidateGroupMember(source->NPC->group, recipient, qtrue));
 	}
+	else if ( Q_stricmp( cmd, "player" ) == 0 )
+	{
+		gentity_t *player = &g_entities[0];
+		if (player->client)
+			gi.Printf("playerstate health=%d armor=%d weapons=%d ammo_blaster=%d jump=%d pos=%.3f,%.3f,%.3f\n",
+				player->health, player->client->ps.stats[STAT_ARMOR], player->client->ps.stats[STAT_WEAPONS],
+				player->client->ps.ammo[AMMO_BLASTER], player->client->ps.forcePowerLevel[FP_LEVITATION],
+				player->currentOrigin[0], player->currentOrigin[1], player->currentOrigin[2]);
+	}
 	else if ( Q_stricmp( cmd, "show" ) == 0 )
 	{
 		cmd = gi.argv( 2 );
@@ -736,6 +745,7 @@ void Svcmd_Nav_f( void )
 		//Print the available commands
 		Com_Printf("nav - valid commands\n---\n" );
 		Com_Printf("contact <source NPC name> <recipient NPC name> - inspect local report eligibility\n" );
+		Com_Printf("player - inspect player state for save/load tests\n" );
 		Com_Printf("memory <unique NPC targetname> [hold|chase|enemy [targetname]] - inspect sight memory; controls require _memory_ names\n" );
 		Com_Printf("additional memory test controls: fight, protect, wound, ignore, nogroups, dontflee\n" );
 		Com_Printf("show\n - nodes\n - edges\n - testpath\n - enemypath\n - combatpoints\n - navgoals\n---\n");

@@ -114,6 +114,11 @@ port separately after the vanilla build and deployment workflow are reliable.
 - [x] Render and validate a non-black 3840x2160 screenshot. Keep existing profile settings unless an override is requested.
 - [ ] Replace the legacy resolution menu list and investigate widescreen HUD/menu layout separately.
 
+## Save Migration
+
+- [x] Add read-time migration for known project v1 saves while retaining v2 output and strict parsing.
+- [ ] Qualify additional historical/modded save layouts separately; do not promise compatibility from the version number alone.
+
 ## Rend2 Port
 
 - [x] Add an opt-in SP-native object target for shared shader, allocator, math, and tangent-space sources, with one shared shader generator.

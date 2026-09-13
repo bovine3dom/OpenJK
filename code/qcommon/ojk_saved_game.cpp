@@ -18,6 +18,7 @@ namespace ojk
 SavedGame::SavedGame() :
 		error_message_(),
 		file_handle_(),
+		version_(),
 		io_buffer_(),
 		saved_io_buffer_(),
 		io_buffer_offset_(),
@@ -80,15 +81,19 @@ bool SavedGame::open(
 			INT_ID('_', 'V', 'E', 'R'),
 			sg_version))
 		{
-			if (sg_version != iSAVEGAME_VERSION)
+			if (sg_version != iSAVEGAME_VERSION && sg_version != 1)
 			{
 				is_succeed = false;
 
 				::Com_Printf(
-					S_COLOR_RED "File \"%s\" has version # %d (expecting %d)\n",
+					S_COLOR_RED "File \"%s\" has unsupported version # %d (current %d)\n",
 					base_file_name.c_str(),
 					sg_version,
 					iSAVEGAME_VERSION);
+			}
+			else
+			{
+				version_ = sg_version;
 			}
 		}
 		else
@@ -139,13 +144,13 @@ bool SavedGame::create(
 
 	is_writable_ = true;
 
-	const int sg_version = iSAVEGAME_VERSION;
+	version_ = iSAVEGAME_VERSION;
 
 	SavedGameHelper sgsh(this);
 
 	sgsh.write_chunk<int32_t>(
 		INT_ID('_', 'V', 'E', 'R'),
-		sg_version);
+		version_);
 
 	if (is_failed())
 	{
@@ -164,6 +169,8 @@ void SavedGame::close()
 		file_handle_ = 0;
 	}
 
+	version_ = 0;
+
 	clear_error();
 	reset_buffer();
 
@@ -174,6 +181,11 @@ void SavedGame::close()
 
 	is_readable_ = false;
 	is_writable_ = false;
+}
+
+int SavedGame::get_version() const
+{
+	return version_;
 }
 
 bool SavedGame::read_chunk(

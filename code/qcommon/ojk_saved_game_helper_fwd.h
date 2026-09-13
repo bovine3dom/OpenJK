@@ -22,6 +22,9 @@ public:
 		ISavedGame* saved_game);
 
 
+	// Returns the file format version, or 0 if no file is open.
+	int get_version() const;
+
 	// Reads a chunk from the file into the internal buffer.
 	// Calls error method on failure.
 	void read_chunk(

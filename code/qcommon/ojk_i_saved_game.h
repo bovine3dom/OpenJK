@@ -97,6 +97,10 @@ public:
 
 	// Calls Com_Error with last error message or with a generic one.
 	virtual void throw_error() = 0;
+
+
+	// Returns the file format version, or 0 if no file is open.
+	virtual int get_version() const = 0;
 }; // ISavedGame
 
 

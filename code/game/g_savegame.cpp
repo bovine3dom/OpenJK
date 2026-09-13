@@ -1358,6 +1358,7 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	saved_game.read_chunk<int32_t>(
 		INT_ID('D', 'O', 'N', 'E'),
 		iDONE);
+	gi.Printf("Loaded saved game format %d\n", saved_game.get_version());
 }
 
 extern int killPlayerTimer;

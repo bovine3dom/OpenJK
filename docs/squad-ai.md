@@ -75,8 +75,8 @@ The dormant `ST_GetCPFlags` policy is unsafe to enable without a separate review
 These records do not validate that dormant policy.
 Shared group, CP, and voice hooks can report NPCs outside stormtrooper groups.
 The diagnostic records do not add random calls. Sight memory uses the existing
-fields, but tactical state adds serialized fields and requires save format 2.
-Start a fresh mission; old Jedi Academy saves are not compatible.
+fields, but tactical state adds serialized fields written in save format 2.
+Supported project v1 saves migrate on load; see `save-migration.md`.
 
 This is not an engine-wide removal of hidden-target knowledge. Existing PVS-facing
 and aim logic, short-loss combat distance decisions, `SCF_NO_GROUPS` pursuit,
