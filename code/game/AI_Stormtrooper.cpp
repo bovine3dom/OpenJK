@@ -514,6 +514,16 @@ void NPC_BSST_Sleep( void )
 	}
 }
 
+//Call only after LOS is confirmed.
+static void ST_RecordConfirmedSight( gentity_t *target )
+{
+	if ( target && NPC->enemy == target )
+	{
+		NPCInfo->enemyLastSeenTime = level.time;
+		VectorCopy( target->currentOrigin, NPCInfo->enemyLastSeenLocation );
+	}
+}
+
 /*
 -------------------------
 NPC_CheckEnemyStealth
@@ -549,7 +559,10 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 		&& target_dist < (minDist*minDist) )//closer than minDist
 	{
 		G_SetEnemy( NPC, target );
-		NPCInfo->enemyLastSeenTime = level.time;
+		if ( G_ClearLOS( NPC, target ) )
+		{
+			ST_RecordConfirmedSight( target );
+		}
 		TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 		return qtrue;
 	}
@@ -578,6 +591,7 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 		if ( target->client->NPC_class == CLASS_ATST )
 		{//can't miss 'em!
 			G_SetEnemy( NPC, target );
+			ST_RecordConfirmedSight( target );
 			TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 			return qtrue;
 		}
@@ -613,6 +627,7 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 		if ( dist_rating < DISTANCE_THRESHOLD )
 		{
 			G_SetEnemy( NPC, target );
+			ST_RecordConfirmedSight( target );
 			TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 			return qtrue;
 		}
@@ -702,7 +717,7 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 		if ( target_rating > realize && (NPCInfo->scriptFlags&SCF_LOOK_FOR_ENEMIES) )
 		{
 			G_SetEnemy( NPC, target );
-			NPCInfo->enemyLastSeenTime = level.time;
+			ST_RecordConfirmedSight( target );
 			TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 			return qtrue;
 		}
@@ -728,14 +743,14 @@ qboolean NPC_CheckEnemyStealth( gentity_t *target )
 					ST_Speech( NPC, SPEECH_SUSPICIOUS, 0 );
 					TIMER_Set( NPC, "interrogating", interrogateTime );
 					G_SetEnemy( NPC, target );
-					NPCInfo->enemyLastSeenTime = level.time;
+					ST_RecordConfirmedSight( target );
 					TIMER_Set( NPC, "attackDelay", interrogateTime );
 					TIMER_Set( NPC, "stand", interrogateTime );
 				}
 				else
 				{
 					G_SetEnemy( NPC, target );
-					NPCInfo->enemyLastSeenTime = level.time;
+					ST_RecordConfirmedSight( target );
 					//FIXME: ambush guys (like those popping out of water) shouldn't delay...
 					TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 					TIMER_Set( NPC, "stand", Q_irand( 500, 2500 ) );
@@ -819,6 +834,7 @@ qboolean NPC_CheckEnemiesInSpotlight( void )
 						//FIXME: pick closest one?
 						//FIXME: have the graduated noticing like other NPCs? (based on distance, FOV dot, etc...)
 						G_SetEnemy( NPC, enemy );
+						ST_RecordConfirmedSight( enemy );
 						TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 						return qtrue;
 					}
@@ -899,10 +915,17 @@ static qboolean NPC_ST_InvestigateEvent( int eventID, bool extraSuspicious )
 			//FIXME: what if can't actually see enemy, don't know where he is... should we make them just become very alert and start looking for him?  Or just let combat AI handle this... (act as if you lost him)
 			//ST_Speech( NPC, SPEECH_CHARGE, 0 );
 			G_SetEnemy( NPC, level.alertEvents[eventID].owner );
-			NPCInfo->enemyLastSeenTime = level.time;
+			if ( NPC->enemy == level.alertEvents[eventID].owner
+				&& G_ClearLOS( NPC, level.alertEvents[eventID].owner ) )
+			{
+				ST_RecordConfirmedSight( level.alertEvents[eventID].owner );
+			}
 			TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
-			if ( level.alertEvents[eventID].type == AET_SOUND )
+			if ( NPC->enemy == level.alertEvents[eventID].owner
+				&& level.alertEvents[eventID].type == AET_SOUND )
 			{//heard him, didn't see him, stick for a bit
+				NPCInfo->enemyLastHeardTime = level.time;
+				VectorCopy( level.alertEvents[eventID].position, NPCInfo->enemyLastHeardLocation );
 				TIMER_Set( NPC, "roamTime", Q_irand( 500, 2500 ) );
 			}
 			return qtrue;
@@ -1289,7 +1312,17 @@ void NPC_BSST_Patrol( void )
 				//FIXME: what if can't actually see enemy, don't know where he is... should we make them just become very alert and start looking for him?  Or just let combat AI handle this... (act as if you lost him)
 				//ST_Speech( NPC, SPEECH_CHARGE, 0 );
 				G_SetEnemy( NPC, level.alertEvents[alertEvent].owner );
-				NPCInfo->enemyLastSeenTime = level.time;
+				if ( NPC->enemy == level.alertEvents[alertEvent].owner
+					&& level.alertEvents[alertEvent].type == AET_SOUND )
+				{
+					NPCInfo->enemyLastHeardTime = level.time;
+					VectorCopy( level.alertEvents[alertEvent].position, NPCInfo->enemyLastHeardLocation );
+				}
+				if ( NPC->enemy == level.alertEvents[alertEvent].owner
+					&& G_ClearLOS( NPC, level.alertEvents[alertEvent].owner ) )
+				{
+					ST_RecordConfirmedSight( level.alertEvents[alertEvent].owner );
+				}
 				TIMER_Set( NPC, "attackDelay", Q_irand( 500, 2500 ) );
 				return;
 			}
@@ -1658,11 +1691,12 @@ void ST_TrackEnemy( gentity_t *self, vec3_t enemyPos )
 	TIMER_Set( self, "scoutTime", TIMER_Get( self, "stick" )-level.time+Q_irand(5000, 10000) );
 	//leave my combat point
 	NPC_FreeCombatPoint( self->NPC->combatPoint );
+	self->NPC->combatPoint = -1;
 	//go after his last seen pos
 	NPC_SetMoveGoal( self, enemyPos, 100.0f, qfalse );
 	if (Q_irand(0,3)==0)
 	{
-		NPCInfo->aiFlags |= NPCAI_STOP_AT_LOS;
+		self->NPC->aiFlags |= NPCAI_STOP_AT_LOS;
 	}
 }
 
@@ -1888,12 +1922,16 @@ void ST_Commander( void )
 
 	if ( group->lastSeenEnemyTime < level.time - 180000 )
 	{//dissolve the group
-		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=lost_track group=%d enemy=%d action=dissolve source=enemy_current age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), group->enemy->s.number, level.time-group->lastSeenEnemyTime, group->enemy->currentOrigin[0], group->enemy->currentOrigin[1], group->enemy->currentOrigin[2] );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=lost_track group=%d enemy=%d action=dissolve source=group_last_seen age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), group->enemy->s.number, level.time-group->lastSeenEnemyTime, group->enemyLastSeenPos[0], group->enemyLastSeenPos[1], group->enemyLastSeenPos[2] );
 		ST_Speech( NPC, SPEECH_LOST, 0.0f );
-		group->enemy->waypoint = NAV::GetNearestNode(group->enemy);
+		int searchWaypoint = group->lastSeenEnemyTime > 0 ? NAV::GetNearestNode( group->enemyLastSeenPos ) : WAYPOINT_NONE;
 		for ( i = 0; i < group->numGroup; i++ )
 		{
 			member = &g_entities[group->member[i].number];
+			if ( member->enemy != group->enemy )
+			{
+				continue;
+			}
 			SetNPCGlobals( member );
 			if ( Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
 			{//running somewhere that a script requires us to go, don't break from that
@@ -1907,18 +1945,23 @@ void ST_Commander( void )
 			}
 			//Lost enemy for three minutes?  go into search mode?
 			G_ClearEnemy( NPC );
-			NPC->waypoint = NAV::GetNearestNode(group->enemy);
+			if ( NPC->enemy )
+			{//G_ClearEnemy keeps a valid locked enemy.
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=dissolve_locked_enemy\n", (int)(group-level.groups), NPC->s.number );
+				continue;
+			}
+			NPC->waypoint = NAV::GetNearestNode( NPC );
 			if ( NPC->waypoint == WAYPOINT_NONE )
 			{
 				NPCInfo->behaviorState = BS_DEFAULT;//BS_PATROL;
 			}
-			else if ( group->enemy->waypoint == WAYPOINT_NONE || (NAV::EstimateCostToGoal( NPC->waypoint, group->enemy->waypoint ) >= Q3_INFINITE) )
+			else if ( searchWaypoint == WAYPOINT_NONE || (NAV::EstimateCostToGoal( NPC->waypoint, searchWaypoint ) >= Q3_INFINITE) )
 			{
 				NPC_BSSearchStart( NPC->waypoint, BS_SEARCH );
 			}
 			else
 			{
-				NPC_BSSearchStart( group->enemy->waypoint, BS_SEARCH );
+				NPC_BSSearchStart( searchWaypoint, BS_SEARCH );
 			}
 		}
 		group->enemy = NULL;
@@ -1940,8 +1983,8 @@ void ST_Commander( void )
 		NPCInfo->blockedSpeechDebounceTime = level.time + 3000;
 	}
 
-	if ( group->lastSeenEnemyTime < level.time - 7000 )
-	{//no-one has seen the enemy for at least 10 seconds!  Should send a scout
+	if ( group->lastSeenEnemyTime <= 0 || group->lastSeenEnemyTime > level.time || group->lastSeenEnemyTime < level.time - 7000 )
+	{//The group has no valid recent sight record.
 		enemyLost = qtrue;
 	}
 
@@ -2009,6 +2052,48 @@ void ST_Commander( void )
 		}
 
 
+		if ( enemyLost )
+		{
+			if ( NPCInfo->goalEntity == NPC->enemy )
+			{
+				NPCInfo->goalEntity = NULL;
+			}
+			const char *holdReason = NULL;
+			if ( group->lastSeenEnemyTime <= 0 || group->lastSeenEnemyTime > level.time || NPC->enemy != group->enemy )
+			{
+				holdReason = "invalid_record";
+			}
+			else if ( NPC->client->ps.weapon == WP_NONE )
+			{//Retreat from the remembered threat, not its current position.
+				if ( (NPCInfo->goalEntity == NULL || NPCInfo->goalEntity->enemy == NULL || NPCInfo->goalEntity->enemy->s.eType != ET_ITEM)
+					&& TIMER_Done( NPC, "hideTime" ) )
+				{
+					Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=lost_track group=%d ent=%d action=retreat source=group_last_seen age=%d\n", (int)(group-level.groups), NPC->s.number, level.time-group->lastSeenEnemyTime );
+					NPC_StartFlee( NPC->enemy, group->enemyLastSeenPos, AEL_DANGER_GREAT, 5000, 10000 );
+				}
+				continue;
+			}
+			else if ( NAV::GetNearestNode( NPC ) == WAYPOINT_NONE
+				|| NAV::GetNearestNode( group->enemyLastSeenPos ) == WAYPOINT_NONE
+				|| !NAV::InSameRegion( NPC, group->enemyLastSeenPos ) )
+			{
+				holdReason = "no_route";
+			}
+			if ( holdReason )
+			{
+				NPCInfo->goalEntity = NULL;
+				NPC_FreeCombatPoint( NPCInfo->combatPoint );
+				NPCInfo->combatPoint = -1;
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=lost_track group=%d ent=%d action=hold source=group_last_seen reason=%s age=%d\n", (int)(group-level.groups), NPC->s.number, holdReason, level.time-group->lastSeenEnemyTime );
+			}
+			else
+			{
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=lost_track group=%d ent=%d enemy=%d action=track source=group_last_seen age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), NPC->s.number, NPC->enemy->s.number, level.time-group->lastSeenEnemyTime, group->enemyLastSeenPos[0], group->enemyLastSeenPos[1], group->enemyLastSeenPos[2] );
+				ST_TrackEnemy( NPC, group->enemyLastSeenPos );
+			}
+			continue;
+		}
+
 		if ( NPC->client->ps.weapon == WP_NONE )
 		{//weaponless, should be hiding
 			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=weaponless\n", (int)(group-level.groups), NPC->s.number );
@@ -2020,13 +2105,6 @@ void ST_Commander( void )
 					NPC_StartFlee( NPC->enemy, NPC->enemy->currentOrigin, AEL_DANGER_GREAT, 5000, 10000 );
 				}//else, just hang here
 			}
-			continue;
-		}
-
-		if (enemyLost && NAV::InSameRegion(NPC, NPC->enemy->currentOrigin))
-		{
-			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=lost_track group=%d ent=%d enemy=%d action=track source=enemy_current age=%d pos=%.1f,%.1f,%.1f\n", (int)(group-level.groups), NPC->s.number, NPC->enemy->s.number, level.time-group->lastSeenEnemyTime, NPC->enemy->currentOrigin[0], NPC->enemy->currentOrigin[1], NPC->enemy->currentOrigin[2] );
-			ST_TrackEnemy( NPC, NPC->enemy->currentOrigin );
 			continue;
 		}
 
@@ -2406,8 +2484,12 @@ void NPC_BSST_Attack( void )
 	//can we see our target?
 	if ( NPC_ClearLOS( NPC->enemy ) )
 	{
-		AI_GroupUpdateEnemyLastSeen( NPCInfo->group, NPC->enemy->currentOrigin );
-		NPCInfo->enemyLastSeenTime = level.time;
+		if ( NPCInfo->group && NPCInfo->group->enemy == NPC->enemy )
+		{
+			AI_GroupUpdateEnemyLastSeen( NPCInfo->group, NPC->enemy->currentOrigin );
+		}
+		ST_RecordConfirmedSight( NPC->enemy );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=sight ent=%d enemy=%d time=%d pos=%.1f,%.1f,%.1f\n", NPC->s.number, NPC->enemy->s.number, NPCInfo->enemyLastSeenTime, NPCInfo->enemyLastSeenLocation[0], NPCInfo->enemyLastSeenLocation[1], NPCInfo->enemyLastSeenLocation[2] );
 		enemyLOS = qtrue;
 
 		if ( NPC->client->ps.weapon == WP_NONE )
@@ -2437,10 +2519,12 @@ void NPC_BSST_Attack( void )
 					|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
 					|| ( hitEnt && hitEnt->takedamage && ((hitEnt->svFlags&SVF_GLASS_BRUSH)||hitEnt->health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
 				{//can hit enemy or enemy ally or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
-					AI_GroupUpdateClearShotTime( NPCInfo->group );
+					if ( NPCInfo->group && NPCInfo->group->enemy == NPC->enemy )
+					{
+						AI_GroupUpdateClearShotTime( NPCInfo->group );
+					}
 					enemyCS = qtrue;
 					NPC_AimAdjust( 2 );//adjust aim better longer we have clear shot at enemy
-					VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 				}
 				else
 				{//Hmm, have to get around this bastard
@@ -2463,7 +2547,7 @@ void NPC_BSST_Attack( void )
 	}
 	else if ( gi.inPVS( NPC->enemy->currentOrigin, NPC->currentOrigin ) )
 	{
-		NPCInfo->enemyLastSeenTime = level.time;
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=sight_blocked ent=%d enemy=%d pvs=1 seen=%d group_seen=%d\n", NPC->s.number, NPC->enemy->s.number, NPCInfo->enemyLastSeenTime, NPCInfo->group ? NPCInfo->group->lastSeenEnemyTime : 0 );
 		faceEnemy = qtrue;
 		NPC_AimAdjust( -1 );//adjust aim worse longer we cannot see enemy
 	}

@@ -423,6 +423,8 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member )
 	return qtrue;
 }
 
+void AI_DeleteSelfFromGroup( gentity_t *self );
+
 /*
 -------------------------
 AI_GetGroup
@@ -457,7 +459,22 @@ void AI_GetGroup( gentity_t *self )
 		return;
 	}
 
-	if ( self->enemy && (!self->enemy->client || (level.time - self->NPC->enemyLastSeenTime > 7000 )))
+	if ( self->enemy && !self->enemy->client )
+	{
+		self->NPC->group = NULL;
+		return;
+	}
+
+	if ( AI_FindSelfInPreviousGroup( self ) )
+	{//Keep group memory when this member loses sight.
+		if ( !self->enemy || self->enemy == self->NPC->group->enemy )
+		{
+			return;
+		}
+		AI_DeleteSelfFromGroup( self );
+	}
+
+	if ( self->enemy && level.time - self->NPC->enemyLastSeenTime > 7000 )
 	{
 		self->NPC->group = NULL;
 		return;
@@ -469,6 +486,11 @@ void AI_GetGroup( gentity_t *self )
 	}
 
 	//create a new one
+	if ( self->enemy && !G_ClearLOS( self, self->enemy ) )
+	{//An empty slot does not supply a sight record.
+		self->NPC->group = NULL;
+		return;
+	}
 	memset( self->NPC->group, 0, sizeof( AIGroupInfo_t ) );
 
 	self->NPC->group->enemy = self->enemy;
@@ -481,8 +503,9 @@ void AI_GetGroup( gentity_t *self )
 	if ( self->NPC->group->enemy )
 	{
 		self->NPC->group->lastSeenEnemyTime = level.time;
-		self->NPC->group->lastClearShotTime = level.time;
 		VectorCopy( self->NPC->group->enemy->currentOrigin, self->NPC->group->enemyLastSeenPos );
+		self->NPC->enemyLastSeenTime = level.time;
+		VectorCopy( self->enemy->currentOrigin, self->NPC->enemyLastSeenLocation );
 	}
 
 //	for ( i = 0, member = &g_entities[0]; i < globals.num_entities ; i++, member++)
@@ -740,6 +763,11 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 			{//2 groups with same enemy
 				if ( level.groups[i].numGroup+group->numGroup < (MAX_GROUP_MEMBERS - 1) )
 				{//combining the members would fit in one group
+					if ( group->enemy && group->lastSeenEnemyTime > level.groups[i].lastSeenEnemyTime )
+					{
+						level.groups[i].lastSeenEnemyTime = group->lastSeenEnemyTime;
+						VectorCopy( group->enemyLastSeenPos, level.groups[i].enemyLastSeenPos );
+					}
 					qboolean deleteWhenDone = qtrue;
 					//combine the members of mine into theirs
 					for ( int j = 0; j < group->numGroup; j++ )

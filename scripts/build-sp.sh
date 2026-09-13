@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+[[ $# == 0 || ( $# == 1 && $1 == --stage-only ) ]] || { printf 'Usage: build-sp.sh [--stage-only]\n' >&2; exit 1; }
+
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$root"
 mkdir -p build/sp build/packages
@@ -27,6 +29,7 @@ cp docs/encounter-krildor.md "$package/encounter-krildor.md"
 cp scripts/squad-smoke.cfg "$package/OpenJK/squad-smoke.cfg"
 cp scripts/krildor-route.cfg "$package/OpenJK/krildor-route.cfg"
 cp scripts/krildor-traverse.cfg "$package/OpenJK/krildor-traverse.cfg"
+cp scripts/ai-memory*.cfg "$package/OpenJK/"
 chmod +x "$package/launch-sp.sh"
 revision=$(git rev-parse --short HEAD)
 id="$(date -u +%Y%m%dT%H%M%S%N)-$revision"
@@ -54,6 +57,10 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 } > "$package/runtime-manifest.txt"
 
 bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
+if [[ ${1:-} == --stage-only ]]; then
+    printf 'Staged for further tests (not published): %s/\n' "$package"
+    exit 0
+fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"
 mv -Tf "$stage/ready" build/ready

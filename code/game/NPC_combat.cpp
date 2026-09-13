@@ -3054,7 +3054,7 @@ NPC_ReserveCombatPoint
 qboolean NPC_ReserveCombatPoint( int combatPointID )
 {
 	//Make sure it's valid
-	if ( combatPointID > level.numCombatPoints )
+	if ( combatPointID < 0 || combatPointID >= level.numCombatPoints )
 		return qfalse;
 
 	//Make sure it's not already occupied
@@ -3081,7 +3081,7 @@ qboolean NPC_FreeCombatPoint( int combatPointID, qboolean failed )
 		NPCInfo->lastFailedCombatPoint = combatPointID;
 	}
 	//Make sure it's valid
-	if ( combatPointID > level.numCombatPoints )
+	if ( combatPointID < 0 || combatPointID >= level.numCombatPoints )
 		return qfalse;
 
 	//Make sure it's currently occupied

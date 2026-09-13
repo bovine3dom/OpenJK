@@ -13,6 +13,11 @@ headless smoke test. It updates `build/ready` only after the test passes. The
 output gives an immutable package path under `build/packages/`. Do not change
 source files during packaging. Failed candidates remain available for diagnosis.
 
+For changes that need more than the basic smoke test, use
+`bash scripts/build-sp.sh --stage-only`. This prints a candidate path without
+updating `build/ready`. Pass that path to the relevant test with `--package`,
+then publish with the normal build command after checks pass.
+
 Build logs are in `build/sp/`. Test logs and screenshots are in a new directory
 under `build/smoke/` for each run. No original assets, configs, or saves are changed.
 
@@ -111,8 +116,9 @@ bash launch-sp.sh /path/to/GameData +devmap t1_sour +set d_npcai 3
 ```
 
 See `squad-ai.md` in the package or `docs/squad-ai.md` in the repository for trace
-details. Current squad instrumentation does not change tactics. Fresh encounters
-are preferred over cross-build saves.
+details. Squad memory now uses recorded positions for lost-contact tracking;
+coordinated flank roles are not yet implemented. Fresh encounters are preferred
+over cross-build saves.
 Add `+exec squad-smoke.cfg` for the diagnostic spawn fixture. It enables player
 invulnerability and adds three enemies; it is not a campaign playtest.
 
@@ -126,10 +132,15 @@ uses `krildor-traverse.cfg`, which clears native NPCs in fresh test sessions.
 Use `--case north` or another documented case to repeat one check. Python 3 and
 the existing smoke-test dependencies are required. Run headless cases sequentially.
 
+Run `python3 scripts/test-ai-memory.py` for sight, shared-memory, target-switch,
+and search-expiry checks. Use `--case shared-async` to repeat the two-member case.
+The fixtures and `nav memory` snapshot command are described in `squad-ai.md`.
+
 Both machines are x86-64 Arch Linux, but runtime library versions still need a
 desktop check. The package includes source and runtime manifests, debug symbols,
 and the tracked source diff. It does not bundle system libraries or proprietary
-game assets. No desktop validation has been performed yet.
+game assets. The user has confirmed desktop update and launch on the GTX 1080 Ti.
+Detailed hardware performance, audio, and campaign checks remain manual tasks.
 
 `python3 scripts/test-play-sp.py` tests the updater with real rsync, a local SSH
 stand-in, and a fake game. It checks delta reuse, argument quoting, publication

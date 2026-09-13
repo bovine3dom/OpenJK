@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_nav.h"
 #include "g_navigator.h"
 #include "g_functions.h"
+#include "Q3_Interface.h"
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
@@ -514,11 +515,85 @@ static void RouteTestCommand( void )
 	RouteTestGoal();
 }
 
+static void MemoryCommand( void )
+{
+	const char *name = gi.argv(2);
+	gentity_t *actor = G_Find( NULL, FOFS(targetname), name );
+	if ( gi.argc() < 3 || gi.argc() > 5 || (gi.argc() == 5 && Q_stricmp(gi.argv(3), "enemy"))
+		|| !name[0] || !actor || !actor->NPC || !actor->client
+		|| G_Find( actor, FOFS(targetname), name ) )
+	{
+		gi.Printf( "aimemory event=rejected reason=unique_npc_required\n" );
+		return;
+	}
+	if ( gi.argc() >= 4 )
+	{
+		const char *action = gi.argv(3);
+		if ( Q_strncmp(name, "_memory_", 8) || Q3_TaskIDPending(actor, TID_MOVE_NAV) )
+		{
+			gi.Printf( "aimemory event=rejected reason=test_actor_required\n" );
+			return;
+		}
+		if ( !Q_stricmp(action, "enemy") )
+		{
+			gentity_t *target = gi.argc() == 5 ? G_Find(NULL, FOFS(targetname), gi.argv(4)) : &g_entities[0];
+			if ( !target || !target->client || target == actor
+				|| (gi.argc() == 5 && G_Find(target, FOFS(targetname), gi.argv(4))) )
+			{
+				gi.Printf( "aimemory event=rejected reason=target\n" );
+				return;
+			}
+			G_SetEnemy(actor, target);
+		}
+		else if ( !Q_stricmp(action, "hold") || !Q_stricmp(action, "chase") )
+		{
+			actor->NPC->scriptFlags |= SCF_DONT_FIRE;
+			if ( !Q_stricmp(action, "hold") )
+			{
+				actor->NPC->scriptFlags &= ~SCF_CHASE_ENEMIES;
+				actor->NPC->goalEntity = actor->NPC->lastGoalEntity = NULL;
+				NPC_FreeCombatPoint(actor->NPC->combatPoint);
+				actor->NPC->combatPoint = -1;
+				NAV::ClearPath(actor);
+				VectorClear(actor->client->ps.velocity);
+				memset(&actor->NPC->last_ucmd, 0, sizeof(actor->NPC->last_ucmd));
+			}
+			else
+				actor->NPC->scriptFlags |= SCF_CHASE_ENEMIES;
+		}
+		else
+		{
+			gi.Printf( "aimemory event=rejected reason=action\n" );
+			return;
+		}
+		gi.Printf( "aimemory event=control name=%s action=%s\n", name, action );
+		return;
+	}
+	AIGroupInfo_t *group = actor->NPC->group;
+	const float *seen = actor->NPC->enemyLastSeenLocation;
+	const float *shared = group ? group->enemyLastSeenPos : vec3_origin;
+	const float *target = actor->enemy ? actor->enemy->currentOrigin : vec3_origin;
+	gentity_t *goal = actor->NPC->goalEntity;
+	const float *goalPos = goal ? goal->currentOrigin : vec3_origin;
+	gi.Printf( "aimemory event=sample name=%s time=%d ent=%d enemy=%d pos=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f los=%d pvs=%d seen_time=%d seen=%.3f,%.3f,%.3f group=%d group_enemy=%d group_time=%d shared=%.3f,%.3f,%.3f clear_time=%d members=%d goal=%d goal_pos=%.3f,%.3f,%.3f home=%d\n",
+		name, level.time, actor->s.number, actor->enemy ? actor->enemy->s.number : -1,
+		actor->currentOrigin[0], actor->currentOrigin[1], actor->currentOrigin[2], target[0], target[1], target[2],
+		actor->enemy ? G_ClearLOS(actor, actor->enemy) : 0, actor->enemy ? gi.inPVS(actor->currentOrigin, target) : 0,
+		actor->NPC->enemyLastSeenTime, seen[0], seen[1], seen[2], group ? (int)(group-level.groups) : -1,
+		group && group->enemy ? group->enemy->s.number : -1, group ? group->lastSeenEnemyTime : 0,
+		shared[0], shared[1], shared[2], group ? group->lastClearShotTime : 0, group ? group->numGroup : 0, goal ? goal->s.number : -1,
+		goalPos[0], goalPos[1], goalPos[2], actor->NPC->homeWp );
+}
+
 void Svcmd_Nav_f( void )
 {
 	const char	*cmd = gi.argv( 1 );
 
-	if ( Q_stricmp( cmd, "test" ) == 0 )
+	if ( Q_stricmp( cmd, "memory" ) == 0 )
+	{
+		MemoryCommand();
+	}
+	else if ( Q_stricmp( cmd, "test" ) == 0 )
 	{
 		RouteTestCommand();
 	}
@@ -611,6 +686,7 @@ void Svcmd_Nav_f( void )
 	{
 		//Print the available commands
 		Com_Printf("nav - valid commands\n---\n" );
+		Com_Printf("memory <unique NPC targetname> [hold|chase|enemy [targetname]] - inspect sight memory; controls require _memory_ names\n" );
 		Com_Printf("show\n - nodes\n - edges\n - testpath\n - enemypath\n - combatpoints\n - navgoals\n---\n");
 		Com_Printf("goto\n ---\n" );
 		Com_Printf("gotonum\n ---\n" );

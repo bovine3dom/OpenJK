@@ -56,7 +56,8 @@ function, not GPU performance, audio quality, or gameplay quality.
 
 The playtest machine runs x86-64 Arch Linux with a GTX 1080 Ti and can connect to
 this server over SSH. Prefer rsync and local execution over running from SSHFS.
-Desktop access and validation are postponed. No files have been transferred.
+The user has confirmed that desktop update and launch work. No remote session
+was needed for the automated checks on the build machine.
 
 - [ ] Obtain the server SSH address and remote build path as seen from the desktop. Choose local build, asset, and profile directories.
 - [ ] Compare runtime library versions on both machines. Check that the executable and all native modules load on the desktop. Avoid server-specific CPU optimisation.
@@ -83,7 +84,10 @@ Desktop access and validation are postponed. No files have been transferred.
 - [x] Verify blocked and frozen timeouts, cancel/busy/restart, killed-actor cleanup, and save cancellation with `python3 scripts/test-traversal-sp.py`.
 - [x] Observe geometric line-of-sight loss around the pillar. This does not yet verify enemy perception or memory.
 - [ ] Add goal-replacement, direct-free, and active-probe load/map-change lifecycle cases.
-- [ ] Trace real enemy lost-contact behaviour in this room, then replace live hidden-position tracking with observation-based tracking.
+- [x] Trace real enemy lost-contact behaviour in this room. Pair sight time with position, remove PVS-only sight refresh, retain valid groups, and use shared recorded positions in the commander's lost-contact paths.
+- [x] Verify seven memory cases with `scripts/test-ai-memory.py`: loss/reacquisition and shared observations in both commander modes, unseen assignment, search expiry, and target switching.
+- [ ] Add dedicated runtime cases for rejected alert acquisition, blocked-shot sight, no-route holds, merge ordering, and competing combat-point reuse.
+- [ ] Address remaining live-position use in facing, short-loss tactics, solo pursuit, path-cost sorting, and generic fleeing before claiming engine-wide perception correctness.
 - [ ] Audit existing cover, flank, and lost-contact voice clips. Map suitable clips to real squad events.
 - [x] Add default-off traces for existing membership, squad states, commander decisions, combat-point searches and reservations, movement, and bark requests, suppression, and dispatch.
 - [x] Check trace levels 0, 3, and 4 with `bash scripts/test-squad-sp.sh`. This is a diagnostic fixture, not a coordinated-flank test.
