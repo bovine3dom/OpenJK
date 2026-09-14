@@ -85,6 +85,8 @@ void G_ClearEnemy (gentity_t *self)
 	{
 		TIMER_Remove( self, "reportAck" );
 		TIMER_Remove( self, "coverExposure" );
+		TIMER_Remove( self, "incomingFire" );
+		TIMER_Remove( self, "underFire" );
 		self->NPC->enemyLastSeenTime = 0;
 		VectorClear( self->NPC->enemyLastSeenLocation );
 	}

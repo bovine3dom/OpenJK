@@ -47,7 +47,7 @@ python3 scripts/test-rend2-sp.py --package build/ready
 ```
 
 The strict Rend2 check requires its log identity and rejects vanilla fallback.
-The lifecycle test checks OpenGL errors, `vid_restart`, and format-2 save/load
+The lifecycle test checks OpenGL errors, `vid_restart`, and format-3 save/load
 in one process. It also checks the transition from `t2_wedge` to `t1_sour`.
 
 To check squad and bark diagnostics at levels 0, 3, and 4:

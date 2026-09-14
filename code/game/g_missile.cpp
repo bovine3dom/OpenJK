@@ -1454,6 +1454,8 @@ void G_RunMissile( gentity_t *ent )
 	}
 	*/
 
+	if ( !tr.startsolid && !tr.allsolid )
+		ST_IncomingFire( ent, oldOrg, ent->currentOrigin );
 	AddSightEvent( ent->owner, ent->currentOrigin, 512, AEL_DISCOVERED, 75 );//wakes them up when see a shot passes in front of them
 	if ( !Q_irand( 0, 10 ) )
 	{//not so often...

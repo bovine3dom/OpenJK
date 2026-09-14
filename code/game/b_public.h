@@ -369,6 +369,7 @@ public:
 	int			tacticDeadline;
 	vec3_t		tacticGoal;
 	vec3_t		tacticThreat;
+	vec3_t		tacticCover;
 
 	//JWEIER ADDITIONS END
 	//
@@ -505,6 +506,7 @@ public:
 		saved_game.write<int32_t>(tacticDeadline);
 		saved_game.write<float>(tacticGoal);
 		saved_game.write<float>(tacticThreat);
+		saved_game.write<float>(tacticCover);
 		saved_game.write<int32_t>(confusionTime);
 		saved_game.write<int32_t>(charmedTime);
 		saved_game.write<int32_t>(controlledTime);
@@ -645,6 +647,10 @@ public:
 			saved_game.read<float>(tacticGoal);
 			saved_game.read<float>(tacticThreat);
 		}
+		if (saved_game.get_version() >= 3)
+			saved_game.read<float>(tacticCover);
+		else
+			tacticCover[0] = tacticCover[1] = tacticCover[2] = 0.0f;
 		saved_game.read<int32_t>(confusionTime);
 		saved_game.read<int32_t>(charmedTime);
 		saved_game.read<int32_t>(controlledTime);

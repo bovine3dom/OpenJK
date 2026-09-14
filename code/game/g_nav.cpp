@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_navigator.h"
 #include "g_functions.h"
 #include "Q3_Interface.h"
+#include "w_local.h"
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
@@ -592,6 +593,28 @@ static void MemoryCommand( void )
 				5, DAMAGE_NO_PROTECTION | DAMAGE_NO_KNOCKBACK, MOD_BLASTER );
 			actor->flags |= protection;
 		}
+		else if ( !Q_stricmp(action, "nearshot") || !Q_stricmp(action, "friendlyshot") || !Q_stricmp(action, "farshot")
+			|| !Q_stricmp(action, "peekshot") )
+		{
+			if ( !Q_stricmp(action, "peekshot") && (actor->NPC->tacticRole != 2 || !TIMER_Exists( actor, "coverPeek" )) )
+				return;
+			if ( !actor->enemy || !actor->enemy->inuse )
+			{
+				gi.Printf( "aimemory event=rejected reason=shot_target\n" );
+				return;
+			}
+			vec3_t origin, direction = {0, 1, 0};
+			VectorCopy( actor->currentOrigin, origin );
+			origin[0] += !Q_stricmp(action, "farshot") ? 160 : 48;
+			origin[1] -= 80;
+			origin[2] += 16;
+			gentity_t *bolt = CreateMissile( origin, direction, 1000, 200,
+				!Q_stricmp(action, "friendlyshot") ? actor : actor->enemy );
+			bolt->s.weapon = WP_BLASTER;
+			bolt->damage = 5;
+			bolt->methodOfDeath = MOD_BLASTER;
+			bolt->clipmask = MASK_SHOT;
+		}
 		else if ( !Q_stricmp(action, "wound") )
 		{
 			actor->health = Q_max(1, actor->max_health / 4);
@@ -706,7 +729,7 @@ static void MemoryCommand( void )
 		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
 		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
 		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
-	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d\n",
+	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f\n",
 		name, actor->NPC->combatPoint,
 		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,
 		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState,
@@ -715,7 +738,9 @@ static void MemoryCommand( void )
 		(actor->NPC->last_ucmd.buttons & BUTTON_WALKING) != 0,
 		sqrtf( actor->client->ps.velocity[0]*actor->client->ps.velocity[0] + actor->client->ps.velocity[1]*actor->client->ps.velocity[1] ),
 		actor->NPC->stats.walkSpeed, actor->NPC->stats.runSpeed,
-		actor->NPC->last_ucmd.forwardmove, actor->NPC->last_ucmd.rightmove );
+		actor->NPC->last_ucmd.forwardmove, actor->NPC->last_ucmd.rightmove,
+		TIMER_Exists( actor, "coverPeek" ), !TIMER_Done( actor, "incomingFire" ),
+		actor->NPC->tacticCover[0], actor->NPC->tacticCover[1], actor->NPC->tacticCover[2] );
 }
 
 void Svcmd_Nav_f( void )

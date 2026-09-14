@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify real project-v1 saves load without rewriting their source files."""
+"""Verify project-v1 or v2 saves migrate to v3 without changing the source files."""
 
 import argparse
 import hashlib
@@ -72,7 +72,7 @@ def main():
             raise RuntimeError(f"Wrong renderer in {name}: {suite / (name + '.log')}")
         return text
 
-    old = run("v1-create", args.old_package, old_profile,
+    old = run("legacy-create", args.old_package, old_profile,
               ["+devmap", "t2_wedge", "+exec", "ai-memory-switch.cfg", "+d_npcfreeze", "1",
                "+give", "health", "77", "+give", "armor", "33", "+give", "weaponnum", "4",
                "+give", "ammo", "23", "+setForceJump", "3", "+wait", "4", "+save", "migration_v1",
@@ -80,8 +80,9 @@ def main():
               renderer="rdsp-vanilla")
     source = old_profile / "OpenJK/saves/migration_v1.sav"
     old_chunks = chunks(source)
-    if struct.unpack("<i", old_chunks[0][1])[0] != 1:
-        raise RuntimeError("The supplied old package did not write v1")
+    old_version = struct.unpack("<i", old_chunks[0][1])[0]
+    if old_version not in (1, 2):
+        raise RuntimeError("The supplied old package did not write v1 or v2")
     source_hash = hashlib.sha256(source.read_bytes()).digest()
     destination = new_profile / "OpenJK/saves"
     destination.mkdir(parents=True)
@@ -89,36 +90,36 @@ def main():
     shutil.copy2(source, copied)
     checks = ["+wait", "40", "+nav", "player", "+nav", "memory", "_memory_a",
               "+nav", "memory", "_memory_b", "+nav", "memory", "_memory_c"]
-    loaded = run("v1-load-v2-save", args.package, new_profile,
-                 ["+set", "d_npcfreeze", "1", "+load", "migration_v1", "+helpusobi", "1", "+d_npcfreeze", "1", *checks, "+save", "migration_v2"])
-    if "Loaded saved game format 1" not in loaded:
+    loaded = run("legacy-load-v3-save", args.package, new_profile,
+                 ["+set", "d_npcfreeze", "1", "+load", "migration_v1", "+helpusobi", "1", "+d_npcfreeze", "1", *checks, "+save", "migration_v3"])
+    if f"Loaded saved game format {old_version}" not in loaded:
         raise RuntimeError("Legacy importer did not finish")
     before, after = samples(old), samples(loaded)
     for name in ("_memory_a", "_memory_b", "_memory_c"):
         for key in ("ent", "enemy", "pos", "seen_time", "seen", "group", "group_enemy", "group_time", "shared", "members", "goal", "goal_pos"):
             if before[name][key] != after[name][key]:
                 raise RuntimeError(f"Migration changed {name}.{key}: {before[name][key]} -> {after[name][key]}")
-        if after[name]["role"] != "0" or after[name]["cp"] != "-1" or after[name]["deadline"] != "0":
+        if old_version == 1 and (after[name]["role"] != "0" or after[name]["cp"] != "-1" or after[name]["deadline"] != "0"):
             raise RuntimeError(f"Bad tactical defaults: {after[name]}")
     player = re.search(r"playerstate health=(\d+) armor=(\d+) weapons=(\d+) ammo_blaster=(\d+) jump=(\d+)", loaded)
     if not player or tuple(map(int, (player[1], player[2], player[4], player[5]))) != (77, 33, 23, 3) or not int(player[3]) & (1 << 4):
         raise RuntimeError("Player state was not preserved")
-    converted = destination / "migration_v2.sav"
+    converted = destination / "migration_v3.sav"
     new_chunks = chunks(converted)
-    if struct.unpack("<i", new_chunks[0][1])[0] != 2:
-        raise RuntimeError("Writer did not produce v2")
+    if struct.unpack("<i", new_chunks[0][1])[0] != 3:
+        raise RuntimeError("Writer did not produce v3")
     if [p for tag, p in old_chunks if tag == "OBJT"] != [p for tag, p in new_chunks if tag == "OBJT"]:
         raise RuntimeError("Mission objectives changed")
-    reloaded = run("v2-reload", args.package, new_profile, ["+set", "d_npcfreeze", "1", "+load", "migration_v2", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
-    if "Loaded saved game format 2" not in reloaded or set(samples(reloaded)) != set(after):
+    reloaded = run("v3-reload", args.package, new_profile, ["+set", "d_npcfreeze", "1", "+load", "migration_v3", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
+    if "Loaded saved game format 3" not in reloaded or set(samples(reloaded)) != set(after):
         raise RuntimeError("Converted save did not reload")
     for name, expected in after.items():
         actual = samples(reloaded)[name]
         for key in ("enemy", "pos", "seen_time", "seen", "group", "shared", "role", "cp"):
             if actual[key] != expected[key]:
-                raise RuntimeError(f"V2 round trip changed {name}.{key}")
+                raise RuntimeError(f"V3 round trip changed {name}.{key}")
     # _VER is a four-byte uncompressed chunk; update its normal MD4 XOR checksum.
-    for version in (0, 3):
+    for version in (0, 4):
         invalid = bytearray(source.read_bytes())
         payload = struct.pack("<i", version)
         digest = subprocess.run(["openssl", "dgst", "-provider", "legacy", "-md4", "-binary"],
@@ -128,13 +129,13 @@ def main():
         invalid[12:16] = struct.pack("<I", words[0] ^ words[1] ^ words[2] ^ words[3])
         (destination / f"invalid_{version}.sav").write_bytes(invalid)
         rejected = run(f"reject-{version}", args.package, new_profile,
-                       ["+load", f"invalid_{version}", "+load", "migration_v2", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
-        if f"version # {version}" not in rejected or "Loaded saved game format 2" not in rejected:
+                       ["+load", f"invalid_{version}", "+load", "migration_v3", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
+        if f"version # {version}" not in rejected or "Loaded saved game format 3" not in rejected:
             raise RuntimeError("Unsupported version was not rejected or poisoned the next load")
     for path in (source, copied):
         if hashlib.sha256(path.read_bytes()).digest() != source_hash:
-            raise RuntimeError("Original v1 save was modified")
-    print(f"PASS: v1 migration, v2 round trip, state preservation, unchanged originals. Results: {suite}")
+            raise RuntimeError("Original save was modified")
+    print(f"PASS: v{old_version} migration, v3 round trip, state preservation, unchanged originals. Results: {suite}")
 
 
 if __name__ == "__main__":

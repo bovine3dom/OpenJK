@@ -27,6 +27,9 @@ def main():
              "contact-hold": ("contact-hold", 1),
              "cycle-async": ("cycle", 1), "cycle-sync": ("cycle", 0),
              "cycle-cancel": ("cycle-cancel", 1),
+             "pressure": ("pressure", 1),
+             "peek-pressure": ("peek-pressure", 1),
+             "peek-save": ("peek-save", 1),
              "regroup": ("regroup", 1), "solo": ("cycle-solo", 1), "cancel": ("cancel", 1), "save": ("save", 1),
              **{name: (name, 1) for name in ("death", "timeout", "cinematic", "contested", "save-reservation", "cp-low", "cp-high")}}
     parser = argparse.ArgumentParser(description=__doc__)
@@ -171,11 +174,45 @@ def main():
                           and e["reason"] == "arrival" for e in actor_events), "Cover did not expire normally")
                 check(any(e["event"] == "cp_release" and e["cp"] == cp and e["phase"] == "CONTACT"
                           for e in events), "Cover reservation not released")
-                check(any(s["role"] == "0" and s["cp"] == s["combat_cp"] == "-1" and s["occupied"] == "0"
+                check(any(s["role"] == "0" and s["cp"] == "-1" and s["combat_cp"] != cp
                           and 0 <= int(s["time"]) - int(covered[0]["deadline"]) <= 800
                           for s in contact_samples), "Contact cover not released within bounds")
                 assignments = [e for e in actor_events if e["event"] == "tactic_assign"]
                 check([e["role"] for e in assignments[:2]] == ["1", "2"], "Contact did not select retreat then hold")
+        elif case == "peek-save":
+            before, after = (samples[p]["_memory_a"] for p in ("SAVE", "RESTORED"))
+            check(before["role"] in ("1", "2") and point(before, "anchor") != (0, 0, 0), str(before))
+            check("Loaded saved game format 3" in text, "Wrong save version")
+            check(math.dist(point(before), point(after)) < 4, "Loaded actor moved away from cover")
+            for key in ("role", "cp", "combat_cp", "occupied", "anchor", "peek", "deadline", "tactic_goal", "tactic_threat"):
+                check(before[key] == after[key], f"Save changed {key}: {before} -> {after}")
+            check(any(e["event"] in ("peek_move", "peek_withdraw") and e["phase"] == "RESTORED"
+                      for e in events), "Loaded cover pair did not resume")
+        elif case == "peek-pressure":
+            ready = samples["READY"]["_memory_a"]
+            actor_events = [e for e in events if e.get("ent") == ready["ent"] and e["order"] < history[-1]["order"]]
+            threats = [e for e in actor_events if e["event"] == "incoming_fire"]
+            withdrawals = [e for e in actor_events if e["event"] == "peek_withdraw" and e["pressure"] == "1"]
+            check(threats and withdrawals, "No pressure-driven withdrawal")
+            for event in withdrawals:
+                previous = [e for e in threats if e["order"] < event["order"]]
+                after = next((s for s in history if s["order"] > event["order"]), None)
+                check(previous and after and int(after["time"])-int(previous[-1]["time"]) <= 1000,
+                      "Pressure response took too long")
+            check(all(s["health"] == ready["health"] for s in history), "Near miss caused damage")
+            check(any(s["role"] == "2" and s["peek"] == "0" and s["los"] == "0"
+                      and s["order"] > withdrawals[0]["order"] and math.dist(point(s), point(s, "anchor")) < 24
+                      for s in history), "No return behind cover")
+        elif case == "pressure":
+            before = samples["PRESSURE_BASE"]["_memory_a"]
+            for phase in ("FRIENDLY", "DISTANT", "NEAR", "DECAY"):
+                state = samples[phase]["_memory_a"]
+                check(state["health"] == before["health"] and state["los"] == "0", str(state))
+                for key in ("enemy", "seen_time", "seen", "shared", "group_time"):
+                    check(state[key] == before[key], f"Pressure changed memory: {key}: {state}")
+                check(state["pressure"] == ("1" if phase == "NEAR" else "0"), str(state))
+            pressure = [e for e in events if e["event"] == "incoming_fire" and e["ent"] == before["ent"]]
+            check(len(pressure) == 1 and pressure[0]["phase"] == "DISTANT", str(pressure))
         elif case.startswith("cycle-") or case == "solo":
             ready = samples["READY"]["_memory_a"]
             states = [s for s in history if s["name"] == "_memory_a" and s["order"] >= ready["order"]]
@@ -199,7 +236,7 @@ def main():
             check(min(int(s["time"]) for s in states if s["order"] > starts[0]["order"])
                   - int(ready["time"]) >= 2500, "Cover started before the exposure delay")
             # fire_attempt means an attack command, not a confirmed shot.
-            check(not any(e["event"] == "fire_attempt" and e["role"] == "2" for e in actor_events),
+            check(not any(e["event"] == "fire_attempt" and e["role"] == "2" and e["peek"] == "0" for e in actor_events),
                   "Actor tried to fire in cover")
             if case == "solo":
                 check(samples["SOLO"]["_memory_a"]["role"] == "0", "Solo actor retreated immediately")
@@ -240,7 +277,7 @@ def main():
                         check(all(s["cp"] == begin["cp"] and s["combat_cp"] == s["cp"]
                                   and s["occupied"] == str(int(int(s["cp"]) >= 0)) for s in moving),
                               f"Invalid cycle reservation: {moving}")
-                    held = [s for s in states if start["order"] < s["order"] < returning["order"] and s["role"] == "2"]
+                    held = [s for s in states if start["order"] < s["order"] < returning["order"] and s["role"] == "2" and s["peek"] == "0"]
                     check(len(held) >= 4, f"Missing sustained cover hold: {held}")
                     check(all(s["cp"] == start["cp"] and s["crouched"] == "1" and s["los"] == "0"
                               and math.dist(point(s), point(s, "tactic_goal")) < 24
@@ -264,7 +301,16 @@ def main():
                         after = min(int(s["time"]) for s in states if s["order"] > end)
                         check(after - before >= 3000, "Cycle restarted before the retry delay")
                     completed.append(finish)
-                check(len(completed) >= 2, f"Expected two complete cover cycles, got {len(completed)}")
+                check(completed, "No complete cover cycle")
+                peeks = [e for e in actor_events if e["event"] == "peek_move"]
+                check(len(peeks) >= 2, "No repeated local peeks")
+                check(all(math.dist(point(e, "anchor"), point(e, "goal")) <= 145 for e in peeks), str(peeks))
+                check(any(e["event"] == "fire_attempt" and e["role"] == "2" and e["peek"] == "1" for e in actor_events), "No fire from a peek")
+                for peek in peeks[:-1]:
+                    withdrawal = next((e for e in actor_events if e["event"] == "peek_withdraw" and e["order"] > peek["order"]), None)
+                    check(withdrawal and any(s["role"] == "2" and s["peek"] == "0"
+                          and s["order"] > withdrawal["order"] and math.dist(point(s), point(peek, "anchor")) < 24
+                          for s in states), "Peek did not return to its cover")
         elif case == "regroup":
             moving = samples["RETREAT"]["_memory_a"]
             check(moving["role"] in ("1", "2"), str(moving))

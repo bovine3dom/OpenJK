@@ -236,6 +236,7 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboole
 void AI_InsertGroupMember( AIGroupInfo_t *group, gentity_t *member );
 void AI_DeleteSelfFromGroup( gentity_t *self );
 void ST_ClearTactic( gentity_t *self, const char *reason = "interrupted" );
+void ST_IncomingFire( gentity_t *missile, const vec3_t start, const vec3_t end );
 
 gentity_t *AI_DistributeAttack( gentity_t *attacker, gentity_t *enemy, team_t team, int threshold );
 

@@ -81,7 +81,7 @@ bool SavedGame::open(
 			INT_ID('_', 'V', 'E', 'R'),
 			sg_version))
 		{
-			if (sg_version != iSAVEGAME_VERSION && sg_version != 1)
+			if (sg_version < 1 || sg_version > iSAVEGAME_VERSION)
 			{
 				is_succeed = false;
 

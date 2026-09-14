@@ -8,9 +8,9 @@ imperials, rebels, commandos, and Bespin cops. Bosses, Force users, incompatible
 weapons, and script-controlled actors are excluded. It is not a replacement for
 every NPC behaviour.
 
-Jedi Academy saves now use format version 2. Supported pre-tactics v1 saves migrate
-on load, with the new tactical fields initialized. The original file is not
-rewritten. See `save-migration.md`. Jedi Outcast is unchanged.
+Jedi Academy saves use format version 3. Supported project v1 and v2 saves migrate
+on load. The original file is not rewritten. See `save-migration.md`.
+Jedi Outcast is unchanged.
 
 ## Local Reports
 
@@ -69,22 +69,44 @@ At an assigned cover point, role 2 keeps the NPC crouched for the three-second
 hold. The point is then released. The existing movement deadline, retry delay,
 script restrictions, and `SCF_DONT_FLEE` restriction still apply. Damage does not
 supply a new sight position. It does not interrupt an active tactical role or
-bypass its retry delay. No new save fields are required.
+bypass its retry delay.
 
 Healthy stationary shooters also seek cover without damage. A firing opportunity
 starts a 2.5-to-4-second exposure timer. Normal pauses between shots do not reset
 it. Movement, loss of sight, or an incompatible order clears pending exposure.
 After exposure, the NPC runs to checked cover within 384 units, crouches for
-three seconds without firing, then moves to a checked firing position. Each
-movement has a six-second limit. The return uses the recorded threat, not a
-hidden target's current position. Normal firing can resume after arrival.
+three seconds without firing, then steps out beside that cover. The firing step
+is 48 to 144 units from the cover anchor. It needs a clear standing muzzle line,
+a clear body route, and ground support. The NPC fires for one to 1.8 seconds,
+then runs back to the same anchor. Incoming fire, low health, or a shot blocked
+for 500 ms can end the firing interval early. Pressure delays the next peek.
 
-The cycle checks an authored combat point, then up to 64 nearby graph positions.
+A cover pair has a 15-second budget. Each movement has a six-second limit. When
+the pair ends, the NPC can select a new firing position through the existing
+cycle. A changed known threat or a blocked return route cancels the pair.
+The decisions use recorded threat positions. They do not track a hidden target.
+
+The cycle checks an authored combat point, then up to 64 nearby graph positions
+and 128 local floor samples. Each cover candidate must have a usable firing step.
 Cover needs fixed world geometry at crouched and standing heights. Doors do not
 qualify. Candidates must have a safe route and must not overlap reserved combat
 points or active tactical destinations. A failed search has a four-second retry
 delay. It does not force a cover hold in the open. Active flank and support roles
-are not interrupted by exposure. Existing timers store the cycle phase in saves.
+are not interrupted by exposure. Timers store the cycle phase. Format 3 also
+stores the cover anchor. Other actors avoid the anchor while its owner peeks.
+
+## Incoming Fire
+
+Non-explosive linear missiles apply pressure along their actual movement segment.
+An eligible NPC must already have an enemy. A hostile shot must pass within
+72 units of its body center, with a clear local line between the segment and the
+NPC. This includes nearby impacts. Walls can block the pressure signal. Friendly
+shots, stationary missiles, and explosive missiles do not use this path.
+
+Pressure lasts 1.5 seconds and requests cover through a two-second under-fire
+timer. Updates are limited to one per NPC per 300 ms. Pressure does not assign
+an enemy or update sight times and positions. Existing grenade avoidance remains
+separate.
 
 Autonomous role-1 movement requests running. Explicit script-walk orders remain
 in control unless a script-run order has priority. Navigation can still slow an
@@ -128,22 +150,24 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 22 cases. `contact-async` and
+The suite has 25 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
 reservation release. `contact-hold` checks that damage does not override a
 no-chase order. These cases use normal maximum health and protect the actors
 from other damage. They do not prove firing recovery or campaign combat quality.
 
-`cycle-async` and `cycle-sync` check two complete cycles without damage, quiet
-crouched holds, return arrivals, and renewed attack commands. `cycle-cancel`
+`cycle-async` and `cycle-sync` check repeated local peeks without damage, quiet
+crouched holds, returns to the same anchor, and attack commands. `cycle-cancel`
 checks cleanup when tactics are disabled. Contact tests check the running
 command and measured speed above walking speed. Attack commands do not prove
 that projectiles hit their targets. Campaign combat quality needs manual tests.
 
-Rend2 v1-to-v2 save migration, renderer lifecycle, and an autosave load also pass.
-These changes do not change the save layout. For conflicting claims in older
-saves, reconstruction keeps the first valid living owner in entity order.
+`pressure` checks a real nearby missile, friendly and distant controls, decay,
+and unchanged hidden-target memory. `peek-pressure` checks quick withdrawal
+without damage. `peek-save` checks the anchor and active phase across save/load.
+For conflicting claims in older saves, reconstruction keeps the first valid
+living owner in entity order.
 The save does not identify which conflicting claimant was the original owner.
 
 The fixtures clear native NPCs and use protected test actors. They run at a
@@ -166,9 +190,9 @@ test invulnerability; `hit` applies five damage through the damage handler;
 ## Remaining Checks
 
 Contact tests are still needed for repeated hits, expired damage records, no
-available cover, and damage during active flank or support roles. Add cycle
-save/load, pending-exposure interruption, contested graph destinations, and
-explicit script-walk tests. Wall-edge leaning is not implemented. Blocked-shot
+available cover, and damage during active flank or support roles. Add wall-shielded
+pressure, pending-exposure interruption, contested graph destinations, and
+explicit script-walk tests. Animated leaning is not implemented. Blocked-shot
 posture recovery and friendly-shot rejection need dedicated runtime tests.
 
 Manual campaign tests must assess difficulty, retreat pacing, and bark clarity.
