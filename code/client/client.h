@@ -34,7 +34,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #ifdef USE_RMLUI
 void CL_RmlUiInit();
 void CL_RmlUiShutdown();
-qboolean CL_RmlUiDrawReticle(float x, float y, float size, const float* color);
+int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
 #endif
 
 // snapshots are a view of the server at a given time

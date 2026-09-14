@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <RmlUi/Core.h>
+#include <RmlUi/Core/ElementInstancer.h>
+#include <RmlUi/Core/Geometry.h>
+#include <RmlUi/Core/RenderManager.h>
 #include "client.h"
 #include <algorithm>
 #include <cmath>
@@ -10,10 +13,11 @@ namespace {
 const char* reticleRml = R"(
 <rml><head><style>
 body { margin: 0; padding: 0; width: 32px; height: 32px; }
-div { position: absolute; left: 43.75%; top: 43.75%; width: 12.5%; height: 12.5%;
+#dot { position: absolute; left: 43.75%; top: 43.75%; width: 12.5%; height: 12.5%;
       background-color: rgba(255, 255, 255, 65%); border: 1px rgba(0, 0, 0, 25%);
       border-radius: 100px; box-sizing: border-box; }
-</style></head><body><div/></body></rml>
+resource-rings { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+</style></head><body><resource-rings id="resources"/><div id="dot"/></body></rml>
 )";
 
 class ReticleSystem final : public Rml::SystemInterface {
@@ -33,8 +37,6 @@ class ReticleRenderer final : public Rml::RenderInterface {
 	bool scissor = false;
 	int clip[4] = {};
 public:
-	vec4_t tint = {1, 1, 1, 1};
-
 	Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
 		Rml::Span<const int> indices) override {
 		// This adapter is limited to the embedded reticle, not arbitrary documents.
@@ -60,8 +62,8 @@ public:
 			// RmlUi uses premultiplied colors; the legacy renderer uses straight alpha.
 			for (int c = 0; c < 3; ++c)
 				vertex.modulate[c] = source.colour.alpha ? static_cast<byte>(std::min(255.0f,
-					source.colour[c] * 255.0f / source.colour.alpha * tint[c])) : 0;
-			vertex.modulate[3] = static_cast<byte>(source.colour.alpha * tint[3]);
+					source.colour[c] * 255.0f / source.colour.alpha)) : 0;
+			vertex.modulate[3] = source.colour.alpha;
 		}
 		re.DrawUiGeometry(static_cast<int>(geometry.vertices.size()), vertices,
 			static_cast<int>(geometry.indices.size()), geometry.indices.data(), scissor ? clip : nullptr);
@@ -76,13 +78,64 @@ public:
 	void ReleaseTexture(Rml::TextureHandle) override {}
 };
 
+class ResourceRings final : public Rml::Element {
+	Rml::Geometry geometry;
+	ReticleHud::Display display;
+	float pixelScale = 1;
+
+	void Arc(Rml::Mesh& mesh, float radius, float thickness, float start, float sweep,
+		Rml::Colourb color, float alpha) {
+		if (alpha <= 0 || sweep <= 0) return;
+		const int segments = std::max(1, int(std::ceil(sweep / 7.5f)));
+		const int first = int(mesh.vertices.size());
+		color.alpha = byte(255 * alpha);
+		for (int i = 0; i <= segments; ++i) {
+			const float angle = (start + sweep * i / segments) * 0.01745329252f;
+			for (float r : {radius - thickness, radius}) {
+				Rml::Vertex vertex{};
+				vertex.position = {std::cos(angle) * r * pixelScale, std::sin(angle) * r * pixelScale};
+				vertex.colour = color.ToPremultiplied();
+				mesh.vertices.push_back(vertex);
+			}
+			if (i < segments) {
+				const int n = first + 2 * i;
+				mesh.indices.insert(mesh.indices.end(), {n, n + 1, n + 2, n + 2, n + 1, n + 3});
+			}
+		}
+	}
+	void Ring(Rml::Mesh& mesh, float radius, float value, Rml::Colourb color, float alpha) {
+		Arc(mesh, radius, 0.8f, -90, 360, color, alpha * 0.12f);
+		Arc(mesh, radius, 0.8f, -90, 360 * value, color, alpha * 0.55f);
+	}
+	void OnRender() override {
+		if (display.forceAlpha <= 0 && display.ammoAlpha <= 0 && display.stanceAlpha <= 0) return;
+		Rml::Mesh mesh;
+		Ring(mesh, 10, display.force, {135, 205, 255}, display.forceAlpha);
+		Ring(mesh, 14, display.ammo, {255, 225, 140}, display.ammoAlpha);
+		if (display.stance >= 0 && display.stance <= 2) {
+			const Rml::Colourb colors[] = {{110, 175, 255}, {255, 225, 125}, {255, 105, 100}};
+			Arc(mesh, 14, 1.8f, -170.0f + display.stance * 60, 40, colors[display.stance], display.stanceAlpha * 0.65f);
+		}
+		geometry = GetRenderManager()->MakeGeometry(std::move(mesh));
+		geometry.Render(GetAbsoluteOffset());
+	}
+public:
+	explicit ResourceRings(const Rml::String& tag) : Rml::Element(tag) {}
+	void SetDisplay(const ReticleHud::Display& value, float scale) { display = value; pixelScale = scale; }
+};
+
+Rml::ElementInstancerGeneric<ResourceRings> resourceInstancer;
+ReticleHud::Activity activity;
 ReticleSystem systemInterface;
 ReticleRenderer renderInterface;
 Rml::Context* context = nullptr;
 Rml::ElementDocument* document = nullptr;
+Rml::Element* dot = nullptr;
+ResourceRings* resources = nullptr;
 bool initialized = false;
 cvar_t* enabled = nullptr;
 cvar_t* scale = nullptr;
+cvar_t* hudEnabled = nullptr;
 
 } // namespace
 
@@ -90,21 +143,30 @@ void CL_RmlUiShutdown() {
 	if (initialized) Rml::Shutdown();
 	context = nullptr;
 	document = nullptr;
+	dot = nullptr;
+	resources = nullptr;
+	activity.Reset();
 	initialized = false;
 }
 
 void CL_RmlUiInit() {
 	CL_RmlUiShutdown();
 	enabled = Cvar_Get("cg_rmluiReticle", "1", CVAR_ARCHIVE);
-	scale = Cvar_Get("cg_rmluiReticleScale", "1", CVAR_ARCHIVE);
+	scale = Cvar_Get("cg_rmluiReticleScale", "0.75", CVAR_ARCHIVE);
+	hudEnabled = Cvar_Get("cg_rmluiHud", "1", CVAR_ARCHIVE);
 	Rml::SetSystemInterface(&systemInterface);
 	Rml::SetRenderInterface(&renderInterface);
 	initialized = Rml::Initialise();
 	if (initialized) {
+		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
 		context = Rml::CreateContext("reticle", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 		if (context) document = context->LoadDocumentFromMemory(reticleRml);
 	}
-	if (!document) {
+	if (document) {
+		dot = document->GetElementById("dot");
+		resources = static_cast<ResourceRings*>(document->GetElementById("resources"));
+	}
+	if (!document || !dot || !resources) {
 		Com_Printf("RmlUi: reticle initialization failed; using legacy crosshair\n");
 		CL_RmlUiShutdown();
 		return;
@@ -113,21 +175,28 @@ void CL_RmlUiInit() {
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
 }
 
-qboolean CL_RmlUiDrawReticle(float x, float y, float size, const float* color) {
-	if (!document || !enabled->integer || !re.DrawUiGeometry) return qfalse;
+int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state) {
+	if (!document || !enabled->integer || !re.DrawUiGeometry) { activity.Reset(); return 0; }
 	if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(size) || size <= 0) return qfalse;
 	const int width = cls.glconfig.vidWidth, height = cls.glconfig.vidHeight;
 	if (width <= 0 || height <= 0) return qfalse;
-	const float uiScale = std::isfinite(scale->value) ? std::max(0.25f, std::min(4.0f, scale->value)) : 1.0f;
+	const float uiScale = std::isfinite(scale->value) ? std::max(0.25f, std::min(4.0f, scale->value)) : 0.75f;
 	const float pixels = size * height / 480.0f * uiScale;
 	context->SetDimensions({width, height});
 	document->SetProperty(Rml::PropertyId::Left, Rml::Property(x * width / 640.0f - pixels * 0.5f, Rml::Unit::PX));
 	document->SetProperty(Rml::PropertyId::Top, Rml::Property(y * height / 480.0f - pixels * 0.5f, Rml::Unit::PX));
 	document->SetProperty(Rml::PropertyId::Width, Rml::Property(pixels, Rml::Unit::PX));
 	document->SetProperty(Rml::PropertyId::Height, Rml::Property(pixels, Rml::Unit::PX));
+	Rml::Colourb tint;
 	for (int c = 0; c < 4; ++c)
-		renderInterface.tint[c] = std::isfinite(color[c]) ? std::max(0.0f, std::min(1.0f, color[c])) : 1.0f;
+		tint[c] = byte(255 * (std::isfinite(color[c]) ? std::max(0.0f, std::min(1.0f, color[c])) : 1.0f));
+	tint.alpha = byte(tint.alpha * 0.65f);
+	dot->SetProperty(Rml::PropertyId::BackgroundColor, Rml::Property(tint, Rml::Unit::COLOUR));
+	const bool drawHud = state && hudEnabled->integer;
+	if (!drawHud) activity.Reset();
+	resources->SetDisplay(drawHud ? activity.Update(*state, systemInterface.GetElapsedTime()) : ReticleHud::Display(),
+		height / 480.0f * uiScale);
 	context->Update();
 	context->Render();
-	return qtrue;
+	return ReticleHud::DotDrawn | (drawHud ? ReticleHud::ResourcesDrawn : 0);
 }

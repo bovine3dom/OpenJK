@@ -13,6 +13,10 @@
 
 ## Reticle MVP Status
 
+- [x] Set the default dot scale to 0.75.
+- [x] Replace the bottom-right SP resource panel with contextual Force and ammo rings and a stance arc.
+- [ ] Check ring size, opacity, fade timing, and stance readability during human play.
+
 - [x] Integrate RmlUi 6.3 into the Jedi Academy SP client with static dependencies.
 - [x] Replace normal reticle artwork in vanilla and Rend2. Keep the existing collision and target-color logic.
 - [x] Add `cg_rmluiReticle` for legacy fallback and `cg_rmluiReticleScale` for independent size control.

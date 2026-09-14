@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define	__CG_LOCAL_H__
 
 #include "../qcommon/q_shared.h"
+#include "qcommon/reticle_hud.h"
 
 // define GAME_INCLUDE so that g_public.h does not define the
 // short, server-visible gclient_t and gentity_t structures,
@@ -1038,6 +1039,7 @@ void	cgi_R_AddLightToScene( const vec3_t org, float intensity, float r, float g,
 void	cgi_R_RenderScene( const refdef_t *fd );
 void	cgi_R_SetColor( const float *rgba );	// NULL = 1,1,1,1
 qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color);
+int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const reticleHudState_t* state);
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 	float s1, float t1, float s2, float t2, qhandle_t hShader );
 

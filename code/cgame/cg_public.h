@@ -24,6 +24,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #ifndef _CG_PUBLIC_H
 #define _CG_PUBLIC_H
 
+#include "qcommon/reticle_hud.h"
+
 #define NUM_EXPLOSION_SHADERS	8
 #define NUM_EXPLOSION_FRAMES	3
 
@@ -222,6 +224,7 @@ Ghoul2 Insert End
 	CG_OPENJK_MENU_PAINT,
 	CG_OPENJK_GETMENU_BYNAME,
 	CG_R_DRAWRETICLE,
+	CG_R_DRAWRETICLEHUD,
 } cgameImport_t;
 
 #ifdef JK2_MODE

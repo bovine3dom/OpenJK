@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // active (after loading) gameplay
 
 #include "cg_headers.h"
+#include "../game/wp_saber.h"
 
 #include "cg_media.h"
 #include "../game/objectives.h"
@@ -128,17 +129,9 @@ Draw the force power graphics (tics) and the force power numeric amount. Any tic
 be alphaed out.
 ================
 */
-static void CG_DrawForcePower(const centity_t *cent,const int xPos,const int yPos)
+static qboolean CG_ForceHudFlash()
 {
-	int			i;
 	qboolean	flash=qfalse;
-	vec4_t		calcColor;
-	float		value,extra=0,inc,percent;
-
-	if ( !cent->gent->client->ps.forcePowersKnown )
-	{
-		return;
-	}
 
 	// Make the hud flash by setting forceHUDTotalFlashTime above cg.time
 	if (cg.forceHUDTotalFlashTime > cg.time )
@@ -165,11 +158,16 @@ static void CG_DrawForcePower(const centity_t *cent,const int xPos,const int yPo
 		cg.forceHUDActive = qtrue;
 	}
 
-	// I left the funtionality for flashing in because I might be needed yet.
-//	if (!cg.forceHUDActive)
-//	{
-//		return;
-//	}
+	return flash;
+}
+
+static void CG_DrawForcePower(const centity_t *cent,const int xPos,const int yPos)
+{
+	if (!cent->gent->client->ps.forcePowersKnown) return;
+	const qboolean flash = CG_ForceHudFlash();
+	int i;
+	vec4_t calcColor;
+	float value, extra=0, inc, percent;
 
 	inc = (float)  cent->gent->client->ps.forcePowerMax / MAX_HUD_TICS;
 	value = cent->gent->client->ps.forcePower;
@@ -1822,6 +1820,8 @@ static void CG_DrawSimpleForcePower( const centity_t *cent )
 CG_DrawHUD
 ================
 */
+static bool reticleHudDrawn = false;
+
 static void CG_DrawHUD( centity_t *cent )
 {
 	int value;
@@ -1835,6 +1835,8 @@ static void CG_DrawHUD( centity_t *cent )
 		SimpleHud_DrawString( x + 16, y + 40, va( "%i", cg.snap->ps.stats[STAT_HEALTH] ), colorTable[CT_HUD_RED] );
 
 		SimpleHud_DrawString( x + 18 + 14, y + 40 + 14, va( "%i", cg.snap->ps.stats[STAT_ARMOR] ), colorTable[CT_HUD_GREEN] );
+
+		if (reticleHudDrawn) return;
 
 		CG_DrawSimpleForcePower( cent );
 
@@ -1887,6 +1889,7 @@ static void CG_DrawHUD( centity_t *cent )
 
 
 	// Draw the lower right section of the HUD
+	if (reticleHudDrawn) return;
 	if (cgi_UI_GetMenuInfo("righthud",&sectionXPos,&sectionYPos,&sectionWidth,&sectionHeight))
 	{
 		// Draw all the HUD elements --eez
@@ -2541,6 +2544,38 @@ CROSSHAIR
 CG_DrawCrosshair
 =================
 */
+static reticleHudState_t CG_ReticleHudState()
+{
+	const playerState_t& ps = cg.snap->ps;
+	const playerState_t& predicted = cg.predicted_player_state;
+	const playerState_t& live = g_entities[ps.clientNum].client->ps;
+	reticleHudState_t state;
+	state.time = cg.time;
+	state.weapon = cg_entities[ps.clientNum].currentState.weapon;
+	state.force = live.forcePower;
+	state.forceMax = live.forcePowersKnown ? live.forcePowerMax : 0;
+	state.forceActive = live.forcePowersActive != 0;
+	state.forceWarning = cg.forceHUDTotalFlashTime > cg.time;
+	state.firing = predicted.weaponstate == WEAPON_FIRING ||
+		predicted.weaponstate == WEAPON_CHARGING || predicted.weaponstate == WEAPON_CHARGING_ALT;
+	if (state.weapon == WP_SABER)
+	{
+		if (!cg.saberAnimLevelPending) cg.saberAnimLevelPending = live.saberAnimLevel;
+		const int style = cg.saberAnimLevelPending;
+		state.stance = (style == SS_FAST || style == SS_TAVION) ? 0 :
+			(style == SS_MEDIUM || style == SS_DUAL || style == SS_STAFF) ? 1 : 2;
+		state.saberActive = state.firing || live.saberInFlight || live.saberLockTime > cg.time ||
+			(live.saberMove > LS_NONE && live.saberMove != LS_READY && live.saberMove != LS_DRAW && live.saberMove != LS_PUTAWAY);
+	}
+	else if (state.weapon > WP_NONE && state.weapon < WP_NUM_WEAPONS && state.weapon != WP_STUN_BATON)
+	{
+		const int index = weaponData[state.weapon].ammoIndex;
+		state.ammo = ps.ammo[index];
+		state.ammoMax = state.ammo >= 0 ? ammoData[index].max : 0;
+	}
+	return state;
+}
+
 static void CG_DrawCrosshair( vec3_t worldPoint )
 {
 	float		w, h;
@@ -2768,7 +2803,17 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	{
 		hShader = cgs.media.crosshairShader[ cg_drawCrosshair.integer % NUM_CROSSHAIRS ];
 
-		if (!cgi_R_DrawReticle(x + cg.refdef.x + 320, y + cg.refdef.y + 240, w, reticleColor))
+		const centity_t& player = cg_entities[cg.snap->ps.clientNum];
+		const bool normalHud = cg_drawHUD.integer && cg_drawStatus.integer && !cg.zoomMode &&
+			player.gent && player.gent->client && !G_IsRidingVehicle(player.gent) &&
+			!(player.currentState.eFlags & EF_IN_ATST) && !(player.gent->s.eFlags & EF_LOCKED_TO_WEAPON);
+		reticleHudState_t hudState;
+		if (normalHud) hudState = CG_ReticleHudState();
+		const int drawn = cgi_R_DrawReticleHud(x + cg.refdef.x + 320, y + cg.refdef.y + 240, w,
+			reticleColor, normalHud ? &hudState : nullptr);
+		reticleHudDrawn = (drawn & ReticleHud::ResourcesDrawn) != 0;
+		if (reticleHudDrawn && hudState.forceMax > 0) CG_ForceHudFlash();
+		if (!(drawn & ReticleHud::DotDrawn))
 		{
 			cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w),
 				y + cg.refdef.y + 0.5 * (480 - h),
@@ -3913,6 +3958,7 @@ CG_Draw2D
 extern void CG_SaberClashFlare( void );
 static void CG_Draw2D( void )
 {
+	reticleHudDrawn = false;
 	char	text[1024]={0};
 	int		w,y_pos;
 	centity_t *cent = &cg_entities[cg.snap->ps.clientNum];
@@ -4000,6 +4046,9 @@ static void CG_Draw2D( void )
 
 		CG_DrawWeaponSelect();
 
+		// Resolve the reticle first so the legacy HUD has a same-frame fallback.
+		CG_DrawCrosshairNames();
+
 		if ( cg.zoomMode == 0 )
 		{
 			CG_DrawStats();
@@ -4012,8 +4061,6 @@ static void CG_Draw2D( void )
 		//	CG_DrawCrosshair( NULL );
 		//}
 
-
-		CG_DrawCrosshairNames();
 
 		CG_RunRocketLocking();
 

@@ -1026,6 +1026,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #else
 		return qfalse;
 #endif
+	case CG_R_DRAWRETICLEHUD:
+#ifdef USE_RMLUI
+		return CL_RmlUiDrawReticle(VMF(1), VMF(2), VMF(3), (const float*)VMA(4), (const reticleHudState_t*)VMA(5));
+#else
+		return 0;
+#endif
 		// The below was commented out for whatever reason... /me shrugs --eez
 	case CG_R_DRAWSCREENSHOT:
 		re.DrawStretchRaw( VMF(1), VMF(2), VMF(3), VMF(4), SG_SCR_WIDTH, SG_SCR_HEIGHT, SCR_GetScreenshot(0), 0, qtrue);
