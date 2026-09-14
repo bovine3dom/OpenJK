@@ -2,9 +2,10 @@
 
 ## Build Limit
 
-**Use one build job until instructed otherwise.** Use
-`cmake --build build/sp --parallel 1`. Do not run concurrent builds or use
-automatic job counts. Apply the same limit to container and dependency builds.
+**Use one job per build.** Use `cmake --build build/sp --parallel 1`.
+Independent worktrees may build concurrently. Do not use automatic job counts.
+Apply the per-build limit to container and dependency builds too. Keep local
+build and package locks; do not add global build or benchmark locks.
 
 ## Verified Prerequisites
 

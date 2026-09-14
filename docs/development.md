@@ -58,6 +58,45 @@ To check squad and bark diagnostics at levels 0, 3, and 4:
 bash scripts/test-squad-sp.sh
 ```
 
+## Worktrees
+
+Create or check out a local branch in a separate worktree:
+
+```bash
+bash scripts/add-worktree.sh rend2-perf
+```
+
+This creates `../worktrees/openjk-rend2-perf` relative to the main checkout.
+An existing local branch is checked out; a missing branch starts at the invoking
+worktree's HEAD. Uncommitted changes are not copied. Branch-name slashes become
+hyphens in directory names, so `ui/radial` uses `openjk-ui-radial`. Existing paths
+are never replaced, and Git refuses branches already checked out elsewhere.
+The helper also works from a linked worktree and uses the same parent directory.
+
+Each worktree gets a `GameData` symlink to the main checkout's asset directory.
+Set `OJK_ASSETS` when running the helper to select a different shared directory.
+Keep shared assets unchanged. Each worktree has its own `build/sp`, packages,
+and `build/ready`; do not share configured build directories. Run
+`bash scripts/build-sp.sh` inside the selected worktree as usual.
+
+Concurrent worktree builds are allowed. Each build still uses one job. Local
+build and package locks remain; there are no global locks. Other builds and
+game sessions can distort benchmark results, so compare performance on an idle
+machine when practical.
+
+Automated tests create separate profiles. For manual launches, select a distinct
+writable profile for each worktree:
+
+```bash
+OJK_PROFILE="$HOME/.local/share/openjk-profiles/rend2-perf" \
+  bash build/ready/launch-sp.sh GameData
+```
+
+The desktop updater still uses its configured remote root. To keep branches
+installed side by side, use separate `OJK_DESKTOP_CONFIG` files with distinct
+`OJK_REMOTE_ROOT`, `OJK_DESKTOP_DIR`, and `OJK_PROFILE` values. They can share
+`OJK_ASSETS`. See the desktop instructions below.
+
 ## Desktop Package
 
 Install the pull-and-launch command on the desktop once. Replace `BUILD_SERVER`
