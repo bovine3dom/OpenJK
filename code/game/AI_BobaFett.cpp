@@ -1154,6 +1154,17 @@ void	Boba_Update()
 ////////////////////////////////////////////////////////////////////////////////////////
 bool	Boba_Flee()
 {
+	if ( NPCInfo->combatPoint < 0 || NPCInfo->combatPoint >= level.numCombatPoints )
+	{
+		// Let Boba_Update select a new flee point on the next frame.
+		NPCInfo->combatPoint = -1;
+		NPCInfo->surrenderTime = 0;
+		NPC->svFlags &= ~SVF_NOCLIENT;
+		TIMER_Set(NPC, "Boba_TacticsSelect", 0);
+		if ( NPCInfo->goalEntity == NPCInfo->tempGoal )
+			NPCInfo->goalEntity = NULL;
+		return false;
+	}
 	bool	EnemyRecentlySeen	= ((level.time - NPCInfo->enemyLastSeenTime)<10000);
 	bool	ReachedEscapePoint	= (Distance(level.combatPoints[NPCInfo->combatPoint].origin, NPC->currentOrigin)<50.0f);
 	bool	HasBeenGoneEnough	= (level.time>NPCInfo->surrenderTime || (level.time - NPCInfo->enemyLastSeenTime)>400000);

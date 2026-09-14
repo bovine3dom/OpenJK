@@ -274,7 +274,8 @@ extern int NPC_FindCombatPointRetry( const vec3_t position,
 							 vec3_t enemyPosition,
 							 int *cpFlags,
 							 float avoidDist,
-							 const int ignorePoint );
+							 const int ignorePoint,
+							 const vec3_t knownThreat = NULL );
 
 
 extern qboolean NPC_ReserveCombatPoint( int combatPointID );

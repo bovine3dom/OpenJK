@@ -23,25 +23,32 @@ def main():
     root = Path(__file__).resolve().parent.parent
     cases = {"recruit": ("recruit", 1), "ignore": ("ignore", 1), "nogroups": ("nogroups", 1),
              "flank-async": ("flank", 1), "flank-sync": ("flank", 0),
-             "regroup": ("regroup", 1), "solo": ("solo", 1), "cancel": ("cancel", 1), "save": ("save", 1)}
+             "regroup": ("regroup", 1), "solo": ("solo", 1), "cancel": ("cancel", 1), "save": ("save", 1),
+             **{name: (name, 1) for name in ("death", "timeout", "cinematic", "contested", "save-reservation", "cp-low", "cp-high")}}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--case", choices=cases)
     args = parser.parse_args()
+    for fixture in root.joinpath("scripts").glob("ai-squad-*.cfg"):
+        staged = args.package / "OpenJK" / fixture.name
+        check(staged.is_file() and staged.read_bytes() == fixture.read_bytes(),
+              f"Stage current {fixture.name} in {args.package / 'OpenJK'}")
     output = root / "build/smoke"
     output.mkdir(parents=True, exist_ok=True)
     suite = Path(tempfile.mkdtemp(prefix="tactics.", dir=output))
     for case in ([args.case] if args.case else cases):
         fixture, asynchronous = cases[case]
+        mode = [] if asynchronous else ["+exec", "ai-squad-sync.cfg"]
         subprocess.run(["bash", str(root / "scripts/smoke-sp.sh"), str(args.package.resolve()), "t2_wedge",
-                        "+set", "com_maxfps", "10", "+set", "d_asynchronousGroupAI", str(asynchronous),
+                        "+exec", "ai-squad-settings.cfg", *mode,
                         "+exec", f"ai-squad-{fixture}.cfg"],
                        env=dict(os.environ, OJK_SMOKE_ROOT=str(suite / case)), check=True)
         logs = list((suite / case).glob("t2_wedge.*/console.log"))
         check(len(logs) == 1, f"Missing log: {suite / case}")
         text = logs[0].read_text(errors="replace")
         check("aimemory event=rejected" not in text, f"Rejected fixture control: {logs[0]}")
-        samples, events, phase = {}, [], ""
+        check(not re.search(r"couldn't exec|Unknown command|ERROR:", text), f"Fixture error: {logs[0]}")
+        samples, events, controls, phase = {}, [], [], ""
         for line in text.splitlines():
             line = re.sub(r"\^[0-9]", "", line)
             label = re.search(r"OJK_SQUAD_([A-Z_]+)$", line)
@@ -50,8 +57,14 @@ def main():
             if "aimemory event=sample " in line:
                 sample = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
                 samples.setdefault(phase, {})[sample["name"]] = sample
+            elif "aimemory event=lifecycle " in line:
+                state = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
+                samples[phase][state["name"]].update(state)
+            elif any(f"aimemory event={kind} " in line for kind in ("reservation", "reuse", "cp")):
+                controls.append(dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split()))
             if "squad event=" in line:
                 event = dict(word.split("=", 1) for word in line.split("squad ", 1)[1].split() if "=" in word)
+                event["phase"] = phase
                 events.append(event)
         reports = [e for e in events if e["event"] == "report_delivery"]
         if case == "recruit":
@@ -109,6 +122,56 @@ def main():
             check(before["role"] == "1" and after["role"] in ("1", "2"), str(samples))
             for key in ("cp", "tactic_goal", "tactic_threat", "health", "enemy"):
                 check(after[key] == before[key], f"Tactic did not survive save/load: {samples}")
+        elif case in ("cp-low", "cp-high"):
+            former, owner = ("_memory_a", "_memory_b") if case == "cp-low" else ("_memory_b", "_memory_a")
+            initial = samples["OWNED"]
+            check((int(initial[former]["ent"]) < int(initial[owner]["ent"])) == (case == "cp-low"), "Wrong entity order")
+            for phase in ("OWNED", "RELEASED", "SAVED", "RESTORED", "REUSED", "FAILED", "VACATED", "CLEANED"):
+                expected_owner = former if phase == "OWNED" else None if phase in ("RELEASED", "CLEANED") else owner
+                for name in (former, owner):
+                    state = samples[phase][name]
+                    # Inactive tacticCP keeps its spawn value; combat_cp is the reservation.
+                    check(state["role"] == "0" and state["cp"] == initial[name]["cp"], f"Tactical state changed: {state}")
+                    check(state["combat_cp"] == ("0" if name == expected_owner else "-1")
+                          and state["occupied"] == ("1" if name == expected_owner else "0"), f"Wrong owner at {phase}: {state}")
+                    check(state["ent"] == initial[name]["ent"], f"Entity changed at {phase}: {state}")
+            operations = [(c["name"], c["action"], c["cp"], c["result"], c["occupied"])
+                          for c in controls if c["event"] == "cp"]
+            check(operations == [(former, "cp", "0", "1", "1"), (former, "release", "0", "1", "0"),
+                                 (owner, "cp", "0", "1", "1"), (former, "release", "-1", "0", "0"),
+                                 (former, "cp", "1", "1", "1"), (former, "cp", "0", "0", "1"),
+                                 (former, "cp", "1", "1", "1"), (former, "vacate", "1", "0", "0"),
+                                 (owner, "release", "0", "1", "0")], f"Wrong reservation results: {operations}")
+        else:
+            before = samples["PREPARED"]["_memory_b"]
+            check(before["role"] == "3" and samples["PREPARED"]["_memory_a"]["role"] == "5", str(samples))
+            check(int(before["cp"]) >= 0 and before["cp"] == before["combat_cp"] and before["occupied"] == "1", str(before))
+            check(before["speech"] == "7" and float(before["speech_chance"]) == 0.5, f"No queued bark: {before}")
+            check(any(c["event"] == "reservation" and c["cp"] == before["cp"] and c["contested"] == "0" for c in controls), str(controls))
+            if case == "save-reservation":
+                for name, saved in samples["PREPARED"].items():
+                    restored = samples["RESTORED"][name]
+                    for key in ("role", "cp", "combat_cp", "occupied", "deadline", "tactic_goal", "tactic_threat", "speech", "speech_chance"):
+                        check(saved[key] == restored[key], f"Save changed {key}: {saved} -> {restored}")
+            for state in samples["CLEANED"].values():
+                check(state["role"] == "0" and state["cp"] == "-1", f"Role not cleared: {state}")
+                check(state["speech"] == "0" and float(state["speech_chance"]) == 0, f"Stale queued bark: {state}")
+            after = samples["CLEANED"]["_memory_b"]
+            check(after["combat_cp"] == "-1", f"Stale reservation: {after}")
+            check(any(e["event"] == "cp_release" and e["cp"] == before["cp"]
+                      and e["phase"] in ("PREPARED", "RESTORED") for e in events), "No reservation release")
+            check(not any(e["event"] == "movement_speech_consume" and e["ent"] == before["ent"]
+                          and e["phase"] in ("PREPARED", "CLEANED", "LATER", "RESTORED") for e in events), "Cancelled bark consumed")
+            if case == "death":
+                check(int(after["health"]) <= 0 and after["group"] == "-1", str(after))
+                check(samples["LATER"]["_memory_b"]["speech"] == "0", "Dead actor retained speech")
+            elif case == "timeout":
+                check(any(e["event"] == "tactic_finish" and e["ent"] == before["ent"] and e["reason"] == "timeout" for e in events), "No timeout cleanup")
+                check(math.dist(point(after), point(before, "tactic_goal")) > 24, "Timeout fixture reached the goal")
+            elif case == "cinematic":
+                check(after["goal"] == "0" and after["behavior"] != before["behavior"], f"Script goal lost: {after}")
+            if case in ("contested", "save-reservation"):
+                check(any(c["event"] == "reuse" and c["cp"] == before["cp"] and c["reserved"] == c["occupied"] == "1" for c in controls), "Stale cleanup freed reused point")
         print(f"PASS: {case}", flush=True)
     print(f"Squad results: {suite}")
 

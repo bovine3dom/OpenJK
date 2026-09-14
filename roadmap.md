@@ -110,9 +110,11 @@ Compare `codemp/rd-rend2/` with `code/rd-vanilla/` and the renderer build target
 Rend2 remains experimental and opt-in. Vanilla is still the default.
 Linux GCC builds used one job. Xvfb and LLVMpipe checks passed for renderer
 lifecycle, active AI tactic save/load, and save migration.
+Migration and renderer lifecycle checks passed after the CP ownership changes.
 
 Rend2 4K and lifecycle checks with stencil and projected shadows passed.
 Hardware performance, audio, and broader manual campaign checks remain open.
+Defer these manual checks to the root `human_todo.md` Rend2 checklist.
 The beam fix still needs a dedicated visual test.
 See `docs/rend2-sp.md` for commands and test limits.
 
@@ -126,9 +128,30 @@ sampling before declaring the port complete. Track asset upgrades separately.
 
 Single-player already has groups, commanders, combat-point reservations, cover and
 flank tests, covering fire, morale, and last-seen records. Some morale-driven
-combat-point choices appear to have no callers. Some lost-target paths use the
-enemy's current position rather than an observed position. Verify these paths in
-runtime tests before changing them.
+combat-point choices appear to have no callers. ST hidden-target facing, distance,
+short-loss CP search, and solo enemy goals now use known personal or same-enemy
+group positions. Group sorting uses actual member nodes and the target record
+node; the legacy insertion `k++` stack overflow is corrected. `NPC_StartFlee` CP
+retries retain the supplied danger point rather than hidden enemy coordinates.
+
+Accepted target changes or clears remove memory and old memory goals. Same-target
+and rejected locked-target assignments preserve memory. Tactic cancellation and
+group removal clear movement speech and chance. CP release clears all NPC claims;
+failed replacement clears the ID. Full-save load restores occupancy from NPC
+claims; autosave load does not.
+
+Thirteen memory and 16 tactical cases are verified, including `solo-switch`,
+`cp-low`, and `cp-high`. The timeout test forces a
+deadline, not physical route obstruction. The cinematic test simulates
+`BS_CINEMATIC` with an external goal, not a full pending ICARUS script. Contested
+reservation testing uses the API, not a real encounter with multiple squads.
+
+Solo fixtures use `d_noGroupAI 1`. `SCF_NO_GROUPS` selects the separate legacy
+formation controller, `AI_HazardTrooper`; its hearing, steering, and chase
+restrictions still need correction. Other NPC controllers, generic callers,
+and full FOV and attention remain outside this work. Do not claim engine-wide
+removal of hidden-target knowledge. See `docs/squad-ai.md` and
+`docs/squad-tactics.md` for test details and limits.
 
 Relevant code is in `code/game/AI_Stormtrooper.cpp`, `AI_Utils.cpp`,
 `NPC_combat.cpp`, and `AI_Grenadier.cpp`.

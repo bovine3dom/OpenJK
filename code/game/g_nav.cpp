@@ -37,6 +37,7 @@ extern qboolean G_EntIsDoor( int entityNum );
 extern qboolean G_EntIsRemovableUsable( int entNum );
 extern qboolean G_FindClosestPointOnLineSegment( const vec3_t start, const vec3_t end, const vec3_t from, vec3_t result );
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
+extern cvar_t *d_noGroupAI;
 //For debug graphics
 extern void CG_Line( vec3_t start, vec3_t end, vec3_t color, float alpha );
 extern void CG_Cube( vec3_t mins, vec3_t maxs, vec3_t color, float alpha );
@@ -519,7 +520,7 @@ static void MemoryCommand( void )
 {
 	const char *name = gi.argv(2);
 	gentity_t *actor = G_Find( NULL, FOFS(targetname), name );
-	if ( gi.argc() < 3 || gi.argc() > 5 || (gi.argc() == 5 && Q_stricmp(gi.argv(3), "enemy"))
+	if ( gi.argc() < 3 || gi.argc() > 5 || (gi.argc() == 5 && Q_stricmp(gi.argv(3), "enemy") && Q_stricmp(gi.argv(3), "cp"))
 		|| !name[0] || !actor || !actor->NPC || !actor->client
 		|| G_Find( actor, FOFS(targetname), name ) )
 	{
@@ -562,7 +563,18 @@ static void MemoryCommand( void )
 				memset(&actor->NPC->last_ucmd, 0, sizeof(actor->NPC->last_ucmd));
 			}
 			else
+			{
 				actor->NPC->scriptFlags |= SCF_CHASE_ENEMIES;
+				// Exercise Stormtrooper enemy-goal conversion without legacy troop AI.
+				if ( !Q_stricmp(action, "chase") && d_noGroupAI->integer )
+					actor->NPC->goalEntity = actor->enemy;
+			}
+		}
+		else if ( !Q_stricmp(action, "sort") )
+		{
+			extern void AI_SortGroupByPathCostToEnemy( AIGroupInfo_t *group );
+			if ( actor->NPC->group )
+				AI_SortGroupByPathCostToEnemy( actor->NPC->group );
 		}
 		else if ( !Q_stricmp(action, "protect") )
 			actor->flags |= FL_GODMODE;
@@ -577,6 +589,75 @@ static void MemoryCommand( void )
 			actor->NPC->scriptFlags |= SCF_NO_GROUPS;
 		else if ( !Q_stricmp(action, "dontflee") )
 			actor->NPC->scriptFlags |= SCF_DONT_FLEE;
+		else if ( !Q_stricmp(action, "queue") )
+		{
+			actor->NPC->movementSpeech = 7; // SPEECH_OUTFLANK is private to AI_Stormtrooper.cpp.
+			actor->NPC->movementSpeechChance = 0.5f;
+		}
+		else if ( !Q_stricmp(action, "expire") && actor->NPC->tacticRole )
+			actor->NPC->tacticDeadline = level.time;
+		else if ( !Q_stricmp(action, "cinematic") )
+		{
+			actor->NPC->behaviorState = BS_CINEMATIC;
+			actor->NPC->goalEntity = &g_entities[0];
+		}
+		else if ( (!Q_stricmp(action, "cp") && gi.argc() == 5)
+			|| !Q_stricmp(action, "release") || !Q_stricmp(action, "vacate") )
+		{
+			int cp = actor->NPC->combatPoint;
+			qboolean result;
+			if ( !Q_stricmp(action, "cp") )
+			{
+				char *end;
+				long requested = strtol(gi.argv(4), &end, 10);
+				if ( !gi.argv(4)[0] || *end || requested < -1 || requested >= level.numCombatPoints )
+				{
+					gi.Printf( "aimemory event=rejected reason=cp\n" );
+					return;
+				}
+				cp = (int)requested;
+				SaveNPCGlobals();
+				SetNPCGlobals(actor);
+				result = NPC_SetCombatPoint(cp);
+				RestoreNPCGlobals();
+			}
+			else
+			{
+				// Simulate a saved owner whose occupancy flag was not restored.
+				if ( !Q_stricmp(action, "vacate") && cp >= 0 && cp < level.numCombatPoints )
+					level.combatPoints[cp].occupied = qfalse;
+				result = NPC_FreeCombatPoint(cp);
+			}
+			gi.Printf( "aimemory event=cp name=%s action=%s cp=%d result=%d occupied=%d\n", name, action, cp, result,
+				cp >= 0 && cp < level.numCombatPoints ? level.combatPoints[cp].occupied : 0 );
+		}
+		else if ( !Q_stricmp(action, "reserve") && actor->NPC->tacticRole )
+		{
+			int cp = actor->NPC->tacticCP;
+			if ( cp < 0 )
+			{
+				for ( cp = 0; cp < level.numCombatPoints; ++cp )
+					if ( NPC_ReserveCombatPoint(cp) )
+						break;
+				if ( cp == level.numCombatPoints )
+				{
+					gi.Printf( "aimemory event=rejected reason=no_free_cp\n" );
+					return;
+				}
+				NPC_FreeCombatPoint(actor->NPC->combatPoint);
+				actor->NPC->combatPoint = actor->NPC->tacticCP = cp;
+			}
+			gi.Printf( "aimemory event=reservation name=%s cp=%d contested=%d\n", name, cp, NPC_ReserveCombatPoint(cp) );
+		}
+		else if ( !Q_stricmp(action, "reuse") && actor->NPC->tacticCP >= 0 && actor->NPC->tacticCP < level.numCombatPoints )
+		{
+			int cp = actor->NPC->tacticCP;
+			NPC_FreeCombatPoint(cp);
+			qboolean reserved = NPC_ReserveCombatPoint(cp);
+			ST_ClearTactic(actor);
+			gi.Printf( "aimemory event=reuse name=%s cp=%d reserved=%d occupied=%d\n", name, cp, reserved, level.combatPoints[cp].occupied );
+			NPC_FreeCombatPoint(cp);
+		}
 		else
 		{
 			gi.Printf( "aimemory event=rejected reason=action\n" );
@@ -591,6 +672,10 @@ static void MemoryCommand( void )
 	const float *target = actor->enemy ? actor->enemy->currentOrigin : vec3_origin;
 	gentity_t *goal = actor->NPC->goalEntity;
 	const float *goalPos = goal ? goal->currentOrigin : vec3_origin;
+	AIGroupMember_t *member = NULL;
+	for ( int i = 0; group && i < group->numGroup; ++i )
+		if ( group->member[i].number == actor->s.number )
+			member = &group->member[i];
 	gi.Printf( "aimemory event=sample name=%s time=%d ent=%d enemy=%d pos=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f los=%d pvs=%d seen_time=%d seen=%.3f,%.3f,%.3f group=%d group_enemy=%d group_time=%d shared=%.3f,%.3f,%.3f clear_time=%d members=%d goal=%d goal_pos=%.3f,%.3f,%.3f home=%d health=%d role=%d cp=%d deadline=%d tactic_goal=%.3f,%.3f,%.3f tactic_threat=%.3f,%.3f,%.3f\n",
 		name, level.time, actor->s.number, actor->enemy ? actor->enemy->s.number : -1,
 		actor->currentOrigin[0], actor->currentOrigin[1], actor->currentOrigin[2], target[0], target[1], target[2],
@@ -602,6 +687,15 @@ static void MemoryCommand( void )
 		actor->NPC->tacticRole, actor->NPC->tacticCP, actor->NPC->tacticDeadline,
 		actor->NPC->tacticGoal[0], actor->NPC->tacticGoal[1], actor->NPC->tacticGoal[2],
 		actor->NPC->tacticThreat[0], actor->NPC->tacticThreat[1], actor->NPC->tacticThreat[2] );
+	gi.Printf( "aimemory event=path name=%s group_wp=%d seen_wp=%d member_wp=%d actor_wp=%d path_cost=%d target_wp=%d troop=%d\n",
+		name, group ? group->enemyWP : WAYPOINT_NONE,
+		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
+		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
+		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
+	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d\n",
+		name, actor->NPC->combatPoint,
+		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,
+		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState );
 }
 
 void Svcmd_Nav_f( void )
@@ -748,6 +842,8 @@ void Svcmd_Nav_f( void )
 		Com_Printf("player - inspect player state for save/load tests\n" );
 		Com_Printf("memory <unique NPC targetname> [hold|chase|enemy [targetname]] - inspect sight memory; controls require _memory_ names\n" );
 		Com_Printf("additional memory test controls: fight, protect, wound, ignore, nogroups, dontflee\n" );
+		Com_Printf("lifecycle test controls: queue, expire, cinematic, reserve, reuse\n" );
+		Com_Printf("reservation test controls: cp <id>, release, vacate\n" );
 		Com_Printf("show\n - nodes\n - edges\n - testpath\n - enemypath\n - combatpoints\n - navgoals\n---\n");
 		Com_Printf("goto\n ---\n" );
 		Com_Printf("gotonum\n ---\n" );

@@ -138,9 +138,9 @@ void AI_SortGroupByPathCostToEnemy( AIGroupInfo_t *group )
 	int				i, j, k;
 	qboolean		sort = qfalse;
 
-	if ( group->enemy != NULL )
-	{//FIXME: just use enemy->waypoint?
-		group->enemyWP = NAV::GetNearestNode(group->enemy);
+	if ( group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time )
+	{
+		group->enemyWP = NAV::GetNearestNode( group->enemyLastSeenPos );
 	}
 	else
 	{
@@ -149,24 +149,15 @@ void AI_SortGroupByPathCostToEnemy( AIGroupInfo_t *group )
 
 	for ( i = 0; i < group->numGroup; i++ )
 	{
-		if ( group->enemyWP == WAYPOINT_NONE )
-		{//FIXME: just use member->waypoint?
-			group->member[i].waypoint = WAYPOINT_NONE;
+		group->member[i].waypoint = NAV::GetNearestNode( &g_entities[group->member[i].number] );
+		if ( group->enemyWP == WAYPOINT_NONE || group->member[i].waypoint == WAYPOINT_NONE )
+		{
 			group->member[i].pathCostToEnemy = Q3_INFINITE;
 		}
 		else
-		{//FIXME: just use member->waypoint?
-			group->member[i].waypoint = NAV::GetNearestNode(group->enemy);
-			if ( group->member[i].waypoint != WAYPOINT_NONE )
-			{
-				group->member[i].pathCostToEnemy = NAV::EstimateCostToGoal( group->member[i].waypoint, group->enemyWP );
-				//at least one of us has a path, so do sorting
-				sort = qtrue;
-			}
-			else
-			{
-				group->member[i].pathCostToEnemy = Q3_INFINITE;
-			}
+		{
+			group->member[i].pathCostToEnemy = NAV::EstimateCostToGoal( group->member[i].waypoint, group->enemyWP );
+			sort = qtrue;
 		}
 	}
 	//Now sort
@@ -186,7 +177,7 @@ void AI_SortGroupByPathCostToEnemy( AIGroupInfo_t *group )
 				{//slot occupied
 					if ( group->member[i].pathCostToEnemy < bestMembers[j].pathCostToEnemy )
 					{//this guy has a shorter path than the one currenly in this spot, bump him and put myself in here
-						for ( k = group->numGroup; k > j; k++ )
+						for ( k = i; k > j; k-- )
 						{
 							memcpy( &bestMembers[k], &bestMembers[k-1], sizeof( bestMembers[k] ) );
 						}
@@ -634,6 +625,8 @@ void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 	ST_ClearTactic( &g_entities[group->member[memberNum].number] );
 	if ( g_entities[group->member[memberNum].number].NPC )
 	{
+		g_entities[group->member[memberNum].number].NPC->movementSpeech = 0;
+		g_entities[group->member[memberNum].number].NPC->movementSpeechChance = 0.0f;
 		int state = g_entities[group->member[memberNum].number].NPC->squadState;
 		if ( group->numState[state] > 0 )
 			group->numState[state]--;
@@ -1041,6 +1034,25 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 	group->processed = qfalse;
 
 	return (qboolean)(group->numGroup>0);
+}
+
+void AI_RestoreCombatPointReservations( void )
+{
+	// Combat-point occupancy is not saved. Rebuild it after all NPCs are loaded.
+	for ( int cp = 0; cp < level.numCombatPoints; ++cp )
+		level.combatPoints[cp].occupied = qfalse;
+	for ( int i = 0; i < globals.num_entities; ++i )
+	{
+		gentity_t *owner = &g_entities[i];
+		if ( !owner->inuse || !owner->NPC || owner->NPC->combatPoint < 0 )
+			continue;
+		if ( owner->health <= 0 || !NPC_ReserveCombatPoint(owner->NPC->combatPoint) )
+		{
+			// A duplicate or invalid saved claim must not release another NPC's point.
+			owner->NPC->combatPoint = -1;
+			ST_ClearTactic(owner);
+		}
+	}
 }
 
 void AI_UpdateGroups( void )

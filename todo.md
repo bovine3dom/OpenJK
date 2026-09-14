@@ -87,19 +87,24 @@ was needed for the automated checks on the build machine.
 - [x] Observe geometric line-of-sight loss around the pillar. This does not yet verify enemy perception or memory.
 - [ ] Add goal-replacement, direct-free, and active-probe load/map-change lifecycle cases.
 - [x] Trace real enemy lost-contact behaviour in this room. Pair sight time with position, remove PVS-only sight refresh, retain valid groups, and use shared recorded positions in the commander's lost-contact paths.
-- [x] Verify seven memory cases with `scripts/test-ai-memory.py`: loss/reacquisition and shared observations in both commander modes, unseen assignment, search expiry, and target switching.
-- [ ] Add dedicated runtime cases for rejected alert acquisition, blocked-shot sight, no-route holds, merge ordering, and competing combat-point reuse.
-- [ ] Address remaining live-position use in facing, short-loss tactics, solo pursuit, path-cost sorting, and generic fleeing before claiming engine-wide perception correctness.
+- [x] Verify 13 memory cases with `scripts/test-ai-memory.py`: the previous eight, short-loss checks in both modes, solo pursuit, solo unseen assignment, and solo target replacement.
+- [x] Check same-target memory retention and unseen-target goal cleanup. Solo fixtures use `d_noGroupAI 1`, not the separate `SCF_NO_GROUPS` formation controller.
+- [ ] Add dedicated runtime cases for rejected alert acquisition, blocked-shot sight, no-route holds, merge ordering, and combat-point reuse in real multi-squad encounters.
+- [x] Use known personal or same-enemy group positions for ST hidden facing, distance, short-loss CP search, and solo enemy goals. Sort from actual member nodes to the target record node and fix the legacy insertion `k++` stack overflow. Keep the supplied danger point in `NPC_StartFlee` CP retries.
+- [x] Clear memory and old memory goals on accepted target changes or clears, but preserve memory for same-target or rejected locked assignments. Tag temporary memory goals with `tempGoal.enemy`.
+- [ ] Correct hearing, steering, and chase restrictions in the separate `SCF_NO_GROUPS` controller, `AI_HazardTrooper`. Review other NPC controllers, generic callers, full FOV, and attention before claiming engine-wide perception correctness.
 - [ ] Audit existing cover, flank, and lost-contact voice clips. Map suitable clips to real squad events.
 - [x] Add default-off traces for existing membership, squad states, commander decisions, combat-point searches and reservations, movement, and bark requests, suppression, and dispatch.
 - [x] Check trace levels 0, 3, and 4 with `bash scripts/test-squad-sp.sh`. This is a diagnostic fixture, not a coordinated-flank test.
 - [x] Add local report and tactical-role diagnostics, including fixed goal/threat positions and cleanup events.
 - [x] Implement report-backed recruitment, one supported flank per group, and bounded regrouping without increasing production NPC health or damage.
 - [x] Use contact calls, delayed acknowledgement attempts, and action-linked outflank/cover barks under existing speech restrictions.
-- [x] Verify nine tactical cases, including hidden recruitment, completed flanks in both modes, wounded/solo regrouping, support loss, ignore/no-group controls, and save/load.
-- [ ] Add large-chain/range, mixed-team, grenade, additional script-control, and competing combat-point lifecycle tests.
+- [x] Verify 16 tactical cases: the baseline nine plus death, timeout, cinematic interruption, contested reservation, save-reservation, and non-tactical ownership checks.
+- [x] Clear movement speech and chance on tactic cancellation or group removal. Restore full-save CP occupancy from NPC claims, not autosaves. Release all NPC ownership claims and clear the ID when replacement fails.
+- [x] Verify `cp-low` and `cp-high`: release/reuse/save/load in both entity orders, failed replacement, and stale occupancy cleanup.
+- [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Current checks force a deadline, simulate `BS_CINEMATIC` with an external goal, and contest points through the reservation API. They do not cover physical route obstruction, a full pending ICARUS script, or a real multi-squad encounter.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
-- [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information.
+- [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information. Defer manual Rend2 checks to the root `human_todo.md` checklist.
 
 Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port
 experimental and opt-in. Vanilla remains the default.
@@ -120,6 +125,7 @@ experimental and opt-in. Vanilla remains the default.
 
 - [x] Add read-time migration for known project v1 saves while retaining v2 output and strict parsing.
 - [x] Verify genuine v1 migration and a v2 save/load cycle under Rend2. Check state and source hashes. Reject files with valid checksums but invalid versions 0 and 3, then load a valid save.
+- [x] Repeat Rend2 migration and autosave-load checks after the CP ownership fixes. The save layout is unchanged.
 - [ ] Qualify additional historical/modded save layouts separately; do not promise compatibility from the version number alone.
 
 ## Rend2 Port
@@ -131,7 +137,7 @@ experimental and opt-in. Vanilla remains the default.
 - [x] Require both renderer smoke tests before publication. Verify Rend2 identity and reject vanilla fallback in strict tests.
 - [x] Pass `t1_sour` with both renderers and `t2_wedge` with Rend2. Check screenshots with NPCs, textured maps, the player, and a yellow saber.
 - [x] Pass OpenGL debug lifecycle checks for `vid_restart`, format-2 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
-- [x] Pass all nine squad-tactics cases under Rend2, including active-tactic save/load.
+- [x] Pass the baseline nine squad-tactics cases under Rend2, including active-tactic save/load. The expanded 16-case suite passes with vanilla; Rend2 lifecycle, autosave, and migration checks also pass with the AI changes.
 - [x] Pass the lifecycle test with persistent buffers enabled. Keep tag-only weapon models without GPU geometry.
 - [x] Fix projected shadows and pass lifecycle checks with stencil and projected shadows. Test with patch stitching disabled.
 - [ ] Add a dedicated visual test for the beam draw-order and color fix.

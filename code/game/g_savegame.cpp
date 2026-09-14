@@ -37,6 +37,7 @@ extern void OBJ_LoadTacticalInfo(void);
 
 extern void G_LoadSave_WriteMiscData(void);
 extern void G_LoadSave_ReadMiscData(void);
+extern void AI_RestoreCombatPointReservations(void);
 extern void G_ReloadSaberData( gentity_t *ent );
 extern void FX_Read( void );
 extern void FX_Write( void );
@@ -1345,6 +1346,8 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	ReadGEntities(qbAutosave);
 	Quake3Game()->VariableLoad();
 	G_LoadSave_ReadMiscData();
+	if ( !qbAutosave )
+		AI_RestoreCombatPointReservations();
 
 	extern void CG_ReadTheEvilCGHackStuff(void);
 	CG_ReadTheEvilCGHackStuff();

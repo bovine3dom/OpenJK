@@ -1699,6 +1699,8 @@ void ST_TrackEnemy( gentity_t *self, vec3_t enemyPos )
 	self->NPC->combatPoint = -1;
 	//go after his last seen pos
 	NPC_SetMoveGoal( self, enemyPos, 100.0f, qfalse );
+	if ( self->NPC->tempGoal )
+		self->NPC->tempGoal->enemy = self->enemy;
 	if (Q_irand(0,3)==0)
 	{
 		self->NPC->aiFlags |= NPCAI_STOP_AT_LOS;
@@ -1973,6 +1975,8 @@ void ST_ClearTactic( gentity_t *self, const char *reason )
 	int role = info->tacticRole;
 	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_finish ent=%d role=%d cp=%d reason=%s knownposition=%.1f,%.1f,%.1f\n", self->s.number, role, info->tacticCP, reason, info->tacticThreat[0], info->tacticThreat[1], info->tacticThreat[2] );
 	info->tacticRole = 0;
+	info->movementSpeech = 0;
+	info->movementSpeechChance = 0.0f;
 	if ( info->goalEntity == info->tempGoal && info->tempGoal
 		&& VectorCompare( info->tempGoal->currentOrigin, info->tacticGoal ) && !Q3_TaskIDPending( self, TID_MOVE_NAV ) )
 		info->goalEntity = NULL;
@@ -2000,6 +2004,25 @@ void ST_ClearTactic( gentity_t *self, const char *reason )
 				ST_ClearTactic( other, reason );
 		}
 	}
+}
+
+static qboolean ST_GetLastSeenPosition( gentity_t *self, vec3_t known )
+{
+	auto *info = self->NPC;
+	if ( !self->enemy )
+		return qfalse;
+	int observed = info->enemyLastSeenTime;
+	qboolean personal = (observed > 0 && observed <= level.time) ? qtrue : qfalse;
+	AIGroupInfo_t *group = info->group;
+	if ( group && group->enemy == self->enemy && group->lastSeenEnemyTime > 0
+		&& group->lastSeenEnemyTime <= level.time && (!personal || group->lastSeenEnemyTime > observed) )
+	{
+		VectorCopy( group->enemyLastSeenPos, known );
+		return qtrue;
+	}
+	if ( personal )
+		VectorCopy( info->enemyLastSeenLocation, known );
+	return personal;
 }
 
 static qboolean ST_SeesKnownThreat( gentity_t *self, const vec3_t known )
@@ -2469,15 +2492,22 @@ void ST_Commander( void )
 			continue;
 		}
 
+		vec3_t enemyPosition;
+		qboolean seesEnemy = NPC_ClearLOS( NPC->enemy );
+		if ( seesEnemy )
+			VectorCopy( NPC->enemy->currentOrigin, enemyPosition );
+		else if ( !ST_GetLastSeenPosition( NPC, enemyPosition ) )
+			continue;
+
 		if ( NPC->client->ps.weapon == WP_NONE )
 		{//weaponless, should be hiding
 			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=commander_skip group=%d ent=%d reason=weaponless\n", (int)(group-level.groups), NPC->s.number );
 			if ( NPCInfo->goalEntity == NULL || NPCInfo->goalEntity->enemy == NULL || NPCInfo->goalEntity->enemy->s.eType != ET_ITEM )
 			{//not running after a pickup
-				if ( TIMER_Done( NPC, "hideTime" ) || (DistanceSquared( group->enemy->currentOrigin, NPC->currentOrigin ) < 65536 && NPC_ClearLOS( NPC->enemy )) )
+				if ( TIMER_Done( NPC, "hideTime" ) || (seesEnemy && DistanceSquared( enemyPosition, NPC->currentOrigin ) < 65536) )
 				{//done hiding or enemy near and can see us
 					//er, start another flee I guess?
-					NPC_StartFlee( NPC->enemy, NPC->enemy->currentOrigin, AEL_DANGER_GREAT, 5000, 10000 );
+					NPC_StartFlee( NPC->enemy, enemyPosition, AEL_DANGER_GREAT, 5000, 10000 );
 				}//else, just hang here
 			}
 			continue;
@@ -2495,7 +2525,7 @@ void ST_Commander( void )
 		if (TIMER_Done( NPC, "checkEnemyVisDebouncer" ))
 		{
 			TIMER_Set (NPC, "checkEnemyVisDebouncer", Q_irand(3000, 7000));
-			if (!NPC_ClearLOS(NPC->enemy))
+			if ( !seesEnemy )
 			{
 				cpFlags |= (CP_CLEAR|CP_COVER);	// NOPE, Can't See The Enemy, So Find A New Combat Point
 			}
@@ -2535,7 +2565,7 @@ void ST_Commander( void )
 					break;
 				}
 
-				if ( DistanceSquared( group->enemy->currentOrigin, NPC->currentOrigin ) < distThreshold )
+				if ( DistanceSquared( enemyPosition, NPC->currentOrigin ) < distThreshold )
 				{
 					cpFlags |= (CP_CLEAR|CP_COVER);
 				}
@@ -2558,7 +2588,7 @@ void ST_Commander( void )
 			if ( cp == -1 )
 			{//may have had sone set above
 				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_request group=%d ent=%d flags=%d avoid=%.1f failed_cp=%d source=self_current\n", (int)(group-level.groups), NPC->s.number, cpFlags, avoidDist, NPCInfo->lastFailedCombatPoint );
-				cp = NPC_FindCombatPointRetry( NPC->currentOrigin, NPC->currentOrigin, NPC->currentOrigin, &cpFlags, avoidDist, NPCInfo->lastFailedCombatPoint );
+				cp = NPC_FindCombatPointRetry( NPC->currentOrigin, NPC->currentOrigin, NPC->currentOrigin, &cpFlags, avoidDist, NPCInfo->lastFailedCombatPoint, seesEnemy ? NULL : enemyPosition );
 				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_result group=%d ent=%d cp=%d flags=%d\n", (int)(group-level.groups), NPC->s.number, cp, cpFlags );
 			}
 
@@ -2758,14 +2788,24 @@ void NPC_BSST_Attack( void )
 	shoot = qfalse;
 	hitAlly = qfalse;
 	VectorClear( impactPos );
-	enemyDist = DistanceSquared( NPC->currentOrigin, NPC->enemy->currentOrigin );
+	// LOS must test the entity, not the empty space at its last seen position.
+	enemyLOS = NPC_ClearLOS( NPC->enemy );
+	vec3_t enemyPosition;
+	qboolean hasEnemyPosition = enemyLOS;
+	if ( enemyLOS )
+		VectorCopy( NPC->enemy->currentOrigin, enemyPosition );
+	else
+		hasEnemyPosition = ST_GetLastSeenPosition( NPC, enemyPosition );
+	enemyDist = hasEnemyPosition ? DistanceSquared( NPC->currentOrigin, enemyPosition ) : Q3_INFINITE;
 
 	vec3_t	enemyDir, shootDir;
-	VectorSubtract( NPC->enemy->currentOrigin, NPC->currentOrigin, enemyDir );
+	VectorClear( enemyDir );
+	if ( hasEnemyPosition )
+		VectorSubtract( enemyPosition, NPC->currentOrigin, enemyDir );
 	VectorNormalize( enemyDir );
 	AngleVectors( NPC->client->ps.viewangles, shootDir, NULL, NULL );
 	float dot = DotProduct( enemyDir, shootDir );
-	if ( dot > 0.5f ||( enemyDist * (1.0f-dot)) < 10000 )
+	if ( hasEnemyPosition && (dot > 0.5f || (enemyDist * (1.0f-dot)) < 10000) )
 	{//enemy is in front of me or they're very close and not behind me
 		enemyInFOV = qtrue;
 	}
@@ -2779,7 +2819,7 @@ void NPC_BSST_Attack( void )
 			//FIXME: we can never go back to alt-fire this way since, after this, we don't know if we were initially supposed to use alt-fire or not...
 		}
 	}
-	else if ( enemyDist > 65536 )//256 squared
+	else if ( hasEnemyPosition && enemyDist > 65536 )//256 squared
 	{
 		if ( NPC->client->ps.weapon == WP_DISRUPTOR )
 		{//sniping...
@@ -2795,7 +2835,7 @@ void NPC_BSST_Attack( void )
 	}
 
 	//can we see our target?
-	if ( NPC_ClearLOS( NPC->enemy ) )
+	if ( enemyLOS )
 	{
 		if ( NPCInfo->group && NPCInfo->group->enemy == NPC->enemy )
 		{
@@ -2858,9 +2898,9 @@ void NPC_BSST_Attack( void )
 			}
 		}
 	}
-	else if ( gi.inPVS( NPC->enemy->currentOrigin, NPC->currentOrigin ) )
+	else if ( hasEnemyPosition && gi.inPVS( enemyPosition, NPC->currentOrigin ) )
 	{
-		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=sight_blocked ent=%d enemy=%d pvs=1 seen=%d group_seen=%d\n", NPC->s.number, NPC->enemy->s.number, NPCInfo->enemyLastSeenTime, NPCInfo->group ? NPCInfo->group->lastSeenEnemyTime : 0 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=sight_blocked ent=%d enemy=%d source=last_seen pvs=1 seen=%d group_seen=%d\n", NPC->s.number, NPC->enemy->s.number, NPCInfo->enemyLastSeenTime, NPCInfo->group ? NPCInfo->group->lastSeenEnemyTime : 0 );
 		faceEnemy = qtrue;
 		NPC_AimAdjust( -1 );//adjust aim worse longer we cannot see enemy
 	}
@@ -2890,7 +2930,15 @@ void NPC_BSST_Attack( void )
 
 	if ( faceEnemy )
 	{//face the enemy
-		NPC_FaceEnemy( qtrue );
+		if ( enemyLOS )
+			NPC_FaceEnemy( qtrue );
+		else if ( hasEnemyPosition )
+		{
+			vec3_t facingPosition;
+			VectorCopy( enemyPosition, facingPosition );
+			NPC_FacePosition( facingPosition, qtrue );
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=memory_face ent=%d enemy=%d pos=%.3f,%.3f,%.3f yaw=%.3f pitch=%.3f\n", NPC->s.number, NPC->enemy->s.number, enemyPosition[0], enemyPosition[1], enemyPosition[2], NPCInfo->desiredYaw, NPCInfo->desiredPitch );
+		}
 	}
 
 	if ( !(NPCInfo->scriptFlags&SCF_CHASE_ENEMIES) )
@@ -2900,11 +2948,17 @@ void NPC_BSST_Attack( void )
 			doMove = qfalse;
 		}
 	}
-	else if (NPC->NPC->scriptFlags&SCF_NO_GROUPS)
+	else if ( !Q3_TaskIDPending( NPC, TID_MOVE_NAV )
+		&& ((NPCInfo->scriptFlags&SCF_NO_GROUPS) || (!enemyLOS && NPCInfo->goalEntity == NPC->enemy)) )
 	{
-			//	NPCInfo->goalEntity = UpdateGoal();
-
- 		NPCInfo->goalEntity = (enemyLOS)?(0):(NPC->enemy);
+		if ( !enemyLOS && hasEnemyPosition && NPCInfo->tempGoal )
+		{
+			NPC_SetMoveGoal( NPC, enemyPosition, 100.0f, qfalse );
+			// Keep target identity without copying its live waypoint.
+			NPCInfo->tempGoal->enemy = NPC->enemy;
+		}
+		else
+			NPCInfo->goalEntity = NULL;
 	}
 
 	if ( NPC->client->fireDelay && NPC->s.weapon == WP_ROCKET_LAUNCHER )

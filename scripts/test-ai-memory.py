@@ -19,6 +19,12 @@ def point(sample, key):
     return tuple(map(float, sample[key].split(",")))
 
 
+def check_path(sample):
+    check(sample["group_wp"] == sample["seen_wp"] != "0", f"Group waypoint is not the observed target waypoint: {sample}")
+    check(sample["member_wp"] == sample["actor_wp"] != "0", f"Path source is not the member waypoint: {sample}")
+    check(0 <= int(sample["path_cost"]) < 16777216, f"No member path to the observed target: {sample}")
+
+
 def main():
     root = Path(__file__).resolve().parent.parent
     cases = {"contact-async": ("ai-memory-test.cfg", 1),
@@ -28,6 +34,11 @@ def main():
              "shared-async": ("ai-memory-shared.cfg", 1),
              "shared-sync": ("ai-memory-shared.cfg", 0),
              "switch": ("ai-memory-switch.cfg", 1),
+             "short-async": ("ai-memory-short.cfg", 1),
+             "short-sync": ("ai-memory-short.cfg", 0),
+             "solo": ("ai-memory-solo.cfg", 1),
+             "solo-unseen": ("ai-memory-solo-unseen.cfg", 1),
+             "solo-switch": ("ai-memory-solo-switch.cfg", 1),
              "door": ("ai-memory-door.cfg", 1)}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
@@ -54,8 +65,13 @@ def main():
             if "aimemory event=sample " in line:
                 sample = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
                 all_samples.setdefault(phase, {})[sample["name"]] = sample
+            elif "aimemory event=path " in line:
+                path = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
+                all_samples[phase][path["name"]].update(path)
         samples = {phase: actors["_memory_a"] for phase, actors in all_samples.items()}
         check("aimemory event=rejected" not in text, f"Fixture control rejected: {logs[0]}")
+        if case.startswith("solo"):
+            check(all(sample["troop"] == "0" for sample in samples.values()), "Solo fixture entered legacy troop AI")
         if case == "door":
             visible, hidden, followed = (samples[phase] for phase in ("DOOR_VISIBLE", "DOOR_HIDDEN", "DOOR_FOLLOW"))
             # The door may start closing before the first snapshot is printed.
@@ -76,12 +92,16 @@ def main():
             hidden = all_samples["SHARED_HIDDEN"]
             updated = all_samples["SHARED_MEMBER"]
             for name in ("_memory_a", "_memory_b"):
+                for actors in (initial, hidden, updated):
+                    check_path(actors[name])
                 check(initial[name]["los"] == "1" and hidden[name]["los"] == "0", str(hidden))
                 check(initial[name]["members"] == "2" and updated[name]["members"] == "2", str(updated))
                 check(int(hidden[name]["time"]) - int(hidden[name]["seen_time"]) > 7000, str(hidden))
-                for key in ("seen_time", "seen", "group_time", "shared", "group"):
+                for key in ("seen_time", "seen", "group_time", "shared", "group", "group_wp", "member_wp", "path_cost"):
                     check(hidden[name][key] == initial[name][key], f"Hidden member lost its memory: {hidden}")
             a, b = updated["_memory_a"], updated["_memory_b"]
+            check(hidden["_memory_a"]["target_wp"] != hidden["_memory_a"]["group_wp"],
+                  "Hidden target did not leave the observed waypoint")
             check(a["group"] == b["group"] != "-1", str(updated))
             check(a["los"] == "0" and b["los"] == "1", str(updated))
             check(a["seen_time"] == initial["_memory_a"]["seen_time"] and a["seen"] == initial["_memory_a"]["seen"], str(a))
@@ -94,11 +114,78 @@ def main():
                 check(a["enemy"] == a["group_enemy"] == c["ent"], str(switched))
                 check(b["enemy"] == b["group_enemy"] == "0" and a["group"] != b["group"], str(switched))
                 check(point(a, "seen") == point(a, "shared") == point(c, "pos"), str(switched))
-        elif case == "unseen":
+        elif case == "solo-switch":
+            visible, tracked, same = (samples[phase] for phase in ("VISIBLE", "TRACK", "SAME_TARGET"))
+            check(visible["los"] == "1" and tracked["los"] == same["los"] == "0", str(samples))
+            check(tracked["enemy"] == visible["enemy"] and tracked["group"] == "-1", str(tracked))
+            check(tracked["seen_time"] == visible["seen_time"], str(tracked))
+            check(tracked["goal"] not in ("-1", tracked["enemy"]), str(tracked))
+            check(point(tracked, "goal_pos") == point(visible, "seen"), str(tracked))
+            for key in ("enemy", "seen_time", "seen", "goal", "goal_pos"):
+                check(same[key] == tracked[key], f"Same-target assignment changed {key}: {same}")
+            target = all_samples["SWITCHED"]["_memory_b"]
+            for phase in ("SWITCHED", "SWITCH_HOLD"):
+                switched = samples[phase]
+                check(switched["enemy"] == target["ent"] != tracked["enemy"] and switched["los"] == "0", str(switched))
+                check(switched["group"] == "-1" and int(switched["health"]) > 0, str(switched))
+                check(switched["seen_time"] == "0" and point(switched, "seen") == (0, 0, 0), str(switched))
+                check(switched["goal"] == "-1", f"Old-target memory goal survived target switch: {switched}")
+        elif case.startswith("short-") or case == "solo":
+            visible = samples["VISIBLE"]
+            check(visible["los"] == "1" and point(visible, "seen") == point(visible, "target"), str(visible))
+            for phase in ("SHORT_B", "SHORT_C", "TRACK"):
+                hidden = samples[phase]
+                check(int(hidden["health"]) > 0, f"Memory actor died during {phase}: {hidden}")
+                if phase != "TRACK":
+                    check(math.dist(point(hidden, "pos"), point(visible, "pos")) < 1,
+                          f"Memory actor moved during hold: {hidden}")
+                check(hidden["los"] == "0" and hidden["enemy"] == visible["enemy"], str(hidden))
+                check(0 < int(hidden["time"]) - int(hidden["seen_time"]) < 7000, str(hidden))
+                for key in ("seen_time", "seen"):
+                    check(hidden[key] == visible[key], f"Hidden movement changed {key}: {hidden}")
+                if case == "solo":
+                    check(hidden["group"] == "-1", str(hidden))
+                else:
+                    for key in ("group", "group_time", "shared", "clear_time"):
+                        check(hidden[key] == visible[key], f"Hidden movement changed {key}: {hidden}")
+                    if phase != "TRACK":
+                        check_path(hidden)
+                        for key in ("group_wp", "member_wp", "path_cost"):
+                            check(hidden[key] == samples["SHORT_B"][key], f"Hidden movement changed routing: {hidden}")
+            check(math.dist(point(samples["SHORT_B"], "target"), point(samples["SHORT_C"], "target")) > 100,
+                  "Hidden positions did not change")
+            if case != "solo":
+                check(any(samples[phase]["target_wp"] != samples[phase]["group_wp"] for phase in ("SHORT_B", "SHORT_C")),
+                      "Hidden target did not leave the observed waypoint")
+            held_log = text.split("OJK_MEMORY_LOSS_BEGIN", 1)[1].split("OJK_MEMORY_PURSUIT", 1)[0]
+            faces = [dict(word.split("=", 1) for word in line.split("squad ", 1)[1].split())
+                     for line in held_log.splitlines() if "squad event=memory_face " in line]
+            faces = [face for face in faces if face["ent"] == visible["ent"]]
+            check(faces, "No hidden-target facing decisions")
+            expected_yaw = math.degrees(math.atan2(point(visible, "seen")[1] - point(visible, "pos")[1],
+                                                  point(visible, "seen")[0] - point(visible, "pos")[0]))
+            for face in faces:
+                check(point(face, "pos") == point(visible, "seen"), f"Facing followed hidden target: {face}")
+                # Head position can differ from the actor origin.
+                check(abs((float(face["yaw"]) - expected_yaw + 180) % 360 - 180) < 5, str(face))
+            if case == "solo":
+                tracked = samples["TRACK"]
+                check(tracked["goal"] not in ("-1", tracked["enemy"]), str(tracked))
+                check(point(tracked, "goal_pos") == point(visible, "seen"), f"Solo goal followed hidden target: {tracked}")
+            reacquired = samples["REACQUIRED"]
+            check(int(reacquired["health"]) > 0, f"Memory actor died before reacquisition: {reacquired}")
+            check(reacquired["los"] == "1" and int(reacquired["seen_time"]) > int(samples["TRACK"]["time"]), str(reacquired))
+            check(point(reacquired, "seen") == point(reacquired, "target"), str(reacquired))
+        elif case in ("unseen", "solo-unseen"):
             unseen = samples["UNSEEN"]
             check(unseen["enemy"] == "0" and unseen["los"] == "0" and unseen["pvs"] == "1", str(unseen))
             check(unseen["seen_time"] == "0" and unseen["group_time"] == "0" and unseen["group"] == "-1",
                   f"Unseen enemy fabricated sight or a group: {unseen}")
+            if case == "solo-unseen":
+                chased = samples["UNSEEN_CHASE"]
+                check(chased["los"] == "0" and chased["enemy"] == "0", str(chased))
+                check(chased["goal"] == "-1" and chased["seen_time"] == "0" and chased["group"] == "-1", str(chased))
+                check("event=memory_face" not in text, "Unseen target supplied a facing position")
         else:
             visible = samples["VISIBLE"]
             check(visible["los"] == "1" and visible["group_enemy"] == "0", str(visible))

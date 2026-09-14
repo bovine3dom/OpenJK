@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_navigator.h"
 #include "wp_saber.h"
 #include "g_functions.h"
+#include "Q3_Interface.h"
 
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern void G_SetEnemy( gentity_t *self, gentity_t *enemy );
@@ -56,6 +57,19 @@ void G_ClearEnemy (gentity_t *self)
 			NPC_ClearLookTarget( self );
 		}
 
+		if ( self->NPC && self->NPC->tempGoal && self->NPC->tempGoal->enemy == self->enemy
+			&& !Q3_TaskIDPending( self, TID_MOVE_NAV ) )
+		{
+			if ( self->NPC->goalEntity == self->NPC->tempGoal )
+			{
+				self->NPC->goalEntity = NULL;
+				NAV::ClearPath( self );
+				self->NPC->aiFlags &= ~(NPCAI_STOP_AT_LOS|NPCAI_TOUCHED_GOAL);
+			}
+			if ( self->NPC->lastGoalEntity == self->NPC->tempGoal )
+				self->NPC->lastGoalEntity = NULL;
+			self->NPC->tempGoal->enemy = NULL;
+		}
 		if ( self->NPC && self->enemy == self->NPC->goalEntity )
 		{
 			self->NPC->goalEntity = NULL;
@@ -68,7 +82,11 @@ void G_ClearEnemy (gentity_t *self)
 		ST_ClearTactic( self, "target_changed" );
 	}
 	if ( self->NPC )
+	{
 		TIMER_Remove( self, "reportAck" );
+		self->NPC->enemyLastSeenTime = 0;
+		VectorClear( self->NPC->enemyLastSeenLocation );
+	}
 	self->enemy = NULL;
 }
 
@@ -636,8 +654,12 @@ static void G_SetEnemyInternal( gentity_t *self, gentity_t *enemy, qboolean prop
 	}
 
 	//Take the enemy
-	if ( self->enemy != enemy || !self->NPC->tacticRole )
+	if ( self->enemy != enemy )
+	{
 		G_ClearEnemy(self);
+		if ( self->enemy )
+			return;
+	}
 	self->enemy = enemy;
 }
 
@@ -1408,6 +1430,9 @@ void NPC_CheckPossibleEnemy( gentity_t *other, visibility_t vis )
 	{//only take an enemy if you don't have one yet
 		G_SetEnemy( NPC, other );
 	}
+
+	if ( NPC->enemy != other )
+		return;
 
 	if ( vis == VIS_FOV )
 	{
@@ -2938,7 +2963,8 @@ int NPC_FindCombatPointRetry( const vec3_t position,
 							 vec3_t destPosition,
 							 int *cpFlags,
 							 float avoidDist,
-							 const int ignorePoint )
+							 const int ignorePoint,
+							 const vec3_t knownThreat )
 {
 	int cp = -1;
 	cp = NPC_FindCombatPoint( position,
@@ -2946,7 +2972,8 @@ int NPC_FindCombatPointRetry( const vec3_t position,
 								destPosition,
 								*cpFlags,
 								avoidDist,
-								ignorePoint );
+								ignorePoint,
+								knownThreat );
 	while ( cp == -1 && (*cpFlags&~CP_HAS_ROUTE) != CP_ANY )
 	{//start "OR"ing out certain flags to see if we can find *any* point
 		if ( *cpFlags & CP_INVESTIGATE )
@@ -3036,7 +3063,8 @@ int NPC_FindCombatPointRetry( const vec3_t position,
 									destPosition,
 									*cpFlags,
 									avoidDist,
-									ignorePoint );
+									ignorePoint,
+									knownThreat );
 	}
 	return cp;
 }
@@ -3119,26 +3147,24 @@ qboolean NPC_FreeCombatPoint( int combatPointID, qboolean failed )
 	if ( combatPointID < 0 || combatPointID >= level.numCombatPoints )
 		return qfalse;
 
-	//Make sure it's currently occupied
-	if ( level.combatPoints[combatPointID].occupied == qfalse )
-		return qfalse;
-
 	//Free it
+	qboolean occupied = level.combatPoints[combatPointID].occupied;
 	level.combatPoints[combatPointID].occupied = qfalse;
-	// Invalidate tactic ownership before this slot can be reserved again.
+	// Invalidate all ownership, even if the occupancy flag was already cleared.
 	for ( int i = 0; i < globals.num_entities; i++ )
 	{
 		gentity_t *owner = &g_entities[i];
-		if ( owner->inuse && owner->NPC && owner->NPC->tacticRole && owner->NPC->tacticCP == combatPointID )
-		{
-			if ( owner->NPC->combatPoint == combatPointID )
-				owner->NPC->combatPoint = -1;
+		if ( !owner->inuse || !owner->NPC )
+			continue;
+		if ( owner->NPC->combatPoint == combatPointID )
+			owner->NPC->combatPoint = -1;
+		if ( owner->NPC->tacticRole && owner->NPC->tacticCP == combatPointID )
 			ST_ClearTactic( owner );
-		}
 	}
-	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_release cp=%d failed=%d\n", combatPointID, failed );
+	if ( occupied )
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cp_release cp=%d failed=%d\n", combatPointID, failed );
 
-	return qtrue;
+	return occupied;
 }
 
 /*
@@ -3149,7 +3175,8 @@ NPC_SetCombatPoint
 
 qboolean NPC_SetCombatPoint( int combatPointID )
 {
-	if (combatPointID==NPCInfo->combatPoint)
+	if ( combatPointID == NPCInfo->combatPoint && combatPointID >= 0 && combatPointID < level.numCombatPoints
+		&& level.combatPoints[combatPointID].occupied )
 	{
 		return qtrue;
 	}
@@ -3159,6 +3186,7 @@ qboolean NPC_SetCombatPoint( int combatPointID )
 	{
 		NPC_FreeCombatPoint( NPCInfo->combatPoint );
 	}
+	NPCInfo->combatPoint = -1;
 
 	if ( NPC_ReserveCombatPoint( combatPointID ) == qfalse )
 		return qfalse;

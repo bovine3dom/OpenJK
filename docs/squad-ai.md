@@ -15,10 +15,14 @@ flank/support/regroup roles now build on the lost-contact memory fix. See
 - After seven seconds without group sight, eligible commander-controlled members track the recorded position. Invalid or unreachable records cause a hold rather than a live-target fallback.
 - After three minutes, the commander starts search from the recorded location's navigation node, or a member-local fallback. It does not write the target's waypoint in this transition.
 - Scripted navigation, no-chase orders, and locked enemies retain their protections.
+- ST hidden-target facing, distance decisions, short-loss combat-point searches, and enemy-goal conversion outside groups use known personal or same-enemy group positions.
+- Group path-cost sorting uses the target record's node and each actual member's node. The legacy insertion loop's `k++` stack overflow is corrected.
+- An accepted enemy change or clear removes sight memory and old memory goals. Same-target assignments and rejected locked-target changes preserve memory. Temporary memory goals use the existing `tempGoal.enemy` field to identify their target.
+- `NPC_StartFlee` combat-point retries retain the supplied danger point instead of reading hidden enemy coordinates.
 
-The fix also clears a released combat-point assignment during tracking and rejects
-out-of-range combat-point IDs. This prevents repeated tracking from releasing a
-point that another member has since reserved.
+Combat-point release clears all NPC ownership claims, not only tactical claims.
+A failed replacement clears the NPC's point ID. Out-of-range IDs are rejected.
+This prevents an old claim from releasing a point that another NPC has reserved.
 
 ## Controls
 
@@ -78,11 +82,11 @@ The diagnostic records do not add random calls. Sight memory uses the existing
 fields, but tactical state adds serialized fields written in save format 2.
 Supported project v1 saves migrate on load; see `save-migration.md`.
 
-This is not an engine-wide removal of hidden-target knowledge. Existing PVS-facing
-and aim logic, short-loss combat distance decisions, `SCF_NO_GROUPS` pursuit,
-group path-cost sorting, and generic flee behaviour still use live positions.
-Geometric LOS is not a complete model of FOV, attention, or reaction time. Those
-remain separate work items.
+This is not an engine-wide removal of hidden-target knowledge. Other NPC
+controllers and generic callers remain outside this scope. `SCF_NO_GROUPS`
+selects the separate legacy formation controller, `AI_HazardTrooper`; its hearing,
+steering, and chase restrictions still need correction. Geometric LOS is not a
+complete model of FOV, attention, or reaction time. Those remain separate tasks.
 
 ## Headless Check
 
@@ -105,13 +109,16 @@ python3 scripts/test-ai-memory.py
 python3 scripts/test-ai-memory.py --case shared-async
 ```
 
-Eight cases pass: single-member loss/reacquisition in both commander modes,
+Thirteen cases pass: single-member loss/reacquisition in both commander modes,
 unseen enemy assignment, search expiry, shared observations in both modes, and
 target switching, plus remembered-target pursuit through an automatic-door
-approach. The tests check simulation timestamps, positions, group
-identity, and movement goals, not just event presence.
+approach, short-loss checks in both modes, solo pursuit, and solo unseen assignment.
+The `solo-switch` case checks same-target retention and unseen-target replacement.
+The tests check simulation timestamps, positions, group identity, and movement
+goals, not just event presence.
 These cases disable tactical movement to isolate the memory behaviour. Reports
-remain enabled.
+remain enabled. Solo fixtures use `d_noGroupAI 1`, not `SCF_NO_GROUPS`, to test
+ST behaviour without selecting the separate legacy formation controller.
 
 The `ai-memory*.cfg` fixtures use the cleared Kril'dor room. They spawn named
 stormtroopers, suppress firing, and hold their movement while normal combat AI
@@ -140,8 +147,9 @@ For test NPC names beginning with `_memory_`, optional controls are available:
 
 Controls refuse pending scripted movement. Do not use these fixtures as ordinary
 campaign sessions. Rejected alert acquisition, blocked-shot sight, no-route holds,
-merge ordering, and competing combat-point reuse still need dedicated runtime
-cases. The broader campaign also needs manual regression testing.
+merge ordering, and combat-point reuse in real multi-squad encounters need runtime
+cases. The broader campaign also needs manual regression testing. Use the root
+`human_todo.md` Rend2 checklist for deferred manual checks.
 
 The door case requires the NPC to approach and reopen a closed door after contact
 loss. It may stop once a firing line is restored. See `door-navigation.md` for

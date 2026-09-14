@@ -59,8 +59,11 @@ three-second hold on arrival and a retry cooldown. Stale sight does not renew
 regroup holds indefinitely; ordinary lost-contact behaviour can resume.
 
 Support loss, target changes, death, script interruption, and timeouts clear the
-assignment. Combat-point ownership is invalidated before a freed point can be
-reused. Scripted goals are not cleared as if they belonged to a tactic. Existing
+assignment. Tactic cancellation and group removal also clear `movementSpeech`
+and its chance value. Combat-point release clears all NPC ownership claims, not
+only tactical claims, before reuse. A failed replacement clears the NPC's point
+ID. Full-save load restores combat-point occupancy from NPC claims; autosave load
+does not. Scripted goals are not cleared as if they belonged to a tactic. Existing
 grenade danger handling runs before tactical decisions can suppress it.
 
 ## Barks
@@ -81,11 +84,22 @@ python3 scripts/test-squad-tactics.py
 python3 scripts/test-squad-tactics.py --case flank-async
 ```
 
-Nine cases pass: hidden-ally recruitment with unchanged personal sight, ignore
+Sixteen cases pass: hidden-ally recruitment with unchanged personal sight, ignore
 and no-group protections, completed concealed flanks in both commander modes,
 wounded retreat, unsupported regrouping, support-loss cancellation, and tactical
-save/load. The tests check roles, positions, route separation from the threat,
-arrival, and cleanup, not just assignment messages.
+save/load, plus death, timeout, cinematic interruption, contested reservation,
+and save-reservation checks. The `cp-low` and `cp-high` cases check non-tactical
+release, reuse, failed replacement, and save/load in both entity orders.
+The tests check roles, positions, route separation from the threat, arrival, and
+cleanup, not just assignment messages. The timeout case forces a deadline; it
+does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
+and an external goal, not a full pending ICARUS script. The contested case uses
+the reservation API, not a real encounter with multiple squads.
+
+Rend2 v1-to-v2 save migration, renderer lifecycle, and an autosave load also pass.
+These changes do not change the save layout. For conflicting claims in older
+saves, reconstruction keeps the first valid living owner in entity order.
+The save does not identify which conflicting claimant was the original owner.
 
 The fixtures clear native NPCs and use protected test actors. They run at a
 controlled frame cap; do not execute them at arbitrary frame rates and treat the
@@ -106,7 +120,11 @@ test invulnerability; `wound` reduces health; and `ignore`, `nogroups`, and
 ## Remaining Checks
 
 Manual campaign tests must assess difficulty, retreat pacing, and bark clarity.
+These checks remain deferred. Use the root `human_todo.md` Rend2 checklist.
 Dedicated tests are still needed for larger recruitment chains, radius boundaries,
 mixed teams, grenade preemption, named/locked-door permissions, and all authored
-anger-script combinations. Existing attack/facing and generic flee code still
-contain live-position uses; this is not an engine-wide perception rewrite.
+anger-script combinations. ST hidden-target decisions now use known positions,
+and `NPC_StartFlee` retries keep the supplied danger point. Other NPC controllers,
+generic callers, and full FOV and attention checks remain outside this scope.
+The separate `SCF_NO_GROUPS` legacy formation controller still needs hearing,
+steering, and chase corrections. This is not an engine-wide perception rewrite.
