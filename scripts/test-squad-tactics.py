@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify local reports, supported flanks, regrouping, and interruption."""
+"""Verify reports, flanks, regrouping, cover cycles, gait, and cleanup."""
 
 import argparse
 import math
@@ -23,7 +23,11 @@ def main():
     root = Path(__file__).resolve().parent.parent
     cases = {"recruit": ("recruit", 1), "ignore": ("ignore", 1), "nogroups": ("nogroups", 1),
              "flank-async": ("flank", 1), "flank-sync": ("flank", 0),
-             "regroup": ("regroup", 1), "solo": ("solo", 1), "cancel": ("cancel", 1), "save": ("save", 1),
+             "contact-async": ("contact", 1), "contact-sync": ("contact", 0),
+             "contact-hold": ("contact-hold", 1),
+             "cycle-async": ("cycle", 1), "cycle-sync": ("cycle", 0),
+             "cycle-cancel": ("cycle-cancel", 1),
+             "regroup": ("regroup", 1), "solo": ("cycle-solo", 1), "cancel": ("cancel", 1), "save": ("save", 1),
              **{name: (name, 1) for name in ("death", "timeout", "cinematic", "contested", "save-reservation", "cp-low", "cp-high")}}
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
@@ -49,22 +53,28 @@ def main():
         check("aimemory event=rejected" not in text, f"Rejected fixture control: {logs[0]}")
         check(not re.search(r"couldn't exec|Unknown command|ERROR:", text), f"Fixture error: {logs[0]}")
         samples, events, controls, phase = {}, [], [], ""
-        for line in text.splitlines():
+        contact_samples, history = [], []
+        for order, line in enumerate(text.splitlines()):
             line = re.sub(r"\^[0-9]", "", line)
             label = re.search(r"OJK_SQUAD_([A-Z_]+)$", line)
             if label:
                 phase = label[1]
             if "aimemory event=sample " in line:
-                sample = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
+                sample: dict = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
+                sample.update(phase=phase, order=order)
+                history.append(sample)
                 samples.setdefault(phase, {})[sample["name"]] = sample
+                if phase == "CONTACT":
+                    contact_samples.append(sample)
             elif "aimemory event=lifecycle " in line:
                 state = dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split())
                 samples[phase][state["name"]].update(state)
             elif any(f"aimemory event={kind} " in line for kind in ("reservation", "reuse", "cp")):
                 controls.append(dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split()))
             if "squad event=" in line:
-                event = dict(word.split("=", 1) for word in line.split("squad ", 1)[1].split() if "=" in word)
+                event: dict = dict(word.split("=", 1) for word in line.split("squad ", 1)[1].split() if "=" in word)
                 event["phase"] = phase
+                event["order"] = order
                 events.append(event)
         reports = [e for e in events if e["event"] == "report_delivery"]
         if case == "recruit":
@@ -108,15 +118,161 @@ def main():
                 arrived = samples["FINISHED"]["_memory_b"]
                 check(arrived["role"] in ("0", "4") and math.dist(point(arrived), goal) < 24, str(arrived))
                 check(any(e["event"] == "tactic_arrival" and e["ent"] == b["ent"] for e in events), "No physical flank arrival")
-        elif case in ("regroup", "solo"):
-            moving = samples["RETREAT" if case == "regroup" else "SOLO"]["_memory_a"]
+        elif case.startswith("contact-"):
+            baseline, prehit, armed, hit, released = (samples[p]["_memory_a"] for p in
+                                                      ("BASELINE", "PREHIT", "ARMED", "HIT", "RELEASED"))
+            buddy = samples["ARMED"]["_memory_b"]
+            check(math.dist(point(baseline), point(prehit)) < 4 and prehit["role"] == "0"
+                  and prehit["los"] == "1", f"Invalid stationary baseline: {prehit}")
+            check(armed["role"] == buddy["role"] == "0" and armed["group"] == buddy["group"] != "-1"
+                  and armed["enemy"] == buddy["enemy"] == "0" and int(armed["members"]) >= 2,
+                  f"Actors not ready: {armed}, {buddy}")
+            check(buddy["health"] == buddy["max_health"] and buddy["weapon"] != "0"
+                  and buddy["chase"] == "1" and buddy["dont_fire"] == "0"
+                  and math.dist(point(armed), point(buddy)) <= 512, f"Buddy unavailable: {buddy}")
+            check(armed["health"] == armed["max_health"] == hit["max_health"]
+                  and int(armed["health"]) > int(hit["health"]) > int(hit["max_health"]) / 2,
+                  f"Hit did not damage a healthy actor: {armed} -> {hit}")
+            check(len(contact_samples) == 20 and all(s["health"] == hit["health"]
+                  and s["max_health"] == armed["max_health"] for s in contact_samples), "Unexpected later damage")
+            actor_events = [e for e in events if e.get("ent") == armed["ent"]]
+            contacts = [e for e in actor_events if e["event"] == "contact_cover"]
+            if case == "contact-hold":
+                check(armed["chase"] == "0" and not contacts, "No-chase actor selected contact cover")
+                check(not any(e["event"] == "tactic_assign" for e in actor_events), "No-chase actor received a role")
+                check(all(s["role"] == "0" and math.dist(point(s), point(prehit)) < 4
+                          for s in [*contact_samples, released]), "No-chase actor moved")
+            else:
+                check(armed["chase"] == "1" and armed["dont_fire"] == "0", str(armed))
+                check(len(contacts) == 1 and contacts[0]["moving"] == "1" and int(contacts[0]["cp"]) >= 0,
+                      f"No moving contact cover: {contacts}")
+                cp = contacts[0]["cp"]
+                retreats = [s for s in contact_samples if s["role"] == "1"]
+                movement = [s for s in retreats if float(s["speed"]) > 0
+                            and (int(s["forward"]) or int(s["right"]))]
+                check(movement and all(s["walking"] == "0" for s in movement),
+                      f"Retreat has no running movement: {retreats}")
+                check(any(0 < float(s["walkSpeed"]) < float(s["speed"])
+                          and float(s["runSpeed"]) > float(s["walkSpeed"]) for s in movement),
+                      f"Retreat never exceeds walk speed on the open path: {movement}")
+                covered = [s for s in contact_samples if s["role"] == "2" and s["cp"] == cp]
+                check(retreats and len(covered) >= 2, f"Missing retreat or hold samples: {contact_samples}")
+                moving = retreats[0]
+                check(moving["cp"] == moving["combat_cp"] == cp and moving["occupied"] == "1"
+                      and 0 < int(moving["deadline"]) - int(hit["time"]) <= 7000, str(moving))
+                check(all(s["los"] == "0" and s["crouched"] == "1" and s["occupied"] == "1"
+                          and s["combat_cp"] == cp and math.dist(point(s), point(moving, "tactic_goal")) < 24
+                          for s in covered), f"No crouched hold in blocked cover: {covered}")
+                check(math.dist(point(covered[0]), point(prehit)) >= 32, "Contact actor did not move to cover")
+                check(0 < int(covered[0]["deadline"]) - int(covered[0]["time"]) <= 3000
+                      and int(covered[0]["deadline"]) - int(hit["time"]) <= 10000, "Unbounded cover hold")
+                check(any(e["event"] == "tactic_arrival" and e["cp"] == cp for e in actor_events), "No cover arrival")
+                check(any(e["event"] == "tactic_finish" and e["role"] == "2" and e["cp"] == cp
+                          and e["reason"] == "arrival" for e in actor_events), "Cover did not expire normally")
+                check(any(e["event"] == "cp_release" and e["cp"] == cp and e["phase"] == "CONTACT"
+                          for e in events), "Cover reservation not released")
+                check(any(s["role"] == "0" and s["cp"] == s["combat_cp"] == "-1" and s["occupied"] == "0"
+                          and 0 <= int(s["time"]) - int(covered[0]["deadline"]) <= 800
+                          for s in contact_samples), "Contact cover not released within bounds")
+                assignments = [e for e in actor_events if e["event"] == "tactic_assign"]
+                check([e["role"] for e in assignments[:2]] == ["1", "2"], "Contact did not select retreat then hold")
+        elif case.startswith("cycle-") or case == "solo":
+            ready = samples["READY"]["_memory_a"]
+            states = [s for s in history if s["name"] == "_memory_a" and s["order"] >= ready["order"]]
+            actor_events = [e for e in events if e.get("ent") == ready["ent"]
+                            and ready["order"] < e["order"] < states[-1]["order"]]
+            check(ready["role"] == "0" and ready["los"] == "1" and ready["chase"] == "1"
+                  and ready["dont_fire"] == "0", f"Invalid cycle baseline: {ready}")
+            check(all(s["health"] == s["max_health"] == ready["health"] for s in states), "Cycle actor took damage")
+            check(all(int(s["members"]) <= 1 for s in states if int(s["time"]) - int(ready["time"]) >= 1000),
+                  "Cycle actor has support")
+            check(not any(e["event"] == "tactic_assign" and e["role"] in ("3", "4", "5")
+                          for e in actor_events), "Unsupported actor received a flank role")
+            starts = [e for e in actor_events if e["event"] == "exposure_cover"]
+            check(starts, "Healthy unsupported actor did not request cover")
+            initial = [s for s in states if s["order"] < starts[0]["order"]]
+            check(len(initial) >= 3 and all(s["role"] == "0" and s["los"] == "1"
+                  and float(s["speed"]) < 4 and math.dist(point(s), point(ready)) < 4 for s in initial),
+                  f"No stationary exposure before cover: {initial}")
+            check(any(e["event"] == "fire_attempt" and e["role"] == "0"
+                      and e["order"] < starts[0]["order"] for e in actor_events), "No firing before cover")
+            check(min(int(s["time"]) for s in states if s["order"] > starts[0]["order"])
+                  - int(ready["time"]) >= 2500, "Cover started before the exposure delay")
+            # fire_attempt means an attack command, not a confirmed shot.
+            check(not any(e["event"] == "fire_attempt" and e["role"] == "2" for e in actor_events),
+                  "Actor tried to fire in cover")
+            if case == "solo":
+                check(samples["SOLO"]["_memory_a"]["role"] == "0", "Solo actor retreated immediately")
+            if case == "cycle-cancel":
+                before = samples["PREPARED"]["_memory_a"]
+                check(before["role"] in ("1", "2"), f"Cancellation missed active cover: {before}")
+                for phase in ("CLEANED", "LATER"):
+                    state = samples[phase]["_memory_a"]
+                    check(state["role"] == "0" and state["cp"] == state["combat_cp"] == "-1"
+                          and state["occupied"] == "0" and state["speech"] == "0"
+                          and float(state["speech_chance"]) == 0, f"Stale cycle state: {state}")
+                check(any(e["event"] == "tactic_finish" and e.get("reason") == "disabled"
+                          and e["phase"] == "CANCEL" for e in actor_events), "No disabled cleanup")
+                if int(before["cp"]) >= 0:
+                    check(before["combat_cp"] == before["cp"] and before["occupied"] == "1", str(before))
+                    check(any(e["event"] == "cp_release" and e["cp"] == before["cp"]
+                              and e["phase"] == "CANCEL" for e in events), "Cycle reservation not released")
+                check(not any(e["event"] in ("tactic_assign", "cover_return", "exposure_cover", "movement_speech_consume")
+                              and e["order"] > before["order"] for e in actor_events), "Cancelled cycle resumed")
+            else:
+                check(25000 <= int(states[-1]["time"]) - int(ready["time"]) <= 35000,
+                      "Cycle observation is not 25 to 35 simulated seconds")
+                completed = []
+                for index, start in enumerate(starts):
+                    end = starts[index+1]["order"] if index+1 < len(starts) else float("inf")
+                    window = [e for e in actor_events if start["order"] < e["order"] < end]
+                    finishes = [e for e in window if e["event"] == "tactic_finish" and e.get("reason") == "firing_position"]
+                    if not finishes:
+                        check(index == len(starts)-1, "Cycle restarted without a firing-position arrival")
+                        continue
+                    finish = finishes[0]
+                    returns = [e for e in window if e["event"] == "cover_return" and e["order"] < finish["order"]]
+                    check(len(returns) == 1, f"Missing cover return: {window}")
+                    returning = returns[0]
+                    for begin, stop in ((start, returning), (returning, finish)):
+                        moving = [s for s in states if begin["order"] < s["order"] < stop["order"] and s["role"] == "1"]
+                        check(moving and any(float(s["speed"]) > 0 for s in moving), "Missing cycle movement")
+                        check(all(s["cp"] == begin["cp"] and s["combat_cp"] == s["cp"]
+                                  and s["occupied"] == str(int(int(s["cp"]) >= 0)) for s in moving),
+                              f"Invalid cycle reservation: {moving}")
+                    held = [s for s in states if start["order"] < s["order"] < returning["order"] and s["role"] == "2"]
+                    check(len(held) >= 4, f"Missing sustained cover hold: {held}")
+                    check(all(s["cp"] == start["cp"] and s["crouched"] == "1" and s["los"] == "0"
+                              and math.dist(point(s), point(s, "tactic_goal")) < 24
+                              and s["combat_cp"] == s["cp"] and s["occupied"] == str(int(int(s["cp"]) >= 0))
+                              for s in held), f"Invalid cover arrival: {held}")
+                    check(int(held[-1]["time"]) - int(held[0]["time"]) >= 2000
+                          and 0 < int(held[0]["deadline"]) - int(held[0]["time"]) <= 3000,
+                          "Cover hold is not bounded to 3 seconds")
+                    arrivals = [e for e in window if e["event"] == "tactic_arrival"]
+                    check(any(e["cp"] == start["cp"] and e["order"] < held[0]["order"] for e in arrivals)
+                          and any(e["cp"] == returning["cp"] and returning["order"] < e["order"] < finish["order"]
+                                  for e in arrivals), "Missing physical cover or firing-position arrival")
+                    check(any(e["event"] == "tactic_finish" and e["role"] == "2" and e.get("reason") == "arrival"
+                              and held[-1]["order"] < e["order"] < returning["order"] for e in window),
+                          "Cover hold did not finish normally")
+                    check(any(e["event"] == "fire_attempt" and e["role"] == "0" and e["order"] > finish["order"]
+                              for e in window), "No renewed fire after return")
+                    if index+1 < len(starts):
+                        # These samples bound events that have no time field.
+                        before = max(int(s["time"]) for s in states if s["order"] < finish["order"])
+                        after = min(int(s["time"]) for s in states if s["order"] > end)
+                        check(after - before >= 3000, "Cycle restarted before the retry delay")
+                    completed.append(finish)
+                check(len(completed) >= 2, f"Expected two complete cover cycles, got {len(completed)}")
+        elif case == "regroup":
+            moving = samples["RETREAT"]["_memory_a"]
             check(moving["role"] in ("1", "2"), str(moving))
             check(not any(e["event"] == "tactic_assign" and e["role"] == "3" for e in events), "Unsupported flank")
-            if case == "regroup":
-                final = samples["REGROUPED"]["_memory_a"]
-                check(final["role"] in ("0", "2") and final["los"] == "0", str(final))
-                check(math.dist(point(final), point(final, "tactic_threat")) > math.dist(point(moving), point(moving, "tactic_threat")), "Retreat did not gain distance")
-                check(any(e["event"] == "tactic_arrival" for e in events), "No regroup arrival")
+            final = samples["REGROUPED"]["_memory_a"]
+            check(final["role"] in ("0", "2") and final["los"] == "0", str(final))
+            check(math.dist(point(final), point(final, "tactic_threat")) > math.dist(point(moving), point(moving, "tactic_threat")), "Retreat did not gain distance")
+            check(any(e["event"] == "tactic_arrival" for e in events), "No regroup arrival")
         elif case == "save":
             before, after = (samples[p]["_memory_a"] for p in ("SAVE", "RESTORED"))
             check(before["role"] == "1" and after["role"] in ("1", "2"), str(samples))

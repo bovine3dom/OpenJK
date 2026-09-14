@@ -106,7 +106,9 @@ was needed for the automated checks on the build machine.
 - [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Current checks force a deadline, simulate `BS_CINEMATIC` with an external goal, and contest points through the reservation API. They do not cover physical route obstruction, a full pending ICARUS script, or a real multi-squad encounter.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information. Defer manual Rend2 checks to the root `human_todo.md` checklist.
-- [ ] Investigate and improve AI behaviour when directly in contact - encourage them to take cover, move between firing, crouch, retreat to cover when engaged and so on. Currently they have a habit of just standing bolt upright in one position with no cover and firing constantly. Cover can be peeking just a little bit around a wall etc.
+- [x] Use recent damage to request retreat cover before a new flank. Keep a bounded crouched hold at the cover point. Verify damage, movement, arrival, release, and no-chase protection in three new cases. All 19 squad cases and 13 memory cases pass under vanilla.
+- [x] Add a timed firing-and-cover cycle without damage. Return to a checked firing position after a quiet crouched hold. Request running for autonomous tactical retreats. Add cycle, cancellation, and measured gait checks.
+- [ ] Extend contact combat with wall-edge leaning. Test repeated hits, no available cover, cycle save/load, pending exposure interruption, contested graph destinations, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
 
 Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port
 experimental and opt-in. Vanilla remains the default.

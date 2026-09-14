@@ -347,6 +347,8 @@ NPC_ST_Pain
 void NPC_ST_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, const vec3_t point, int damage, int mod,int hitLoc )
 {
 	self->NPC->localState = LSTATE_UNDERFIRE;
+	if ( damage > 0 )
+		TIMER_Set( self, "underFire", 3000 );
 
 	TIMER_Set( self, "duck", -1 );
 	TIMER_Set( self, "hideTime", -1 );
@@ -424,7 +426,22 @@ static qboolean ST_Move( void )
 {
 	NPCInfo->combatMove = qtrue;//always doMove straight toward our goal
 
+	const bool runRetreat = NPCInfo->tacticRole == 1
+		&& !Q3_TaskIDPending( NPC, TID_MOVE_NAV )
+		&& (!(NPCInfo->scriptFlags & SCF_WALKING) || (NPCInfo->scriptFlags & SCF_RUNNING));
+	const int walking = NPCInfo->aiFlags & NPCAI_WALKING;
+	if ( runRetreat )
+	{
+		NPCInfo->aiFlags &= ~NPCAI_WALKING;
+		ucmd.buttons &= ~BUTTON_WALKING;
+	}
 	qboolean	moved = NPC_MoveToGoal( qtrue );
+	if ( runRetreat )
+	{
+		NPCInfo->aiFlags = (NPCInfo->aiFlags & ~NPCAI_WALKING) | walking;
+		// Keep the speed that navigation calculated for obstacles and arrival.
+		ucmd.buttons &= ~BUTTON_WALKING;
+	}
 	if (moved==qfalse)
 	{
 		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=move_failed ent=%d cp=%d goal=%d nodes=%d\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity ? NPCInfo->goalEntity->s.number : -1, NAV::PathNodesRemaining(NPC) );
@@ -1502,6 +1519,8 @@ static void ST_CheckMoveState( void )
 
 void ST_ResolveBlockedShot( int hit )
 {
+	if ( NPCInfo->tacticRole == 2 && (NPCInfo->tacticCP >= 0 || TIMER_Exists( NPC, "coverCycle" )) )
+		return; // Stay crouched during the bounded cover hold.
 	int	stuckTime;
 	//figure out how long we intend to stand here, max
 	if ( TIMER_Get( NPC, "roamTime" ) > TIMER_Get( NPC, "stick" ) )
@@ -1523,7 +1542,7 @@ void ST_ResolveBlockedShot( int hit )
 				if ( TIMER_Done( member, "stand" ) )
 				{//they're not being forced to stand
 					//tell them to duck at least as long as I'm not moving
-					TIMER_Set( member, "duck", stuckTime );	// tell my friend to duck so I can shoot over his head
+					TIMER_Set( member, "duck", Com_Clampi( 1000, 3000, stuckTime ) );
 					return;
 				}
 			}
@@ -1533,7 +1552,8 @@ void ST_ResolveBlockedShot( int hit )
 	{//maybe we should stand
 		if ( TIMER_Done( NPC, "stand" ) )
 		{//stand for as long as we'll be here
-			TIMER_Set( NPC, "stand", stuckTime );
+			TIMER_Set( NPC, "stand", Com_Clampi( 1000, 3000, stuckTime ) );
+			TIMER_Set( NPC, "duck", -1 );
 			return;
 		}
 	}
@@ -1542,7 +1562,6 @@ void ST_ResolveBlockedShot( int hit )
 	TIMER_Set( NPC, "roamTime", -1 );
 	TIMER_Set( NPC, "stick", -1 );
 	TIMER_Set( NPC, "duck", -1 );
-	TIMER_Set( NPC, "attakDelay", Q_irand( 1000, 3000 ) );
 }
 
 /*
@@ -1969,12 +1988,17 @@ static void ST_ReportNearby( AIGroupInfo_t *group )
 
 void ST_ClearTactic( gentity_t *self, const char *reason )
 {
-	if ( !self || !self->NPC || !self->NPC->tacticRole )
+	if ( !self || !self->NPC )
+		return;
+	TIMER_Remove( self, "coverExposure" );
+	if ( !self->NPC->tacticRole )
 		return;
 	auto *info = self->NPC;
 	int role = info->tacticRole;
 	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_finish ent=%d role=%d cp=%d reason=%s knownposition=%.1f,%.1f,%.1f\n", self->s.number, role, info->tacticCP, reason, info->tacticThreat[0], info->tacticThreat[1], info->tacticThreat[2] );
 	info->tacticRole = 0;
+	TIMER_Remove( self, "coverCycle" );
+	TIMER_Remove( self, "coverReturn" );
 	info->movementSpeech = 0;
 	info->movementSpeechChance = 0.0f;
 	if ( info->goalEntity == info->tempGoal && info->tempGoal
@@ -2085,6 +2109,88 @@ static qboolean ST_ValidFlankGoal( gentity_t *self, gentity_t *support, const ve
 		&& NAV::InSameRegion( self, goal ) && NAV::SafePathExists( self->currentOrigin, goal, known, 128*128, self )) ? qtrue : qfalse;
 }
 
+static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean cover, vec3_t goal, int &cp )
+{
+	if ( !self->NPC->tempGoal || NAV::GetNearestNode( self ) == WAYPOINT_NONE )
+		return qfalse;
+	cp = NPC_FindCombatPoint( self->currentOrigin, known, self->currentOrigin,
+		(cover ? CP_COVER : CP_CLEAR)|CP_AVOID_ENEMY|CP_HAS_ROUTE,
+		128, self->NPC->lastFailedCombatPoint, known );
+	NAV::TNodeHandle nodes[64];
+	int count = NAV::GetNearbyGroundNodes( self->currentOrigin, nodes, 64 );
+	vec3_t muzzleOffset;
+	CalcEntitySpot( self, SPOT_WEAPON, muzzleOffset );
+	VectorSubtract( muzzleOffset, self->currentOrigin, muzzleOffset );
+	// Try an authored point first, then nearby graph positions in travel order.
+	for ( int i = -1; i < count; ++i )
+	{
+		if ( i == -1 && cp < 0 )
+			continue;
+		const vec3_t &point = i == -1 ? level.combatPoints[cp].origin : NAV::GetNodePosition( nodes[i] );
+		float travel = DistanceSquared( self->currentOrigin, point );
+		if ( travel < 32*32 || travel > 384*384 || DistanceSquared( point, known ) < 128*128 )
+			continue;
+		bool claimed = false;
+		for ( int other = 0; other < level.numCombatPoints && !claimed; ++other )
+			if ( level.combatPoints[other].occupied && other != self->NPC->combatPoint
+				&& DistanceSquared( point, level.combatPoints[other].origin ) < 48*48 )
+				claimed = true;
+		for ( int number = 0; number < globals.num_entities && !claimed; ++number )
+		{
+			gentity_t *other = &g_entities[number];
+			if ( other != self && other->inuse && other->NPC
+				&& (other->NPC->tacticRole == 1 || other->NPC->tacticRole == 3)
+				&& DistanceSquared( point, other->NPC->tacticGoal ) < 48*48 )
+				claimed = true;
+		}
+		if ( claimed )
+			continue;
+		vec3_t firing;
+		VectorAdd( point, muzzleOffset, firing );
+		if ( G_ClearLOS( self, firing, known ) == cover )
+			continue;
+		if ( cover )
+		{
+			// Check crouched and standing heights across the arrival tolerance, not just the muzzle.
+			vec3_t threatHead;
+			VectorCopy( known, threatHead );
+			threatHead[2] += 40;
+			bool exposed = false;
+			for ( int side = 0; side < 12 && !exposed; ++side )
+			{
+				VectorCopy( point, firing );
+				firing[0] += side & 1 ? self->maxs[0]+16 : self->mins[0]-16;
+				firing[1] += side & 2 ? self->maxs[1]+16 : self->mins[1]-16;
+				float low = self->client->crouchheight*0.5f;
+				firing[2] += low + (self->client->standheight-low)*(side/4)*0.5f;
+				for ( int height = 0; height < 2 && !exposed; ++height )
+				{
+					trace_t coverTrace;
+					gi.trace( &coverTrace, firing, NULL, NULL, height ? threatHead : known,
+						self->s.number, CONTENTS_OPAQUE, (EG2_Collision)0, 0 );
+					// Doors can open on approach. Only fixed world geometry supplies cover.
+					if ( coverTrace.startsolid || coverTrace.allsolid || coverTrace.fraction == 1.0f
+						|| coverTrace.entityNum != ENTITYNUM_WORLD )
+						exposed = true;
+				}
+			}
+			if ( exposed )
+				continue;
+		}
+		trace_t trace;
+		gi.trace( &trace, point, self->mins, self->maxs, point, self->s.number, self->clipmask, (EG2_Collision)0, 0 );
+		if ( trace.startsolid || trace.allsolid || NAV::GetNearestNode( point ) == WAYPOINT_NONE
+			|| !NAV::InSameRegion( self, point )
+			|| !NAV::SafePathExists( self->currentOrigin, point, known, 128*128, self ) )
+			continue;
+		VectorCopy( point, goal );
+		if ( i >= 0 )
+			cp = -1;
+		return qtrue;
+	}
+	return qfalse;
+}
+
 static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 {
 	auto *info = self->NPC;
@@ -2159,12 +2265,32 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		else if ( (info->tacticRole == 3 || info->tacticRole == 4) && (lowHealth || !support || support->NPC->tacticRole != 5) )
 			ST_ClearTactic( self, "support_lost" );
 		else if ( info->tacticDeadline <= level.time )
-			ST_ClearTactic( self, info->tacticRole == 4 || (info->tacticRole == 2 && info->tacticCP >= 0) ? "arrival" : "timeout" );
+		{
+			vec3_t goal, known;
+			VectorCopy( info->tacticThreat, known );
+			int cp = -1;
+			bool returnToFire = role == 2 && TIMER_Exists( self, "coverCycle" ) && !lowHealth
+				&& !(info->scriptFlags & (SCF_DONT_FLEE|SCF_DONT_FIRE|SCF_FIRE_WEAPON))
+				&& ST_CyclePosition( self, known, qfalse, goal, cp );
+			ST_ClearTactic( self, role == 4 || (role == 2 && (info->tacticCP >= 0 || TIMER_Exists( self, "coverCycle" ))) ? "arrival" : "timeout" );
+			if ( returnToFire && (cp < 0 || NPC_SetCombatPoint( cp )) )
+			{
+				NPC_SetMoveGoal( self, goal, 16, qtrue, cp );
+				ST_AssignTactic( self, 1, cp, known, goal );
+				TIMER_Set( self, "coverReturn", 6000 );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=cover_return ent=%d cp=%d\n", self->s.number, cp );
+			}
+		}
 		else if ( arrived )
 		{
-			info->goalEntity = NULL;
-			ST_AssignTactic( self, info->tacticRole+1, info->tacticCP, info->tacticThreat, info->tacticGoal );
 			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=tactic_arrival ent=%d reason=arrival cp=%d\n", self->s.number, info->tacticCP );
+			if ( TIMER_Exists( self, "coverReturn" ) )
+				ST_ClearTactic( self, "firing_position" );
+			else
+			{
+				info->goalEntity = NULL;
+				ST_AssignTactic( self, info->tacticRole+1, info->tacticCP, info->tacticThreat, info->tacticGoal );
+			}
 		}
 		if ( !info->tacticRole && lowHealth && role >= 3 )
 			TIMER_Set( self, "regroupRetry", 0 );
@@ -2175,8 +2301,34 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		return qfalse;
 	if ( !TIMER_Done( self, "regroupRetry" ) )
 		return qtrue;
-	qboolean flank = (!lowHealth && availableBuddy && support && !flanker) ? qtrue : qfalse;
-	if ( !lowHealth && availableBuddy && !flank )
+	if ( TIMER_Exists( self, "coverExposure" ) && TIMER_Done( self, "coverExposure" )
+		&& !info->goalEntity && self->painDebounceTime <= level.time
+		&& VectorLengthSquared( self->client->ps.velocity ) < 16
+		&& G_ClearLOS( self, self->enemy )
+		&& !lowHealth && !(info->scriptFlags & (SCF_DONT_FLEE|SCF_DONT_FIRE|SCF_FIRE_WEAPON)) )
+	{
+		vec3_t goal;
+		int cp = -1;
+		TIMER_Remove( self, "coverExposure" );
+		TIMER_Set( self, "coverRetry", 4000 );
+		if ( ST_CyclePosition( self, group->enemyLastSeenPos, qtrue, goal, cp ) )
+		{
+			NPC_FreeCombatPoint( info->combatPoint );
+			if ( cp < 0 || NPC_SetCombatPoint( cp ) )
+			{
+				NPC_SetMoveGoal( self, goal, 16, qtrue, cp );
+				ST_AssignTactic( self, 1, cp, group->enemyLastSeenPos, goal );
+				TIMER_Set( self, "coverCycle", 9000 );
+				ST_Speech( self, SPEECH_COVER, 0 );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=exposure_cover ent=%d cp=%d\n", self->s.number, cp );
+				return qtrue;
+			}
+		}
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=exposure_cover_failed ent=%d\n", self->s.number );
+	}
+	qboolean underFire = !TIMER_Done( self, "underFire" ) && !(info->scriptFlags & SCF_DONT_FLEE) ? qtrue : qfalse;
+	qboolean flank = (!underFire && !lowHealth && availableBuddy && support && !flanker) ? qtrue : qfalse;
+	if ( !underFire && !lowHealth && !flank )
 		return qfalse;
 	int cp = -1;
 	if ( (flank || (!(info->scriptFlags & SCF_DONT_FLEE) && ST_SeesKnownThreat( self, group->enemyLastSeenPos )))
@@ -2229,6 +2381,11 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 	if ( move )
 		NPC_SetMoveGoal( self, goal, 16, qtrue, cp );
 	ST_AssignTactic( self, flank && move ? 3 : move ? 1 : 2, cp, group->enemyLastSeenPos, goal );
+	if ( underFire )
+	{
+		TIMER_Set( self, "underFire", -1 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=contact_cover ent=%d cp=%d moving=%d\n", self->s.number, cp, move );
+	}
 	if ( flank && move )
 	{
 		ST_AssignTactic( support, 5, -1, group->enemyLastSeenPos, support->currentOrigin );
@@ -2870,7 +3027,7 @@ void NPC_BSST_Attack( void )
 
 				if ( hit == NPC->enemy->s.number
 					|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam )
-					|| ( hitEnt && hitEnt->takedamage && ((hitEnt->svFlags&SVF_GLASS_BRUSH)||hitEnt->health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
+					|| ( hitEnt && !hitEnt->client && hitEnt->takedamage && ((hitEnt->svFlags&SVF_GLASS_BRUSH)||hitEnt->health < 40||NPC->s.weapon == WP_EMPLACED_GUN) ) )
 				{//can hit enemy or enemy ally or will hit glass or other minor breakable (or in emplaced gun), so shoot anyway
 					if ( NPCInfo->group && NPCInfo->group->enemy == NPC->enemy )
 					{
@@ -3050,7 +3207,8 @@ void NPC_BSST_Attack( void )
 	{
 		if (NPC->client->NPC_class != CLASS_ASSASSIN_DROID)
 		{
-			if ( !TIMER_Done( NPC, "duck" ) )
+			if ( !TIMER_Done( NPC, "duck" ) || (NPCInfo->tacticRole == 2
+				&& (NPCInfo->tacticCP >= 0 || TIMER_Exists( NPC, "coverCycle" ))) )
 			{
 				ucmd.upmove = -127;
 			}
@@ -3093,7 +3251,8 @@ void NPC_BSST_Attack( void )
 		}
 	}
 
-	if ( NPCInfo->scriptFlags & SCF_DONT_FIRE )
+	if ( (NPCInfo->scriptFlags & SCF_DONT_FIRE)
+		|| (NPCInfo->tacticRole == 2 && TIMER_Exists( NPC, "coverCycle" )) )
 	{
 		shoot = qfalse;
 	}
@@ -3136,6 +3295,8 @@ void NPC_BSST_Attack( void )
 			if( !(NPCInfo->scriptFlags & SCF_FIRE_WEAPON) ) // we've already fired, no need to do it again here
 			{
 				WeaponThink( qtrue );
+				if ( ucmd.buttons & (BUTTON_ATTACK|BUTTON_ALT_ATTACK) )
+					Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=fire_attempt ent=%d time=%d role=%d\n", NPC->s.number, level.time, NPCInfo->tacticRole );
 			}
 			//NASTY
 			if ( NPC->s.weapon == WP_ROCKET_LAUNCHER )
@@ -3169,6 +3330,22 @@ void NPC_BSST_Attack( void )
 			}
 		}
 	}
+	if ( d_squadTactics->integer && !NPCInfo->tacticRole && enemyLOS
+		&& NPCInfo->group && NPCInfo->group->enemy == NPC->enemy
+		&& AI_ValidateGroupMember( NPCInfo->group, NPC, qtrue )
+		&& (NPCInfo->scriptFlags & SCF_CHASE_ENEMIES)
+		&& !(NPCInfo->scriptFlags & (SCF_DONT_FLEE|SCF_DONT_FIRE|SCF_FIRE_WEAPON))
+		&& NPC->health*2 >= NPC->max_health && NPC->painDebounceTime <= level.time
+		&& !NPCInfo->goalEntity && !ucmd.forwardmove && !ucmd.rightmove
+		&& VectorLengthSquared( NPC->client->ps.velocity ) < 16
+		&& TIMER_Done( NPC, "flee" ) && TIMER_Done( NPC, "coverRetry" ) )
+	{
+		// Count exposure across burst pauses, but start only with a firing opportunity.
+		if ( !TIMER_Exists( NPC, "coverExposure" ) && shoot && enemyCS )
+			TIMER_Set( NPC, "coverExposure", Q_irand( 2500, 4000 ) );
+	}
+	else
+		TIMER_Remove( NPC, "coverExposure" );
 }
 
 extern qboolean G_TuskenAttackAnimDamage( gentity_t *self );

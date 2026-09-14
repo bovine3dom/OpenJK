@@ -578,6 +578,20 @@ static void MemoryCommand( void )
 		}
 		else if ( !Q_stricmp(action, "protect") )
 			actor->flags |= FL_GODMODE;
+		else if ( !Q_stricmp(action, "hit") )
+		{
+			if ( !actor->inuse || !actor->takedamage || actor->health <= 5
+				|| !actor->enemy || !actor->enemy->inuse || actor->enemy->health <= 0 )
+			{
+				gi.Printf( "aimemory event=rejected reason=hit_target\n" );
+				return;
+			}
+			int protection = actor->flags & (FL_GODMODE | FL_UNDYING);
+			actor->flags &= ~(FL_GODMODE | FL_UNDYING);
+			G_Damage( actor, actor->enemy, actor->enemy, NULL, actor->currentOrigin,
+				5, DAMAGE_NO_PROTECTION | DAMAGE_NO_KNOCKBACK, MOD_BLASTER );
+			actor->flags |= protection;
+		}
 		else if ( !Q_stricmp(action, "wound") )
 		{
 			actor->health = Q_max(1, actor->max_health / 4);
@@ -692,10 +706,16 @@ static void MemoryCommand( void )
 		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
 		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
 		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
-	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d\n",
+	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d\n",
 		name, actor->NPC->combatPoint,
 		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,
-		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState );
+		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState,
+		(actor->client->ps.pm_flags & PMF_DUCKED) != 0, actor->max_health, actor->client->ps.weapon,
+		(actor->NPC->scriptFlags & SCF_CHASE_ENEMIES) != 0, (actor->NPC->scriptFlags & SCF_DONT_FIRE) != 0,
+		(actor->NPC->last_ucmd.buttons & BUTTON_WALKING) != 0,
+		sqrtf( actor->client->ps.velocity[0]*actor->client->ps.velocity[0] + actor->client->ps.velocity[1]*actor->client->ps.velocity[1] ),
+		actor->NPC->stats.walkSpeed, actor->NPC->stats.runSpeed,
+		actor->NPC->last_ucmd.forwardmove, actor->NPC->last_ucmd.rightmove );
 }
 
 void Svcmd_Nav_f( void )
@@ -841,7 +861,7 @@ void Svcmd_Nav_f( void )
 		Com_Printf("contact <source NPC name> <recipient NPC name> - inspect local report eligibility\n" );
 		Com_Printf("player - inspect player state for save/load tests\n" );
 		Com_Printf("memory <unique NPC targetname> [hold|chase|enemy [targetname]] - inspect sight memory; controls require _memory_ names\n" );
-		Com_Printf("additional memory test controls: fight, protect, wound, ignore, nogroups, dontflee\n" );
+		Com_Printf("additional memory test controls: fight, protect, hit, wound, ignore, nogroups, dontflee\n" );
 		Com_Printf("lifecycle test controls: queue, expire, cinematic, reserve, reuse\n" );
 		Com_Printf("reservation test controls: cp <id>, release, vacate\n" );
 		Com_Printf("show\n - nodes\n - edges\n - testpath\n - enemypath\n - combatpoints\n - navgoals\n---\n");
