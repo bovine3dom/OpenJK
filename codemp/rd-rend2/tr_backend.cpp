@@ -2151,10 +2151,11 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 
 	RB_InstantTriangle();
 
-	FBO_Bind(filtered);
-
-	qglViewport(0, 0, filtered->width, filtered->height);
-	qglScissor(0, 0, filtered->width, filtered->height);
+	const bool upsample = r_ssaoMethod->integer && r_gtaoHalfRes->integer;
+	FBO_t *vertical = upsample ? tr.aoScratchFbo[0] : filtered;
+	FBO_Bind(vertical);
+	qglViewport(0, 0, vertical->width, vertical->height);
+	qglScissor(0, 0, vertical->width, vertical->height);
 
 	GLSL_BindProgram(&tr.depthBlurShader[1]);
 
@@ -2163,6 +2164,16 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 	GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
 
 	RB_InstantTriangle();
+	if (upsample)
+	{
+		FBO_Bind(filtered);
+		qglViewport(0, 0, filtered->width, filtered->height);
+		qglScissor(0, 0, filtered->width, filtered->height);
+		GL_BindToTMU(tr.aoScratchImage[0], TB_COLORMAP);
+		const vec4_t upsampleInfo = {viewInfo[0], viewInfo[1], 2.0f, viewInfo[3]};
+		GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, upsampleInfo);
+		RB_InstantTriangle();
+	}
 	if (timed)
 		qglQueryCounter(frame->aoQueries[layer * 2 + 1], GL_TIMESTAMP);
 }

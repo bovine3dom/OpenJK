@@ -28,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--method", type=int, choices=(0, 1), default=0)
+    parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
     args = parser.parse_args()
     package = args.package.resolve()
@@ -47,7 +48,7 @@ def main():
     for msaa in (0, 4):
         case = suite / f"msaa{msaa}"
         command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
-        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_sampleShading=args.sample_shading,
+        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res, r_sampleShading=args.sample_shading,
                                 r_ext_multisample=msaa, r_normalMapping=1,
                                 r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0).items():
             command += ["+set", name, str(value)]

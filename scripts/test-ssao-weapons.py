@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fov", type=int, default=80)
     parser.add_argument("--method", type=int, choices=(0, 1), default=0)
+    parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
     args = parser.parse_args()
     if not (64 <= args.width <= 16384 and 64 <= args.height <= 16384):
@@ -69,7 +70,7 @@ def main():
             env["SDL_VIDEODRIVER"] = "x11"
             env.pop("EGL_PLATFORM", None)
             command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
-        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_sampleShading=args.sample_shading,
+        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res, r_sampleShading=args.sample_shading,
                                 r_ext_multisample=msaa, r_normalMapping=1,
                                 r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0,
                                 com_maxfps=10, r_mode=-1, r_customwidth=args.width,

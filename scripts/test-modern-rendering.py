@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--msaa", type=int, choices=(0, 4), default=4)
+    parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     args = parser.parse_args()
     if not (64 <= args.width <= 16384 and 64 <= args.height <= 16384):
         parser.error("Invalid capture dimensions")
@@ -30,7 +31,7 @@ def main():
     case = Path(tempfile.mkdtemp(prefix="modern.", dir=output))
     profile = case / "profile/OpenJK"
     profile.mkdir(parents=True, exist_ok=True)
-    settings = dict(cl_renderer="rdsp-rend2", r_ssao=1, r_ssaoMethod=1,
+    settings = dict(cl_renderer="rdsp-rend2", r_ssao=1, r_ssaoMethod=1, r_gtaoHalfRes=args.half_res,
                     r_normalMapping=1, r_specularMapping=1, r_ext_multisample=args.msaa,
                     r_mode=-1, r_customwidth=args.width, r_customheight=args.height,
                     r_fullscreen=0, r_debugContext=1, r_ignoreGLErrors=0,
@@ -56,7 +57,12 @@ def main():
         raise RuntimeError("Requested MSAA count was not confirmed")
     if not re.search(r'Cvar r_ssaoMethod = "1"', text):
         raise RuntimeError("GTAO selection was not confirmed")
-    for name, value in (("r_gtaoQuality", 1), ("r_sampleShading", 0)):
+    ao_width = (args.width + 1) // 2 if args.half_res else args.width
+    ao_height = (args.height + 1) // 2 if args.half_res else args.height
+    if f"GTAO: {ao_width}x{ao_height} -> {args.width}x{args.height}" not in text:
+        raise RuntimeError("Unexpected AO buffer dimensions")
+    for name, value in (("r_gtaoQuality", 1), ("r_sampleShading", 0),
+                        ("r_ssaoRadius", 1), ("r_ssaoViewModelRadius", "0.05")):
         if not re.search(rf'Cvar {name} = "{value}"', text):
             raise RuntimeError(f"Unexpected default: {name}")
 
@@ -72,7 +78,8 @@ def main():
     def difference(a, b):
         return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
 
-    results = {"package": (package / "build-id.txt").read_text().strip(), "msaa": args.msaa}
+    results = {"package": (package / "build-id.txt").read_text().strip(), "msaa": args.msaa,
+               "half_res": args.half_res, "ao_dimensions": [ao_width, ao_height]}
     presets = [pixels(f"quality{i}") for i in range(4)]
     for i, image in enumerate(presets):
         if max(image) - min(image) < 20 or sum(p < 245 for p in image) < len(image) * 0.001:

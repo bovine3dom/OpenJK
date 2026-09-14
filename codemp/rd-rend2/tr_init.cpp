@@ -137,7 +137,7 @@ cvar_t  *r_ssao;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
-cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality;
+cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes;
 cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
@@ -1524,13 +1524,15 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_ssaoMethod, 0, 1, qtrue);
 	r_gtaoQuality = ri.Cvar_Get("r_gtaoQuality", "1", CVAR_ARCHIVE, "GTAO quality: 0 low, 1 medium, 2 high, 3 ultra.");
 	ri.Cvar_CheckRange(r_gtaoQuality, 0, 3, qtrue);
+	r_gtaoHalfRes = ri.Cvar_Get("r_gtaoHalfRes", "0", CVAR_ARCHIVE | CVAR_LATCH, "Calculate GTAO at half width and height, then depth-aware upsample.");
+	ri.Cvar_CheckRange(r_gtaoHalfRes, 0, 1, qtrue);
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
 	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
 	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
 	r_ssaoRadius = ri.Cvar_Get("r_ssaoRadius", "1", CVAR_ARCHIVE, "World AO radius multiplier.");
 	r_ssaoViewModel = ri.Cvar_Get("r_ssaoViewModel", "1", CVAR_ARCHIVE, "Enable isolated first-person weapon AO.");
 	r_ssaoViewModelStrength = ri.Cvar_Get("r_ssaoViewModelStrength", "0.5", CVAR_ARCHIVE, "Weapon self-occlusion strength.");
-	r_ssaoViewModelRadius = ri.Cvar_Get("r_ssaoViewModelRadius", "1", CVAR_ARCHIVE, "Weapon AO radius multiplier.");
+	r_ssaoViewModelRadius = ri.Cvar_Get("r_ssaoViewModelRadius", "0.05", CVAR_ARCHIVE, "Weapon AO radius multiplier.");
 	ri.Cvar_CheckRange(r_ssaoStrength, 0, 4, qfalse);
 	ri.Cvar_CheckRange(r_ssaoRadius, 0.05f, 4, qfalse);
 	ri.Cvar_CheckRange(r_ssaoViewModel, 0, 1, qtrue);

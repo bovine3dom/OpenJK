@@ -87,7 +87,44 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 	return result / total;
 }
 
+vec4 upsampleAO(vec2 uv)
+{
+	float z = u_ViewInfo.y * getLinearDepth(u_ScreenDepthMap, uv, u_ViewInfo.x);
+	if (z >= u_ViewInfo.y * 0.9999) return vec4(1.0);
+	vec2 pixel = 1.0 / vec2(textureSize(u_ScreenDepthMap, 0));
+	vec2 slope;
+	for (int axis = 0; axis < 2; ++axis)
+	{
+		vec2 offset = vec2(0.0);
+		offset[axis] = pixel[axis];
+		float left = z - u_ViewInfo.y * getLinearDepth(u_ScreenDepthMap, uv - offset, u_ViewInfo.x);
+		float right = u_ViewInfo.y * getLinearDepth(u_ScreenDepthMap, uv + offset, u_ViewInfo.x) - z;
+		slope[axis] = (abs(left) < abs(right) ? left : right) / pixel[axis];
+	}
+	vec2 size = vec2(textureSize(u_ScreenImageMap, 0));
+	vec2 coordinate = uv * size - 0.5;
+	vec2 base = floor(coordinate);
+	vec2 fraction = fract(coordinate);
+	float total = 0.0;
+	vec4 result = vec4(0.0);
+	for (int y = 0; y < 2; ++y)
+	for (int x = 0; x < 2; ++x)
+	{
+		vec2 tap = clamp((base + vec2(x, y) + 0.5) / size, 0.5 / size, 1.0 - 0.5 / size);
+		float sampleZ = u_ViewInfo.y * getLinearDepth(u_ScreenDepthMap, tap, u_ViewInfo.x);
+		if (sampleZ >= u_ViewInfo.y * 0.9999) continue;
+		float error = abs(sampleZ - z - dot(slope, tap - uv));
+		float weight = (x == 0 ? 1.0 - fraction.x : fraction.x) *
+			(y == 0 ? 1.0 - fraction.y : fraction.y) *
+			max(0.0, 1.0 - error / max(0.05, u_ViewInfo.w * 0.02));
+		result += texture(u_ScreenImageMap, tap) * weight;
+		total += weight;
+	}
+	return total > 0.00001 ? result / total : vec4(1.0);
+}
+
 void main()
 {
-	out_Color = depthGaussian1D(u_ScreenImageMap, u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
+	out_Color = u_ViewInfo.z > 1.5 ? upsampleAO(var_ScreenTex) :
+		depthGaussian1D(u_ScreenImageMap, u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
 }

@@ -29,14 +29,15 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | `r_ssao` | `0` disables SSAO; `1` enables SSAO. Use `vid_restart` after a change. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
-| `r_ssaoMethod` | Default `0`: legacy SSAO. `1`: full-resolution spatial GTAO. Use `vid_restart` after a change. |
+| `r_ssaoMethod` | Default `0`: legacy SSAO. `1`: spatial GTAO. Use `vid_restart` after a change. |
+| `r_gtaoHalfRes` | Default `0`: native-resolution GTAO. `1`: calculate and filter at half width and half height, then upscale with full-resolution depth. Use `vid_restart` after a change. |
 | `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |
 | `r_ssaoAmbientOnly` | Default `1`: apply SSAO to ambient light and IBL. `0`: apply SSAO once to all per-pixel Lightall lighting. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
 | `r_ssaoRadius` | World radius multiplier, from `0.05` to `4`. Default `1`. |
 | `r_ssaoViewModel` | Default `1`: enable first-person weapon self-occlusion. `0` disables it. |
 | `r_ssaoViewModelStrength` | Weapon strength, from `0` to `4`. Default `0.5`; `0` removes weapon AO from lighting. |
-| `r_ssaoViewModelRadius` | Weapon radius multiplier, from `0.05` to `4`. Default `1`. |
+| `r_ssaoViewModelRadius` | Weapon radius multiplier, from `0.05` to `4`. Default `0.05`. |
 | `r_ssaoDebug` | Default `0`: scene. `1`: raw world AO. `2`: filtered world AO. `3`: weapon mask. `4`: weapon AO. No restart is required. |
 | `r_depthPrepass` | Use `1` for AO generation. With `0`, debug mode must show the scene, not stale AO. |
 
@@ -90,9 +91,9 @@ World and weapon AO remain separate. The debug modes work with both methods.
 
 GTAO reconstructs view-space positions and surface normals from depth. It
 calculates occlusion along hemisphere slices with a cosine-weighted integral.
-Each result uses full display resolution. Two depth-aware, five-tap passes
-filter the result. The sampling pattern is fixed in screen space. There is
-no frame history, temporal jitter, or TAA requirement.
+By default, calculation and filtering use full display resolution. Two
+depth-aware, five-tap passes filter the result. The sampling pattern is fixed in
+screen space. There is no frame history, temporal jitter, or TAA requirement.
 
 This is an independent GLSL implementation of the GTAO approach described by
 [Jimenez et al. (2016)](https://www.activision.com/cdn/research/Practical_Real_Time_Strategies_for_Accurate_Indirect_Occlusion_NEW%20VERSION_COLOR.pdf).
@@ -113,7 +114,38 @@ feedback. Set `r_gtaoQuality 1` in an existing profile to select the new default
 Saved values are not reset when the renderer default changes.
 
 Normal reconstruction and filtering require additional texture reads.
-All presets use full resolution. A larger radius is not a higher quality preset.
+Resolution is independent of the quality preset. A larger radius is not a
+higher quality preset.
+
+For half-resolution GTAO, set `r_gtaoHalfRes 1`, then use `vid_restart`.
+AO calculation and both filter passes use half width and half height. A final
+pass compares full-resolution depth with the four nearby low-resolution samples.
+It rejects samples across depth edges and restores native-resolution output.
+World and weapon depth remain separate. Odd dimensions round up for the smaller
+buffers. The renderer log reports the calculation and output dimensions.
+
+Half resolution reduces the AO pixel count to about one quarter. The extra
+upsampling pass and full-resolution depth work limit the total speed increase.
+Fine contact detail can be lost, especially with a small weapon radius.
+The world radius default remains `1`; the weapon radius default is `0.05`.
+Existing profiles retain saved values. Set `r_ssaoViewModelRadius 0.05` explicitly
+to apply the new default to an existing profile.
+
+```sh
+python3 scripts/test-modern-rendering.py --half-res 1
+python3 scripts/test-modern-rendering.py --half-res 1 --width 1279 --height 719
+python3 scripts/test-ssao-weapons.py --hardware --method 1 --half-res 1 --msaa 4 --width 1280 --height 720
+```
+
+The weapon isolation fixture sets radius `1` for its controlled comparisons.
+The modern-rendering fixture checks the fresh-profile radius defaults.
+
+Half-resolution checks passed at 1280 x 720 and 1279 x 719 on the P630 with
+4x MSAA. Weapon separation, radius controls, firing, restart, and save/load also
+passed. In two 8-second runs per mode, the verified 720p weapon benchmark
+measured median throughput of 37.56 FPS at native AO resolution and 46.46 FPS
+at half resolution. Both used Medium GTAO and ordinary 4x MSAA. Results are in
+`build/benchmark-sp/rdsp-rend2.8wmbgi6e` and `.0fc2on9e`.
 
 Full sample shading evaluates materials at each MSAA sample location, including
 the interiors of polygons. It applies to the main scene draw list and its depth
