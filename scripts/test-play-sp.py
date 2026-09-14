@@ -13,7 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 SSH = '''#!/usr/bin/env python3
-import os, subprocess, sys
+import os, shlex, subprocess, sys
 from pathlib import Path
 args = sys.argv[1:]
 if args[0] == "--":
@@ -40,7 +40,11 @@ if args[0] == "rsync" and os.environ.get("OJK_TEST_INTERRUPT"):
         server.wait()
 if args[0].startswith("sh -s") and os.environ.get("OJK_TEST_PUBLISH"):
     result = subprocess.run(["sh", "-c", " ".join(args)], stdout=subprocess.PIPE)
-    ready = Path(os.environ["OJK_REMOTE_ROOT"]) / "build/ready"
+    parameters = shlex.split(args[0])
+    root = Path(parameters[3]).resolve()
+    if parameters[4]:
+        root = root.parent / "worktrees" / ("openjk-" + parameters[4])
+    ready = root / "build/ready"
     ready.unlink()
     ready.symlink_to(os.environ["OJK_TEST_PUBLISH"])
     sys.stdout.buffer.write(result.stdout)
@@ -83,8 +87,8 @@ class DesktopUpdateTests(unittest.TestCase):
         self.first = self.package("first")
         (self.server / "build/ready").symlink_to(self.first)
 
-    def package(self, name):
-        package = self.packages / name
+    def package(self, name, server=None):
+        package = (server / "build/packages" if server else self.packages) / name
         (package / "OpenJK").mkdir(parents=True)
         (package / "launch-sp.sh").write_bytes((ROOT / "scripts/launch-sp.sh").read_bytes())
         (package / "openjk_sp.x86_64").write_text(GAME)
@@ -96,6 +100,12 @@ class DesktopUpdateTests(unittest.TestCase):
         (package / "smoke-result.txt").write_text("PASS: t1_sour\n")
         (package / "smoke-rend2-result.txt").write_text("PASS: t1_sour\n")
         return package
+
+    def worktree(self, name):
+        server = self.server.parent / "worktrees" / f"openjk-{name}"
+        package = self.package(name, server)
+        (server / "build/ready").symlink_to(package)
+        return server
 
     def run_play(self, *args, success=True, **env):
         result = subprocess.run(["bash", str(ROOT / "scripts/play-sp.sh"), *args],
@@ -209,6 +219,93 @@ class DesktopUpdateTests(unittest.TestCase):
         self.env.pop("OJK_ASSETS")
         self.run_play()
         self.assertTrue(self.launch.exists())
+
+    def test_worktree_configuration_isolation_and_arguments(self):
+        self.run_play("--configure", "fixture", str(self.assets))
+        configuration = Path(self.env["OJK_DESKTOP_CONFIG"]).read_bytes()
+        main_profile = Path(self.env["OJK_PROFILE"])
+        for key in ("OJK_REMOTE_ROOT", "OJK_DESKTOP_DIR", "OJK_PROFILE", "OJK_ASSETS"):
+            self.env[key] = str(self.root / "unused environment" / key)
+        self.run_play()
+        self.worktree("ui-radial")
+        self.worktree("rend2-perf")
+        (main_profile / "keep.cfg").write_text("main settings")
+        self.run_play("--worktree", "ui/radial", "--resolution", "1920x1080",
+                      "+set", "cl_renderer", "rdsp-rend2")
+        args = json.loads(self.launch.read_text())
+        destination = self.root / "desktop/worktrees/openjk-ui-radial/build"
+        profile = main_profile / "worktrees/openjk-ui-radial"
+        self.assertEqual(args[args.index("fs_basepath") + 1], str(destination))
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(profile))
+        self.assertEqual(args[args.index("fs_cdpath") + 1], str(self.assets))
+        self.assertEqual(args[args.index("r_customwidth") + 1], "1920")
+        self.assertEqual(args[-3:], ["+set", "cl_renderer", "rdsp-rend2"])
+        self.assertNotIn("--worktree", args)
+        (profile / "keep.cfg").write_text("worktree settings")
+        self.run_play("--worktree", "rend2-perf", "--desktop")
+        self.assertEqual((self.root / "desktop/worktrees/openjk-rend2-perf/build/build-id.txt").read_text(), "rend2-perf\n")
+        self.run_play("--worktree", "ui/radial")
+        self.assertEqual((destination / "build-id.txt").read_text(), "ui-radial\n")
+        self.assertEqual((profile / "keep.cfg").read_text(), "worktree settings")
+        self.run_play()
+        self.assertEqual((self.destination / "build-id.txt").read_text(), "first\n")
+        self.assertEqual((main_profile / "keep.cfg").read_text(), "main settings")
+        self.assertEqual(Path(self.env["OJK_DESKTOP_CONFIG"]).read_bytes(), configuration)
+        self.assertFalse((self.root / "unused environment").exists())
+
+    def test_worktree_uses_resolved_remote_root(self):
+        self.worktree("rend2-perf")
+        alias = self.root / "aliases/main"
+        alias.parent.mkdir()
+        alias.symlink_to(self.server, target_is_directory=True)
+        self.run_play("--worktree", "rend2-perf", OJK_REMOTE_ROOT=str(alias))
+        destination = self.root / "desktop/worktrees/openjk-rend2-perf/build"
+        self.assertEqual((destination / "build-id.txt").read_text(), "rend2-perf\n")
+
+    def test_worktree_publication_is_pinned(self):
+        server = self.worktree("rend2-perf")
+        second = self.package("second", server)
+        self.run_play("--worktree", "rend2-perf", OJK_TEST_PUBLISH=str(second))
+        destination = self.root / "desktop/worktrees/openjk-rend2-perf/build"
+        self.assertEqual((destination / "build-id.txt").read_text(), "rend2-perf\n")
+        self.run_play("--worktree", "rend2-perf")
+        self.assertEqual((destination / "build-id.txt").read_text(), "second\n")
+        self.assertEqual((self.server / "build/ready").resolve(), self.first)
+
+    def test_worktree_failure_does_not_fall_back_to_main(self):
+        self.run_play("--worktree", "missing", success=False)
+        self.assertFalse(self.launch.exists())
+        server = self.worktree("bad")
+        ready = server / "build/ready"
+        ready.unlink()
+        ready.symlink_to(self.first)
+        self.run_play("--worktree", "bad", success=False)
+        self.assertFalse(self.launch.exists())
+
+    def test_invalid_worktree_names(self):
+        self.run_play("--worktree", success=False)
+        for name in ("", "../main", "/absolute", "a/../../b", "--configure", "a\nb", "a b", "a;id", "a/", "a//b"):
+            with self.subTest(name=name):
+                self.run_play("--worktree", name, success=False)
+        self.assertFalse(self.launch.exists())
+        self.assertFalse(self.destination.parent.exists())
+
+    def test_worktree_locks_are_independent(self):
+        self.worktree("held")
+        game = subprocess.Popen(["bash", str(ROOT / "scripts/play-sp.sh"), "--worktree", "held"],
+                                env=dict(self.env, OJK_TEST_HOLD="1"), stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL)
+        try:
+            deadline = time.monotonic() + 10
+            while not self.launch.exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            self.assertTrue(self.launch.exists(), "Worktree game did not start")
+            self.run_play()
+            result = self.run_play("--worktree", "held", success=False)
+            self.assertIn("already running or updating", result.stderr)
+        finally:
+            game.terminate()
+            game.wait(timeout=10)
 
     def test_display_defaults_and_explicit_modes(self):
         self.run_play()

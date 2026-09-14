@@ -90,10 +90,39 @@ OJK_PROFILE="$HOME/.local/share/openjk-profiles/rend2-perf" \
   bash build/ready/launch-sp.sh GameData
 ```
 
-The desktop updater still uses its configured remote root. To keep branches
-installed side by side, use separate `OJK_DESKTOP_CONFIG` files with distinct
-`OJK_REMOTE_ROOT`, `OJK_DESKTOP_DIR`, and `OJK_PROFILE` values. They can share
-`OJK_ASSETS`. See the desktop instructions below.
+The desktop updater can select these directories with `--worktree`:
+
+```bash
+openjk-play --worktree rend2-perf +set cl_renderer rdsp-rend2
+openjk-play --worktree ui/radial --resolution 1920x1080
+```
+
+Put `--worktree NAME` before display options and engine arguments. Names accept
+letters, digits, underscores, dots, hyphens, and slashes. Slashes become hyphens,
+as in the worktree helper. The option selects a directory; it does not verify
+which Git branch is checked out there.
+
+Keep `OJK_REMOTE_ROOT` set to the main checkout. The updater resolves that path
+on the server, then uses its sibling `worktrees/openjk-NAME/build/ready`.
+The selected worktree must have a published build, not only a staged candidate.
+A missing or invalid publication fails; it does not fall back to the main build.
+
+Local files use the existing configuration as their base:
+
+| Setting | With `--worktree NAME` |
+| --- | --- |
+| Installation | `<OJK_DESKTOP_DIR>/worktrees/openjk-NAME/build` |
+| Profile | `<OJK_PROFILE>/worktrees/openjk-NAME` |
+| Assets and SSH host | Unchanged |
+
+No separate configuration file is needed. The updater does not rewrite the
+configuration or copy the main profile. Each worktree starts with separate
+settings and saves. Plain `openjk-play` retains its original paths. Local locks
+protect each installation independently; no global lock is added.
+
+If the desktop has an older installed updater, repeat the `scp` and `chmod`
+commands below once. There is no need to repeat `--configure`. Game-package
+updates do not replace the separately installed `openjk-play` script.
 
 ## Desktop Package
 

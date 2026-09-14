@@ -3,7 +3,7 @@ set -euo pipefail
 
 config=${OJK_DESKTOP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf}
 if [[ ${1:-} == --help ]]; then
-    printf 'Usage: %s --configure SSH_HOST /path/to/GameData\n       %s [engine arguments]\nConfiguration: %s\n' "$0" "$0" "$config"
+    printf 'Usage: %s --configure SSH_HOST /path/to/GameData\n       %s [--worktree NAME] [launcher/engine arguments]\nConfiguration: %s\n' "$0" "$0" "$config"
     exit 0
 fi
 if [[ -f "$config" ]]; then
@@ -22,6 +22,17 @@ if [[ ${1:-} == --configure ]]; then
         "$2" "$configured_assets" "$remote_root" "$desktop" "$profile" > "$config"
     printf 'Configuration written to %s\n' "$config"
     exit 0
+fi
+worktree=
+if [[ ${1:-} == --worktree ]]; then
+    [[ ${2:-} =~ ^[a-zA-Z0-9_][a-zA-Z0-9_./-]*$ && $2 != *..* && $2 != */ && $2 != *//* ]] || {
+        printf 'Use --worktree NAME with letters, digits, underscores, dots, hyphens, or slashes\n' >&2
+        exit 1
+    }
+    worktree=${2//\//-}
+    desktop="${desktop%/}/worktrees/openjk-$worktree"
+    profile="${profile%/}/worktrees/openjk-$worktree"
+    shift 2
 fi
 host=${OJK_HOST:?Run --configure SSH_HOST /path/to/GameData first}
 [[ "$host" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.@-]*$ ]] || { printf 'Use an SSH host alias or user@hostname\n' >&2; exit 1; }
@@ -58,9 +69,12 @@ fi
 
 # Resolve once: a new server publication must not change the source mid-transfer.
 quoted_root=${remote_root//\'/\'\\\'\'}
-remote=$(ssh -- "$host" "sh -s -- '$quoted_root'" <<'REMOTE'
+remote=$(ssh -- "$host" "sh -s -- '$quoted_root' '$worktree'" <<'REMOTE'
 set -eu
 root=$(realpath -e -- "$1")
+if [ -n "$2" ]; then
+    root=$(realpath -e -- "$root/../worktrees/openjk-$2")
+fi
 package=$(realpath -e -- "$root/build/ready")
 case "$package" in "$root/build/packages/"*) ;; *) exit 1 ;; esac
 for file in openjk_sp.x86_64 rdsp-vanilla_x86_64.so OpenJK/jagamex86_64.so launch-sp.sh build-id.txt; do
