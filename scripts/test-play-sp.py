@@ -90,9 +90,11 @@ class DesktopUpdateTests(unittest.TestCase):
         (package / "openjk_sp.x86_64").write_text(GAME)
         (package / "openjk_sp.x86_64").chmod(0o755)
         (package / "rdsp-vanilla_x86_64.so").write_bytes(bytes(range(256)) * 8192)
+        (package / "rdsp-rend2_x86_64.so").write_text(f"rend2 module {name}")
         (package / "OpenJK/jagamex86_64.so").write_text("game module")
         (package / "build-id.txt").write_text(name + "\n")
         (package / "smoke-result.txt").write_text("PASS: t1_sour\n")
+        (package / "smoke-rend2-result.txt").write_text("PASS: t1_sour\n")
         return package
 
     def run_play(self, *args, success=True, **env):
@@ -102,8 +104,9 @@ class DesktopUpdateTests(unittest.TestCase):
         return result
 
     def test_repeated_delta_update_and_arguments(self):
-        self.run_play("+devmap", "t2_wedge", "+exec", "a config.cfg")
-        self.assertEqual(json.loads(self.launch.read_text())[-4:], ["+devmap", "t2_wedge", "+exec", "a config.cfg"])
+        args = ["+set", "cl_renderer", "rdsp-rend2", "+devmap", "t2_wedge", "+exec", "a config.cfg"]
+        self.run_play(*args)
+        self.assertEqual(json.loads(self.launch.read_text())[-len(args):], args)
         second = self.package("second")
         blob = second / "rdsp-vanilla_x86_64.so"
         with blob.open("r+b") as file:
@@ -119,6 +122,8 @@ class DesktopUpdateTests(unittest.TestCase):
         ready.symlink_to(second)
         result = self.run_play()
         self.assertEqual((self.destination / blob.name).read_bytes(), blob.read_bytes())
+        self.assertEqual((self.destination / "rdsp-rend2_x86_64.so").read_bytes(),
+                         (second / "rdsp-rend2_x86_64.so").read_bytes())
         self.assertFalse((self.destination / "obsolete.so").exists())
         self.assertEqual((profile / "keep.cfg").read_text(), "user configuration")
         matched = re.search(r"Matched data: ([\d,]+) bytes", result.stdout)
@@ -208,6 +213,7 @@ class DesktopUpdateTests(unittest.TestCase):
     def test_display_defaults_and_explicit_modes(self):
         self.run_play()
         args = json.loads(self.launch.read_text())
+        self.assertNotIn("cl_renderer", args)
         self.assertEqual(args[args.index("r_mode") + 1], "-2")
         self.assertEqual(args[args.index("cg_fovAspectAdjust") + 1], "1")
         profile = Path(self.env["OJK_PROFILE"]) / "OpenJK"

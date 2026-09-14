@@ -163,13 +163,35 @@ R_ComputeLOD
 
 =================
 */
+#ifdef REND2_SP
+void RE_GetModelBounds(refEntity_t *entity, vec3_t mins, vec3_t maxs)
+{
+	VectorClear(mins);
+	VectorClear(maxs);
+	if (!entity)
+		return;
+	model_t *model = R_GetModelByHandle(entity->hModel);
+	if (model && model->type == MOD_MESH && model->data.mdv[0] && model->data.mdv[0]->numFrames > 0)
+	{
+		const mdvModel_t *mesh = model->data.mdv[0];
+		const int frame = Com_Clampi(0, mesh->numFrames - 1, entity->frame);
+		VectorCopy(mesh->frames[frame].bounds[0], mins);
+		VectorCopy(mesh->frames[frame].bounds[1], maxs);
+	}
+	else
+		R_ModelBounds(entity->hModel, mins, maxs);
+}
+#endif
+
 int R_ComputeLOD( trRefEntity_t *ent ) {
 	float radius;
 	float flod, lodscale;
 	float projectedRadius;
 	mdvFrame_t *frame;
+#ifndef REND2_SP
 	mdrHeader_t *mdr;
 	mdrFrame_t *mdrframe;
+#endif
 	int lod;
 
 	if ( tr.currentModel->numLods < 2 )
@@ -182,6 +204,7 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 		// multiple LODs exist, so compute projected bounding sphere
 		// and use that as a criteria for selecting LOD
 
+#ifndef REND2_SP
 		if(tr.currentModel->type == MOD_MDR)
 		{
 			int frameSize;
@@ -193,6 +216,7 @@ int R_ComputeLOD( trRefEntity_t *ent ) {
 			radius = RadiusFromBounds(mdrframe->bounds[0], mdrframe->bounds[1]);
 		}
 		else
+#endif
 		{
 			//frame = ( md3Frame_t * ) ( ( ( unsigned char * ) tr.currentModel->md3[0] ) + tr.currentModel->md3[0]->ofsFrames );
 			frame = tr.currentModel->data.mdv[0]->frames;
@@ -299,6 +323,14 @@ void R_AddMD3Surfaces( trRefEntity_t *ent, int entityNum ) {
 		ent->e.frame %= tr.currentModel->data.mdv[0]->numFrames;
 		ent->e.oldframe %= tr.currentModel->data.mdv[0]->numFrames;
 	}
+#ifdef REND2_SP
+	if (ent->e.renderfx & RF_CAP_FRAMES)
+	{
+		const int last = tr.currentModel->data.mdv[0]->numFrames - 1;
+		ent->e.frame = Com_Clampi(0, last, ent->e.frame);
+		ent->e.oldframe = Com_Clampi(0, last, ent->e.oldframe);
+	}
+#endif
 
 	//
 	// Validate the frames so there is no chance of a crash.
@@ -393,8 +425,6 @@ void R_AddMD3Surfaces( trRefEntity_t *ent, int entityNum ) {
 	}
 
 }
-
-
 
 
 

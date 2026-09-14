@@ -19,8 +19,14 @@ void main()
 		1.0);
 	var_Velocity = attr_Color;
 
+#ifdef REND2_SP
+	vec4 velocitiyOffset = vec4(0.0);
+	if (var_Velocity.z != 0.0)
+		velocitiyOffset = u_ViewInfo.y * vec4(-var_Velocity.xy / var_Velocity.z, var_Velocity.z, 0.0);
+#else
 	vec4 velocitiyOffset = u_ViewInfo.y * vec4(-var_Velocity.xy/var_Velocity.z, var_Velocity.z, 0.0);
 	velocitiyOffset.xyz = mix(vec3(0.0), velocitiyOffset.xyz, float(var_Velocity.z != 0.0));
+#endif
 	var_Velocity.z *= u_ViewInfo.z;
 
 	vec4 depthPosition = u_ShadowMvp * (gl_Position + velocitiyOffset);

@@ -20,7 +20,11 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
 
+#ifdef REND2_SP
+#include "../../codemp/rd-rend2/tr_local.h"
+#else
 #include "tr_local.h"
+#endif
 
 #include <map>
 
@@ -166,10 +170,12 @@ int RE_GetAnimationCFG(const char *psCFGFilename, char *psDest, int iDestSize)
 	{
 		// not found, so load it...
 		//
-		fileHandle_t f;
+		fileHandle_t f = 0;
 		int iLen = ri.FS_FOpenFileRead( psCFGFilename, &f, qfalse );
 		if (iLen <= 0)
 		{
+			if (f)
+				ri.FS_FCloseFile(f);
 			return 0;
 		}
 
@@ -307,7 +313,7 @@ qhandle_t RE_RegisterIndividualSkin( const char *name , qhandle_t hSkin)
 		token = CommaParse( &text_p );
 
 #ifndef JK2_MODE
-		if ( !strcmp( &surfName[strlen(surfName)-4], "_off") )
+		if ( strlen(surfName) >= 4 && !strcmp( &surfName[strlen(surfName)-4], "_off") )
 		{
 			if ( !strcmp( token ,"*off" ) )
 			{
@@ -393,7 +399,7 @@ qhandle_t RE_RegisterSkin( const char *name) {
 	Q_strncpyz( skin->name, name, sizeof( skin->name ) );	//always make one so it won't search for it again
 
 	// If not a .skin file, load as a single shader	- then return
-	if ( strcmp( name + strlen( name ) - 5, ".skin" ) ) {
+	if ( strlen(name) < 5 || strcmp( name + strlen( name ) - 5, ".skin" ) ) {
 #ifdef JK2_MODE
 		skin->numSurfaces = 1;
 		skin->surfaces[0] = (skinSurface_t *) R_Hunk_Alloc( sizeof(skin->surfaces[0]), qtrue );

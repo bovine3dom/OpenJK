@@ -22,13 +22,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // tr_init.c -- functions that are not called every frame
 
 #include "tr_local.h"
+#ifndef REND2_SP
 #include "ghoul2/g2_local.h"
+#endif
 #include "tr_cache.h"
 #include "tr_allocator.h"
 #include "tr_weather.h"
 #include <algorithm>
 
-#ifdef _G2_GORE
+#if defined(_G2_GORE) && !defined(REND2_SP)
 #include "G2_gore_r2.h"
 #endif
 
@@ -225,6 +227,19 @@ cvar_t	*r_noPrecacheGLA;
 cvar_t	*r_noServerGhoul2;
 cvar_t	*r_Ghoul2AnimSmooth=0;
 cvar_t	*r_Ghoul2UnSqashAfterSmooth=0;
+#ifdef REND2_SP
+cvar_t *r_noGhoul2;
+cvar_t *r_Ghoul2UnSqash;
+cvar_t *r_Ghoul2TimeBase;
+cvar_t *r_shadowRange;
+cvar_t *r_Ghoul2NoLerp;
+cvar_t *r_Ghoul2NoBlend;
+cvar_t *r_Ghoul2BlendMultiplier;
+cvar_t *com_buildScript;
+cvar_t *sv_mapname;
+cvar_t *sv_mapChecksum;
+static int spMediaLevel;
+#endif
 //cvar_t	*r_Ghoul2UnSqash;
 //cvar_t	*r_Ghoul2TimeBase=0; from single player
 //cvar_t	*r_Ghoul2NoLerp;
@@ -566,6 +581,10 @@ static void InitOpenGL( void )
 	}
 	else
 	{
+		#ifdef REND2_SP
+		qglGenVertexArrays(1, &tr.globalVao);
+		qglBindVertexArray(tr.globalVao);
+		#endif
 		// set default state
 		GL_SetDefaultState();
 	}
@@ -1087,6 +1106,10 @@ RB_TakeVideoFrameCmd
 */
 const void *RB_TakeVideoFrameCmd( const void *data )
 {
+#ifdef REND2_SP
+	ri.Error(ERR_DROP, "rdsp-rend2: the SP renderer ABI does not support AVI recording");
+	return nullptr;
+#else
 	const videoFrameCommand_t	*cmd;
 	byte				*cBuf;
 	size_t				memcount, linelen;
@@ -1159,6 +1182,7 @@ const void *RB_TakeVideoFrameCmd( const void *data )
 	}
 
 	return (const void *)(cmd + 1);
+#endif
 }
 
 //============================================================================
@@ -1627,9 +1651,25 @@ Ghoul2 Insert Start
 	r_noPrecacheGLA						= ri.Cvar_Get( "r_noPrecacheGLA",					"0",						CVAR_CHEAT, "" );
 #endif
 	r_noServerGhoul2					= ri.Cvar_Get( "r_noserverghoul2",					"0",						CVAR_CHEAT, "" );
+#ifdef REND2_SP
+	r_noGhoul2 = ri.Cvar_Get("r_noghoul2", "0", CVAR_CHEAT);
+	r_Ghoul2UnSqash = ri.Cvar_Get("r_ghoul2unsquash", "1", 0);
+	r_Ghoul2TimeBase = ri.Cvar_Get("r_ghoul2timebase", "2", 0);
+	r_shadowRange = ri.Cvar_Get("r_shadowRange", "1000", CVAR_ARCHIVE_ND);
+	r_Ghoul2NoLerp = ri.Cvar_Get("r_ghoul2nolerp", "0", 0);
+	r_Ghoul2NoBlend = ri.Cvar_Get("r_ghoul2noblend", "0", 0);
+	r_Ghoul2BlendMultiplier = ri.Cvar_Get("r_ghoul2blendmultiplier", "1", 0);
+	com_buildScript = ri.Cvar_Get("com_buildScript", "0", 0);
+	sv_mapname = ri.Cvar_Get("mapname", "nomap", CVAR_SERVERINFO | CVAR_ROM);
+	sv_mapChecksum = ri.Cvar_Get("sv_mapChecksum", "", CVAR_ROM);
+	r_Ghoul2AnimSmooth = ri.Cvar_Get("r_ghoul2animsmooth", "0.25", 0);
+	r_Ghoul2UnSqashAfterSmooth = ri.Cvar_Get("r_ghoul2unsquashaftersmooth", "1", 0);
+	broadsword = ri.Cvar_Get("broadsword", "1", 0);
+#else
 	r_Ghoul2AnimSmooth					= ri.Cvar_Get( "r_ghoul2animsmooth",				"0.3",						CVAR_NONE, "" );
 	r_Ghoul2UnSqashAfterSmooth			= ri.Cvar_Get( "r_ghoul2unsqashaftersmooth",		"1",						CVAR_NONE, "" );
 	broadsword							= ri.Cvar_Get( "broadsword",						"0",						CVAR_ARCHIVE, "" );
+#endif
 	broadsword_kickbones				= ri.Cvar_Get( "broadsword_kickbones",				"1",						CVAR_NONE, "" );
 	broadsword_kickorigin				= ri.Cvar_Get( "broadsword_kickorigin",			"1",						CVAR_NONE, "" );
 	broadsword_dontstopanim				= ri.Cvar_Get( "broadsword_dontstopanim",			"0",						CVAR_NONE, "" );
@@ -1726,7 +1766,7 @@ static void R_InitBackEndFrameData()
 	backEndData->currentFrame = backEndData->frames;
 }
 
-#ifdef _G2_GORE
+#if defined(_G2_GORE) && !defined(REND2_SP)
 static void R_InitGoreVao()
 {
 	tr.goreVBO = R_CreateVBO(
@@ -1884,13 +1924,22 @@ static void R_ShutdownBackEndFrameData()
 		}
 
 		qglDeleteBuffers(1, &frame->ubo);
+		#ifdef REND2_SP
+		if (frame->screenshotReadback.pbo)
+			R_SaveScreenshot(&frame->screenshotReadback);
+		#endif
 
-		if ( glRefConfig.immutableBuffers )
+		if (frame->dynamicVboMemory)
 		{
 			R_BindVBO(frame->dynamicVbo);
-			R_BindIBO(frame->dynamicIbo);
 			qglUnmapBuffer(GL_ARRAY_BUFFER);
+			frame->dynamicVboMemory = nullptr;
+		}
+		if (frame->dynamicIboMemory)
+		{
+			R_BindIBO(frame->dynamicIbo);
 			qglUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
+			frame->dynamicIboMemory = nullptr;
 		}
 
 		for ( int j = 0; j < MAX_GPU_TIMERS; j++ )
@@ -1910,10 +1959,18 @@ void R_Init( void ) {
 	byte *ptr;
 	int i;
 
+#ifdef REND2_SP
+	if (backEndData)
+		RE_Shutdown(qfalse, qfalse);
+	ri.Printf(PRINT_ALL, "----- rdsp-rend2 -----\n");
+#endif
 	ri.Printf( PRINT_ALL, "----- R_Init -----\n" );
 
 	// clear all our internal state
 	Com_Memset( &tr, 0, sizeof( tr ) );
+#ifdef REND2_SP
+	tr.currentLevel = spMediaLevel;
+#endif
 	Com_Memset( &backEnd, 0, sizeof( backEnd ) );
 	Com_Memset( &tess, 0, sizeof( tess ) );
 
@@ -1990,7 +2047,7 @@ void R_Init( void ) {
 	R_InitBackEndFrameData();
 	R_InitImages();
 
-#ifdef _G2_GORE
+#if defined(_G2_GORE) && !defined(REND2_SP)
 	R_InitGoreVao();
 #endif
 
@@ -2037,6 +2094,49 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	for ( size_t i = 0; i < numCommands; i++ )
 		ri.Cmd_RemoveCommand( commands[i].cmd );
 
+#ifdef REND2_SP
+	if (destroyWindow)
+		CModelCache->DeleteAll();
+	if (backEndData && glConfig.vidWidth)
+	{
+		R_IssuePendingRenderCommands();
+		qglFinish();
+		R_SP_UnloadWorld();
+		R_ShutdownBackEndFrameData();
+		R_ShutDownQueries();
+		FBO_Shutdown();
+		R_DeleteTextures();
+		R_DestroyGPUBuffers();
+		GLSL_ShutdownGPUShaders();
+		qglDeleteVertexArrays(1, &tr.globalVao);
+	}
+	R_ShutdownFonts();
+	RE_TempRawImage_CleanUp();
+	RE_HunkClearCrap();
+	if (destroyWindow && restarting)
+	{
+		RestoreGhoul2InfoArray();
+		SaveGhoul2InfoArray();
+	}
+	if (destroyWindow && glConfig.vidWidth)
+	{
+		ri.Z_Free((void *)glConfig.extensions_string);
+		ri.Z_Free((void *)glConfigExt.originalExtensionString);
+		ri.WIN_Shutdown();
+		Com_Memset(&glConfig, 0, sizeof(glConfig));
+		Com_Memset(&glConfigExt, 0, sizeof(glConfigExt));
+		Com_Memset(&glRefConfig, 0, sizeof(glRefConfig));
+		Com_Memset(&glState, 0, sizeof(glState));
+		window = {};
+	}
+	tr.registered = qfalse;
+	backEndData = nullptr;
+	R_SP_ClearRendererAllocations();
+	Com_Memset(&tr, 0, sizeof(tr));
+	tr.currentLevel = spMediaLevel;
+	Com_Memset(&backEnd, 0, sizeof(backEnd));
+	Com_Memset(&tess, 0, sizeof(tess));
+#else
 	// Flush here to make sure all the fences are processed
 	qglFlush();
 
@@ -2071,6 +2171,7 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 
 	tr.registered = qfalse;
 	backEndData = NULL;
+#endif
 }
 
 /*
@@ -2087,6 +2188,7 @@ void RE_EndRegistration( void ) {
 	}
 }
 
+#ifndef REND2_SP
 // HACK
 extern qboolean gG2_GBMNoReconstruct;
 extern qboolean gG2_GBMUseSPMethod;
@@ -2104,6 +2206,7 @@ static void GetRealRes( int *w, int *h ) {
 
 // STUBS, REPLACEME
 qboolean stub_InitializeWireframeAutomap() { return qtrue; }
+#endif
 
 void RE_GetLightStyle(int style, color4ub_t color)
 {
@@ -2113,8 +2216,12 @@ void RE_GetLightStyle(int style, color4ub_t color)
 		return;
 	}
 
+#ifdef REND2_SP
+	Com_Memcpy(color, styleColors[style], sizeof(color4ub_t));
+#else
 	byteAlias_t *baDest = (byteAlias_t *)&color, *baSource = (byteAlias_t *)&styleColors[style];
 	baDest->i = baSource->i;
+#endif
 }
 
 void RE_SetLightStyle(int style, int color)
@@ -2134,18 +2241,26 @@ void RE_SetLightStyle(int style, int color)
 void RE_GetBModelVerts(int bmodelIndex, vec3_t *verts, vec3_t normal);
 void RE_WorldEffectCommand(const char *cmd);
 
+#ifndef REND2_SP
 void stub_RE_AddWeatherZone ( vec3_t mins, vec3_t maxs ) {} // Intentionally left blank. Rend2 reads the zones manually on bsp load
 static void RE_SetRefractionProperties ( float distortionAlpha, float distortionStretch, qboolean distortionPrePost, qboolean distortionNegate ) { }
+#endif
 
 void C_LevelLoadBegin(const char *psMapName, ForceReload_e eForceReload)
 {
 	static char sPrevMapName[MAX_QPATH]={0};
 	bool bDeleteModels = eForceReload == eForceReload_MODELS || eForceReload == eForceReload_ALL;
 
+#ifdef REND2_SP
+	if (bDeleteModels && backEndData)
+		R_IssuePendingRenderCommands();
+#endif
 	if( bDeleteModels )
 		CModelCache->DeleteAll();
+#ifndef REND2_SP
 	else if( ri.Cvar_VariableIntegerValue( "sv_pure" ) )
 		CModelCache->DumpNonPure();
+#endif
 
 	tr.numBSPModels = 0;
 
@@ -2155,6 +2270,9 @@ void C_LevelLoadBegin(const char *psMapName, ForceReload_e eForceReload)
 		Q_strncpyz( sPrevMapName, psMapName, sizeof(sPrevMapName) );
 		tr.currentLevel++;
 	}
+#ifdef REND2_SP
+	spMediaLevel = tr.currentLevel;
+#endif
 }
 
 int C_GetLevel( void )
@@ -2175,6 +2293,7 @@ GetRefAPI
 
 @@@@@@@@@@@@@@@@@@@@@
 */
+#ifndef REND2_SP
 extern "C" {
 Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	static refexport_t	re;
@@ -2372,3 +2491,4 @@ Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *rimp ) {
 	return &re;
 }
 }
+#endif

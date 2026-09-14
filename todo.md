@@ -36,6 +36,8 @@ bash scripts/build-sp.sh
 
 The script enforces `--parallel 1`. Logs are in `build/sp/`. Completed packages
 are in `build/packages/`; `build/ready` points to the latest passing package.
+The script always enables both SP renderers. Both smoke tests must pass before
+publication. Results are in `smoke-result.txt` and `smoke-rend2-result.txt`.
 See `docs/development.md` for launch and test commands.
 
 ## 2. Headless Smoke Test
@@ -62,8 +64,8 @@ was needed for the automated checks on the build machine.
 - [ ] Obtain the server SSH address and remote build path as seen from the desktop. Choose local build, asset, and profile directories.
 - [ ] Compare runtime library versions on both machines. Check that the executable and all native modules load on the desktop. Avoid server-specific CPU optimisation.
 - [ ] Copy game assets once, or use an existing desktop installation. Exclude assets from routine build transfers.
-- [x] Package `openjk_sp.x86_64`, `rdsp-vanilla_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
-- [x] Assign each package a unique identifier and source checksums, including uncommitted files. Publish only complete packages that passed the smoke test.
+- [x] Package `openjk_sp.x86_64`, `rdsp-vanilla_x86_64.so`, `rdsp-rend2_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
+- [x] Assign each package a unique identifier and source checksums, including uncommitted files. Publish only complete packages that passed both renderer smoke tests.
 - [x] Add a configured desktop pull-and-launch command in `scripts/play-sp.sh`. Reuse one managed directory for rsync delta updates, resolve a fixed server package, and refuse updates while the game is running.
 - [x] Test delta reuse, transfer failure/retry, path protection, publication changes, and launcher locking locally. Actual desktop SSH and GPU validation remain pending.
 - [x] Retain older packages and use an external writable profile. Desktop validation remains pending.
@@ -99,8 +101,8 @@ was needed for the automated checks on the build machine.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information.
 
-Use `roadmap.md` for detailed acceptance checks. Investigate the raster-only Rend2
-port separately after the vanilla build and deployment workflow are reliable.
+Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port
+experimental and opt-in. Vanilla remains the default.
 
 ## Door Follow-up
 
@@ -111,18 +113,31 @@ port separately after the vanilla build and deployment workflow are reliable.
 ## Display Follow-up
 
 - [x] Expose desktop and custom resolutions through `openjk-play --desktop` and `--resolution WIDTHxHEIGHT`, with aspect-adjusted world FOV.
-- [x] Render and validate a non-black 3840x2160 screenshot. Keep existing profile settings unless an override is requested.
+- [x] Render and validate a non-black 3840x2160 screenshot with vanilla. Keep existing profile settings unless an override is requested.
 - [ ] Replace the legacy resolution menu list and investigate widescreen HUD/menu layout separately.
 
 ## Save Migration
 
 - [x] Add read-time migration for known project v1 saves while retaining v2 output and strict parsing.
+- [x] Verify genuine v1 migration and a v2 save/load cycle under Rend2. Check state and source hashes. Reject files with valid checksums but invalid versions 0 and 3, then load a valid save.
 - [ ] Qualify additional historical/modded save layouts separately; do not promise compatibility from the version number alone.
 
 ## Rend2 Port
 
-- [x] Add an opt-in SP-native object target for shared shader, allocator, math, and tangent-space sources, with one shared shader generator.
-- [x] Build the SP objects, MP Rend2, and SP vanilla on Linux with one job.
-- [ ] Adapt scene/entity submission and integrate SP Ghoul2 ownership, animation, collision, and skinning.
-- [ ] Complete the SP renderer interface and resource lifetime, then link and load a real `rdsp-rend2` module.
-- [ ] Verify renderer identity, representative SP maps, visual effects, and performance on the GTX 1080 Ti. Do not add ray tracing.
+- [x] Replace the compile-only `BuildSPRend2Port` option with `BuildSPRend2`. Link and install `rdsp-rend2_x86_64.so` with shared MP raster code and one shader generator.
+- [x] Build both SP renderers with Linux GCC and one job. Keep vanilla as the engine and launcher default.
+- [x] Adapt SP scene/entity submission and native API 18 imports and exports. Retain native SP Ghoul2 array and handle ownership, bones, collision, save data, IK, and ragdolls.
+- [x] Add CPU skinning with packed normals and tangents in Rend2 dynamic buffers.
+- [x] Require both renderer smoke tests before publication. Verify Rend2 identity and reject vanilla fallback in strict tests.
+- [x] Pass `t1_sour` with both renderers and `t2_wedge` with Rend2. Check screenshots with NPCs, textured maps, the player, and a yellow saber.
+- [x] Pass OpenGL debug lifecycle checks for `vid_restart`, format-2 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
+- [x] Pass all nine squad-tactics cases under Rend2, including active-tactic save/load.
+- [x] Pass the lifecycle test with persistent buffers enabled. Keep tag-only weapon models without GPU geometry.
+- [x] Fix projected shadows and pass lifecycle checks with stencil and projected shadows. Test with patch stitching disabled.
+- [ ] Add a dedicated visual test for the beam draw-order and color fix.
+- [x] Render and validate a non-black Rend2 scene at 3840x2160.
+- [ ] Test Rend2 performance on the NVIDIA GTX 1080 Ti, audio, and broader manual campaign play. Verify more effects, UI, and cinematic scenes.
+
+Rend2 tests used Xvfb and LLVMpipe only. Keep Rend2 experimental and opt-in.
+Do not add ray tracing. See `docs/rend2-sp.md` for build, launch, fallback,
+and test commands.

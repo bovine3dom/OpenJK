@@ -596,7 +596,9 @@ void RB_DeformTessGeometry( void ) {
 		case DEFORM_TEXT5:
 		case DEFORM_TEXT6:
 		case DEFORM_TEXT7:
+#ifndef REND2_SP
 			DeformText( backEnd.refdef.text[ds->deformation - DEFORM_TEXT0] );
+#endif
 			break;
 		}
 	}

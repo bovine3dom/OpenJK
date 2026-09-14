@@ -96,6 +96,30 @@ void RB_CheckVBOandIBO(VBO_t *vbo, IBO_t *ibo)
 RB_AddQuadStampExt
 ==============
 */
+#ifdef REND2_SP
+static void RB_SP_SurfaceAttributes(int first, int count = 4)
+{
+	vec3_t edge, side, normal;
+	VectorSubtract(tess.xyz[first + 1], tess.xyz[first], edge);
+	VectorSubtract(tess.xyz[first + 2], tess.xyz[first], side);
+	CrossProduct(edge, side, normal);
+	if (!VectorNormalize(normal))
+		VectorNegate(backEnd.viewParms.ori.axis[0], normal);
+	if (!VectorNormalize(edge))
+		PerpendicularVector(edge, normal);
+	vec4_t tangent = { edge[0], edge[1], edge[2], 1.0f };
+	for (int i = first; i < first + count; ++i)
+	{
+		tess.xyz[i][3] = 1.0f;
+		tess.normal[i] = R_VboPackNormal(normal);
+		tess.tangent[i] = R_VboPackTangent(tangent);
+		tess.lightdir[i] = tess.normal[i];
+		for (int j = 1; j < NUM_TESS_TEXCOORDS; ++j)
+			VectorCopy2(tess.texCoords[i][0], tess.texCoords[i][j]);
+	}
+}
+#endif
+
 void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, float color[4], float s1, float t1, float s2, float t2 ) {
 	vec3_t		normal;
 	int			ndx;
@@ -158,6 +182,9 @@ void RB_AddQuadStampExt( vec3_t origin, vec3_t left, vec3_t up, float color[4], 
 	VectorCopy4(color, tess.vertexColors[ndx+2]);
 	VectorCopy4(color, tess.vertexColors[ndx+3]);
 
+#ifdef REND2_SP
+	RB_SP_SurfaceAttributes(ndx);
+#endif
 	tess.numVertexes += 4;
 	tess.numIndexes += 6;
 }
@@ -307,8 +334,12 @@ static void RB_SurfaceOrientedQuad( void )
 	// calculate the xyz locations for the four corners
 	radius = backEnd.currentEntity->e.radius;
 //	MakeNormalVectors( backEnd.currentEntity->e.axis[0], left, up );
+#ifdef REND2_SP
+	MakeNormalVectors(backEnd.currentEntity->e.axis[0], left, up);
+#else
 	VectorCopy( backEnd.currentEntity->e.axis[1], left );
 	VectorCopy( backEnd.currentEntity->e.axis[2], up );
+#endif
 
 	if ( backEnd.currentEntity->e.rotation == 0 )
 	{
@@ -355,6 +386,12 @@ static void RB_SurfacePolychain( srfPoly_t *p ) {
 	int		i;
 	int		numv;
 
+#ifdef REND2_SP
+	if (p->numVerts < 3)
+		return;
+	RB_CheckVBOandIBO(backEndData->currentFrame->dynamicVbo, backEndData->currentFrame->dynamicIbo);
+	tess.useInternalVBO = qtrue;
+#endif
 	RB_CHECKOVERFLOW( p->numVerts, 3*(p->numVerts - 2) );
 
 	// fan triangles into the tess array
@@ -379,6 +416,9 @@ static void RB_SurfacePolychain( srfPoly_t *p ) {
 		tess.numIndexes += 3;
 	}
 
+#ifdef REND2_SP
+	RB_SP_SurfaceAttributes(tess.numVertexes, p->numVerts);
+#endif
 	tess.numVertexes = numv;
 }
 
@@ -643,15 +683,27 @@ static void RB_SurfaceBeam( void )
 	for ( i = 0; i < NUM_BEAM_SEGS ; i++ )
 	{
 		RotatePointAroundVector( start_points[i], normalized_direction, perpvec, (360.0/NUM_BEAM_SEGS)*i );
+#ifdef REND2_SP
+		VectorAdd(start_points[i], origin, start_points[i]);
+#else
 //		VectorAdd( start_points[i], origin, start_points[i] );
+#endif
 		VectorAdd( start_points[i], direction, end_points[i] );
 	}
 
+#ifdef REND2_SP
+	if (backEnd.depthFill || (backEnd.viewParms.flags & VPF_DEPTHSHADOW))
+		return;
+
+	RB_EndSurface();
+	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
+#else
 	GL_Bind( tr.whiteImage );
 
 	GL_State( GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE );
 
 	// FIXME: Quake3 doesn't use this, so I never tested it
+#endif
 	tess.numVertexes = 0;
 	tess.numIndexes = 0;
 	tess.firstIndex = 0;
@@ -677,6 +729,48 @@ static void RB_SurfaceBeam( void )
 	tess.maxIndex = tess.numVertexes;
 	tess.useInternalVBO = qtrue;
 
+#ifdef REND2_SP
+	for (i = 0; i < tess.numVertexes; ++i)
+		VectorClear2(tess.texCoords[i][0]);
+	RB_UpdateVBOs(ATTR_POSITION | ATTR_TEXCOORD0);
+
+	VertexArraysProperties vertexArrays;
+	CalculateVertexArraysProperties(ATTR_POSITION | ATTR_TEXCOORD0, &vertexArrays);
+	for (i = 0; i < vertexArrays.numVertexArrays; ++i)
+		vertexArrays.offsets[vertexArrays.enabledAttributes[i]] += backEndData->currentFrame->dynamicVboCommitOffset;
+	vertexAttribute_t attribs[ATTR_INDEX_MAX] = {};
+	GL_VertexArraysToAttribs(attribs, ARRAY_LEN(attribs), &vertexArrays);
+
+	vec4_t color = {1.0f, 0.0f, 0.0f, 1.0f};
+	if (e->skinNum == 1)
+		VectorSet4(color, 0.0f, 1.0f, 0.0f, 1.0f);
+	else if (e->skinNum == 2)
+		VectorSet4(color, 0.5f, 0.5f, 1.0f, 1.0f);
+
+	matrix_t mvp;
+	Matrix16Multiply(backEnd.viewParms.projectionMatrix, backEnd.viewParms.world.modelViewMatrix, mvp);
+	UniformDataWriter uniformDataWriter;
+	uniformDataWriter.Start(sp);
+	uniformDataWriter.SetUniformMatrix4x4(UNIFORM_MODELVIEWPROJECTIONMATRIX, mvp);
+	uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, color);
+	uniformDataWriter.SetUniformInt(UNIFORM_ALPHA_TEST_TYPE, ALPHA_TEST_NONE);
+	uniformDataWriter.SetUniformVec4(UNIFORM_ENABLETEXTURES, 0.0f, 0.0f, 0.0f, 0.0f);
+	const SamplerBinding samplerBinding = {tr.whiteImage, 0, TB_DIFFUSEMAP};
+	Allocator& frameAllocator = *backEndData->perFrameMemory;
+
+	DrawItem item = {};
+	item.renderState.stateBits = GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE;
+	item.renderState.cullType = CT_TWO_SIDED;
+	item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, tess.shader);
+	item.program = sp;
+	item.ibo = backEndData->currentFrame->dynamicIbo;
+	item.uniformData = uniformDataWriter.Finish(frameAllocator);
+	DrawItemSetSamplerBindings(item, &samplerBinding, 1, frameAllocator);
+	DrawItemSetVertexAttributes(item, attribs, vertexArrays.numVertexArrays, frameAllocator);
+	RB_FillDrawCommand(item.draw, GL_TRIANGLES, 1, &tess);
+	// Keep the beam after opaque draws and retain its data until the pass runs.
+	RB_AddDrawItem(backEndData->currentPass, RB_CreateSortKey(item, 0, SS_BLEND1), item);
+#else
 	// FIXME: A lot of this can probably be removed for speed, and refactored into a more convenient function
 	RB_UpdateVBOs(ATTR_POSITION);
 
@@ -688,6 +782,7 @@ static void RB_SurfaceBeam( void )
 	GLSL_SetUniformVec4(sp, UNIFORM_COLOR, colorRed);
 
 	R_DrawElementsVBO(tess.numIndexes, tess.firstIndex, tess.minIndex, tess.maxIndex);
+#endif
 
 	RB_CommitInternalBufferData();
 
@@ -738,6 +833,10 @@ static void RB_SurfaceSaberGlow()
 	refEntity_t *e;
 
 	e = &backEnd.currentEntity->e;
+#ifdef REND2_SP
+	if (e->radius <= 0.0f)
+		return;
+#endif
 
 	// Render the glow part of the blade
 	for ( float i = e->saberLength; i > 0; i -= e->radius * 0.65f )
@@ -809,6 +908,9 @@ static void DoLine( const vec3_t start, const vec3_t end, const vec3_t up, float
 	VectorScale4 (backEnd.currentEntity->e.shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
+#ifdef REND2_SP
+	RB_SP_SurfaceAttributes(vbase);
+#endif
 	tess.indexes[tess.numIndexes++] = vbase;
 	tess.indexes[tess.numIndexes++] = vbase + 1;
 	tess.indexes[tess.numIndexes++] = vbase + 2;
@@ -851,6 +953,9 @@ static void DoLine2( const vec3_t start, const vec3_t end, const vec3_t up, floa
 	VectorScale4 (backEnd.currentEntity->e.shaderRGBA, 1.0f / 255.0f, tess.vertexColors[tess.numVertexes]);
 	tess.numVertexes++;
 
+#ifdef REND2_SP
+	RB_SP_SurfaceAttributes(vbase);
+#endif
 	tess.indexes[tess.numIndexes++] = vbase;
 	tess.indexes[tess.numIndexes++] = vbase + 1;
 	tess.indexes[tess.numIndexes++] = vbase + 2;
@@ -860,6 +965,7 @@ static void DoLine2( const vec3_t start, const vec3_t end, const vec3_t up, floa
 	tess.indexes[tess.numIndexes++] = vbase + 3;
 }
 
+#ifndef REND2_SP
 static void DoLine_Oriented( const vec3_t start, const vec3_t end, const vec3_t up, float spanWidth )
 {
 	float		spanWidth2;
@@ -903,6 +1009,7 @@ static void DoLine_Oriented( const vec3_t start, const vec3_t end, const vec3_t 
 	tess.indexes[tess.numIndexes++] = vbase + 1;
 	tess.indexes[tess.numIndexes++] = vbase + 3;
 }
+#endif
 
 //-----------------
 // RB_SurfaceLine
@@ -928,6 +1035,7 @@ static void RB_SurfaceLine( void )
 	DoLine( start, end, right, e->radius);
 }
 
+#ifndef REND2_SP
 static void RB_SurfaceOrientedLine( void )
 {
 	refEntity_t *e;
@@ -944,6 +1052,7 @@ static void RB_SurfaceOrientedLine( void )
 	VectorCopy(e->axis[1], right);
 	DoLine_Oriented( start, end, right, e->data.line.width*0.5 );
 }
+#endif
 
 /*
 ==============
@@ -951,7 +1060,11 @@ RB_SurfaceCylinder
 ==============
 */
 
+#ifdef REND2_SP
+#define NUM_CYLINDER_SEGMENTS 40
+#else
 #define NUM_CYLINDER_SEGMENTS 32
+#endif
 
 // FIXME: use quad stamp?
 static void DoCylinderPart(polyVert_t *verts)
@@ -973,6 +1086,9 @@ static void DoCylinderPart(polyVert_t *verts)
 		verts++;
 	}
 
+#ifdef REND2_SP
+	RB_SP_SurfaceAttributes(vbase);
+#endif
 	tess.indexes[tess.numIndexes++] = vbase;
 	tess.indexes[tess.numIndexes++] = vbase + 1;
 	tess.indexes[tess.numIndexes++] = vbase + 2;
@@ -1008,7 +1124,11 @@ static void RB_SurfaceCylinder( void )
 	// this doesn't need to be perfect....just a rough compensation for zoom level is enough
 	length *= (backEnd.viewParms.fovX / 90.0f);
 
+#ifdef REND2_SP
+	detail = 1 - length / 2048.0f;
+#else
 	detail = 1 - ((float) length / 1024 );
+#endif
 	segments = NUM_CYLINDER_SEGMENTS * detail;
 
 	// 3 is the absolute minimum, but the pop between 3-8 is too noticeable
@@ -1026,7 +1146,11 @@ static void RB_SurfaceCylinder( void )
 	MakeNormalVectors( e->axis[0], vr, vu );
 
 	VectorScale( vu, e->radius, v1 );	// size1
+#ifdef REND2_SP
+	VectorScale(vu, e->backlerp, vu);
+#else
 	VectorScale( vu, e->rotation, vu );	// size2
+#endif
 
 	// Calculate the step around the cylinder
 	detail = 360.0f / (float)segments;
@@ -1188,6 +1312,17 @@ static void DoBoltSeg( vec3_t start, vec3_t end, vec3_t right, float radius )
 	VectorSubtract( end, start, fwd );
 	dis = VectorNormalize( fwd );
 
+#ifdef REND2_SP
+	dis = MIN(dis, 2000.0f);
+	if (dis < 20.0f)
+	{
+		DoLine2(start, end, right, radius, (e->renderfx & RF_TAPERED) ? 0.0f : radius);
+		return;
+	}
+	const float chaos = e->angles[0];
+#else
+	const float chaos = e->axis[0][0];
+#endif
 	MakeNormalVectors( fwd, rt, up );
 
 	VectorCopy( start, old );
@@ -1209,8 +1344,8 @@ static void DoBoltSeg( vec3_t start, vec3_t end, vec3_t right, float radius )
 
 		// create our level of deviation for this point
 		VectorScale( fwd, Q_crandom(&e->frame) * 3.0f, temp );				// move less in fwd direction, chaos also does not affect this
-		VectorMA( temp, Q_crandom(&e->frame) * 7.0f * e->axis[0][0], rt, temp );	// move more in direction perpendicular to line, angles is really the chaos
-		VectorMA( temp, Q_crandom(&e->frame) * 7.0f * e->axis[0][0], up, temp );	// move more in direction perpendicular to line
+		VectorMA( temp, Q_crandom(&e->frame) * 7.0f * chaos, rt, temp );
+		VectorMA( temp, Q_crandom(&e->frame) * 7.0f * chaos, up, temp );
 
 		// track our total level of offset from the ideal line
 		VectorAdd( off, temp, off );
@@ -1280,7 +1415,11 @@ static void RB_SurfaceElectricity()
 	// see if we should grow from start to end
 	if ( e->renderfx & RF_GROW )
 	{
+#ifdef REND2_SP
+		perc = e->angles[1] > 0.0f ? 1.0f - (e->endTime - backEnd.refdef.time) / e->angles[1] : 1.0f;
+#else
 		perc = 1.0f - ( e->axis[0][2]/*endTime*/ - tr.refdef.time ) / e->axis[0][1]/*duration*/;
+#endif
 
 		if ( perc > 1.0f )
 		{
@@ -1301,6 +1440,9 @@ static void RB_SurfaceElectricity()
 	CrossProduct( v1, v2, right );
 	VectorNormalize( right );
 
+#ifdef REND2_SP
+	f_count = 3;
+#endif
     DoBoltSeg( start, end, right, radius );
 }
 
@@ -1996,6 +2138,67 @@ static void RB_SurfaceAxis( void ) {
 #endif
 }
 
+#ifdef REND2_SP
+static void RB_SurfaceLathe()
+{
+	const refEntity_t &e = backEnd.currentEntity->e;
+	const bool clouds = e.reType == RT_CLOUDS;
+	const bool tube = clouds && (e.renderfx & RF_GROW);
+	const float disk[4][3] = { {0, 1, 0}, {0.4f, 1, 0}, {0.7f, 0.4f, 0.008f}, {1, 0, 0.02f} };
+	const float rings[6][3] = { {0, 0, 0}, {0.05f, 0.45f, 0.004f}, {0.1f, 1, 0.006f},
+		{0.5f, 1, 0.01f}, {0.7f, 0.45f, 0.006f}, {1, 0, 0} };
+	const int lod = Com_Clampi(1, 4, r_lodbias->integer + 1);
+	const int segments = clouds ? 12 : 36 / lod;
+	const int rows = clouds ? (tube ? 6 : 4) : (int)ceilf(20.0f / lod) + 1;
+	const float growth = !clouds && e.endTime > backEnd.refdef.time ?
+		Com_Clamp(0.0f, 1.0f, 1 - (e.endTime - backEnd.refdef.time) / 1000.0f) : 1.0f;
+	const float pain = e.frame && e.frame + 1000 > backEnd.refdef.time ?
+		(1 - (backEnd.refdef.time - e.frame) / 1000.0f) * 0.08f : 0.0f;
+	for (int row = 0; row < rows - 1; ++row)
+	{
+		vec2_t profile[2];
+		float alpha[2] = {1, 1}, t[2];
+		for (int side = 0; side < 2; ++side)
+		{
+			t[side] = growth * (row + side) / (rows - 1);
+			if (clouds)
+			{
+				const float *ring = tube ? rings[row + side] : disk[row + side];
+				profile[side][0] = ring[0] * (e.radius - e.rotation) + e.rotation;
+				profile[side][1] = ring[2] * e.radius * e.backlerp * (tube ? -1 : 1);
+				alpha[side] = ring[1];
+			}
+			else
+			{
+				const float u = t[side], v = 1 - u;
+				for (int axis = 0; axis < 2; ++axis)
+					profile[side][axis] = v * v * v * e.axis[0][axis] + 3 * u * v * v * e.axis[1][axis] +
+						3 * u * u * v * e.axis[2][axis] + u * u * u * e.oldorigin[axis];
+			}
+		}
+		for (int seg = 0; seg < segments; ++seg)
+		{
+			polyVert_t verts[4];
+			for (int corner = 0; corner < 4; ++corner)
+			{
+				const int side = corner == 1 || corner == 2;
+				const float turn = (seg + (corner >= 2)) / (float)segments;
+				const float x = cosf(turn * 2 * M_PI) * profile[side][0];
+				const float y = sinf(turn * 2 * M_PI) * profile[side][0];
+				VectorSet(verts[corner].xyz, e.origin[0] + x, e.origin[1] + y, e.origin[2] + profile[side][1]);
+				verts[corner].st[0] = clouds ? verts[corner].xyz[0] * 0.1f : turn;
+				verts[corner].st[1] = clouds ? verts[corner].xyz[1] * 0.1f :
+					t[side] + cosf((int)((x + y) * 0.1f) + backEnd.refdef.floatTime) * pain;
+				for (int c = 0; c < 3; ++c)
+					verts[corner].modulate[c] = clouds ? e.shaderRGBA[0] * alpha[side] : e.shaderRGBA[c];
+				verts[corner].modulate[3] = e.shaderRGBA[3];
+			}
+			DoCylinderPart(verts);
+		}
+	}
+}
+#endif
+
 //===========================================================================
 
 /*
@@ -2006,6 +2209,15 @@ Entities that have a single procedurally generated surface
 ====================
 */
 static void RB_SurfaceEntity( surfaceType_t *surfType ) {
+#ifdef REND2_SP
+	gpuFrame_t *frame = backEndData->currentFrame;
+	RB_CheckVBOandIBO(frame->dynamicVbo, frame->dynamicIbo);
+	tess.useInternalVBO = qtrue;
+	const float radius = backEnd.currentEntity->e.radius;
+	const int seed = backEnd.currentEntity->e.frame;
+	vec3_t oldorigin;
+	VectorCopy(backEnd.currentEntity->e.oldorigin, oldorigin);
+#endif
 	switch( backEnd.currentEntity->e.reType ) {
 	case RT_SPRITE:
 		RB_SurfaceSprite();
@@ -2022,15 +2234,24 @@ static void RB_SurfaceEntity( surfaceType_t *surfType ) {
 	case RT_LINE:
 		RB_SurfaceLine();
 		break;
+#ifndef REND2_SP
 	case RT_ORIENTEDLINE:
 		RB_SurfaceOrientedLine();
 		break;
+#endif
 	case RT_SABER_GLOW:
 		RB_SurfaceSaberGlow();
 		break;
 	case RT_CYLINDER:
 		RB_SurfaceCylinder();
 		break;
+#ifdef REND2_SP
+	case RT_LATHE:
+	case RT_CLOUDS:
+		RB_SurfaceLathe();
+		break;
+#endif
+#ifndef REND2_SP
 	case RT_ENT_CHAIN:
 		{
 			static trRefEntity_t tempEnt = *backEnd.currentEntity;
@@ -2055,12 +2276,19 @@ static void RB_SurfaceEntity( surfaceType_t *surfType ) {
 			}
 		}
 		break;
+#endif
 	default:
 		RB_SurfaceAxis();
 		break;
 	}
+#ifdef REND2_SP
+	backEnd.currentEntity->e.radius = radius;
+	backEnd.currentEntity->e.frame = seed;
+	VectorCopy(oldorigin, backEnd.currentEntity->e.oldorigin);
+#else
 	// FIX ME: just a testing hack. Pretty sure we can merge all of these
 	tess.shader->entityMergable = qtrue;
+#endif
 }
 
 static void RB_SurfaceBad( surfaceType_t *surfType ) {
@@ -2311,7 +2539,11 @@ void (*rb_surfaceTable[SF_NUM_SURFACE_TYPES])( void *) = {
 	(void(*)(void*))RB_SurfaceBSPTriangles,	// SF_TRIANGLES,
 	(void(*)(void*))RB_SurfacePolychain,	// SF_POLY,
 	(void(*)(void*))RB_SurfaceMesh,			// SF_MDV,
+#ifndef REND2_SP
 	(void(*)(void*))RB_MDRSurfaceAnim,		// SF_MDR,
+#else
+	(void(*)(void*))RB_SurfaceBad,		// SF_MDR is not an SP model format
+#endif
 	(void(*)(void*))RB_IQMSurfaceAnim,		// SF_IQM,
 	(void(*)(void*))RB_SurfaceGhoul,		// SF_MDX,
 	(void(*)(void*))RB_SurfaceFlare,		// SF_FLARE,

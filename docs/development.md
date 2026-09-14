@@ -8,15 +8,17 @@ Run from the repository root:
 bash scripts/build-sp.sh
 ```
 
-This command builds with one job, stages matching native modules, and runs a
-headless smoke test. It updates `build/ready` only after the test passes. The
-output gives an immutable package path under `build/packages/`. Do not change
-source files during packaging. Failed candidates remain available for diagnosis.
+This command always enables both SP renderers and builds with one job. It stages
+matching native modules and runs headless smoke tests with vanilla and Rend2.
+It records `smoke-result.txt` and `smoke-rend2-result.txt` in the package.
+Both tests must pass before it updates `build/ready`. The output gives a fixed
+package path under `build/packages/`. Do not change source files during packaging.
+Failed candidates remain available for diagnosis.
 
-For changes that need more than the basic smoke test, use
-`bash scripts/build-sp.sh --stage-only`. This prints a candidate path without
-updating `build/ready`. Pass that path to the relevant test with `--package`,
-then publish with the normal build command after checks pass.
+For more checks, use `bash scripts/build-sp.sh --stage-only`. This runs both smoke
+tests without updating `build/ready`. Pass the printed candidate path to the
+relevant test with `--package`. Publish with the normal build command after checks
+pass.
 
 Build logs are in `build/sp/`. Test logs and screenshots are in a new directory
 under `build/smoke/` for each run. No original assets, configs, or saves are changed.
@@ -37,6 +39,18 @@ the repository's `GameData/`. Optional engine arguments follow the map name.
 Set `OJK_SMOKE_ROOT` to change the output parent directory. The test records its
 command and uses a fresh profile each time. `wait` counts command-buffer delays,
 not exact rendered frames; do not use this test as a deterministic benchmark.
+
+To test Rend2 and its renderer lifecycle:
+
+```bash
+OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=600 \
+  bash scripts/smoke-sp.sh build/ready t2_wedge
+python3 scripts/test-rend2-sp.py --package build/ready
+```
+
+The strict Rend2 check requires its log identity and rejects vanilla fallback.
+The lifecycle test checks OpenGL errors, `vid_restart`, and format-2 save/load
+in one process. It also checks the transition from `t2_wedge` to `t1_sour`.
 
 To check squad and bark diagnostics at levels 0, 3, and 4:
 
@@ -67,6 +81,18 @@ If `~/.local/bin` is on `PATH`, use `openjk-play`. Extra arguments go to the eng
 ```bash
 openjk-play +devmap t2_wedge +exec krildor-route.cfg
 ```
+
+The engine and launcher still default to `rdsp-vanilla`. Rend2 is experimental
+and opt-in. Select it explicitly, or return to vanilla:
+
+```bash
+openjk-play +set cl_renderer rdsp-rend2
+openjk-play +set cl_renderer rdsp-vanilla
+```
+
+The profile saves the `cl_renderer` choice for later launches. The engine can
+fall back to vanilla if it cannot load the selected module. Rend2 tests reject
+this fallback.
 
 Select desktop resolution with widescreen world FOV adjustment:
 
@@ -156,10 +182,11 @@ rasterizer threads by default, and allows up to 600 seconds. Builds still use
 one job. Set `LP_NUM_THREADS` to change rasterizer threads. General smoke tests
 default to one thread, 640x480, and 120 seconds; `OJK_SMOKE_DISPLAY`,
 `OJK_SMOKE_WAIT`, and `OJK_SMOKE_TIMEOUT` provide explicit test overrides.
+Both renderers passed the 4K check. Set `OJK_SMOKE_RENDERER=rdsp-rend2` to test Rend2.
 
 SP Rend2 development progress and build commands are in `rend2-sp.md` in the
-package, or `docs/rend2-sp.md` in the repository. The current development target
-is not a playable SP renderer.
+package, or `docs/rend2-sp.md` in the repository. The installed
+`rdsp-rend2_x86_64.so` is playable but experimental. See that document for limits.
 
 Run `python3 scripts/test-ai-memory.py` for sight, shared-memory, target-switch,
 and search-expiry checks. Use `--case shared-async` to repeat the two-member case.

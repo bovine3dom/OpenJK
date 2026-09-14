@@ -429,6 +429,44 @@ float GetQuadArea(vec3_t v1, vec3_t v2, vec3_t v3, vec3_t v4)
 
 void RE_GetBModelVerts(int bmodelIndex, vec3_t *verts, vec3_t normal)
 {
+#ifdef REND2_SP
+	for (int i = 0; i < 4; ++i)
+		VectorClear(verts[i]);
+	VectorClear(normal);
+	model_t *model = R_GetModelByHandle(bmodelIndex);
+	if (!model || model->type != MOD_BRUSH || !model->data.bmodel)
+		return;
+	const bmodel_t *bmodel = model->data.bmodel;
+	world_t *world = R_GetWorld(bmodel->worldIndex);
+	if (!world)
+		return;
+	const srfBspSurface_t *best = nullptr;
+	float bestArea = -1.0f;
+	for (int i = 0; i < bmodel->numSurfaces; ++i)
+	{
+		const surfaceType_t *data = world->surfaces[bmodel->firstSurface + i].data;
+		if (*data != SF_FACE)
+			continue;
+		const srfBspSurface_t *face = (const srfBspSurface_t *)data;
+		if (face->numVerts < 3)
+			continue;
+		float area = GetQuadArea(face->verts[0].xyz, face->verts[1].xyz,
+			face->verts[2].xyz, face->verts[MIN(3, face->numVerts - 1)].xyz);
+		if (DotProduct(face->cullPlane.normal, tr.refdef.viewaxis[0]) < 0.0f)
+			area *= 2.0f;
+		if (area > bestArea)
+		{
+			bestArea = area;
+			best = face;
+		}
+	}
+	if (best)
+	{
+		for (int i = 0; i < 4; ++i)
+			VectorCopy(best->verts[MIN(i, best->numVerts - 1)].xyz, verts[i]);
+		VectorCopy(best->cullPlane.normal, normal);
+	}
+#else
 	int					surf;
 	srfBspSurface_t		*face;
 	//	Not sure if we really need to track the best two candidates
@@ -498,6 +536,7 @@ void RE_GetBModelVerts(int bmodelIndex, vec3_t *verts, vec3_t normal)
 	{
 		VectorCopy(face->verts[t].xyz, verts[t]);
 	}
+#endif
 }
 
 void RE_SetRangedFog ( float range )
@@ -758,6 +797,16 @@ R_inPVS
 =================
 */
 qboolean R_inPVS( const vec3_t p1, const vec3_t p2, byte *mask ) {
+#ifdef REND2_SP
+	if (!tr.world || !tr.world->nodes)
+		return qfalse;
+	const int from = R_PointInLeaf(p1)->cluster;
+	const int to = R_PointInLeaf(p2)->cluster;
+	if (from < 0 || to < 0 || from >= tr.world->numClusters || to >= tr.world->numClusters)
+		return qfalse;
+	const byte *vis = R_ClusterPVS(from);
+	return (qboolean)(vis && (vis[to >> 3] & (1 << (to & 7))));
+#else
 	int		leafnum;
 	int		cluster;
 
@@ -773,6 +822,7 @@ qboolean R_inPVS( const vec3_t p1, const vec3_t p2, byte *mask ) {
 		return qfalse;
 
 	return qtrue;
+#endif
 }
 
 /*

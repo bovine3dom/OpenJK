@@ -203,7 +203,11 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 		}
 
 		data = world->lightGridData + *(world->lightGridArray+gridPos);
+#ifdef REND2_SP
+		if (data->styles[0] == LS_NONE)
+#else
 		if ( data->styles[0] == LS_LSNONE )
+#endif
 		{
 			continue;	// ignore samples in walls
 		}
@@ -236,7 +240,11 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 		{
 			for(j=0;j<MAXLIGHTMAPS;j++)
 			{
+#ifdef REND2_SP
+				if (data->styles[j] < MAX_LIGHT_STYLES)
+#else
 				if (data->styles[j] != LS_LSNONE)
+#endif
 				{
 					const byte	style= data->styles[j];
 
@@ -347,7 +355,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 
 	// if NOWORLDMODEL, only use dynamic lights (menu system, etc)
 	if ( !(refdef->rdflags & RDF_NOWORLDMODEL )
-		&& tr.world->lightGridData ) {
+		&& tr.world && tr.world->lightGridData ) {
 		R_SetupEntityLightingGrid( ent, tr.world );
 	} else {
 		ent->ambientLight[0] = ent->ambientLight[1] =
@@ -368,6 +376,13 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 			ent->ambientLight[2] += tr.identityLight * 32;
 		}
 
+#ifdef REND2_SP
+		if (ent->e.renderfx & RF_MORELIGHT)
+		{
+			for (int j = 0; j < 3; ++j)
+				ent->ambientLight[j] += tr.identityLight * 32;
+		}
+#else
 		if (ent->e.renderfx & RF_MINLIGHT)
 		{ //the minlight flag is now for items rotating on their holo thing
 			if (ent->e.shaderRGBA[0] == 255 &&
@@ -385,6 +400,7 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 				ent->ambientLight[2] += tr.identityLight * 150;
 			}
 		}
+#endif
 	}
 
 	d = VectorLength( ent->directedLight );
@@ -428,7 +444,7 @@ int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, ve
 {
 	trRefEntity_t ent;
 
-	if ( tr.world->lightGridData == NULL )
+	if ( !tr.world || tr.world->lightGridData == NULL )
 	  return qfalse;
 
 	Com_Memset(&ent, 0, sizeof(ent));

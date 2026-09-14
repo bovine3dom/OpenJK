@@ -26,10 +26,19 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../client/vmachine.h"
 
 #if !defined(TR_LOCAL_H)
+	#ifdef REND2_SP
+	#include "../../codemp/rd-rend2/tr_local.h"
+	#else
 	#include "tr_local.h"
+	#endif
 #endif
 
+#ifdef REND2_SP
+#include "../../codemp/rd-rend2/tr_cache.h"
+#include <deque>
+#else
 #include "tr_common.h"
+#endif
 
 #include "qcommon/matcomp.h"
 #if !defined(_QCOMMON_H_)
@@ -667,6 +676,12 @@ public:
 	const model_t	*currentModel;
 	int				lod;
 	boltInfo_v		&boltList;
+#ifdef REND2_SP
+	int entityNum;
+	int dlightBits;
+	int cubemapIndex;
+	bool postRender;
+#endif
 #ifdef _G2_GORE
 	shader_t		*gore_shader;
 	CGoreSet		*gore_set;
@@ -710,6 +725,23 @@ public:
 	{}
 };
 
+#ifdef REND2_SP
+static std::deque<CRenderableSurface> RSStorage;
+
+void ResetGhoul2RenderableSurfaceHeap()
+{
+	RSStorage.clear();
+}
+
+CRenderableSurface *AllocRS()
+{
+	RSStorage.emplace_back();
+	CRenderableSurface *surface = &RSStorage.back();
+	surface->genShadows = qfalse;
+	surface->dlightBits = surface->pshadowBits = 0;
+	return surface;
+}
+#else
 #define MAX_RENDER_SURFACES (2048)
 static CRenderableSurface RSStorage[MAX_RENDER_SURFACES];
 static unsigned int NextRS=0;
@@ -721,6 +753,19 @@ CRenderableSurface *AllocRS()
 	NextRS++;
 	NextRS%=MAX_RENDER_SURFACES;
 	return ret;
+}
+#endif
+
+static void R_AddGhoulDrawSurf(const CRenderSurface &rs, CRenderableSurface *surface,
+	const shader_t *shader, int fogNum)
+{
+#ifdef REND2_SP
+	surface->dlightBits = rs.dlightBits;
+	R_AddDrawSurf((surfaceType_t *)surface, rs.entityNum, const_cast<shader_t *>(shader),
+		fogNum, rs.dlightBits, rs.postRender, rs.cubemapIndex);
+#else
+	R_AddDrawSurf((surfaceType_t *)surface, shader, fogNum, qfalse);
+#endif
 }
 
 /*
@@ -785,6 +830,24 @@ R_AComputeFogNum
 */
 static int R_GComputeFogNum( trRefEntity_t *ent ) {
 
+#ifdef REND2_SP
+	if (!tr.world || (tr.refdef.rdflags & RDF_NOWORLDMODEL))
+		return 0;
+	for (int i = 1; i < tr.world->numfogs; ++i)
+	{
+		const fog_t *fog = &tr.world->fogs[i];
+		int axis;
+		for (axis = 0; axis < 3; ++axis)
+		{
+			if (ent->e.origin[axis] - ent->e.radius >= fog->bounds[1][axis] ||
+				ent->e.origin[axis] + ent->e.radius <= fog->bounds[0][axis])
+				break;
+		}
+		if (axis == 3)
+			return i;
+	}
+	return 0;
+#else
 	int				i;
 	fog_t			*fog;
 
@@ -828,6 +891,7 @@ static int R_GComputeFogNum( trRefEntity_t *ent ) {
 	}
 	//if nothing else, use the first partial fog you found
 	return partialFog;
+#endif
 }
 
 // work out lod for this entity.
@@ -2314,7 +2378,10 @@ void RenderSurfaces(CRenderSurface &RS)
 				newSurf->surfaceData = surface;
 			}
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf( (surfaceType_t *)newSurf, tr.shadowShader, 0, qfalse );
+#ifdef REND2_SP
+			newSurf->genShadows = qtrue;
+#endif
+			R_AddGhoulDrawSurf(RS, newSurf, tr.shadowShader, 0);
 		}
 
 		// projection shadows work fine with personal models
@@ -2327,7 +2394,7 @@ void RenderSurfaces(CRenderSurface &RS)
 			CRenderableSurface *newSurf = AllocRS();
 			newSurf->surfaceData = surface;
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf( (surfaceType_t *)newSurf, tr.projectionShadowShader, 0, qfalse );
+			R_AddGhoulDrawSurf(RS, newSurf, tr.projectionShadowShader, 0);
 		}
 
 		// don't add third_person objects if not viewing through a portal
@@ -2336,7 +2403,7 @@ void RenderSurfaces(CRenderSurface &RS)
 			CRenderableSurface *newSurf = AllocRS();
 			newSurf->surfaceData = surface;
 			newSurf->boneCache = RS.boneCache;
-			R_AddDrawSurf( (surfaceType_t *)newSurf, shader, RS.fogNum, qfalse );
+			R_AddGhoulDrawSurf(RS, newSurf, shader, RS.fogNum);
 
 #ifdef _G2_GORE
 			if (RS.gore_set && drawGore)
@@ -2416,7 +2483,7 @@ void RenderSurfaces(CRenderSurface &RS)
 
 						last->goreChain=newSurf2;
 						last=newSurf2;
-						R_AddDrawSurf( (surfaceType_t *)newSurf2,gshader, RS.fogNum, qfalse );
+						R_AddGhoulDrawSurf(RS, newSurf2, gshader, RS.fogNum);
 					}
 				}
 			}
@@ -2555,7 +2622,11 @@ static inline bool bInShadowRange(vec3_t location)
 R_AddGHOULSurfaces
 ==============
 */
+#ifdef REND2_SP
+void R_AddGhoulSurfaces( trRefEntity_t *ent, int entityNum ) {
+#else
 void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
+#endif
 	shader_t		*cust_shader = 0;
 #ifdef _G2_GORE
 	shader_t		*gore_shader = 0;
@@ -2598,6 +2669,10 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 
    	// don't add third_person objects if not in a portal
 	personalModel = (qboolean)((ent->e.renderfx & RF_THIRD_PERSON) && !tr.viewParms.isPortal);
+#ifdef REND2_SP
+	if (tr.viewParms.flags & VPF_DEPTHSHADOW)
+		personalModel = qfalse;
+#endif
 
 	int modelList[32];
 	assert(ghoul2.size()<=31);
@@ -2688,6 +2763,13 @@ void R_AddGhoulSurfaces( trRefEntity_t *ent ) {
 #else
 			CRenderSurface RS(ghoul2[i].mSurfaceRoot, ghoul2[i].mSlist, cust_shader, fogNum, personalModel, ghoul2[i].mBoneCache, ent->e.renderfx, skin,ghoul2[i].currentModel, whichLod, ghoul2[i].mBltlist);
 #endif
+#ifdef REND2_SP
+			RS.entityNum = entityNum;
+			RS.postRender = R_IsPostRenderEntity(ent);
+			RS.cubemapIndex = R_CubemapForPoint(ent->e.origin);
+			float scale = MAX(fabsf(ent->e.modelScale[0]), MAX(fabsf(ent->e.modelScale[1]), fabsf(ent->e.modelScale[2])));
+			RS.dlightBits = R_DLightsForPoint(ent->e.origin, ent->e.radius * (scale ? scale : 1.0f));
+#endif
 			if (!personalModel && (RS.renderfx & RF_SHADOW_PLANE) && !bInShadowRange(ent->e.origin))
 			{
 				RS.renderfx |= RF_NOSHADOW;
@@ -2770,6 +2852,131 @@ RB_SurfaceGhoul
 */
 void RB_SurfaceGhoul( CRenderableSurface *surf )
 {
+#ifdef REND2_SP
+	mdxmSurface_t *surface = surf->surfaceData;
+	const mdxmVertex_t *vertices = (mdxmVertex_t *)((byte *)surface + surface->ofsVerts);
+	const mdxmVertexTexCoord_t *texCoords = (mdxmVertexTexCoord_t *)&vertices[surface->numVerts];
+	const int *boneReferences = (int *)((byte *)surface + surface->ofsBoneReferences);
+	const int *triangles = (int *)((byte *)surface + surface->ofsTriangles);
+	const int *sourceVerts = nullptr;
+	int numVerts = surface->numVerts;
+	int numIndexes = surface->numTriangles * 3;
+	vec4_t color = {1.0f, 1.0f, 1.0f, 1.0f};
+#ifdef _G2_GORE
+	float *gorePositions = nullptr;
+	float *goreNormals = nullptr;
+	const float *goreTexCoords = nullptr;
+	if (surf->alternateTex)
+	{
+		// Keep the SP gore layout. Do not depend on the parent draw order.
+		const int *data = (int *)surf->alternateTex;
+		numVerts = data[0];
+		numIndexes = data[1] * 3;
+		sourceVerts = data + 2;
+		gorePositions = (float *)(sourceVerts + numVerts);
+		goreNormals = gorePositions + 4 * numVerts;
+		goreTexCoords = goreNormals + 4 * numVerts;
+		triangles = (int *)(goreTexCoords + 2 * numVerts);
+		if (surf->fade > 0.0f && surf->fade < 1.0f)
+			color[3] = surf->fade;
+		else if (surf->fade > 2.0f && surf->fade < 3.0f)
+			VectorSet4(color, surf->fade - 2.0f, surf->fade - 2.0f, surf->fade - 2.0f, surf->fade - 2.0f);
+	}
+#endif
+	if (!numVerts || !numIndexes)
+		return;
+
+	// A gore fade is constant for this batch, not for the shader or entity.
+	if (sourceVerts || !tess.useInternalVBO || glState.genShadows != surf->genShadows ||
+		glState.skeletalAnimation || glState.vertexAnimation)
+	{
+		RB_EndSurface();
+		RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
+	}
+	RB_CheckOverflow(numVerts, numIndexes);
+	tess.useInternalVBO = qtrue;
+	tess.externalIBO = nullptr;
+	glState.skeletalAnimation = qfalse;
+	glState.vertexAnimation = qfalse;
+	glState.genShadows = surf->genShadows;
+	tess.dlightBits |= surf->dlightBits;
+	tess.pshadowBits |= surf->pshadowBits;
+	tess.fade = sourceVerts && color[3] < 1.0f;
+	const int baseVertex = tess.numVertexes;
+	const int baseIndex = tess.numIndexes;
+	mdxmVertex_t skinnedVertices[SHADER_MAX_VERTEXES];
+	mdxmVertexTexCoord_t skinnedTexCoords[SHADER_MAX_VERTEXES];
+
+	for (int j = 0; j < numVerts; ++j)
+	{
+		const int source = sourceVerts ? sourceVerts[j] : j;
+		assert(source >= 0 && source < surface->numVerts);
+		const mdxmVertex_t *vertex = &vertices[source];
+		const int numWeights = G2_GetVertWeights(vertex);
+		vec3_t position = {0.0f, 0.0f, 0.0f};
+		vec3_t normal = {0.0f, 0.0f, 0.0f};
+		float totalWeight = 0.0f;
+		for (int k = 0; k < numWeights; ++k)
+		{
+			const float weight = G2_GetVertBoneWeight(vertex, k, totalWeight, numWeights);
+#ifdef JK2_MODE
+			const mdxaBone_t &bone = surf->boneCache->Eval(boneReferences[G2_GetVertBoneIndex(vertex, k)]);
+#else
+			const mdxaBone_t &bone = surf->boneCache->EvalRender(boneReferences[G2_GetVertBoneIndex(vertex, k)]);
+#endif
+			for (int axis = 0; axis < 3; ++axis)
+			{
+				position[axis] += weight * (DotProduct(bone.matrix[axis], vertex->vertCoords) + bone.matrix[axis][3]);
+				normal[axis] += weight * DotProduct(bone.matrix[axis], vertex->normal);
+			}
+		}
+		if (!VectorNormalize(normal))
+			VectorSet(normal, 0.0f, 0.0f, 1.0f);
+		VectorCopy(position, skinnedVertices[j].vertCoords);
+		VectorCopy(normal, skinnedVertices[j].normal);
+		const int out = baseVertex + j;
+		VectorCopy(position, tess.xyz[out]);
+		tess.xyz[out][3] = 1.0f;
+		tess.normal[out] = R_VboPackNormal(normal);
+		vec4_t tangent;
+		PerpendicularVector(tangent, normal);
+		tangent[3] = 1.0f;
+		tess.tangent[out] = R_VboPackTangent(tangent);
+		tess.lightdir[out] = tess.normal[out];
+		memset(tess.texCoords[out], 0, sizeof(tess.texCoords[out]));
+		VectorCopy2(texCoords[source].texCoords, tess.texCoords[out][0]);
+#ifdef _G2_GORE
+		if (sourceVerts)
+		{
+			VectorCopy4(tess.xyz[out], gorePositions + 4 * j);
+			VectorCopy(normal, goreNormals + 4 * j);
+			goreNormals[4 * j + 3] = 0.0f;
+			for (int axis = 0; axis < 2; ++axis)
+				tess.texCoords[out][0][axis] = (goreTexCoords[2 * j + axis] - 0.5f) * surf->scale + 0.5f;
+		}
+#endif
+		VectorCopy2(tess.texCoords[out][0], skinnedTexCoords[j].texCoords);
+		VectorCopy4(color, tess.vertexColors[out]);
+		for (int axis = 0; axis < 4; ++axis)
+			tess.svars.colors[out][axis] = (byte)(255.0f * color[axis]);
+	}
+
+	for (int j = 0; j < numIndexes; ++j)
+	{
+		assert(triangles[j] >= 0 && triangles[j] < numVerts);
+		tess.indexes[baseIndex + j] = baseVertex + triangles[j];
+	}
+	R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords,
+		tess.tangent + baseVertex, (glIndex_t *)triangles);
+	tess.numIndexes += numIndexes;
+	tess.numVertexes += numVerts;
+	if (sourceVerts)
+	{
+		RB_EndSurface();
+		RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
+		tess.fade = false;
+	}
+#else
 #ifdef G2_PERFORMANCE_ANALYSIS
 	G2PerformanceTimer_RB_SurfaceGhoul.Start();
 #endif
@@ -3132,6 +3339,7 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 #ifdef G2_PERFORMANCE_ANALYSIS
 	G2Time_RB_SurfaceGhoul += G2PerformanceTimer_RB_SurfaceGhoul.End();
 #endif
+#endif // REND2_SP
 }
 
 /*
@@ -3598,8 +3806,17 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	mod->dataSize += size;
 
 	qboolean bAlreadyFound = qfalse;
+#ifdef REND2_SP
+	mdxm = mod->mdxm = (mdxmHeader_t *)CModelCache->Allocate(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
+	mod->mdxa = nullptr;
+	mod->data.glm = (mdxmData_t *)R_Hunk_Alloc(sizeof(mdxmData_t), qtrue);
+	mod->data.glm->header = mdxm;
+	if (bAlreadyFound)
+		CModelCache->AllocateShaders(mod_name);
+#else
 	mdxm = mod->mdxm = (mdxmHeader_t*) //R_Hunk_Alloc( size );
 										RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLM);
+#endif
 
 	assert(bAlreadyCached == bAlreadyFound);
 
@@ -3627,11 +3844,15 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 	// first up, go load in the animation file we need that has the skeletal animation info for this model
 	mdxm->animIndex = RE_RegisterModel(va ("%s.gla",mdxm->animName));
+#ifdef REND2_SP
+	if (mdxm->animIndex && !R_GetModelByHandle(mdxm->animIndex)->mdxa)
+		mdxm->animIndex = 0;
+#endif
 
 	char	animGLAName[MAX_QPATH];
 	char	*strippedName;
 	char	*slash = NULL;
-	const char*mapname = sv_mapname->string;
+	const char*mapname = sv_mapname ? sv_mapname->string : "nomap";
 
 	if (strcmp(mapname,"nomap") )
 	{
@@ -3721,7 +3942,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 
 #ifndef JK2_MODE
 		Q_strlwr(surfInfo->name);	//just in case
-		if ( !strcmp( &surfInfo->name[strlen(surfInfo->name)-4],"_off") )
+		if ( strlen(surfInfo->name) >= 4 && !strcmp( &surfInfo->name[strlen(surfInfo->name)-4],"_off") )
 		{
 			surfInfo->name[strlen(surfInfo->name)-4]=0;	//remove "_off" from name
 		}
@@ -3729,7 +3950,7 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 		if ( isANewModelFile )
 		{
 			Q_strlwr(surfInfo->name);	//just in case
-			if ( !strcmp( &surfInfo->name[strlen(surfInfo->name)-4],"_off") )
+			if ( strlen(surfInfo->name) >= 4 && !strcmp( &surfInfo->name[strlen(surfInfo->name)-4],"_off") )
 			{
 				surfInfo->name[strlen(surfInfo->name)-4]=0;	//remove "_off" from name
 			}
@@ -3762,10 +3983,15 @@ qboolean R_LoadMDXM( model_t *mod, void *buffer, const char *mod_name, qboolean 
 			surfInfo->shaderIndex = sh->index;
 		}
 
+#ifdef REND2_SP
+		surfInfo->shaderIndex = sh->defaultShader ? 0 : sh->index;
+		CModelCache->StoreShaderRequest(mod_name, surfInfo->shader, &surfInfo->shaderIndex);
+#else
 		if (surfInfo->shaderIndex)
 		{
 			RE_RegisterModels_StoreShaderRequest(mod_name, &surfInfo->shader[0], &surfInfo->shaderIndex);
 		}
+#endif
 
 #ifdef Q3_BIG_ENDIAN
 		// swap the surface offset
@@ -3948,8 +4174,14 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 	mod->dataSize  += size;
 
 	qboolean bAlreadyFound = qfalse;
+#ifdef REND2_SP
+	mdxa = mod->mdxa = (mdxaHeader_t *)CModelCache->Allocate(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLA);
+	mod->mdxm = nullptr;
+	mod->data.gla = mdxa;
+#else
 	mdxa = mod->mdxa = (mdxaHeader_t*) //R_Hunk_Alloc( size );
 										RE_RegisterModels_Malloc(size, buffer, mod_name, &bAlreadyFound, TAG_MODEL_GLA);
+#endif
 
 	assert(bAlreadyCached == bAlreadyFound);
 
@@ -4040,4 +4272,3 @@ qboolean R_LoadMDXA( model_t *mod, void *buffer, const char *mod_name, qboolean 
 #endif
 	return qtrue;
 }
-

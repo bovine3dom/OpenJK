@@ -69,6 +69,7 @@ qboolean CModelCacheManager::LoadFile( const char *pFileName, void **ppFileBuffe
 	auto cacheEntry = FindFile(path);
 	if ( cacheEntry != std::end(files) )
 	{
+		cacheEntry->iLevelLastUsedOn = tr.currentLevel;
 		*ppFileBuffer = cacheEntry->pDiskImage;
 		*pbAlreadyCached = qtrue;
 
@@ -157,14 +158,85 @@ void* CModelCacheManager::Allocate( int iSize, void *pvDiskBuffer, const char *p
  */
 void CModelCacheManager::DeleteAll( void )
 {
+#ifdef REND2_SP
+	if (tr.registered && backEndData)
+		R_IssuePendingRenderCommands();
+#endif
 	for ( auto& file : files )
 	{
+#ifdef REND2_SP
+		InvalidateFile(file.pDiskImage);
+#endif
 		Z_Free(file.pDiskImage);
 	}
 
 	FileCache().swap(files);
 	AssetCache().swap(assets);
+#ifdef REND2_SP
+	RE_AnimationCFGs_DeleteAll();
+#endif
 }
+
+#ifdef REND2_SP
+void CModelCacheManager::ClearModelHandles()
+{
+	G2_InvalidateModelPointers();
+	ResetGhoul2RenderableSurfaceHeap();
+#ifdef _G2_GORE
+	extern qhandle_t goreShader;
+	goreShader = -1;
+#endif
+	gbInsideRegisterModel = qfalse;
+	assets.clear();
+	for (auto &file : files)
+		file.iLevelLastUsedOn = -1;
+}
+
+void CModelCacheManager::InvalidateFile( const void *diskImage )
+{
+	G2_InvalidateModelPointers(diskImage);
+	for (int i = 1; i < tr.numModels; ++i)
+	{
+		model_t *model = tr.models[i];
+		if (model->mdxm == diskImage || model->mdxa == diskImage)
+		{
+			// Keep the handle slot. SP animation offsets depend on it.
+			model->type = MOD_BAD;
+			model->mdxm = nullptr;
+			model->mdxa = nullptr;
+			memset(&model->data, 0, sizeof(model->data));
+			model->dataSize = model->numLods = 0;
+		}
+	}
+}
+
+void CModelCacheManager::DeleteFile( const char *fileName )
+{
+	char path[MAX_QPATH];
+	NormalizePath(path, fileName, sizeof(path));
+	auto file = FindFile(path);
+	if (file != files.end())
+	{
+		InvalidateFile(file->pDiskImage);
+		Z_Free(file->pDiskImage);
+		files.erase(file);
+	}
+}
+
+void CModelCacheManager::TouchModel( const model_t *model )
+{
+	if (!model->mdxm && !model->mdxa)
+		return;
+	const mdxaHeader_t *animation = model->mdxa;
+	if (model->mdxm && model->mdxm->animIndex > 0 && model->mdxm->animIndex < tr.numModels)
+		animation = tr.models[model->mdxm->animIndex]->mdxa;
+	for (auto &file : files)
+	{
+		if (file.pDiskImage == model->mdxm || file.pDiskImage == animation)
+			file.iLevelLastUsedOn = tr.currentLevel;
+	}
+}
+#endif
 
 /*
  * Scans the cache for assets which don't match the checksum, and dumps
@@ -185,7 +257,12 @@ void CModelCacheManager::DumpNonPure( void )
 			ri.Printf( PRINT_DEVELOPER, "Dumping none pure model \"%s\"", it->path );
 
 			if( it->pDiskImage )
+			{
+#ifdef REND2_SP
+				InvalidateFile(it->pDiskImage);
+#endif
 				Z_Free( it->pDiskImage );
+			}
 
 			it = files.erase(it);
 		}
@@ -216,6 +293,10 @@ qhandle_t CModelCacheManager::GetModelHandle( const char *fileName )
 	if( it == std::end(assets) )
 		return -1; // asset not found
 
+#ifdef REND2_SP
+	if (it->handle > 0 && it->handle < tr.numModels)
+		TouchModel(tr.models[it->handle]);
+#endif
 	return it->handle;
 }
 
@@ -224,6 +305,14 @@ void CModelCacheManager::InsertModelHandle( const char *fileName, qhandle_t hand
 	char path[MAX_QPATH];
 	NormalizePath(path, fileName, sizeof(path));
 
+#ifdef REND2_SP
+	auto existing = FindAsset(path);
+	if (existing != assets.end())
+	{
+		existing->handle = handle;
+		return;
+	}
+#endif
 	Asset asset;
 	asset.handle = handle;
 	Q_strncpyz(asset.path, path, sizeof(asset.path));
@@ -232,6 +321,13 @@ void CModelCacheManager::InsertModelHandle( const char *fileName, qhandle_t hand
 
 qboolean CModelCacheManager::LevelLoadEnd( qboolean deleteUnusedByLevel )
 {
+#ifdef REND2_SP
+	// SP can request eviction from the allocator's failure recovery path.
+	if (gbInsideRegisterModel)
+		return qfalse;
+	if (tr.registered && backEndData)
+		R_IssuePendingRenderCommands();
+#endif
 	qboolean bAtLeastOneModelFreed	= qfalse;
 
 	ri.Printf( PRINT_DEVELOPER, S_COLOR_GREEN "CModelCacheManager::LevelLoadEnd():\n");
@@ -250,6 +346,9 @@ qboolean CModelCacheManager::LevelLoadEnd( qboolean deleteUnusedByLevel )
 			ri.Printf( PRINT_DEVELOPER, S_COLOR_GREEN "Dumping \"%s\"", it->path);
 			if( it->pDiskImage )
 			{
+#ifdef REND2_SP
+				InvalidateFile(it->pDiskImage);
+#endif
 				Z_Free( it->pDiskImage );
 				bAtLeastOneModelFreed = qtrue;	// FIXME: is this correct? shouldn't it be in the next lower scope?
 			}

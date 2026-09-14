@@ -79,8 +79,16 @@ public:
 	void		*Allocate( int iSize, void *pvDiskBuffer, const char *psModelFileName, qboolean *bAlreadyFound, memtag_t eTag );
 	void		DeleteAll( void );
 	void		DumpNonPure();
+#ifdef REND2_SP
+	void		ClearModelHandles();
+	void		DeleteFile( const char *fileName );
+	void		TouchModel( const struct model_s *model );
+#endif
 
 private:
+#ifdef REND2_SP
+	void		InvalidateFile( const void *diskImage );
+#endif
 	AssetCache::iterator FindAsset( const char *name );
 	FileCache::iterator	FindFile( const char *name );
 
@@ -92,3 +100,8 @@ qboolean C_Models_LevelLoadEnd( qboolean deleteUnusedByLevel );
 qboolean C_Images_LevelLoadEnd();
 
 extern CModelCacheManager *CModelCache;
+
+#ifdef REND2_SP
+void G2_InvalidateModelPointers(const void *modelData = nullptr);
+extern qboolean gbInsideRegisterModel;
+#endif

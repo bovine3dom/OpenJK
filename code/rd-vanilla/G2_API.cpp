@@ -26,8 +26,13 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <string>
 
 #include "../qcommon/q_shared.h"
+#ifdef REND2_SP
+#include "../../codemp/rd-rend2/tr_local.h"
+#include "../../codemp/rd-rend2/tr_cache.h"
+#else
 #include "tr_local.h"
 #include "tr_common.h"
+#endif
 #include "../ghoul2/G2.h"
 #include "../qcommon/MiniHeap.h"
 
@@ -461,6 +466,29 @@ class Ghoul2InfoArray : public IGhoul2InfoArray
 		}
 	}
 public:
+#ifdef REND2_SP
+	void InvalidateModelPointers(const void *modelData)
+	{
+		for (auto &infos : mInfos)
+		{
+			for (auto &info : infos)
+			{
+				if (modelData && info.aHeader != modelData &&
+					(!info.currentModel || info.currentModel->mdxm != modelData))
+					continue;
+				RemoveBoneCache(info.mBoneCache);
+				info.mBoneCache = nullptr;
+				info.currentModel = nullptr;
+				info.animModel = nullptr;
+				info.aHeader = nullptr;
+				info.mTransformedVertsArray = nullptr;
+				info.mSkelFrameNum = info.mMeshFrameNum = 0;
+				info.mValid = false;
+			}
+		}
+	}
+#endif
+
 	Ghoul2InfoArray()
 	{
 		size_t i;
@@ -683,6 +711,14 @@ public:
 
 
 static Ghoul2InfoArray *singleton = NULL;
+#ifdef REND2_SP
+void G2_InvalidateModelPointers(const void *modelData)
+{
+	if (singleton)
+		singleton->InvalidateModelPointers(modelData);
+}
+#endif
+
 IGhoul2InfoArray &TheGhoul2InfoArray()
 {
 	if(!singleton) {
@@ -999,6 +1035,11 @@ qboolean G2API_SetAnimIndex(CGhoul2Info *ghlInfo, const int index)
 		{
 			ghlInfo->animModelIndexOffset = index;
 			ghlInfo->currentAnimModelSize = 0;					// Clear anim size so SetupModelPointers recalcs
+#ifdef REND2_SP
+			RemoveBoneCache(ghlInfo->mBoneCache);
+			ghlInfo->mBoneCache = nullptr;
+			ghlInfo->mSkelFrameNum = ghlInfo->mMeshFrameNum = 0;
+#endif
 
 //			RemoveBoneCache(ghlInfo[0].mBoneCache);
 //			ghlInfo[0].mBoneCache=0;
@@ -2341,5 +2382,3 @@ bool G2_SetupModelPointers(CGhoul2Info_v &ghoul2) // returns true if any model i
 	}
 	return ret;
 }
-
-

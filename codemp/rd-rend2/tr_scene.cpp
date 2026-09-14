@@ -43,6 +43,9 @@ R_InitNextFrame
 ====================
 */
 void R_InitNextFrame( void ) {
+#ifdef REND2_SP
+	R_SP_ResetScissor();
+#endif
 	backEndData->commands.used = 0;
 
 	tr.numTimedBlocks = 0;
@@ -91,7 +94,11 @@ Adds all the scene's polys into this view's drawsurf list
 */
 void R_AddPolygonSurfaces( const trRefdef_t *refdef ) {
 	srfPoly_t *poly;
-	int	fogMask = -((refdef->rdflags & RDF_NOFOG) == 0);
+#ifdef REND2_SP
+	int fogMask = -1;
+#else
+	int fogMask = -((refdef->rdflags & RDF_NOFOG) == 0);
+#endif
 
 	int i;
 	for ( i = 0, poly = refdef->polys; i < refdef->numPolys ; i++, poly++ ) {
@@ -114,6 +121,10 @@ RE_AddPolyToScene
 =====================
 */
 void RE_AddPolyToScene( qhandle_t hShader, int numVerts, const polyVert_t *verts, int numPolys ) {
+#ifdef REND2_SP
+	if (!verts || numVerts < 3 || numPolys < 1)
+		return;
+#endif
 	srfPoly_t	*poly;
 	int			i, j;
 	int			fogIndex;
@@ -225,6 +236,7 @@ RE_AddMiniRefEntityToScene
 1:1 with how vanilla does it --eez
 =====================
 */
+#ifndef REND2_SP
 void RE_AddMiniRefEntityToScene( const miniRefEntity_t *miniRefEnt ) {
 	refEntity_t entity;
 	if(!tr.registered)
@@ -235,6 +247,7 @@ void RE_AddMiniRefEntityToScene( const miniRefEntity_t *miniRefEnt ) {
 	memcpy(&entity, miniRefEnt, sizeof(*miniRefEnt));
 	RE_AddRefEntityToScene(&entity);
 }
+#endif
 
 
 /*
@@ -298,7 +311,9 @@ void RE_AddAdditiveLightToScene( const vec3_t org, float intensity, float r, flo
 
 void RE_BeginScene(const refdef_t *fd)
 {
+#ifndef REND2_SP
 	Com_Memcpy( tr.refdef.text, fd->text, sizeof( tr.refdef.text ) );
+#endif
 
 	tr.refdef.x = fd->x;
 	tr.refdef.y = fd->y;
@@ -315,6 +330,10 @@ void RE_BeginScene(const refdef_t *fd)
 	tr.refdef.time = fd->time;
 	tr.refdef.rdflags = fd->rdflags;
 	tr.refdef.frameTime = fd->time - tr.refdef.lastTime;
+#ifdef REND2_SP
+	tr.refdef.rdflags = R_SP_SceneFlags(tr.refdef.rdflags);
+	tr.refdef.frameTime = Com_Clampi(0, 200, tr.refdef.frameTime);
+#endif
 
 	// copy the areamask data over and note if it has changed, which
 	// will force a reset of the visible leafs even if the view hasn't moved
@@ -420,6 +439,7 @@ void RE_BeginScene(const refdef_t *fd)
 		tr.refdef.toneMinAvgMaxLinear[2] = pow(2, tr.toneMinAvgMaxLevel[2]);
 	}
 
+#ifndef REND2_SP
 	// Makro - copy exta info if present
 	if (fd->rdflags & RDF_EXTRA) {
 		const refdefex_t* extra = (const refdefex_t*) (fd+1);
@@ -434,6 +454,7 @@ void RE_BeginScene(const refdef_t *fd)
 		}
 	}
 	else
+#endif
 	{
 		tr.refdef.blurFactor = 0.0f;
 	}

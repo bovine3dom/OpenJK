@@ -1745,6 +1745,11 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 	GLenum internalFormat = GL_RGB8;
 	qboolean forceNoCompression = (qboolean)(flags & IMGFLAG_NO_COMPRESSION);
 	qboolean normalmap = (qboolean)(type == IMGTYPE_NORMAL || type == IMGTYPE_NORMALHEIGHT);
+#ifdef REND2_SP
+	const bool s3tc = glConfig.textureCompression == TC_S3TC_DXT;
+#else
+	const bool s3tc = glConfig.textureCompression == TC_S3TC_ARB;
+#endif
 
 	if(normalmap)
 	{
@@ -1754,7 +1759,7 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 		}
 		else
 		{
-			if ( !forceNoCompression && glConfig.textureCompression == TC_S3TC_ARB )
+			if ( !forceNoCompression && s3tc )
 			{
 				internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 			}
@@ -1808,7 +1813,7 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 				{
 					internalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM_ARB;
 				}
-				else if ( !forceNoCompression && glConfig.textureCompression == TC_S3TC_ARB )
+				else if ( !forceNoCompression && s3tc )
 				{
 					internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
 				}
@@ -1849,7 +1854,7 @@ static GLenum RawImage_GetFormat(const byte *data, int numPixels, qboolean light
 				{
 					internalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM_ARB;
 				}
-				else if ( !forceNoCompression && glConfig.textureCompression == TC_S3TC_ARB )
+				else if ( !forceNoCompression && s3tc )
 				{
 					internalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 				}
@@ -2831,9 +2836,10 @@ image_t *R_BuildSDRSpecGlossImage(shaderStage_t *stage, const char *specImageNam
 		sdrSpecPic[i + 2] = FloatToByte(currentColor[2] * ratio);
 		sdrSpecPic[i + 3] = specPic[i + 3];
 	}
-	ri.Hunk_FreeTempMemory(specPic);
-
-	return R_CreateImage(sdrName, sdrSpecPic, specWidth, specHeight, IMGTYPE_COLORALPHA, flags & ~IMGFLAG_SRGB, 0);
+	Z_Free(specPic);
+	image = R_CreateImage(sdrName, sdrSpecPic, specWidth, specHeight, IMGTYPE_COLORALPHA, flags & ~IMGFLAG_SRGB, 0);
+	ri.Hunk_FreeTempMemory(sdrSpecPic);
+	return image;
 }
 
 static void R_CreateNormalMap ( const char *name, byte *pic, int width, int height, int flags )
@@ -3635,6 +3641,9 @@ R_DeleteTextures
 ===============
 */
 void R_DeleteTextures( void ) {
+#ifdef REND2_SP
+	R_SP_ShutdownEffects();
+#endif
 	image_t *image = tr.images;
 	while ( image )
 	{

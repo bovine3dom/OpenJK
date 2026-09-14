@@ -429,6 +429,9 @@ uniform sampler2D u_ScreenDepthMap;
 uniform vec4 u_Color;
 uniform vec2 u_AutoExposureMinMax;
 uniform vec3 u_ToneMinAvgMaxLinear;
+#ifdef REND2_SP
+uniform vec4 u_NormalScale;
+#endif
 
 #if defined(USE_ALPHA_TEST)
 uniform int u_AlphaTestType;
@@ -470,6 +473,11 @@ void main()
 	vec2 texR = (var_RefractPosR.xy / var_RefractPosR.w) * 0.5 + 0.5;
 	vec2 texG = (var_RefractPosG.xy / var_RefractPosG.w) * 0.5 + 0.5;
 	vec2 texB = (var_RefractPosB.xy / var_RefractPosB.w) * 0.5 + 0.5;
+#ifdef REND2_SP
+	texR = mix(u_NormalScale.xy, vec2(1.0) - u_NormalScale.xy, texR);
+	texG = mix(u_NormalScale.xy, vec2(1.0) - u_NormalScale.xy, texG);
+	texB = mix(u_NormalScale.xy, vec2(1.0) - u_NormalScale.xy, texB);
+#endif
 
 	vec4 color;
 	color.r	= texture(u_TextureMap, texR).r;
@@ -478,6 +486,11 @@ void main()
 	color.a = var_Color.a;
 	color.rgb *= var_Color.rgb;
 	color.rgb *= u_Color.rgb;
+#ifdef REND2_SP
+	color.a *= u_NormalScale.z;
+	if (u_NormalScale.w > 0.0)
+		color.rgb = vec3(1.0) - color.rgb;
+#endif
 
 #if defined(USE_ALPHA_TEST)
 	if (u_AlphaTestType == ALPHA_TEST_GT0)

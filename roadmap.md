@@ -58,9 +58,9 @@ normal and specular mapping, ambient occlusion, and shadow-map paths. Internal H
 rendering does not imply HDR display support. Original assets will limit visual
 improvements without further content work.
 
-For Rend2, first identify the available GPUs and choose a minimum graphics target.
-Test one single-player map with animated characters, sabers, effects, and a
-cinematic before expanding the port. Measure performance on the weakest target GPU.
+Rend2 now runs initial SP scenes with software rendering. Choose a minimum
+graphics target and measure performance on the weakest target GPU.
+The NVIDIA GTX 1080 Ti is available, but Rend2 performance is not yet tested.
 
 ### Investigation Checklist
 
@@ -101,11 +101,20 @@ rates to detect regressions, without expanding scope into a simulation rewrite.
 
 Compare `codemp/rd-rend2/` with `code/rd-vanilla/` and the renderer build targets.
 
-1. List differences in renderer interfaces, model animation, effects, and single-player dependencies. Decide which code can be shared and which needs adaptation.
-2. Build a single-player Rend2 target and load an original map. Retain the vanilla renderer for development comparisons.
+1. Complete: use native SP API 18 and Ghoul2 ownership with shared MP raster code. The first playable path uses CPU skinning in Rend2 dynamic buffers.
+2. Complete: link, install, and load `rdsp-rend2_x86_64.so`. Pass the `t1_sour` baseline with both renderers and load `t2_wedge` with Rend2.
 3. Validate animated characters, sabers, transparent surfaces, particles, decals, UI, and cinematics before enabling additional visual effects.
 4. Add and measure raster lighting, shadows, and material features individually. Provide quality settings for expensive features. Do not add ray tracing.
 5. Compare fixed camera captures and frame times on each target GPU. Record unsupported features and visual defects.
+
+Rend2 remains experimental and opt-in. Vanilla is still the default.
+Linux GCC builds used one job. Xvfb and LLVMpipe checks passed for renderer
+lifecycle, active AI tactic save/load, and save migration.
+
+Rend2 4K and lifecycle checks with stencil and projected shadows passed.
+Hardware performance, audio, and broader manual campaign checks remain open.
+The beam fix still needs a dedicated visual test.
+See `docs/rend2-sp.md` for commands and test limits.
 
 Acceptance: the representative scene works without missing models, effects, or
 UI; the agreed performance target is met on the minimum GPU. Follow with campaign

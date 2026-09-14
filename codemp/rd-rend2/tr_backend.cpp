@@ -584,7 +584,11 @@ void RB_BeginDrawingView (void) {
 #endif
 	}
 
-	if (tr.refdef.rdflags & RDF_AUTOMAP || (!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL)))
+	if (
+#ifndef REND2_SP
+		tr.refdef.rdflags & RDF_AUTOMAP ||
+#endif
+		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL))
 	{
 		if (tr.world && tr.world->globalFog)
 		{
@@ -914,6 +918,10 @@ SamplerBindingsWriter& SamplerBindingsWriter::AddStaticImage( image_t *image, in
 SamplerBindingsWriter& SamplerBindingsWriter::AddAnimatedImage( textureBundle_t *bundle, int unit )
 {
 	int index;
+#ifdef REND2_SP
+	if (bundle->isLightmap && (backEnd.refdef.rdflags & RDF_doFullbright))
+		return AddStaticImage(tr.whiteImage, unit);
+#endif
 
 	if ( bundle->isVideoMap )
 	{
@@ -1175,6 +1183,11 @@ static void RB_PrepareForEntity( int entityNum, float originalTime )
 		backEnd.refdef.floatTime = originalTime;
 	}
 
+#ifdef REND2_SP
+	// CPU deforms need the current entity's axes, origin and local view origin.
+	R_RotateForEntity(backEnd.currentEntity, &backEnd.viewParms, &backEnd.ori);
+#endif
+
 	// we have to reset the shaderTime as well otherwise image animations on
 	// the world (like water) continue with the wrong frame
 	tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
@@ -1189,7 +1202,9 @@ static void RB_SubmitDrawSurfsForDepthFill(
 	int oldEntityNum = -1;
 	int oldSort = -1;
 	int oldDepthRange = 0;
+#ifndef REND2_SP
 	CBoneCache *oldBoneCache = nullptr;
+#endif
 
 	drawSurf_t *drawSurf = drawSurfs;
 	for ( int i = 0; i < numDrawSurfs; i++, drawSurf++ )
@@ -1202,6 +1217,10 @@ static void RB_SubmitDrawSurfsForDepthFill(
 		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
 
+#ifdef REND2_SP
+		if (postRender)
+			continue;
+#endif
 		if (shader->useSimpleDepthShader == qtrue)
 			shader = tr.defaultShader;
 
@@ -1211,6 +1230,7 @@ static void RB_SubmitDrawSurfsForDepthFill(
 			continue;
 		}
 
+#ifndef REND2_SP
 		if (*drawSurf->surface == SF_MDX)
 		{
 			if (((CRenderableSurface*)drawSurf->surface)->boneCache != oldBoneCache)
@@ -1221,6 +1241,7 @@ static void RB_SubmitDrawSurfsForDepthFill(
 				tr.animationBoneUboOffset = RB_GetBoneUboOffset((CRenderableSurface*)drawSurf->surface);
 			}
 		}
+#endif
 
 		if ( shader == oldShader &&	entityNum == oldEntityNum )
 		{
@@ -1280,7 +1301,9 @@ static void RB_SubmitDrawSurfs(
 	int oldDlighted = 0;
 	int oldPostRender = 0;
 	int oldCubemapIndex = -1;
+#ifndef REND2_SP
 	CBoneCache *oldBoneCache = nullptr;
+#endif
 
 	drawSurf_t *drawSurf = drawSurfs;
 	for ( int i = 0; i < numDrawSurfs; i++, drawSurf++ )
@@ -1296,7 +1319,14 @@ static void RB_SubmitDrawSurfs(
 		assert(shader != nullptr);
 		fogNum = drawSurf->fogIndex;
 		dlighted = drawSurf->dlightBits;
+#ifdef REND2_SP
+		const bool refractive = shader->useDistortion || (entityNum != REFENTITYNUM_WORLD &&
+			(backEnd.refdef.entities[entityNum].e.renderfx & RF_DISTORTION));
+		if ((backEnd.refractionFill != qfalse) != refractive)
+			continue;
+#endif
 
+#ifndef REND2_SP
 		if (*drawSurf->surface == SF_MDX)
 		{
 			if (((CRenderableSurface*)drawSurf->surface)->boneCache != oldBoneCache)
@@ -1307,6 +1337,7 @@ static void RB_SubmitDrawSurfs(
 				tr.animationBoneUboOffset = RB_GetBoneUboOffset((CRenderableSurface*)drawSurf->surface);
 			}
 		}
+#endif
 
 		if (    shader == oldShader &&
 				fogNum == oldFogNum &&
@@ -1527,6 +1558,9 @@ void	RB_SetGL2D (void) {
 
 	// reset color scaling
 	backEnd.refdef.colorScale = 1.0f;
+#ifdef REND2_SP
+	R_SP_ApplyScissor();
+#endif
 }
 
 
@@ -2263,6 +2297,10 @@ static void RB_UpdateFogsConstants(gpuFrame_t *frame)
 		VectorCopy4(fog->surface, fogData->plane);
 		VectorCopy4(fog->color, fogData->color);
 		fogData->depthToOpaque = sqrtf(-logf(1.0f / 255.0f)) / fog->parms.depthForOpaque;
+#ifdef REND2_SP
+		if (i + 1 == tr.world->globalFogIndex && tr.rangedFog > 0.0f)
+			fogData->depthToOpaque = sqrtf(-logf(1.0f / 255.0f)) / tr.rangedFog;
+#endif
 		fogData->hasPlane = fog->hasSurface;
 	}
 
@@ -2278,6 +2316,13 @@ static void RB_UpdateEntityLightConstants(
 
 	VectorScale(refEntity->ambientLight, normalizeFactor, entityBlock.ambientLight);
 	VectorScale(refEntity->directedLight, normalizeFactor, entityBlock.directedLight);
+#ifdef REND2_SP
+	if (tr.refdef.rdflags & RDF_doFullbright)
+	{
+		VectorSet(entityBlock.ambientLight, 1.0f, 1.0f, 1.0f);
+		VectorClear(entityBlock.directedLight);
+	}
+#endif
 	VectorCopy(refEntity->lightDir, entityBlock.lightOrigin);
 
 	vec3_t lightDir;
@@ -2498,6 +2543,7 @@ static void RB_UpdateEntityConstants(
 	RB_UpdateSkyEntityConstants(frame, refdef);
 }
 
+#ifndef REND2_SP
 static void RB_UpdateGhoul2Constants(gpuFrame_t *frame, const trRefdef_t *refdef)
 {
 	for (int i = 0; i < refdef->num_entities; i++)
@@ -2525,6 +2571,7 @@ static void RB_UpdateGhoul2Constants(gpuFrame_t *frame, const trRefdef_t *refdef
 		}
 	}
 }
+#endif
 
 void RB_UpdateConstants(const trRefdef_t *refdef)
 {
@@ -2535,7 +2582,9 @@ void RB_UpdateConstants(const trRefdef_t *refdef)
 	RB_UpdateSceneConstants(frame, refdef);
 	RB_UpdateLightsConstants(frame, refdef);
 	RB_UpdateFogsConstants(frame);
+#ifndef REND2_SP
 	RB_UpdateGhoul2Constants(frame, refdef);
+#endif
 	RB_UpdateEntityConstants(frame, refdef);
 
 	RB_EndConstantsUpdate(frame);
@@ -2748,6 +2797,9 @@ static const void	*RB_SwapBuffers( const void *data ) {
 		}
 	}
 
+#ifdef REND2_SP
+	R_SP_CaptureScreen(qtrue);
+#endif
 	R_NewFrameSync();
 
 	GLimp_LogComment( "***************** RB_SwapBuffers *****************\n\n\n" );
@@ -2916,6 +2968,10 @@ const void *RB_PostProcess(const void *data)
 	}
 #endif
 
+#ifdef REND2_SP
+	if (tr_distortionPrePost)
+		R_SP_CaptureScreen(qtrue);
+#endif
 	if (r_dynamicGlow->integer != 0)
 	{
 		// Composite the glow/bloom texture
@@ -2943,11 +2999,19 @@ const void *RB_PostProcess(const void *data)
 
 	backEnd.framePostProcessed = qtrue;
 	FBO_Bind(NULL);
+#ifdef REND2_SP
+	if (!tr_distortionPrePost)
+		R_SP_CaptureScreen(qtrue);
+#endif
 	backEnd.refractionFill = qtrue;
 	RB_RenderDrawSurfList(
 		backEnd.refdef.drawSurfs + backEnd.refdef.fistDrawSurf,
 		backEnd.refdef.numDrawSurfs - tr.refdef.fistDrawSurf);
 	backEnd.refractionFill = qfalse;
+#ifdef REND2_SP
+	if (backEnd.refdef.rdflags & RDF_doLAGoggles)
+		R_SP_DrawGoggles();
+#endif
 
 	return (const void *)(cmd + 1);
 }
@@ -3065,8 +3129,26 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			data = RB_SwapBuffers( data );
 			break;
 		case RC_SCREENSHOT:
+#ifdef REND2_SP
+		{
+			if (tess.numIndexes)
+				RB_EndSurface();
+			FBO_t *previous = glState.currentFBO;
+			FBO_t *source = backEnd.framePostProcessed ? nullptr : tr.renderFbo;
+			if (source && tr.msaaResolveFbo)
+			{
+				FBO_FastBlit(source, nullptr, tr.msaaResolveFbo, nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+				source = tr.msaaResolveFbo;
+			}
+			FBO_Bind(source);
+			data = RB_TakeScreenshotCmd(data);
+			FBO_Bind(previous);
+			break;
+		}
+#else
 			data = RB_TakeScreenshotCmd( data );
 			break;
+#endif
 		case RC_VIDEOFRAME:
 			data = RB_TakeVideoFrameCmd( data );
 			break;
@@ -3102,4 +3184,3 @@ void RB_ExecuteRenderCommands( const void *data ) {
 	}
 
 }
-

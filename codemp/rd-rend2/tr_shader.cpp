@@ -76,10 +76,34 @@ const int lightmapsFullBright[MAXLIGHTMAPS] =
 const byte stylesDefault[MAXLIGHTMAPS] =
 {
 	LS_NORMAL,
+#ifdef REND2_SP
+	LS_NONE,
+	LS_NONE,
+	LS_NONE
+#else
 	LS_LSNONE,
 	LS_LSNONE,
 	LS_LSNONE
+#endif
 };
+
+#ifdef REND2_SP
+static qboolean SkipBracedSection(const char **text, int depth)
+{
+	do
+	{
+		const char *token = COM_ParseExt(text, qtrue);
+		if (!token[0])
+			return qfalse;
+		if (token[1] == '\0')
+		{
+			if (token[0] == '{') ++depth;
+			if (token[0] == '}') --depth;
+		}
+	} while (depth > 0);
+	return qtrue;
+}
+#endif
 
 qhandle_t RE_RegisterShaderLightMap( const char *name, const int *lightmapIndexes, const byte *styles );
 
@@ -2551,6 +2575,9 @@ will optimize it.
 */
 static qboolean ParseShader( const char **text )
 {
+#ifdef REND2_SP
+	COM_ParseSession session;
+#endif
 	char *token;
 	const char *begin = *text;
 	int s;
@@ -3549,9 +3576,15 @@ to be rendered with bad shaders. To fix this, need to go through all render comm
 sortedIndex.
 ==============
 */
+#ifndef REND2_SP
 extern bool gServerSkinHack;
+#endif
 static void FixRenderCommandList( int newShader ) {
+#ifdef REND2_SP
+	if (backEndData) {
+#else
 	if( !gServerSkinHack ) {
+#endif
 		renderCommandList_t	*cmdList = &backEndData->commands;
 
 		if( cmdList ) {
@@ -4209,6 +4242,9 @@ If found, it will return a valid shader
 =====================
 */
 static const char *FindShaderInShaderText( const char *shadername ) {
+#ifdef REND2_SP
+	COM_ParseSession session;
+#endif
 
 	char *token;
 	const char *p;
@@ -4335,6 +4371,10 @@ static inline const int *R_FindLightmaps(const int *lightmapIndexes)
 	// do the lightmaps exist?
 	for (int i = 0; i < MAXLIGHTMAPS; i++)
 	{
+#ifdef REND2_SP
+		if (lightmapIndexes[i] < 0)
+			continue;
+#endif
 		if (lightmapIndexes[i] >= tr.numLightmaps || tr.lightmaps[lightmapIndexes[i]] == NULL)
 			return lightmapsVertex;
 	}
@@ -4907,7 +4947,11 @@ static void ScanAndLoadShaderFiles( void )
 
 		// Do a simple check on the shader structure in that file to make sure one bad shader file cannot fuck up all other shaders.
 		p = buffers[i];
+#ifdef REND2_SP
+		COM_ParseSession session;
+#else
 		COM_BeginParseSession(filename);
+#endif
 		while(1)
 		{
 			token = COM_ParseExt(&p, qtrue);
@@ -4981,6 +5025,9 @@ static void ScanAndLoadShaderFiles( void )
 	Com_Memset(shaderTextHashTableSizes, 0, sizeof(shaderTextHashTableSizes));
 	size = 0;
 
+#ifdef REND2_SP
+	COM_ParseSession session;
+#endif
 	p = s_shaderText;
 	// look for shader names
 	while ( 1 ) {

@@ -32,6 +32,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifdef REND2_SP
 static_assert(REF_API_VERSION == 18, "Rend2 SP requires the SP private header path");
 struct skin_t;
+#include "rd-rend2/tr_sp_import.h"
+#define ri riRend2
 #endif
 #include "tr_allocator.h"
 #include "tr_extratypes.h"
@@ -266,6 +268,18 @@ extern cvar_t	*r_noPrecacheGLA;
 extern cvar_t	*r_noServerGhoul2;
 extern cvar_t	*r_Ghoul2AnimSmooth;
 extern cvar_t	*r_Ghoul2UnSqashAfterSmooth;
+#ifdef REND2_SP
+extern cvar_t *r_noGhoul2;
+extern cvar_t *r_Ghoul2UnSqash;
+extern cvar_t *r_Ghoul2TimeBase;
+extern cvar_t *r_Ghoul2NoLerp;
+extern cvar_t *r_Ghoul2NoBlend;
+extern cvar_t *r_Ghoul2BlendMultiplier;
+extern cvar_t *com_buildScript;
+extern cvar_t *sv_mapname;
+extern cvar_t *sv_mapChecksum;
+extern cvar_t *se_language;
+#endif
 //extern cvar_t	*r_Ghoul2UnSqash;
 //extern cvar_t	*r_Ghoul2TimeBase=0; from single player
 //extern cvar_t	*r_Ghoul2NoLerp;
@@ -1029,7 +1043,9 @@ QINLINE qboolean ShaderRequiresCPUDeforms(const shader_t * shader)
 			case DEFORM_WAVE:
 			case DEFORM_BULGE:
 			case DEFORM_MOVE:
+#ifndef REND2_SP
 			case DEFORM_PROJECTION_SHADOW:
+#endif
 				return qfalse;
 
 			default:
@@ -1420,6 +1436,12 @@ typedef enum
 	UNIFORM_ENVFORCE,
 	UNIFORM_RANDOMOFFSET,
 	UNIFORM_CHUNK_PARTICLES,
+#ifdef REND2_SP
+	UNIFORM_SPWINDCOUNT,
+	UNIFORM_SPWINDMINS,
+	UNIFORM_SPWINDMAXS,
+	UNIFORM_SPWINDVELOCITY,
+#endif
 
 	UNIFORM_COUNT
 } uniform_t;
@@ -2146,6 +2168,10 @@ typedef struct model_s {
 	char		name[MAX_QPATH];
 	modtype_t	type;
 	int			index;		// model = tr.models[model->index]
+#ifdef REND2_SP
+	mdxmHeader_t *mdxm;
+	mdxaHeader_t *mdxa;
+#endif
 
 	int			dataSize;	// just for listing purposes
 	union
@@ -2913,6 +2939,16 @@ extern glconfigExt_t	glConfigExt;
 
 #ifndef REND2_SP
 typedef _skinSurface_t skinSurface_t;
+#else
+struct skinSurface_t {
+	char name[MAX_QPATH];
+	shader_t *shader;
+};
+struct skin_t {
+	char name[MAX_QPATH];
+	int numSurfaces;
+	skinSurface_t *surfaces[128];
+};
 #endif
 
 void	RE_StretchRaw (int x, int y, int w, int h, int cols, int rows, const byte *data, int client, qboolean dirty);
@@ -2928,7 +2964,55 @@ qhandle_t	RE_RegisterModel( const char *name );
 qhandle_t	RE_RegisterServerSkin( const char *name );
 qhandle_t	RE_RegisterSkin( const char *name );
 void		RE_Shutdown(qboolean destroyWindow, qboolean restarting);
+void		RE_EndRegistration(void);
 world_t		*R_LoadBSP(const char *name, int *bspIndex = nullptr);
+
+#ifdef REND2_SP
+void Create_Matrix(const float *angle, mdxaBone_t *matrix);
+void Multiply_3x4Matrix(mdxaBone_t *out, const mdxaBone_t *in2, const mdxaBone_t *in);
+int RE_GetAnimationCFG(const char *name, char *buffer, int size);
+void RE_AnimationCFGs_DeleteAll();
+void R_ClearStuffToStopGhoul2CrashingThings();
+void R_SP_UnloadWorld();
+void RE_GetModelBounds(refEntity_t *entity, vec3_t mins, vec3_t maxs);
+void RE_GetLightStyle(int style, color4ub_t color);
+void RE_SetLightStyle(int style, int color);
+void RE_GetBModelVerts(int bmodelIndex, vec3_t *verts, vec3_t normal);
+void C_LevelLoadBegin(const char *name, ForceReload_e forceReload);
+int C_GetLevel();
+
+void RE_LAGoggles();
+void RE_Scissor(float x, float y, float width, float height);
+qboolean RE_ProcessDissolve();
+qboolean RE_InitDissolve(qboolean forceCircularExtroWipe);
+void RE_KillDissolve();
+void RE_GetScreenShot(byte *data, int width, int height);
+byte *RE_TempRawImage_ReadFromFile(const char *name, int *width, int *height,
+	byte *resampleBuffer, qboolean verticalFlip);
+void RE_TempRawImage_CleanUp();
+void R_SP_CaptureScreen(qboolean finalFrame);
+image_t *R_SP_ScreenImage();
+int R_SP_SceneFlags(int flags);
+void R_SP_DrawGoggles();
+void R_SP_ApplyScissor();
+void R_SP_ResetScissor();
+void R_SP_ShutdownEffects();
+void RB_SetGL2D();
+extern float tr_distortionAlpha;
+extern float tr_distortionStretch;
+extern qboolean tr_distortionPrePost;
+extern qboolean tr_distortionNegate;
+
+void RE_WorldEffectCommand(const char *command);
+bool R_GetWindVector(vec3_t windVector, vec3_t atPoint);
+bool R_GetWindGusting(vec3_t atPoint);
+bool R_IsOutside(vec3_t pos);
+float R_IsOutsideCausingPain(vec3_t pos);
+float R_GetChanceOfSaberFizz();
+bool R_IsShaking(vec3_t pos);
+void R_AddWeatherZone(vec3_t mins, vec3_t maxs);
+bool R_SetTempGlobalFogColor(vec3_t color);
+#endif
 
 qboolean	R_GetEntityToken( char *buffer, int size );
 
@@ -3040,6 +3124,8 @@ struct shaderCommands_s
 	int         cubemapIndex;
 #ifdef REND2_SP_MAYBE
 	bool		scale;		// uses texCoords[input->firstIndex] for storage
+#endif
+#if defined(REND2_SP) || defined(REND2_SP_MAYBE)
 	bool		fade;		// uses svars.colors[input->firstIndex] for storage
 #endif
 	int			dlightBits;	// or together of all vertexDlightBits
@@ -3217,6 +3303,10 @@ void            R_BindNullIBO(void);
 void			R_InitGPUBuffers(void);
 void            R_DestroyGPUBuffers(void);
 void            R_VBOList_f(void);
+#ifdef REND2_SP
+void R_SP_DeleteVBO(VBO_t *vbo);
+void R_SP_DeleteIBO(IBO_t *ibo);
+#endif
 
 void            RB_UpdateVBOs(unsigned int attribBits);
 #ifdef _G2_GORE
@@ -3317,7 +3407,11 @@ UNCOMPRESSING BONES
 #define MC_SCALE_Y (1.0f/64)
 #define MC_SCALE_Z (1.0f/64)
 
+#ifdef REND2_SP
+#include "qcommon/matcomp.h"
+#else
 void MC_UnCompress(float mat[3][4],const unsigned char * comp);
+#endif
 
 /*
 =============================================================
@@ -3366,7 +3460,11 @@ public:
 
 #ifdef _G2_GORE
 	// alternate texture coordinates
+#ifdef REND2_SP
+	float *alternateTex;
+#else
 	srfG2GoreSurface_t *alternateTex;
+#endif
 	void *goreChain;
 
 	float scale;

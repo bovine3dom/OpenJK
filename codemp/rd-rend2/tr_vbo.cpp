@@ -314,6 +314,34 @@ void R_InitGPUBuffers(void)
 R_DestroyGPUBuffers
 ============
 */
+#ifdef REND2_SP
+void R_SP_DeleteVBO(VBO_t *vbo)
+{
+	for (int i = 0; i < tr.numVBOs; ++i)
+	{
+		if (tr.vbos[i] != vbo)
+			continue;
+		qglDeleteBuffers(1, &vbo->vertexesVBO);
+		vbo->vertexesVBO = 0;
+		tr.vbos[i] = tr.vbos[--tr.numVBOs];
+		break;
+	}
+}
+
+void R_SP_DeleteIBO(IBO_t *ibo)
+{
+	for (int i = 0; i < tr.numIBOs; ++i)
+	{
+		if (tr.ibos[i] != ibo)
+			continue;
+		qglDeleteBuffers(1, &ibo->indexesVBO);
+		ibo->indexesVBO = 0;
+		tr.ibos[i] = tr.ibos[--tr.numIBOs];
+		break;
+	}
+}
+#endif
+
 void R_DestroyGPUBuffers(void)
 {
 	ri.Printf(PRINT_ALL, "------- R_DestroyGPUBuffers -------\n");

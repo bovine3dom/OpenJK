@@ -23,6 +23,35 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <cmath>
 
+#ifdef REND2_SP
+namespace
+{
+	struct SPWeatherZone
+	{
+		vec3_t mins, maxs, velocity;
+	};
+	struct SPWeatherState
+	{
+		std::vector<SPWeatherZone> zones, localWind;
+		bool shake = false, fogOverride = false;
+		float pain = 0.0f;
+		vec3_t fogColor = {};
+		unsigned windFrame = ~0u;
+	} spWeather;
+	std::vector<weatherBrushes_t> spWeatherBrushes;
+	weatherBrushType_t spWeatherBrushType;
+
+	bool InWeatherZone(const SPWeatherZone &zone, const vec3_t point)
+	{
+		return point[0] >= zone.mins[0] && point[0] <= zone.maxs[0] &&
+			point[1] >= zone.mins[1] && point[1] <= zone.maxs[1] &&
+			point[2] >= zone.mins[2] && point[2] <= zone.maxs[2];
+	}
+
+	void SPWindVelocity(const vec3_t point, vec3_t velocity);
+}
+#endif
+
 namespace
 {
 	const int CHUNK_COUNT = 9;  // in 3x3 arrangement
@@ -60,6 +89,9 @@ namespace
 		vec3_t deltaVelocity;
 		VectorSubtract(wo->targetVelocity, wo->currentVelocity, deltaVelocity);
 		float	DeltaVelocityLen = VectorNormalize(deltaVelocity);
+#ifdef REND2_SP
+		DeltaVelocityLen = MIN(DeltaVelocityLen, 0.01f);
+#endif
 		if (DeltaVelocityLen > 10.f)
 		{
 			DeltaVelocityLen = 10.f;
@@ -71,7 +103,11 @@ namespace
 	void GenerateRainModel( weatherObject_t& ws, const int maxParticleCount )
 	{
 		const int mapExtentZ = (int)(tr.world->bmodels[0].bounds[1][2] - tr.world->bmodels[0].bounds[0][2]);
+#ifdef REND2_SP
+		const int PARTICLE_COUNT = MAX(maxParticleCount, (int)(maxParticleCount * mapExtentZ / CHUNK_EXTENDS));
+#else
 		const int PARTICLE_COUNT = (int)(maxParticleCount * mapExtentZ / CHUNK_EXTENDS);
+#endif
 		std::vector<rainVertex_t> rainVertices(PARTICLE_COUNT * CHUNK_COUNT);
 
 		for ( int i = 0; i < rainVertices.size(); ++i )
@@ -425,6 +461,30 @@ namespace
 			tr.weatherSystem->windDirection[1] * frictionInverse,
 			-ws->gravity * frictionInverse
 		};
+#ifdef REND2_SP
+		SPWindVelocity(nullptr, envForce);
+		envForce[2] -= ws->gravity;
+		VectorScale(envForce, frictionInverse, envForce);
+		vec3_t center;
+		for (int i = 0; i < 3; ++i)
+			center[i] = floorf(backEnd.viewParms.ori.origin[i] / CHUNK_EXTENDS + 0.5f) * CHUNK_EXTENDS;
+		center[2] = 0.0f;
+		uniformDataWriter.SetUniformVec3(UNIFORM_VIEWORIGIN, center);
+		uniformDataWriter.SetUniformInt(UNIFORM_SPWINDCOUNT, spWeather.localWind.size());
+		if (!spWeather.localWind.empty())
+		{
+			vec3_t mins[MAX_WINDOBJECTS], maxs[MAX_WINDOBJECTS], velocities[MAX_WINDOBJECTS];
+			for (size_t i = 0; i < spWeather.localWind.size(); ++i)
+			{
+				VectorCopy(spWeather.localWind[i].mins, mins[i]);
+				VectorCopy(spWeather.localWind[i].maxs, maxs[i]);
+				VectorScale(spWeather.localWind[i].velocity, frictionInverse, velocities[i]);
+			}
+			uniformDataWriter.SetUniformVec3(UNIFORM_SPWINDMINS, mins[0], spWeather.localWind.size());
+			uniformDataWriter.SetUniformVec3(UNIFORM_SPWINDMAXS, maxs[0], spWeather.localWind.size());
+			uniformDataWriter.SetUniformVec3(UNIFORM_SPWINDVELOCITY, velocities[0], spWeather.localWind.size());
+		}
+#endif
 		vec4_t randomOffset = {
 			Q_flrand(-4.0f, 4.0f),
 			Q_flrand(-4.0f, 4.0f),
@@ -463,6 +523,10 @@ namespace
 
 void R_InitWeatherForMap()
 {
+#ifdef REND2_SP
+	if (!tr.world || !tr.weatherSystem)
+		return;
+#endif
 	for (int i = 0; i < NUM_WEATHER_TYPES; i++)
 		if (tr.weatherSystem->weatherSlots[i].active)
 			GenerateRainModel(tr.weatherSystem->weatherSlots[i], maxWeatherTypeParticles[i]);
@@ -471,9 +535,25 @@ void R_InitWeatherForMap()
 
 void R_InitWeatherSystem()
 {
+#ifdef REND2_SP
+	if (tr.weatherSystem)
+		R_ShutdownWeatherSystem();
+	spWeather = SPWeatherState();
+#endif
 	Com_Printf("Initializing weather system\n");
 	tr.weatherSystem =
 		(weatherSystem_t *)Z_Malloc(sizeof(*tr.weatherSystem), TAG_R_TERRAIN, qtrue);
+#ifdef REND2_SP
+	if (tr.world)
+	{
+		tr.weatherSystem->numWeatherBrushes = spWeatherBrushes.size();
+		tr.weatherSystem->weatherBrushType = spWeatherBrushType;
+		for (size_t i = 0; i < spWeatherBrushes.size(); ++i)
+			tr.weatherSystem->weatherBrushes[i] = spWeatherBrushes[i];
+	}
+	else
+		spWeatherBrushes.clear();
+#endif
 	tr.weatherSystem->weatherSurface.surfaceType = SF_WEATHER;
 	tr.weatherSystem->frozen = false;
 	tr.weatherSystem->activeWeatherTypes = 0;
@@ -488,6 +568,20 @@ void R_ShutdownWeatherSystem()
 {
 	if (tr.weatherSystem != nullptr)
 	{
+#ifdef REND2_SP
+		R_IssuePendingRenderCommands();
+		R_BindNullVBO();
+		for (weatherObject_t &slot : tr.weatherSystem->weatherSlots)
+		{
+			R_SP_DeleteVBO(slot.vbo);
+			R_SP_DeleteVBO(slot.lastVBO);
+		}
+		// Keep BSP masks when the game resets effects without unloading the map.
+		spWeatherBrushes.assign(tr.weatherSystem->weatherBrushes,
+			tr.weatherSystem->weatherBrushes + tr.weatherSystem->numWeatherBrushes);
+		spWeatherBrushType = tr.weatherSystem->weatherBrushType;
+		spWeather = SPWeatherState();
+#endif
 		Com_Printf("Shutting down weather system\n");
 
 		Z_Free(tr.weatherSystem);
@@ -536,6 +630,10 @@ qboolean WE_ParseVector(const char **text, int count, float *v) {
 
 void R_AddWeatherBrush(uint8_t numPlanes, vec4_t *planes)
 {
+#ifdef REND2_SP
+	if (!tr.weatherSystem || numPlanes < 4 || numPlanes > 64)
+		return;
+#endif
 	if (tr.weatherSystem->numWeatherBrushes >= (MAX_WEATHER_ZONES * 2))
 	{
 		ri.Printf(PRINT_WARNING, "Max weather brushes hit. Skipping new inside/outside brush\n");
@@ -549,12 +647,20 @@ void R_AddWeatherBrush(uint8_t numPlanes, vec4_t *planes)
 
 void RE_WorldEffectCommand(const char *command)
 {
+#ifdef REND2_SP
+	if (!tr.weatherSystem)
+		R_InitWeatherSystem();
+#endif
 	if (!command)
 	{
 		return;
 	}
 
+#ifdef REND2_SP
+	COM_ParseSession session;
+#else
 	COM_BeginParseSession("RE_WorldEffectCommand");
+#endif
 
 	const char	*token;//, *origCommand;
 
@@ -572,6 +678,14 @@ void RE_WorldEffectCommand(const char *command)
 			tr.weatherSystem->weatherSlots[i].active = false;
 		tr.weatherSystem->activeWeatherTypes = 0;
 		tr.weatherSystem->frozen = false;
+#ifdef REND2_SP
+		tr.weatherSystem->activeWindObjects = 0;
+		VectorClear(tr.weatherSystem->constWindDirection);
+		VectorClear(tr.weatherSystem->windDirection);
+		spWeather.localWind.clear();
+		spWeather.pain = 0.0f;
+		spWeather.shake = false;
+#endif
 		return;
 	}
 
@@ -584,6 +698,11 @@ void RE_WorldEffectCommand(const char *command)
 		tr.weatherSystem->activeWeatherTypes = 0;
 		tr.weatherSystem->activeWindObjects = 0;
 		tr.weatherSystem->frozen = false;
+#ifdef REND2_SP
+		VectorClear(tr.weatherSystem->constWindDirection);
+		VectorClear(tr.weatherSystem->windDirection);
+		spWeather.localWind.clear();
+#endif
 	}
 
 	// Freeze / UnFreeze - Stops All Particle Motion Updates
@@ -597,13 +716,40 @@ void RE_WorldEffectCommand(const char *command)
 	////---------------
 	else if (Q_stricmp(token, "zone") == 0)
 	{
+#ifdef REND2_SP
+		vec3_t mins, maxs;
+		if (WE_ParseVector(&command, 3, mins) && WE_ParseVector(&command, 3, maxs))
+			R_AddWeatherZone(mins, maxs);
+#else
 		ri.Printf(PRINT_DEVELOPER, "Weather zones aren't used in rend2, but inside/outside brushes\n");
+#endif
 	}
+
+#ifdef REND2_SP
+	else if (Q_stricmp(token, "windzone") == 0)
+	{
+		SPWeatherZone zone = {};
+		if (spWeather.localWind.size() >= MAX_WINDOBJECTS ||
+			!WE_ParseVector(&command, 3, zone.mins) || !WE_ParseVector(&command, 3, zone.maxs))
+			return;
+		if (!WE_ParseVector(&command, 3, zone.velocity))
+			VectorSet(zone.velocity, 0.0f, 800.0f, 0.0f);
+		for (int i = 0; i < 3; ++i)
+			if (zone.mins[i] > zone.maxs[i])
+				std::swap(zone.mins[i], zone.maxs[i]);
+		VectorScale(zone.velocity, 0.001f, zone.velocity);
+		spWeather.localWind.push_back(zone);
+	}
+#endif
 
 	// Basic Wind
 	//------------
 	else if (Q_stricmp(token, "wind") == 0)
 	{
+#ifdef REND2_SP
+		if (tr.weatherSystem->activeWindObjects >= MAX_WINDOBJECTS)
+			return;
+#endif
 		windObject_t *currentWindObject = &tr.weatherSystem->windSlots[tr.weatherSystem->activeWindObjects];
 		currentWindObject->chanceOfDeadTime = 0.3f;
 		currentWindObject->deadTimeMinMax[0] = 1000.0f;
@@ -641,6 +787,10 @@ void RE_WorldEffectCommand(const char *command)
 	//--------------
 	else if (Q_stricmp(token, "gustingwind") == 0)
 	{
+#ifdef REND2_SP
+		if (tr.weatherSystem->activeWindObjects >= MAX_WINDOBJECTS)
+			return;
+#endif
 		windObject_t *currentWindObject = &tr.weatherSystem->windSlots[tr.weatherSystem->activeWindObjects];
 		currentWindObject->chanceOfDeadTime = 0.3f;
 		currentWindObject->deadTimeMinMax[0] = 2000.0f;
@@ -735,6 +885,9 @@ void RE_WorldEffectCommand(const char *command)
 	//---------------------
 	else if (Q_stricmp(token, "acidrain") == 0)
 	{
+#ifdef REND2_SP
+		spWeather.pain = 0.1f;
+#endif
 		/*nCloud.Initialize(1000, "gfx/world/rain.jpg", 3);
 		nCloud.mHeight = 80.0f;
 		nCloud.mWidth = 2.0f;
@@ -868,6 +1021,9 @@ void RE_WorldEffectCommand(const char *command)
 		int count;
 		token = COM_ParseExt(&command, qfalse);
 		count = atoi(token);
+#ifdef REND2_SP
+		count = Com_Clampi(0, maxWeatherTypeParticles[WEATHER_SPACEDUST], count);
+#endif
 
 		if (!tr.weatherSystem->weatherSlots[WEATHER_SPACEDUST].active)
 			tr.weatherSystem->activeWeatherTypes++;
@@ -1055,11 +1211,20 @@ void RE_WorldEffectCommand(const char *command)
 
 	else if (Q_stricmp(token, "outsideshake") == 0)
 	{
+#ifdef REND2_SP
+		spWeather.shake = !spWeather.shake;
+#else
 		ri.Printf(PRINT_DEVELOPER, "outsideshake isn't supported in MP\n");
+#endif
 	}
 	else if (Q_stricmp(token, "outsidepain") == 0)
 	{
+#ifdef REND2_SP
+		const char *value = COM_ParseExt(&command, qfalse);
+		spWeather.pain = value[0] ? MAX(0.0f, (float)atof(value)) : !spWeather.pain;
+#else
 		ri.Printf(PRINT_DEVELOPER, "outsidepain isn't supported in MP\n");
+#endif
 	}
 	else
 	{
@@ -1154,6 +1319,7 @@ void RB_SurfaceWeather( srfWeather_t *surf )
 		}
 	}
 
+#ifndef REND2_SP
 	// Get current global wind vector
 	VectorCopy(tr.weatherSystem->constWindDirection, tr.weatherSystem->windDirection);
 	for (int i = 0; i < tr.weatherSystem->activeWindObjects; i++)
@@ -1162,6 +1328,7 @@ void RB_SurfaceWeather( srfWeather_t *surf )
 		RB_UpdateWindObject(windObject);
 		VectorAdd(windObject->currentVelocity, tr.weatherSystem->windDirection, tr.weatherSystem->windDirection);
 	}
+#endif
 
 	Allocator& frameAllocator = *backEndData->perFrameMemory;
 
@@ -1256,3 +1423,124 @@ void RB_SurfaceWeather( srfWeather_t *surf )
 		}
 	}
 }
+
+#ifdef REND2_SP
+namespace
+{
+	void SPWindVelocity(const vec3_t point, vec3_t velocity)
+	{
+		VectorClear(velocity);
+		if (!tr.weatherSystem)
+			return;
+		weatherSystem_t &ws = *tr.weatherSystem;
+		if (spWeather.windFrame != backEndData->realFrameNumber)
+		{
+			spWeather.windFrame = backEndData->realFrameNumber;
+			VectorCopy(ws.constWindDirection, ws.windDirection);
+			for (int i = 0; i < ws.activeWindObjects; ++i)
+			{
+				if (!ws.frozen)
+					RB_UpdateWindObject(&ws.windSlots[i]);
+				VectorAdd(ws.windDirection, ws.windSlots[i].currentVelocity, ws.windDirection);
+			}
+			ws.windSpeed = VectorLength(ws.windDirection) * 1000.0f;
+		}
+		VectorCopy(ws.windDirection, velocity);
+		if (point)
+			for (const SPWeatherZone &zone : spWeather.localWind)
+				if (InWeatherZone(zone, point))
+					VectorAdd(velocity, zone.velocity, velocity);
+	}
+}
+
+bool R_GetWindVector(vec3_t windVector, vec3_t atPoint)
+{
+	SPWindVelocity(atPoint, windVector);
+	VectorNormalize(windVector);
+	return tr.weatherSystem != nullptr;
+}
+
+bool R_GetWindGusting(vec3_t atPoint)
+{
+	vec3_t velocity;
+	SPWindVelocity(atPoint, velocity);
+	return VectorLength(velocity) > 1.0f;
+}
+
+void R_AddWeatherZone(vec3_t mins, vec3_t maxs)
+{
+	if (spWeather.zones.size() >= MAX_WEATHER_ZONES)
+		return;
+	SPWeatherZone zone = {};
+	for (int i = 0; i < 3; ++i)
+	{
+		zone.mins[i] = MIN(mins[i], maxs[i]);
+		zone.maxs[i] = MAX(mins[i], maxs[i]);
+	}
+	spWeather.zones.push_back(zone);
+}
+
+bool R_IsOutside(vec3_t pos)
+{
+	if (!tr.world || !tr.weatherSystem || !pos)
+		return false;
+	const bool outsideBrushes = tr.weatherSystem->weatherBrushType == WEATHER_BRUSHES_OUTSIDE;
+	bool inZone = spWeather.zones.empty();
+	for (const SPWeatherZone &zone : spWeather.zones)
+		inZone |= InWeatherZone(zone, pos);
+	if (!inZone)
+		return !outsideBrushes;
+	const int contents = ri.CM_PointContents(pos, 0);
+	if (contents & (CONTENTS_SOLID | CONTENTS_WATER))
+		return false;
+	return outsideBrushes ? (contents & CONTENTS_OUTSIDE) != 0 : (contents & CONTENTS_INSIDE) == 0;
+}
+
+bool R_IsShaking(vec3_t pos)
+{
+	return spWeather.shake && R_IsOutside(pos);
+}
+
+float R_IsOutsideCausingPain(vec3_t pos)
+{
+	return R_IsOutside(pos) ? spWeather.pain : 0.0f;
+}
+
+float R_GetChanceOfSaberFizz()
+{
+	if (!tr.weatherSystem)
+		return 0.0f;
+	float chance = 0.0f;
+	int count = 0;
+	for (int i = WEATHER_RAIN; i <= WEATHER_SPACEDUST; ++i)
+		if (tr.weatherSystem->weatherSlots[i].active)
+		{
+			chance += tr.weatherSystem->weatherSlots[i].gravity / 20.0f;
+			++count;
+		}
+	return count ? chance / count : 0.0f;
+}
+
+bool R_SetTempGlobalFogColor(vec3_t color)
+{
+	if (!tr.world || !tr.world->globalFog || !color)
+		return false;
+	R_IssuePendingRenderCommands();
+	fog_t &fog = tr.world->fogs[tr.world->globalFogIndex];
+	if (color[0] || color[1] || color[2])
+	{
+		if (!spWeather.fogOverride)
+			VectorCopy(fog.parms.color, spWeather.fogColor);
+		spWeather.fogOverride = true;
+		VectorCopy(color, fog.parms.color);
+	}
+	else if (spWeather.fogOverride)
+	{
+		VectorCopy(spWeather.fogColor, fog.parms.color);
+		spWeather.fogOverride = false;
+	}
+	VectorScale(fog.parms.color, tr.identityLight, fog.color);
+	fog.color[3] = 1.0f;
+	return true;
+}
+#endif

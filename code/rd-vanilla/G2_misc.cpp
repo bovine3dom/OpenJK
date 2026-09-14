@@ -26,10 +26,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 	#include "../qcommon/q_shared.h"
 #endif
 
+#ifndef REND2_SP
 #include "tr_common.h"
+#endif
 
 #if !defined(TR_LOCAL_H)
+	#ifdef REND2_SP
+	#include "../../codemp/rd-rend2/tr_local.h"
+	#else
 	#include "tr_local.h"
+	#endif
 #endif
 
 #include "qcommon/matcomp.h"

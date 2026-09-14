@@ -28,12 +28,27 @@ python3 scripts/test-save-migration.py \
   --package build/ready
 ```
 
+The test uses vanilla by default for the new package. To test Rend2:
+
+```bash
+python3 scripts/test-save-migration.py \
+  --old-package build/packages/20260913T151200115507047-44910296 \
+  --package build/ready --renderer rdsp-rend2
+```
+
+The old package always uses vanilla to create the v1 save. The test checks the
+selected renderer identity for each process and rejects fallback.
+
 The test creates a genuine v1 save with the older executable and game module.
 It checks multiple NPCs and groups, personal/shared sight, targets, positions,
 player health, armor, ammunition, weapon ownership, Force jump level, and objective
 data. It saves the loaded game as v2, reloads it, and checks source-file hashes.
-It also checks unsupported versions followed by a valid load. OpenSSL's legacy
-MD4 provider is used only to create correctly checksummed negative test files.
+It also rejects files with valid checksums but unsupported versions 0 and 3.
+A valid load must work after each rejection. The test uses OpenSSL's legacy
+MD4 provider only to make these test files.
+
+These checks passed with Rend2. Tests used a Linux GCC build with one build job,
+Xvfb, and LLVMpipe. These are software-rendering results.
 
 This is not full campaign or historical-mod qualification. Do not force a file
 through the parser if its prior record layouts differ from the supported v1 layout.

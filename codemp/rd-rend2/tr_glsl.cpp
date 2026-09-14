@@ -137,6 +137,12 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_EnvForce",				GLSL_VEC3, 1 },
 	{ "u_RandomOffset",			GLSL_VEC4, 1 },
 	{ "u_ChunkParticles",		GLSL_INT, 1 },
+#ifdef REND2_SP
+	{ "u_SPWindCount", GLSL_INT, 1 },
+	{ "u_SPWindMins", GLSL_VEC3, 10 },
+	{ "u_SPWindMaxs", GLSL_VEC3, 10 },
+	{ "u_SPWindVelocity", GLSL_VEC3, 10 },
+#endif
 };
 
 static void GLSL_PrintProgramInfoLog(GLuint object, qboolean developerOnly)
@@ -259,6 +265,9 @@ static size_t GLSL_GetShaderHeader(
 	dest[0] = '\0';
 
 	Q_strcat(dest, size, "#version 150 core\n");
+#ifdef REND2_SP
+	Q_strcat(dest, size, "#define REND2_SP\n");
+#endif
 
 	Q_strcat(dest, size,
 					"#ifndef M_PI\n"
@@ -1008,8 +1017,22 @@ void GLSL_SetUniforms( shaderProgram_t *program, UniformData *uniformData )
 
 			case GLSL_VEC3:
 			{
-				assert(data->numElements == 1);
 				GLfloat *value = (GLfloat *)(data + 1);
+#ifdef REND2_SP
+				if (data->numElements > 1)
+				{
+					assert(data->numElements <= uniformsInfo[data->index].size);
+					if (program->uniforms[data->index] != -1)
+					{
+						qglUniform3fv(program->uniforms[data->index], data->numElements, value);
+						memcpy(program->uniformBuffer + program->uniformBufferOffsets[data->index],
+							value, data->numElements * sizeof(vec3_t));
+					}
+				}
+				else
+#else
+				assert(data->numElements == 1);
+#endif
 				GLSL_SetUniformVec3(program, data->index, value);
 				data = reinterpret_cast<UniformData *>(value + data->numElements*3);
 				break;
@@ -1903,10 +1926,13 @@ static int GLSL_LoadGPUProgramVShadow(
 	char extradefines[1200];
 	const GPUProgramDesc *programDesc =
 		LoadProgramSource("shadowvolume", allocator, fallback_shadowvolumeProgram);
-	const uint32_t attribs = ATTR_POSITION | ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
-
 	extradefines[0] = '\0';
+#ifdef REND2_SP
+	const uint32_t attribs = ATTR_POSITION;
+#else
+	const uint32_t attribs = ATTR_POSITION | ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
 	Q_strcat(extradefines, sizeof(extradefines), "#define USE_SKELETAL_ANIMATION\n");
+#endif
 
 	if (!GLSL_LoadGPUShader(builder, &tr.volumeShadowShader, "shadowvolume", attribs, NO_XFB_VARS,
 		extradefines, *programDesc))

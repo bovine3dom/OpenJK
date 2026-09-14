@@ -23,6 +23,109 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+#ifdef REND2_SP
+#include <climits>
+
+namespace
+{
+struct SPAllocation
+{
+	SPAllocation *next;
+	void *memory;
+};
+
+SPAllocation *rendererAllocations;
+SPAllocation *worldAllocations;
+SPAllocation *tempAllocations;
+
+void *SP_Alloc(SPAllocation *&allocations, size_t size, qboolean zeroIt)
+{
+	if (size > INT_MAX - sizeof(SPAllocation) - 64)
+		ri.Error(ERR_DROP, "rdsp-rend2: allocation too large (%zu bytes)", size);
+
+	// The engine frees TAG_HUNKALLOC before it calls the renderer on map changes.
+	// Keep these blocks on a separate list so GPU cleanup can run first.
+	auto *block = static_cast<SPAllocation *>(ri.Malloc(
+		static_cast<int>(sizeof(SPAllocation) + size + 64), TAG_GENERAL, zeroIt, 4));
+	// SP's Malloc import ignores its alignment argument.
+	block->memory = reinterpret_cast<void *>((reinterpret_cast<uintptr_t>(block + 1) + 63) & ~uintptr_t(63));
+	block->next = allocations;
+	allocations = block;
+	return block->memory;
+}
+
+void SP_FreeAllocations(SPAllocation *&allocations)
+{
+	while (allocations)
+	{
+		SPAllocation *block = allocations;
+		allocations = block->next;
+		ri.Z_Free(block);
+	}
+}
+}
+
+void *R_SP_RendererAlloc(size_t size, qboolean zeroIt)
+{
+	return SP_Alloc(rendererAllocations, size, zeroIt);
+}
+
+void *R_SP_WorldAlloc(int size)
+{
+	return SP_Alloc(worldAllocations, size, qtrue);
+}
+
+void *R_SP_TempAlloc(size_t size)
+{
+	return SP_Alloc(tempAllocations, size, qfalse);
+}
+
+void R_SP_FreeTemp(void *memory)
+{
+	if (!memory)
+		return;
+	for (SPAllocation **link = &tempAllocations; *link; link = &(*link)->next)
+	{
+		SPAllocation *block = *link;
+		if (block->memory == memory)
+		{
+			*link = block->next;
+			ri.Z_Free(block);
+			return;
+		}
+	}
+	ri.Error(ERR_DROP, "rdsp-rend2: invalid temporary allocation");
+}
+
+void R_SP_ClearWorldAllocations()
+{
+	SP_FreeAllocations(worldAllocations);
+}
+
+void R_SP_ClearRendererAllocations()
+{
+	R_SP_ClearWorldAllocations();
+	SP_FreeAllocations(tempAllocations);
+	SP_FreeAllocations(rendererAllocations);
+}
+
+void Com_DPrintf(const char *format, ...)
+{
+	va_list args;
+	char text[1024];
+	va_start(args, format);
+	Q_vsnprintf(text, sizeof(text), format, args);
+	va_end(args);
+	ri.Printf(PRINT_DEVELOPER, "%s", text);
+}
+
+void *R_Malloc(int size, memtag_t tag, qboolean zeroIt) { return ri.Malloc(size, tag, zeroIt, 4); }
+void R_Free(void *memory) { ri.Z_Free(memory); }
+int R_MemSize(memtag_t tag) { return ri.Z_MemSize(tag); }
+void R_MorphMallocTag(void *memory, memtag_t tag) { ri.Z_MorphMallocTag(memory, tag); }
+void *R_Hunk_Alloc(int size, qboolean zeroIt) { return R_SP_RendererAlloc(size, zeroIt); }
+#endif
+
 
 void QDECL Com_Printf( const char *msg, ... )
 {

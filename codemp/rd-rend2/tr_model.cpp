@@ -28,8 +28,48 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define	LL(x) x=LittleLong(x)
 
 
-static qboolean R_LoadMD3(model_t *mod, int lod, void *buffer, const char *modName);
+static qboolean R_LoadMD3(model_t *mod, int lod, void *buffer, const char *modName, qboolean &alreadyCached);
+#ifndef REND2_SP
 static qboolean R_LoadMDR(model_t *mod, void *buffer, int filesize, const char *name );
+#endif
+
+#ifdef REND2_SP
+qboolean gbInsideRegisterModel = qfalse;
+
+static qhandle_t R_RegisterGhoul2(const char *name, model_t *mod)
+{
+	void *buffer = nullptr;
+	qboolean alreadyCached = qfalse;
+	if (!CModelCache->LoadFile(name, &buffer, &alreadyCached))
+		return 0;
+
+	int ident = *(int *)buffer;
+	if (!alreadyCached)
+		LL(ident);
+	qboolean loaded = qfalse;
+	if (ident == MDXM_IDENT)
+		loaded = R_LoadMDXM(mod, buffer, name, alreadyCached);
+	else if (ident == MDXA_IDENT)
+		loaded = R_LoadMDXA(mod, buffer, name, alreadyCached);
+
+	if (!alreadyCached)
+		ri.FS_FreeFile(buffer);
+	if (!loaded)
+	{
+		// Do not retain a partially converted GLM after a missing GLA.
+		if (alreadyCached)
+			CModelCache->DeleteFile(name);
+		mod->type = MOD_BAD;
+		mod->mdxm = nullptr;
+		mod->mdxa = nullptr;
+		memset(&mod->data, 0, sizeof(mod->data));
+		mod->dataSize = mod->numLods = 0;
+		return 0;
+	}
+	++mod->numLods;
+	return mod->index;
+}
+#endif
 
 /*
 ====================
@@ -77,19 +117,25 @@ qhandle_t R_RegisterMD3(const char *name, model_t *mod)
 		switch(ident)
 		{
 			case MD3_IDENT:
-				loaded = R_LoadMD3(mod, lod, buf, namebuf);
+				loaded = R_LoadMD3(mod, lod, buf, namebuf, bAlreadyCached);
 				break;
+#ifndef REND2_SP
 			case MDXA_IDENT:
 				loaded = R_LoadMDXA(mod, buf, namebuf, bAlreadyCached);
 				break;
 			case MDXM_IDENT:
 				loaded = R_LoadMDXM(mod, buf, name, bAlreadyCached);
 				break;
+#endif
 			default:
 				ri.Printf(PRINT_WARNING, "R_RegisterMD3: unknown ident for %s\n", name);
 				break;
 		}
 
+#ifdef REND2_SP
+		if (!bAlreadyCached)
+			ri.FS_FreeFile(buf);
+#endif
 		if(loaded)
 		{
 			mod->numLods++;
@@ -125,6 +171,7 @@ qhandle_t R_RegisterMD3(const char *name, model_t *mod)
 R_RegisterMDR
 ====================
 */
+#ifndef REND2_SP
 qhandle_t R_RegisterMDR(const char *name, model_t *mod)
 {
 	union {
@@ -157,6 +204,7 @@ qhandle_t R_RegisterMDR(const char *name, model_t *mod)
 
 	return mod->index;
 }
+#endif
 
 /*
 ====================
@@ -205,13 +253,20 @@ typedef struct
 static modelExtToLoaderMap_t modelLoaders[ ] =
 {
 	{ "iqm", R_RegisterIQM },
+#ifndef REND2_SP
 	{ "mdr", R_RegisterMDR },
+#endif
 	{ "md3", R_RegisterMD3 },
 	/*
 	Ghoul 2 Insert Start
 	*/
+#ifdef REND2_SP
+	{ "glm", R_RegisterGhoul2 },
+	{ "gla", R_RegisterGhoul2 },
+#else
 	{ "glm", R_RegisterMD3 },
 	{ "gla", R_RegisterMD3 },
+#endif
 	/*
 	Ghoul 2 Insert End
 	*/
@@ -232,6 +287,14 @@ model_t	*R_GetModelByHandle( qhandle_t index ) {
 
 	mod = tr.models[index];
 
+#ifdef REND2_SP
+	if (mod->type == MOD_BAD && mod->name[0])
+	{
+		if (!RE_RegisterModel(mod->name))
+			return tr.models[0];
+	}
+	CModelCache->TouchModel(mod);
+#endif
 	return mod;
 }
 
@@ -292,7 +355,15 @@ asked for again.
 ====================
 */
 qhandle_t RE_RegisterModel( const char *name ) {
-	model_t		*mod;
+#ifdef REND2_SP
+	struct RegistrationGuard
+	{
+		qboolean previous;
+		RegistrationGuard() : previous(gbInsideRegisterModel) { gbInsideRegisterModel = qtrue; }
+		~RegistrationGuard() { gbInsideRegisterModel = previous; }
+	} registrationGuard;
+#endif
+	model_t		*mod = nullptr;
 	qhandle_t	hModel;
 	qboolean	orgNameFailed = qfalse;
 	int			orgLoader = -1;
@@ -313,7 +384,29 @@ qhandle_t RE_RegisterModel( const char *name ) {
 
 	// search the currently loaded models
 	if( ( hModel = CModelCache->GetModelHandle( name ) ) != -1 )
+	{
+#ifdef REND2_SP
+		if (hModel > 0 && hModel < tr.numModels && tr.models[hModel]->type == MOD_BAD)
+			mod = tr.models[hModel];
+		else
+#endif
 		return hModel;
+	}
+
+#ifdef REND2_SP
+	// Reuse invalidated slots to preserve animModelIndexOffset.
+	if (!mod)
+	{
+		for (i = 1; i < tr.numModels; ++i)
+		{
+			if (tr.models[i]->type == MOD_BAD && !Q_stricmp(tr.models[i]->name, name))
+			{
+				mod = tr.models[i];
+				break;
+			}
+		}
+	}
+#endif
 
 	if ( name[0] == '*' )
 	{
@@ -329,7 +422,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	}
 
 	// allocate a new model_t
-	if ( ( mod = R_AllocModel() ) == NULL ) {
+	if ( !mod && ( mod = R_AllocModel() ) == NULL ) {
 		ri.Printf( PRINT_WARNING, "RE_RegisterModel: R_AllocModel() failed for '%s'\n", name);
 		return 0;
 	}
@@ -410,6 +503,7 @@ qhandle_t RE_RegisterModel( const char *name ) {
 	return hModel;
 }
 
+#ifndef REND2_SP
 //rww - Please forgive me for all of the below. Feel free to destroy it and replace it with something better.
 //You obviously can't touch anything relating to shaders or ri-> functions here in case a dedicated
 //server is running, which is the entire point of having these seperate functions. If anything major
@@ -845,7 +939,9 @@ qhandle_t RE_RegisterServerModel( const char *name ) {
 R_LoadMD3
 =================
 */
-static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modName)
+#endif // !REND2_SP
+
+static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modName, qboolean &alreadyCached)
 {
 	int             i, j;
 
@@ -873,7 +969,7 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modN
 
 	md3Model = (md3Header_t *) buffer;
 
-	version = LittleLong(md3Model->version);
+	version = alreadyCached ? md3Model->version : LittleLong(md3Model->version);
 	if(version != MD3_VERSION)
 	{
 		ri.Printf(PRINT_WARNING, "R_LoadMD3: %s has wrong version (%i should be %i)\n", modName, version, MD3_VERSION);
@@ -881,11 +977,12 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modN
 	}
 
 	mod->type = MOD_MESH;
-	size = LittleLong(md3Model->ofsEnd);
+	size = alreadyCached ? md3Model->ofsEnd : LittleLong(md3Model->ofsEnd);
 	mod->dataSize += size;
 	//mdvModel = mod->mdv[lod] = (mdvModel_t *)ri.Hunk_Alloc(sizeof(mdvModel_t), h_low);
 	qboolean bAlreadyFound = qfalse;
 	md3Model = (md3Header_t *)CModelCache->Allocate(size, buffer, modName, &bAlreadyFound, TAG_MODEL_MD3);
+	alreadyCached = qtrue;
 	mdvModel = mod->data.mdv[lod] = (mdvModel_t *)ri.Hunk_Alloc(sizeof(*mdvModel), h_low);
 
 //  Com_Memcpy(mod->md3[lod], buffer, LittleLong(md3Model->ofsEnd));
@@ -1084,6 +1181,8 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modN
 		surf++;
 	}
 
+	// Tag-only weapon models have no geometry to upload.
+	if (mdvModel->numSurfaces)
 	{
 		srfVBOMDVMesh_t *vboSurf;
 
@@ -1241,6 +1340,7 @@ static qboolean R_LoadMD3(model_t * mod, int lod, void *buffer, const char *modN
 R_LoadMDR
 =================
 */
+#ifndef REND2_SP
 static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char *mod_name )
 {
 	int					i, j, k, l;
@@ -1583,6 +1683,8 @@ static qboolean R_LoadMDR( model_t *mod, void *buffer, int filesize, const char 
 /*
 ** RE_BeginRegistration
 */
+#endif // !REND2_SP
+
 void RE_BeginRegistration( glconfig_t *glconfigOut ) {
 
 	R_Init();
@@ -1623,7 +1725,11 @@ void R_ModelInit( void ) {
 	// leave a space for NULL model
 	tr.numModels = 0;
 
+#ifdef REND2_SP
+	CModelCache->ClearModelHandles();
+#else
 	CModelCache->DeleteAll();
+#endif
 
 	mod = R_AllocModel();
 	mod->type = MOD_BAD;
@@ -1634,7 +1740,11 @@ void RE_HunkClearCrap(void)
 { //get your dirty sticky assets off me, you damn dirty hunk!
 	KillTheShaderHashTable();
 	tr.numModels = 0;
+#ifdef REND2_SP
+	CModelCache->ClearModelHandles();
+#else
 	CModelCache->DeleteAll();
+#endif
 	tr.numShaders = 0;
 	tr.numSkins = 0;
 }
@@ -1704,6 +1814,7 @@ static mdvTag_t *R_GetTag( mdvModel_t *mod, int frame, const char *_tagName ) {
 	return NULL;
 }
 
+#ifndef REND2_SP
 void R_GetAnimTag( mdrHeader_t *mod, int framenum, const char *tagName, mdvTag_t * dest)
 {
 	int				i, j, k;
@@ -1744,6 +1855,7 @@ void R_GetAnimTag( mdrHeader_t *mod, int framenum, const char *tagName, mdvTag_t
 	AxisClear( dest->axis );
 	VectorClear( dest->origin );
 }
+#endif
 
 /*
 ================
@@ -1753,14 +1865,17 @@ R_LerpTag
 int R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFrame,
 					 float frac, const char *tagName ) {
 	mdvTag_t	*start, *end;
+#ifndef REND2_SP
 	mdvTag_t	start_space, end_space;
+#endif
 	int		i;
 	float		frontLerp, backLerp;
 	model_t		*model;
 
 	model = R_GetModelByHandle( handle );
-	if ( !model->data.mdv[0] )
+	if ( model->type != MOD_MESH )
 	{
+#ifndef REND2_SP
 		if(model->type == MOD_MDR)
 		{
 			start = &start_space;
@@ -1768,7 +1883,9 @@ int R_LerpTag( orientation_t *tag, qhandle_t handle, int startFrame, int endFram
 			R_GetAnimTag((mdrHeader_t *) model->data.mdr, startFrame, tagName, start);
 			R_GetAnimTag((mdrHeader_t *) model->data.mdr, endFrame, tagName, end);
 		}
-		else if( model->type == MOD_IQM ) {
+		else
+#endif
+		if( model->type == MOD_IQM ) {
 			return R_IQMLerpTag( tag, (iqmData_t *)model->data.iqm,
 					startFrame, endFrame,
 					frac, tagName );
@@ -1833,7 +1950,9 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 		VectorCopy( frame->bounds[1], maxs );
 
 		return;
-	} else if (model->type == MOD_MDR) {
+	}
+#ifndef REND2_SP
+	else if (model->type == MOD_MDR) {
 		mdrHeader_t	*header;
 		mdrFrame_t	*frame;
 
@@ -1844,7 +1963,9 @@ void R_ModelBounds( qhandle_t handle, vec3_t mins, vec3_t maxs ) {
 		VectorCopy( frame->bounds[1], maxs );
 
 		return;
-	} else if(model->type == MOD_IQM) {
+	}
+#endif
+	else if(model->type == MOD_IQM) {
 		iqmData_t *iqmData;
 
 		iqmData = model->data.iqm;

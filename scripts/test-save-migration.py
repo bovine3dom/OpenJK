@@ -39,6 +39,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--old-package", type=Path, required=True)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
+    parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla",
+                        help="Renderer for the new package. The old package uses vanilla.")
     args = parser.parse_args()
     output = root / "build/smoke"
     output.mkdir(parents=True, exist_ok=True)
@@ -46,11 +48,16 @@ def main():
     print(f"Migration results: {suite}", flush=True)
     old_profile, new_profile = suite / "old-profile", suite / "new-profile"
 
-    def run(name, package, profile, commands):
+    def run(name, package, profile, commands, renderer=args.renderer):
+        module = package.resolve() / f"{renderer}_x86_64.so"
+        if not module.is_file() or not module.stat().st_size:
+            raise RuntimeError(f"Missing renderer module: {module}")
         profile.mkdir(parents=True, exist_ok=True)
-        command = ["timeout", "--kill-after=5s", "180s", "xvfb-run", "-a", "-s", "-screen 0 640x480x24",
+        command = ["timeout", "--kill-after=5s", "600s" if renderer == "rdsp-rend2" else "180s",
+                   "xvfb-run", "-a", "-s", "-screen 0 640x480x24",
                    "bash", str(package.resolve() / "launch-sp.sh"), str(root / "GameData"),
-                   "+safe", "+set", "r_fullscreen", "0", "+set", "r_mode", "3", "+set", "s_initsound", "0",
+                   "+safe", "+set", "cl_renderer", renderer,
+                   "+set", "r_fullscreen", "0", "+set", "r_mode", "3", "+set", "s_initsound", "0",
                    "+set", "developer", "1", "+set", "com_maxfps", "10", "+set", "sv_compress_saved_games", "0",
                    *commands, "+wait", "4", "+quit"]
         with (suite / f"{name}.log").open("w") as log:
@@ -59,13 +66,18 @@ def main():
         text = (suite / f"{name}.log").read_text(errors="replace")
         if result.returncode or re.search(r"ERROR:|Error:|couldn't exec|Unknown command", text):
             raise RuntimeError(f"Failed {name}: {suite / (name + '.log')}")
+        if ("failed: trying to load fallback renderer" in text
+                or set(re.findall(r'Trying to load "(rdsp-[^"]+)"', text)) != {module.name}
+                or (renderer == "rdsp-rend2" and "----- rdsp-rend2 -----" not in text)):
+            raise RuntimeError(f"Wrong renderer in {name}: {suite / (name + '.log')}")
         return text
 
     old = run("v1-create", args.old_package, old_profile,
               ["+devmap", "t2_wedge", "+exec", "ai-memory-switch.cfg", "+d_npcfreeze", "1",
                "+give", "health", "77", "+give", "armor", "33", "+give", "weaponnum", "4",
                "+give", "ammo", "23", "+setForceJump", "3", "+wait", "4", "+save", "migration_v1",
-               "+nav", "memory", "_memory_a", "+nav", "memory", "_memory_b", "+nav", "memory", "_memory_c"])
+               "+nav", "memory", "_memory_a", "+nav", "memory", "_memory_b", "+nav", "memory", "_memory_c"],
+              renderer="rdsp-vanilla")
     source = old_profile / "OpenJK/saves/migration_v1.sav"
     old_chunks = chunks(source)
     if struct.unpack("<i", old_chunks[0][1])[0] != 1:

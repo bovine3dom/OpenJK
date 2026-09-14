@@ -16,6 +16,13 @@ uniform vec3 u_EnvForce;
 uniform vec4 u_RandomOffset;
 uniform vec2 u_ZoneOffset[9];
 uniform int u_ChunkParticles;
+#ifdef REND2_SP
+uniform vec3 u_ViewOrigin;
+uniform int u_SPWindCount;
+uniform vec3 u_SPWindMins[10];
+uniform vec3 u_SPWindMaxs[10];
+uniform vec3 u_SPWindVelocity[10];
+#endif
 
 in vec3 attr_Position;
 in vec3 attr_Color;
@@ -39,7 +46,17 @@ vec3 NewParticleZPosition( in vec3 in_position )
 void main()
 {
 	var_Velocity = attr_Color;
+#ifdef REND2_SP
+	vec3 force = u_EnvForce;
+	vec3 worldPosition = attr_Position + u_ViewOrigin;
+	worldPosition.xy += u_ZoneOffset[gl_VertexID / u_ChunkParticles] * CHUNK_EXTENDS;
+	for (int i = 0; i < u_SPWindCount; ++i)
+		if (all(greaterThanEqual(worldPosition, u_SPWindMins[i])) && all(lessThanEqual(worldPosition, u_SPWindMaxs[i])))
+			force += u_SPWindVelocity[i];
+	var_Velocity = mix(var_Velocity, force, clamp(u_deltaTime * 0.002, 0.0, 1.0));
+#else
 	var_Velocity = mix(var_Velocity, u_EnvForce, u_deltaTime * 0.002);
+#endif
 	var_Position = attr_Position;
 	var_Position += var_Velocity * u_deltaTime;
 

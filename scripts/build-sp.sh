@@ -13,7 +13,7 @@ cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DBuildMPEngine=OFF -DBuildMPRdVanilla=OFF -DBuildMPDed=OFF \
     -DBuildMPGame=OFF -DBuildMPCGame=OFF -DBuildMPUI=OFF -DBuildMPRend2=OFF \
-    -DBuildSPEngine=ON -DBuildSPGame=ON -DBuildSPRdVanilla=ON \
+    -DBuildSPEngine=ON -DBuildSPGame=ON -DBuildSPRdVanilla=ON -DBuildSPRend2=ON \
     -DBuildJK2SPEngine=OFF -DBuildJK2SPGame=OFF -DBuildJK2SPRdVanilla=OFF \
     -DBuildTests=OFF > build/sp/configure.log 2>&1
 printf 'Building with one job. Log: %s/build/sp/build.log\n' "$root"
@@ -36,6 +36,7 @@ cp scripts/krildor-traverse.cfg "$package/OpenJK/krildor-traverse.cfg"
 cp scripts/ai-memory*.cfg "$package/OpenJK/"
 cp scripts/ai-squad*.cfg "$package/OpenJK/"
 cp scripts/display-smoke.cfg "$package/OpenJK/display-smoke.cfg"
+cp scripts/rend2-smoke.cfg "$package/OpenJK/rend2-smoke.cfg"
 chmod +x "$package/launch-sp.sh"
 revision=$(git rev-parse --short HEAD)
 id="$(date -u +%Y%m%dT%H%M%S%N)-$revision"
@@ -56,13 +57,15 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 {
     uname -sm
     c++ --version
-    for binary in "$package/openjk_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
+    for binary in "$package/openjk_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/rdsp-rend2_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
         ldd "$binary"
         sha256sum "$binary"
     done
 } > "$package/runtime-manifest.txt"
 
-bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
+OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
+OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
+    bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
 if [[ ${1:-} == --stage-only ]]; then
     printf 'Staged for further tests (not published): %s/\n' "$package"
     exit 0

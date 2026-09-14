@@ -14,6 +14,16 @@ timeout_seconds=${OJK_SMOKE_TIMEOUT:-120}
     printf 'Invalid smoke display size, wait count, or timeout\n' >&2
     exit 1
 }
+renderer=${OJK_SMOKE_RENDERER:-}
+renderer_args=()
+case "$renderer" in
+    '') ;;
+    rdsp-rend2|rdsp-vanilla)
+        [[ -f "$package/${renderer}_x86_64.so" && -s "$package/${renderer}_x86_64.so" ]] || { printf 'Missing renderer module: %s\n' "$renderer" >&2; exit 1; }
+        renderer_args=(+set cl_renderer "$renderer")
+        ;;
+    *) printf 'Invalid smoke renderer: %s\n' "$renderer" >&2; exit 1 ;;
+esac
 output=${OJK_SMOKE_ROOT:-$root/build/smoke}
 mkdir -p -- "$output"
 run=$(mktemp -d "$output/$map.XXXXXXXX")
@@ -25,11 +35,19 @@ command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run -a -s "-screen 0
     OJK_PROFILE="$run/profile" bash "$package/launch-sp.sh" "$assets" \
     +safe +set r_fullscreen 0 +set r_mode 3 +set r_swapInterval 0 \
     +set com_maxfps 60 +set s_initsound 0 +set developer 1 \
-    +set logfile 2 +devmap "$map" "$@" \
+    +set logfile 2 +devmap "$map" "$@" "${renderer_args[@]}" \
     +wait "$wait_count" +screenshot_png smoke +wait 10 +quit)
 printf '%q ' "${command[@]}" > "$run/command.txt"
 if ! "${command[@]}" > "$run/console.log" 2>&1; then
     printf 'FAIL: process failed or timed out. See %s/console.log\n' "$run" >&2
+    exit 1
+fi
+
+if grep -Fq 'failed: trying to load fallback renderer' "$run/console.log" ||
+    { [[ "$renderer" == rdsp-rend2 ]] &&
+        { ! grep -Fq -- '----- rdsp-rend2 -----' "$run/console.log" ||
+            grep -Fq 'Trying to load "rdsp-vanilla_' "$run/console.log"; }; }; then
+    printf 'FAIL: renderer check failed. See %s/console.log\n' "$run" >&2
     exit 1
 fi
 

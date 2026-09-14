@@ -157,6 +157,9 @@ void RB_BeginSurface( shader_t *shader, int fogNum, int cubemapIndex ) {
 	tess.currentStageIteratorFunc = state->optimalStageIteratorFunc;
 	tess.externalIBO = nullptr;
 	tess.useInternalVBO = qtrue;
+#ifdef REND2_SP
+	tess.fade = false;
+#endif
 
 	tess.shaderTime = backEnd.refdef.floatTime - tess.shader->timeOffset;
 	if (tess.shader->clampTime && tess.shaderTime >= tess.shader->clampTime) {
@@ -805,6 +808,7 @@ static UniformBlockBinding GetEntityBlockUniformBinding(
 	return binding;
 }
 
+#ifndef REND2_SP
 static UniformBlockBinding GetBonesBlockUniformBinding(
 	const trRefEntity_t *refEntity)
 {
@@ -824,6 +828,7 @@ static UniformBlockBinding GetBonesBlockUniformBinding(
 
 	return binding;
 }
+#endif
 
 static UniformBlockBinding GetShaderInstanceBlockUniformBinding(
 	const trRefEntity_t *refEntity, const shader_t *shader)
@@ -887,7 +892,9 @@ static void DrawTris(shaderCommands_t *input, const VertexArraysProperties *vert
 			GetEntityBlockUniformBinding(backEnd.currentEntity),
 			GetShaderInstanceBlockUniformBinding(
 				backEnd.currentEntity, input->shader),
+#ifndef REND2_SP
 			GetBonesBlockUniformBinding(backEnd.currentEntity)
+#endif
 		};
 
 		samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_DIFFUSEMAP);
@@ -1076,7 +1083,9 @@ static void RB_FogPass( shaderCommands_t *input, const VertexArraysProperties *v
 		GetEntityBlockUniformBinding(backEnd.currentEntity),
 		GetShaderInstanceBlockUniformBinding(
 			backEnd.currentEntity, input->shader),
+#ifndef REND2_SP
 		GetBonesBlockUniformBinding(backEnd.currentEntity)
+#endif
 	};
 
 	SamplerBindingsWriter samplerBindingsWriter;
@@ -1348,7 +1357,11 @@ void RB_ShadowTessEnd(shaderCommands_t *input, const VertexArraysProperties *ver
 		return;
 	}
 
-	if (!input->numVertexes || !input->numIndexes || input->useInternalVBO)
+	if (!input->numVertexes || !input->numIndexes
+#ifndef REND2_SP
+		|| input->useInternalVBO
+#endif
+	)
 	{
 		return;
 	}
@@ -1366,7 +1379,9 @@ void RB_ShadowTessEnd(shaderCommands_t *input, const VertexArraysProperties *ver
 	const UniformBlockBinding uniformBlockBindings[] = {
 		GetCameraBlockUniformBinding(backEnd.currentEntity),
 		GetEntityBlockUniformBinding(backEnd.currentEntity),
+#ifndef REND2_SP
 		GetBonesBlockUniformBinding(backEnd.currentEntity)
+#endif
 	};
 
 	DrawItem item = {};
@@ -1461,9 +1476,14 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			if (input->shader->useDistortion == qtrue || backEnd.currentEntity->e.renderfx & RF_DISTORTION)
 				forceRefraction = true;
 
-			if ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA )
+			if ( backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA
+#ifdef REND2_SP
+				|| backEnd.currentEntity->e.renderfx & RF_ALPHA_FADE
+#endif
+			)
 			{
 				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+#ifndef REND2_SP
 				if ( backEnd.currentEntity->e.renderfx & RF_ALPHA_DEPTH )
 				{
 					// depth write, so faces through the model will be stomped
@@ -1472,6 +1492,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 					// standard alpha surfs.
 					stateBits |= GLS_DEPTHMASK_TRUE;
 				}
+#endif
 			}
 		}
 
@@ -1519,7 +1540,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				VectorScale(vertColor, backEnd.refdef.colorScale, vertColor);
 			}
 
-			if (backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA)
+			if (backEnd.currentEntity->e.renderfx & RF_FORCE_ENT_ALPHA
+#ifdef REND2_SP
+				|| backEnd.currentEntity->e.renderfx & RF_ALPHA_FADE
+#endif
+			)
 			{
 				baseColor[3] = backEnd.currentEntity->e.shaderRGBA[3] / 255.0f;
 				vertColor[3] = 0.0f;
@@ -1552,6 +1577,17 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				}
 			}
 
+#ifdef REND2_SP
+			if (input->fade)
+			{
+				// Gore texture coordinates already include the SP scale.
+				VectorCopy4(input->vertexColors[0], baseColor);
+				VectorClear4(vertColor);
+				forceRGBGen = CGEN_CONST;
+				forceAlphaGen = AGEN_CONST;
+				stateBits = GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+			}
+#endif
 			uniformDataWriter.SetUniformVec4(UNIFORM_BASECOLOR, baseColor);
 			uniformDataWriter.SetUniformVec4(UNIFORM_VERTCOLOR, vertColor);
 		}
@@ -1607,6 +1643,14 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		};
 
 		uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, normalScale);
+#ifdef REND2_SP
+		if (forceRefraction)
+		{
+			const float stretch = tr_distortionStretch != 0.0f ? tr_distortionStretch : fabsf(sinf(backEnd.refdef.floatTime * 0.5f)) * 0.08f;
+			const vec4_t distortion = { stretch, stretch, Com_Clamp(0.0f, 1.0f, tr_distortionAlpha), (float)tr_distortionNegate };
+			uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, distortion);
+		}
+#endif
 		uniformDataWriter.SetUniformVec4(UNIFORM_SPECULARSCALE, pStage->specularScale);
 
 		const float parallaxBias = r_forceParallaxBias->value > 0.0f ? r_forceParallaxBias->value : pStage->parallaxBias;
@@ -1634,7 +1678,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			if (tr.msaaResolveFbo)
 				srcFbo = tr.msaaResolveFbo;
 
+#ifdef REND2_SP
+			samplerBindingsWriter.AddStaticImage(R_SP_ScreenImage(), TB_COLORMAP);
+#else
 			samplerBindingsWriter.AddStaticImage(srcFbo->colorImage[0], TB_COLORMAP);
+#endif
 			samplerBindingsWriter.AddStaticImage(tr.renderDepthImage, TB_SHADOWMAP);
 			qboolean autoExposure = (qboolean)(r_autoExposure->integer || r_forceAutoExposure->integer);
 
@@ -1805,7 +1853,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			GetEntityBlockUniformBinding(backEnd.currentEntity),
 			GetShaderInstanceBlockUniformBinding(
 				backEnd.currentEntity, input->shader),
+#ifndef REND2_SP
 			GetBonesBlockUniformBinding(backEnd.currentEntity)
+#endif
 		};
 
 		DrawItem item = {};
@@ -1864,6 +1914,14 @@ void RB_StageIteratorGeneric( void )
 	//
 	// update vertex buffer data
 	//
+#ifdef REND2_SP
+	// SP Ghoul surfaces contain CPU-skinned vertices, including gore.
+	if (tess.useInternalVBO)
+	{
+		glState.skeletalAnimation = qfalse;
+		glState.vertexAnimation = qfalse;
+	}
+#endif
 	uint32_t vertexAttribs = RB_CalcShaderVertexAttribs( input->shader );
 	if (tess.useInternalVBO)
 	{
@@ -1893,6 +1951,15 @@ void RB_StageIteratorGeneric( void )
 		CalculateVertexArraysFromVBO(vertexAttribs, glState.currentVBO, &vertexArrays);
 	}
 
+#ifdef REND2_SP
+	// SP uses separate stencil batches; depth fill can replace the marker shader.
+	if (input->shader == tr.shadowShader || glState.genShadows)
+	{
+		if (!backEnd.depthFill && !backEnd.refractionFill && r_shadows->integer == 2)
+			RB_ShadowTessEnd(input, &vertexArrays);
+	}
+	else
+#endif
 	if ( backEnd.depthFill )
 	{
 		RB_IterateStagesGeneric( input, &vertexArrays );
@@ -1912,6 +1979,7 @@ void RB_StageIteratorGeneric( void )
 			ProjectPshadowVBOGLSL( input, &vertexArrays );
 		}
 
+#ifndef REND2_SP
 		//
 		// volumeshadows!
 		//
@@ -1919,6 +1987,7 @@ void RB_StageIteratorGeneric( void )
 		{
 			RB_ShadowTessEnd( input, &vertexArrays );
 		}
+#endif
 
 		//
 		// now do fog
