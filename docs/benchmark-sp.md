@@ -18,6 +18,56 @@ This controller does not change that engine code.
 
 ## Commands
 
+### GTAO and Sample Shading
+
+Use `--cvar r_ssaoMethod 1` for GTAO. Use `--cvar r_gtaoQuality N` to select
+its quality. Medium (`1`) is the default. Use `--cvar r_ext_multisample 4`
+for 4x MSAA and `--cvar r_sampleShading 1` to shade every scene sample.
+Sample shading defaults to `0`.
+
+```sh
+python3 scripts/benchmark-sp.py --weapon 3 --cvar d_npcfreeze 1 --cvar r_ssaoMethod 1 --cvar r_gtaoQuality 1 --cvar r_ext_multisample 4
+```
+
+Weapon selection now occurs after `exitview` and scene setup. With Rend2 AO
+enabled, the controller also captures a weapon mask and rejects a missing
+viewmodel. This check requires FFmpeg. Console notifications are disabled.
+
+The first verified weapon comparison used the P630 at 1280 x 720, 4x MSAA,
+shadows 3, and frozen NPC AI. Each setting had three 10-second measurements.
+The table gives median approximate throughput. GTAO used 24 samples, which is
+now Ultra (`3`), not the new Medium default.
+
+| AO | Sample shading | FPS |
+| --- | ---: | ---: |
+| Legacy SSAO | 0 | 47.04 |
+| Legacy SSAO | 1 | 34.53 |
+| GTAO, 24 samples | 0 | 31.06 |
+| GTAO, 24 samples | 1 | 25.02 |
+
+Results: `build/benchmark-sp/rdsp-rend2.bqfb26_e`, `.b7dwgpxu`, `.ua_6xl5a`,
+and `.hq7be9_3`. These measurements do not predict GTX 1080 Ti performance.
+
+For GPU pass times, add `--cvar r_speeds 100`. The JSON `gpu_pass_ms` field
+contains sample counts and percentiles. AO world/weapon timers include AO
+generation and filtering, but exclude depth generation and depth copies.
+The existing Render Pass timer includes the scene passes. AO times are part
+of that interval; do not add them to it again. Timer reporting can wait for
+GPU results and changes measurement overhead. Use separate untimed runs for
+throughput comparisons.
+
+A separate 24-sample GTAO run with full sample shading measured median GPU
+times of 11.03 ms for world AO and 2.83 ms for weapon AO on the P630.
+Its result is `build/benchmark-sp/rdsp-rend2.8nv913dt`.
+
+After the preset change, the same verified weapon test measured 37.10 FPS
+with the new default Medium (8 samples) and 39.18 FPS with Low (4 samples).
+Both used ordinary 4x MSAA with sample shading disabled. Each result is the
+median of three 10-second runs. Results are in
+`build/benchmark-sp/rdsp-rend2.ixdbikf6` and `.66yb9__s`.
+
+### General Usage
+
 From the repository root:
 
 ```sh

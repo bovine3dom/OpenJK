@@ -137,6 +137,7 @@ cvar_t  *r_ssao;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
+cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality;
 cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
@@ -1517,6 +1518,12 @@ void R_Register( void )
 
 	r_depthPrepass = ri.Cvar_Get( "r_depthPrepass", "1", CVAR_ARCHIVE, "" );
 	r_ssao = ri.Cvar_Get( "r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE, "" );
+	r_sampleShading = ri.Cvar_Get("r_sampleShading", "0", CVAR_ARCHIVE, "Minimum shaded sample fraction for multisample scene rendering.");
+	ri.Cvar_CheckRange(r_sampleShading, 0, 1, qfalse);
+	r_ssaoMethod = ri.Cvar_Get("r_ssaoMethod", "0", CVAR_ARCHIVE | CVAR_LATCH, "AO method: 0 legacy SSAO, 1 spatial GTAO.");
+	ri.Cvar_CheckRange(r_ssaoMethod, 0, 1, qtrue);
+	r_gtaoQuality = ri.Cvar_Get("r_gtaoQuality", "1", CVAR_ARCHIVE, "GTAO quality: 0 low, 1 medium, 2 high, 3 ultra.");
+	ri.Cvar_CheckRange(r_gtaoQuality, 0, 3, qtrue);
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
 	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
 	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
@@ -1777,6 +1784,7 @@ static void R_InitBackEndFrameData()
 			gpuTimer_t *timer = frame->timers + j;
 			timer->queryName = timerQueries[i*MAX_GPU_TIMERS + j];
 		}
+		qglGenQueries(4, frame->aoQueries);
 	}
 
 	backEndData->currentFrame = backEndData->frames;
@@ -1963,6 +1971,7 @@ static void R_ShutdownBackEndFrameData()
 			gpuTimer_t *timer = frame->timers + j;
 			qglDeleteQueries(1, &timer->queryName);
 		}
+		qglDeleteQueries(4, frame->aoQueries);
 	}
 }
 

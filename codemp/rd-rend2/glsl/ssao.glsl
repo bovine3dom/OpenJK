@@ -22,7 +22,7 @@ void main()
 /*[Fragment]*/
 uniform sampler2D u_ScreenDepthMap;
 uniform vec4 u_ViewInfo; // zfar / znear, zfar
-uniform vec4 u_SSAOParams; // strength (lighting only), radius scale, projection scale XY
+uniform vec4 u_SSAOParams; // 0 legacy or GTAO quality + 1, radius, projection scale XY
 uniform int u_SSAODebug;
 
 in vec2 var_ScreenTex;
@@ -104,6 +104,77 @@ float ambientOcclusion(sampler2D depthMap, const vec2 tex, const float zFarDivZN
 	return result;
 }
 
+// View-space hemisphere slices with the cosine-weighted GTAO integral.
+// Jimenez et al., Practical Real-Time Strategies for Accurate Indirect Occlusion (2016).
+vec3 positionAt(vec2 uv)
+{
+	float z = u_ViewInfo.y * getLinearDepth(u_ScreenDepthMap, uv, u_ViewInfo.x);
+	vec2 tanHalfFov = vec2(0.83909963, 0.62932472) / u_SSAOParams.zw;
+	return vec3((uv * 2.0 - 1.0) * tanHalfFov * z, z);
+}
+
+float gtao(vec2 uv)
+{
+	vec2 pixel = 1.0 / vec2(textureSize(u_ScreenDepthMap, 0));
+	vec3 p = positionAt(uv);
+	if (p.z >= u_ViewInfo.y * 0.9999)
+		return 1.0;
+	// Select the neighbour on the same surface at depth discontinuities.
+	vec3 l = p - positionAt(uv - vec2(pixel.x, 0));
+	vec3 r = positionAt(uv + vec2(pixel.x, 0)) - p;
+	vec3 b = p - positionAt(uv - vec2(0, pixel.y));
+	vec3 t = positionAt(uv + vec2(0, pixel.y)) - p;
+	vec3 normal = cross(abs(l.z) < abs(r.z) ? l : r, abs(b.z) < abs(t.z) ? b : t);
+	if (dot(normal, normal) < 1e-12)
+		return 1.0;
+	normal = normalize(normal);
+	vec3 view = normalize(-p);
+	if (dot(normal, view) < 0.0) normal = -normal;
+	int quality = int(u_SSAOParams.x) - 1;
+	int slices = quality == 3 ? 3 : 2;
+	int steps = quality == 0 ? 1 : (quality == 1 ? 2 : 4);
+	float radius = 12.0 * u_SSAOParams.y;
+	vec2 tanHalfFov = vec2(0.83909963, 0.62932472) / u_SSAOParams.zw;
+	vec2 extent = radius / (2.0 * tanHalfFov * p.z);
+	// Fixed spatial noise: no frame history or temporal jitter is required.
+	float noise = fract(52.9829189 * fract(dot(floor(uv / pixel), vec2(0.06711056, 0.00583715))));
+	float visibility = 0.0;
+	for (int slice = 0; slice < slices; ++slice)
+	{
+		float angle = 3.14159265 * (float(slice) + noise) / float(slices);
+		vec2 direction = vec2(cos(angle), sin(angle));
+		vec3 tangent = vec3(direction, 0.0);
+		tangent = normalize(tangent - view * dot(tangent, view));
+		vec3 axis = cross(tangent, view);
+		vec3 projected = normal - axis * dot(normal, axis);
+		float lengthN = length(projected);
+		float n = atan(dot(projected, tangent), dot(projected, view));
+		vec2 horizons = vec2(-1.0);
+		for (int side = 0; side < 2; ++side)
+		{
+			float signSide = side == 0 ? -1.0 : 1.0;
+			for (int stepIndex = 0; stepIndex < steps; ++stepIndex)
+			{
+				float distanceUV = (float(stepIndex) + 0.5 + 0.5 * noise) / float(steps);
+				vec2 offset = signSide * direction * extent * distanceUV * distanceUV;
+				vec2 sampleUV = uv + offset;
+				if (any(lessThan(sampleUV, pixel * 0.5)) || any(greaterThan(sampleUV, 1.0 - pixel * 0.5))) continue;
+				vec3 delta = positionAt(sampleUV) - p;
+				float distanceVS = length(delta);
+				if (distanceVS < 0.001 || distanceVS >= radius) continue;
+				float horizon = dot(delta / distanceVS, view);
+				float weight = 1.0 - smoothstep(radius * 0.6, radius, distanceVS);
+				horizons[side] = max(horizons[side], mix(-1.0, horizon, weight));
+			}
+		}
+		vec2 h = vec2(-1.0, 1.0) * acos(clamp(horizons, -1.0, 1.0));
+		h = clamp(h, n - 1.57079633, n + 1.57079633);
+		vec2 integral = cos(n) + 2.0 * h * sin(n) - cos(2.0 * h - n);
+		visibility += lengthN * 0.25 * (integral.x + integral.y);
+	}
+	return clamp(visibility / float(slices), 0.0, 1.0);
+}
+
 void main()
 {
 	if (u_SSAODebug != 0)
@@ -111,7 +182,8 @@ void main()
 		out_Color = vec4(vec3(texture(u_ScreenDepthMap, var_ScreenTex).r >= 1.0 ? 1.0 : 0.0), 1.0);
 		return;
 	}
-	float result = ambientOcclusion(u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
+	float result = u_SSAOParams.x > 0.0 ? gtao(var_ScreenTex) :
+		ambientOcclusion(u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
 
 	out_Color = vec4(vec3(result), 1.0);
 }

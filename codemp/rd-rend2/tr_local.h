@@ -157,6 +157,7 @@ extern cvar_t  *r_ssao;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
 extern cvar_t  *r_ssaoStrength;
+extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality;
 extern cvar_t  *r_ssaoRadius;
 extern cvar_t  *r_ssaoViewModel;
 extern cvar_t  *r_ssaoViewModelStrength;
@@ -2482,6 +2483,7 @@ typedef struct trGlobals_s {
 	image_t                 *screenSsaoImage;
 	image_t					*hdrDepthImage;
 	image_t *ssaoRawImage, *weaponDepthImage, *weaponDepthFloatImage, *weaponSsaoImage;
+	image_t *aoScratchImage[2];
 	image_t                 *renderCubeImage;
 	image_t                 *renderCubeDepthImage;
 	image_t					*envBrdfImage;
@@ -2504,6 +2506,7 @@ typedef struct trGlobals_s {
 	FBO_t					*screenSsaoFbo;
 	FBO_t					*hdrDepthFbo;
 	FBO_t *ssaoRawFbo, *weaponDepthFbo, *weaponDepthFloatFbo, *weaponSsaoFbo;
+	FBO_t *aoScratchFbo[2];
 	FBO_t                   *renderCubeFbo[6];
 	FBO_t                   *filterCubeFbo;
 	FBO_t					*weatherDepthFbo;
@@ -3801,6 +3804,8 @@ struct gpuFrame_t
 
 	int numTimers;
 	int numTimedBlocks;
+	GLuint aoQueries[4];
+	bool aoPending[2];
 
 	gpuTimer_t timers[MAX_GPU_TIMERS];
 	gpuTimedBlock_t timedBlocks[MAX_GPU_TIMERS / 2]; // Each block will need 2 timer queries.

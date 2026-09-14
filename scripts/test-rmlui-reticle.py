@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -129,6 +130,8 @@ def main():
     mode.add_argument("--hud", action="store_true", help="Test contextual resource rings and stance indicators")
     mode.add_argument("--vitals", action="store_true", help="Test contextual health and shield arcs")
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "reticle-tests")
+    parser.add_argument("--modern", action="store_true", help="Use GTAO and sample-shaded 4x MSAA in Rend2")
+    parser.add_argument("--hardware", action="store_true", help="Use headless hardware EGL for Rend2")
     args = parser.parse_args()
     package = args.package.resolve()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -147,6 +150,7 @@ def main():
     report = {"package": str(package), "runs": [], "failures": []}
     print(f"Reticle-test output: {output}", flush=True)
     for renderer in ("rdsp-vanilla", "rdsp-rend2"):
+        hardware = args.hardware and renderer == "rdsp-rend2"
         for width, height in ((960, 720), (1280, 720)):
             name = f"{renderer}-{width}x{height}"
             run = output / name
@@ -161,7 +165,11 @@ def main():
 
             command = ["bash", str(ROOT / "scripts" / "smoke-sp.sh"), str(package),
                        "t1_sour", "+set", "r_mode", "-1", "+set", "r_customwidth", str(width),
-                       "+set", "r_customheight", str(height), "+exec", fixture]
+                        "+set", "r_customheight", str(height), "+exec", fixture]
+            if args.modern and renderer == "rdsp-rend2":
+                for key, value in dict(r_ssao=1, r_ssaoMethod=1, r_sampleShading=1,
+                                       r_ext_multisample=4, r_normalMapping=1, r_specularMapping=1).items():
+                    command += ["+set", key, str(value)]
             states = ("default", "normal", "scaled", "hidden", "legacy", "legacy-hidden", "restored", "restarted")
             if args.hud:
                 states = ("hud_idle", "hud_legacy", "hud_resources", "hud_fast", "hud_medium", "hud_strong",
@@ -174,6 +182,14 @@ def main():
             env = dict(os.environ, OJK_SMOKE_DISPLAY=f"{width}x{height}",
                        OJK_SMOKE_RENDERER=renderer, OJK_SMOKE_ROOT=str(run),
                        OJK_SMOKE_TIMEOUT="600", OJK_ASSETS=str(overlay))
+            if hardware:
+                command = ["timeout", "--kill-after=5s", "600s", "bash", str(package / "launch-sp.sh"),
+                           str(overlay), "+safe", "+set", "cl_renderer", renderer,
+                           "+set", "r_fullscreen", "0", "+set", "s_initsound", "0",
+                           "+devmap", "t1_sour", *command[4:], "+wait", "10", "+quit"]
+                env.update(SDL_VIDEODRIVER="offscreen", EGL_PLATFORM="surfaceless",
+                           SDL_AUDIODRIVER="dummy", OJK_PROFILE=str(run / "profile"))
+                env.pop("LIBGL_ALWAYS_SOFTWARE", None)
             print(f"RUN: {name}", flush=True)
             try:
                 result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=620)
@@ -181,8 +197,12 @@ def main():
                 check("smoke runner", result.returncode == 0)
                 if result.returncode:
                     continue
-                smoke = next(run.glob("t1_sour.*"))
+                smoke = run if hardware else next(run.glob("t1_sour.*"))
+                if hardware:
+                    (smoke / "console.log").write_text(result.stdout + result.stderr)
                 log = (smoke / "console.log").read_text(errors="replace")
+                if hardware:
+                    check("hardware renderer", "GL_RENDERER:" in log and not re.search(r"llvmpipe|softpipe", log, re.I))
                 check("RmlUi initialized", "RmlUi: reticle ready" in log)
                 check("no RmlUi initialization failure", "reticle initialization failed" not in log)
                 check("no RmlUi resource leaks", "Leaking " not in log)

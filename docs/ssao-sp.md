@@ -28,6 +28,9 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | --- | --- |
 | `r_ssao` | `0` disables SSAO; `1` enables SSAO. Use `vid_restart` after a change. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
+| `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
+| `r_ssaoMethod` | Default `0`: legacy SSAO. `1`: full-resolution spatial GTAO. Use `vid_restart` after a change. |
+| `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |
 | `r_ssaoAmbientOnly` | Default `1`: apply SSAO to ambient light and IBL. `0`: apply SSAO once to all per-pixel Lightall lighting. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
 | `r_ssaoRadius` | World radius multiplier, from `0.05` to `4`. Default `1`. |
@@ -65,8 +68,95 @@ occlusion. Ambient-only remains the default. `r_ssaoAmbientOnly` is archived;
 The strength, radius, and weapon controls change live and are saved in the
 profile. Radius is a multiplier, not a distance in meters. Projection scaling
 keeps the reference sampling footprint consistent when FOV or aspect ratio
-changes. The default reproduces the old kernel at 80-degree horizontal FOV
-and 4:3 aspect. Sampling bias and quality remain fixed shader parameters.
+changes. The legacy default reproduces the old kernel at 80-degree horizontal
+FOV and 4:3 aspect. GTAO uses a different radius calculation.
+
+## Spatial GTAO and Sample Shading
+
+Use these settings to enable GTAO with ordinary MSAA:
+
+```text
+r_ssao 1
+r_ssaoMethod 1
+r_gtaoQuality 1
+r_ext_multisample 4
+r_sampleShading 0
+vid_restart
+```
+
+Keep the existing strength, radius, and ambient-only settings as a starting
+point. The same strength value can look different with the two AO methods.
+World and weapon AO remain separate. The debug modes work with both methods.
+
+GTAO reconstructs view-space positions and surface normals from depth. It
+calculates occlusion along hemisphere slices with a cosine-weighted integral.
+Each result uses full display resolution. Two depth-aware, five-tap passes
+filter the result. The sampling pattern is fixed in screen space. There is
+no frame history, temporal jitter, or TAA requirement.
+
+This is an independent GLSL implementation of the GTAO approach described by
+[Jimenez et al. (2016)](https://www.activision.com/cdn/research/Practical_Real_Time_Strategies_for_Accurate_Indirect_Occlusion_NEW%20VERSION_COLOR.pdf).
+It is not a port of the complete XeGTAO implementation. It samples the original
+depth image directly; it does not use a depth mip chain or bent normals.
+Thin surfaces and hidden geometry can still produce screen-space AO artifacts.
+
+| Quality | Slices | Samples per side | Total horizon samples per pixel |
+| --- | ---: | ---: | ---: |
+| Low (`0`) | 2 | 1 | 4 |
+| Medium (`1`) | 2 | 2 | 8 |
+| High (`2`) | 2 | 4 | 16 |
+| Ultra (`3`) | 3 | 4 | 24 |
+
+Medium uses the original Low sampling settings. The new Low uses fewer steps.
+The original 48-sample Ultra preset was removed after desktop performance
+feedback. Set `r_gtaoQuality 1` in an existing profile to select the new default.
+Saved values are not reset when the renderer default changes.
+
+Normal reconstruction and filtering require additional texture reads.
+All presets use full resolution. A larger radius is not a higher quality preset.
+
+Full sample shading evaluates materials at each MSAA sample location, including
+the interiors of polygons. It applies to the main scene draw list and its depth
+prepass. This includes alpha-tested depth. The renderer disables the state after
+each draw list. HUD rendering and single-sample post-processing retain their
+own sampling rates. Texture mip bias is unchanged.
+
+This mode uses the GPU's multisample pattern. It does not guarantee NVIDIA's
+driver SGSSAA pattern. It does not supersample the AO calculation or every
+post-process. The extension log reports whether sample shading is available.
+Without support, or with MSAA disabled, the setting has no effect.
+
+### Validation
+
+```sh
+python3 scripts/test-ssao-sp.py --method 1 --sample-shading 1
+python3 scripts/test-ssao-weapons.py --hardware --method 1 --sample-shading 1 --width 1280 --height 720 --fov 100
+python3 scripts/test-modern-rendering.py
+python3 scripts/test-modern-rendering.py --msaa 0
+python3 scripts/test-rmlui-reticle.py build/ready --modern --hardware
+```
+
+The modern-rendering test uses headless hardware EGL. It checks four GTAO
+presets, sample-shading enable/disable, and a camera return. It also saves five
+one-degree camera steps for visual inspection. These captures are not a
+continuous motion test or a measurement of input latency.
+
+Camera steps wait for new snapshots. `fixedtime 1` slows simulation time, so
+short command-buffer waits can capture the previous camera position. The return
+comparison uses a fixed wall region. Sky textures and character animation can
+still change elsewhere in the image.
+
+At 1280 x 720 on the P630, all presets produced AO. With 4x MSAA, sample shading
+changed mean grayscale by about 0.286 levels; the restore error was about 0.007.
+With MSAA disabled, the change was below fixture noise. The camera return had
+zero error in the wall region. These checks prove a rendering change and state
+restoration, not a universal improvement in image quality.
+
+World GTAO checks passed with software MSAA 0 and 4. Weapon checks passed on
+hardware at 1280 x 720, FOV 100, with MSAA 0 and 4. They covered firing, weapon
+changes, restart, and save/load. Legacy world AO regression checks also passed.
+
+See [benchmark-sp.md](benchmark-sp.md) for performance results and GPU timing.
 
 ## First-Person Weapons
 

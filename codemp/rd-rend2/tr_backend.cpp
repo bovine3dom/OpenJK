@@ -1494,9 +1494,18 @@ static void RB_RenderDrawSurfList( drawSurf_t *drawSurfs, int numDrawSurfs )
 	}
 
 	// Do the drawing and release memory
+	const bool sampleShading = qglMinSampleShading && tr.msaaResolveFbo &&
+		fbo == tr.renderFbo && r_sampleShading->value > 0;
+	if (sampleShading)
+	{
+		qglEnable(GL_SAMPLE_SHADING);
+		qglMinSampleShading(Com_Clamp(0, 1, r_sampleShading->value));
+	}
 	RB_SubmitRenderPass(
 		*backEndData->currentPass,
 		*backEndData->perFrameMemory);
+	if (sampleShading)
+		qglDisable(GL_SAMPLE_SHADING);
 
 	backEndData->perFrameMemory->ResetTo(allocMark);
 	backEndData->currentPass = nullptr;
@@ -2095,9 +2104,17 @@ static bool RB_SSAOEnabledForView()
 
 static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float radius)
 {
+	gpuFrame_t *frame = &backEndData->frames[backEndData->realFrameNumber % MAX_FRAMES];
+	const int layer = depth == tr.weaponDepthFloatImage ? 1 : 0;
+	const bool timed = glRefConfig.timerQuery && r_speeds->integer == 100;
+	if (timed)
+	{
+		frame->aoPending[layer] = true;
+		qglQueryCounter(frame->aoQueries[layer * 2], GL_TIMESTAMP);
+	}
 	const float zmax = backEnd.viewParms.zFar;
 	const float zmin = r_znear->value;
-	const vec4_t viewInfo = { zmax / zmin, zmax, 0.0f, 0.0f };
+	const vec4_t viewInfo = { zmax / zmin, zmax, float(r_ssaoMethod->integer), 12.0f * radius };
 
 	FBO_Bind(raw);
 
@@ -2113,7 +2130,7 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 	GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
 	// Preserve the old radius at 80-degree horizontal FOV and 4:3 aspect.
 	const float reference = tanf(DEG2RAD(40.0f));
-	const vec4_t params = {1.0f, Com_Clamp(0.05f, 4.0f, radius),
+	const vec4_t params = {r_ssaoMethod->integer ? 1.0f + Com_Clamp(0, 3, r_gtaoQuality->integer) : 0.0f, Com_Clamp(0.05f, 4.0f, radius),
 		reference / tanf(DEG2RAD(backEnd.viewParms.fovX * 0.5f)),
 		0.75f * reference / tanf(DEG2RAD(backEnd.viewParms.fovY * 0.5f))};
 	GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_SSAOPARAMS, params);
@@ -2121,10 +2138,10 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 
 	RB_InstantTriangle();
 
-	FBO_Bind(tr.quarterFbo[1]);
+	FBO_Bind(tr.aoScratchFbo[1]);
 
-	qglViewport(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
-	qglScissor(0, 0, tr.quarterFbo[1]->width, tr.quarterFbo[1]->height);
+	qglViewport(0, 0, tr.aoScratchFbo[1]->width, tr.aoScratchFbo[1]->height);
+	qglScissor(0, 0, tr.aoScratchFbo[1]->width, tr.aoScratchFbo[1]->height);
 
 	GLSL_BindProgram(&tr.depthBlurShader[0]);
 
@@ -2141,11 +2158,13 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 
 	GLSL_BindProgram(&tr.depthBlurShader[1]);
 
-	GL_BindToTMU(tr.quarterImage[1],  TB_COLORMAP);
+	GL_BindToTMU(tr.aoScratchImage[1], TB_COLORMAP);
 	GL_BindToTMU(depth, TB_LIGHTMAP);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
 
 	RB_InstantTriangle();
+	if (timed)
+		qglQueryCounter(frame->aoQueries[layer * 2 + 1], GL_TIMESTAMP);
 }
 
 static void RB_RenderDepthOnly( drawSurf_t *drawSurfs, int numDrawSurfs )
@@ -2297,7 +2316,7 @@ static void RB_RenderAllDepthRelatedPasses( drawSurf_t *drawSurfs, int numDrawSu
 				{
 					vec4i_t box = {0, tr.weaponDepthImage->height, tr.weaponDepthImage->width, -tr.weaponDepthImage->height};
 					FBO_BlitFromTexture(tr.weaponDepthImage, box, nullptr, tr.weaponDepthFloatFbo, nullptr, nullptr, nullptr, 0);
-					RB_RenderSSAO(tr.weaponDepthFloatImage, tr.quarterFbo[0], tr.weaponSsaoFbo, r_ssaoViewModelRadius->value);
+					RB_RenderSSAO(tr.weaponDepthFloatImage, tr.aoScratchFbo[0], tr.weaponSsaoFbo, r_ssaoViewModelRadius->value);
 					backEnd.ssaoWeaponReady = true;
 				}
 			}

@@ -27,6 +27,8 @@ def main():
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
+    parser.add_argument("--method", type=int, choices=(0, 1), default=0)
+    parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
     args = parser.parse_args()
     package = args.package.resolve()
     fixture = package / "OpenJK/rend2-ssao.cfg"
@@ -45,7 +47,8 @@ def main():
     for msaa in (0, 4):
         case = suite / f"msaa{msaa}"
         command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
-        for name, value in dict(r_ssao=1, r_ext_multisample=msaa, r_normalMapping=1,
+        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_sampleShading=args.sample_shading,
+                                r_ext_multisample=msaa, r_normalMapping=1,
                                 r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0).items():
             command += ["+set", name, str(value)]
         command += ["+exec", "rend2-ssao.cfg"]

@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "tr_local.h"
 
+PFNGLMINSAMPLESHADINGPROC qglMinSampleShading;
+
 #define GL_GetProcAddress ri.GL_GetProcAddress
 
 // Stencil commands
@@ -528,6 +530,16 @@ void GLimp_InitExtensions()
 	const char* result[3] = { "...ignoring %s\n", "...using %s\n", "...%s not found\n" };
 
 	Com_Printf ("Initializing OpenGL extensions\n" );
+	qglMinSampleShading = nullptr;
+	GLint majorVersion = 0;
+	qglGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
+	if (majorVersion >= 4 || GLimp_HaveExtension("GL_ARB_sample_shading"))
+	{
+		GetGLFunction(qglMinSampleShading, "glMinSampleShading", qfalse);
+		if (!qglMinSampleShading)
+			GetGLFunction(qglMinSampleShading, "glMinSampleShadingARB", qfalse);
+	}
+	Com_Printf("...sample shading %s\n", qglMinSampleShading ? "available" : "unavailable");
 
 	// Select our tc scheme
 	GLW_InitTextureCompression();

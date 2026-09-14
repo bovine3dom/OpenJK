@@ -112,22 +112,24 @@ def run(args, suite, index, settings):
         result["actual_mode"] = [int(v) for v in modes[-1]]
         result["glsl_summary"] = [dict(zip(("total", "generic", "light", "other", "seconds"),
             [int(v) for v in m[:4]] + [float(m[4])])) for m in SHADERS.findall(text)]
+        send(f"exitview; god; setviewpos 2688 640 -60 315; set cg_thirdPerson {settings['cg_thirdPerson']}; "
+             f"set cg_draw2D {settings['cg_draw2D']}; set d_npcfreeze {settings.get('d_npcfreeze', 0)}; "
+             "com_speeds 0; echo OJK_BENCH_SCENE")
+        scene = wait_for("OJK_BENCH_SCENE")
         if args.weapon is not None:
             send("give all; echo OJK_BENCH_INVENTORY")
             deadline = wait_for("OJK_BENCH_INVENTORY") + 1.0
             while time.monotonic() < deadline:
                 receive(deadline)
-            send(f"weapon {args.weapon}")
-        send(f"exitview; god; setviewpos 2688 640 -60 315; set cg_thirdPerson {settings['cg_thirdPerson']}; "
-             f"set cg_draw2D {settings['cg_draw2D']}; set d_npcfreeze {settings.get('d_npcfreeze', 0)}; "
-             "com_speeds 0; echo OJK_BENCH_SCENE")
-        scene = wait_for("OJK_BENCH_SCENE")
+            send(f"weapon {args.weapon}; cg_thirdPerson 0; cg_drawGun 1; echo OJK_BENCH_WEAPON")
+            scene = wait_for("OJK_BENCH_WEAPON")
         deadline = scene + args.warmup
         while time.monotonic() < deadline:
             receive(deadline)
         send("echo OJK_BENCH_BEGIN; com_speeds 1")
         begin = wait_for("OJK_BENCH_BEGIN")
         samples = []
+        gpu_samples = {}
         deadline = begin + args.seconds
         stopping = False
         while True:
@@ -144,6 +146,8 @@ def run(args, suite, index, settings):
             if line == "OJK_BENCH_END":
                 end = received
                 break
+            for label, value in re.findall(r"(AO GPU world|AO GPU weapon|Render Pass \d+|Post processing): ([\d.]+)ms", line):
+                gpu_samples.setdefault(label, []).append(float(value))
             match = FRAME.match(line)
             if match:
                 samples.append(tuple(map(int, match.groups())))
@@ -154,8 +158,17 @@ def run(args, suite, index, settings):
                       engine_work_ms=percentiles([s[1] for s in samples]),
                       renderer_frontend_work_ms=percentiles([s[2] for s in samples]),
                       renderer_backend_work_ms=percentiles([s[3] for s in samples]))
+        result["gpu_pass_ms"] = {name: dict(samples=len(values), **percentiles(values))
+                                 for name, values in gpu_samples.items()}
         send("screenshot_png benchmark_end")
         wait_for("Wrote screenshots/benchmark_end.png")
+        check_weapon = args.weapon is not None and args.renderer == "rdsp-rend2" and int(settings["r_ssao"])
+        if check_weapon:
+            send("wait 20; r_ssaoDebug 3; echo OJK_BENCH_WEAPON_MASK")
+            wait_for("OJK_BENCH_WEAPON_MASK")
+            send("screenshot_png benchmark_weapon_mask")
+            wait_for("Wrote screenshots/benchmark_weapon_mask.png")
+            send("r_ssaoDebug 0")
         result["reload_receipt_seconds"] = []
         for index in range(args.reloads):
             send(f'set activeAction "echo OJK_RELOAD_READY_{index}"; '
@@ -167,6 +180,15 @@ def run(args, suite, index, settings):
         if process.wait(timeout=args.timeout) != 0:
             raise RuntimeError("Game exited with a nonzero status")
         reader.join(timeout=args.timeout)
+        if check_weapon:
+            mask = subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i",
+                str(profile / "OpenJK/screenshots/benchmark_weapon_mask.png"),
+                "-vf", "scale=160:120", "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
+                capture_output=True, check=True).stdout
+            coverage = sum(value < 128 for value in mask) / max(1, len(mask))
+            if len(mask) != 160 * 120 or not 0.001 < coverage < 0.5:
+                raise RuntimeError("The requested first-person weapon was not visible")
+            result["weapon_mask_coverage"] = coverage
         result["program_cache"] = [dict(zip(("linked", "reused", "unused_released"), map(int, values)))
             for values in re.findall(r"GLSL programs: (\d+) linked, (\d+) reused, (\d+) unused released", "".join(lines))]
         image = profile / "OpenJK/screenshots/benchmark_end.png"
@@ -256,7 +278,7 @@ def main():
         r_normalMapping=1, r_specularMapping=1, r_parallaxMapping=0, r_picmip=0,
         r_dynamiclight=1, r_hdr=1, r_toneMap=1, r_autoExposure=1,
         r_dynamicGlow=0, r_speeds=0, r_debugContext=0, r_arb_buffer_storage=0,
-        r_ext_multisample=0)
+        r_ext_multisample=0, con_notifytime=-1)
     settings.update(args.cvar)
     if args.weapon is not None:
         settings["cg_thirdPerson"] = 0

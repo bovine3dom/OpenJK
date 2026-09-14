@@ -3477,16 +3477,21 @@ void R_CreateBuiltinImages( void ) {
 
 	if (r_ssao->integer)
 	{
-		tr.ssaoRawImage = R_CreateImage("*ssaoRaw", NULL, width / 2, height / 2,
+		const int aoWidth = r_ssaoMethod->integer ? width : width / 2;
+		const int aoHeight = r_ssaoMethod->integer ? height : height / 2;
+		for (int i = 0; i < 2; ++i)
+			tr.aoScratchImage[i] = R_CreateImage(va("*aoScratch%d", i), NULL, aoWidth, aoHeight,
+				IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.ssaoRawImage = R_CreateImage("*ssaoRaw", NULL, aoWidth, aoHeight,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 		tr.weaponDepthImage = R_CreateImage("*weaponDepth", NULL, width, height,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
 		tr.weaponDepthFloatImage = R_CreateImage("*weaponDepthFloat", NULL, width, height,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
-		tr.weaponSsaoImage = R_CreateImage("*weaponSsao", NULL, width / 2, height / 2,
+		tr.weaponSsaoImage = R_CreateImage("*weaponSsao", NULL, aoWidth, aoHeight,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 		tr.screenSsaoImage = R_CreateImage(
-			"*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA,
+			"*screenSsao", NULL, aoWidth, aoHeight, IMGTYPE_COLORALPHA,
 			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 		tr.hdrDepthImage = R_CreateImage(
 			"*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA,

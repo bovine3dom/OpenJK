@@ -166,6 +166,8 @@ and test commands.
 ## Rend2 Performance
 
 - [x] Add live world and weapon SSAO strength/radius controls. Preserve the old world sampling footprint at the reference FOV and aspect.
+- [x] Add native-resolution spatial GTAO and independent weapon GTAO. Add live quality presets; use the original 8-sample Low as the new default Medium and add a 4-sample Low.
+- [x] Add optional full sample shading for main-scene MSAA and alpha-tested depth. Keep it off by default. Check image changes, state restoration, and native-resolution UI.
 - [x] Isolate viewmodel AO from world AO, with normal AO depth and the existing visible-weapon depth hack. Add weapon mask/AO debug views.
 - [x] Test MSAA 0/4, weapon visibility, wall independence, firing, switching, restart, and save/load on software and P630 hardware rendering.
 

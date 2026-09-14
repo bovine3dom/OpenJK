@@ -36,6 +36,7 @@ void R_PerformanceCounters( void ) {
 		Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 		currentFrame->numTimedBlocks = 0;
 		currentFrame->numTimers = 0;
+		Com_Memset(currentFrame->aoPending, 0, sizeof(currentFrame->aoPending));
 		return;
 	}
 
@@ -94,7 +95,7 @@ void R_PerformanceCounters( void ) {
 			backEnd.pc.c_triangleCountBins[TRI_BIN_2000_2999],
 			backEnd.pc.c_triangleCountBins[TRI_BIN_3000_PLUS]);
 	}
-	else if ( r_speeds->integer == 100 )
+	else if ( r_speeds->integer == 100 && glRefConfig.timerQuery )
 	{
 		gpuFrame_t *frame = backEndData->frames + (backEndData->realFrameNumber % MAX_FRAMES);
 
@@ -123,12 +124,21 @@ void R_PerformanceCounters( void ) {
 		}
 
 		ri.Printf( PRINT_ALL, "\n" );
+		for (int i = 0; i < 2; ++i)
+		{
+			if (!frame->aoPending[i]) continue;
+			GLuint64 begin, end;
+			qglGetQueryObjectui64v(frame->aoQueries[i * 2], GL_QUERY_RESULT, &begin);
+			qglGetQueryObjectui64v(frame->aoQueries[i * 2 + 1], GL_QUERY_RESULT, &end);
+			ri.Printf(PRINT_ALL, "AO GPU %s: %.3fms\n", i ? "weapon" : "world", (end - begin) / 1e6);
+		}
 	}
 
 	Com_Memset( &tr.pc, 0, sizeof( tr.pc ) );
 	Com_Memset( &backEnd.pc, 0, sizeof( backEnd.pc ) );
 	currentFrame->numTimedBlocks = 0;
 	currentFrame->numTimers = 0;
+	Com_Memset(currentFrame->aoPending, 0, sizeof(currentFrame->aoPending));
 }
 
 

@@ -42,6 +42,14 @@ float getLinearDepth(sampler2D depthMap, const vec2 tex, const float zFarDivZNea
 vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFarDivZNear, float zFar)
 {
 	float scale = 1.0 / 256.0;
+	if (u_ViewInfo.z > 0.0)
+	{
+#if defined(USE_HORIZONTAL_BLUR)
+		scale = 1.0 / float(textureSize(imageMap, 0).x);
+#else
+		scale = 1.0 / float(textureSize(imageMap, 0).y);
+#endif
+	}
 
 #if defined(USE_HORIZONTAL_BLUR)
     vec2 direction = vec2(1.0, 0.0) * scale;
@@ -60,10 +68,13 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 	{
 		for (j = 1; j < GAUSS_SIZE; j++)
 		{
+			if (u_ViewInfo.z > 0.0 && j > 2) break;
 			vec2 offset = direction * j;
 			float depthSample = zFar * getLinearDepth(depthMap, tex + offset, zFarDivZNear);
 			float depthExpected = depthCenter + dot(centerSlope, offset);
-			if(abs(depthSample - depthExpected) < 5.0)
+			float threshold = u_ViewInfo.z > 0.0 ? max(0.05, u_ViewInfo.w * 0.02) : 5.0;
+			if(abs(depthSample - depthExpected) < threshold &&
+				(u_ViewInfo.z == 0.0 || (depthSample < zFar * 0.9999) == (depthCenter < zFar * 0.9999)))
 			{
 				result += texture(imageMap, tex + offset) * gauss[j];
 				total += gauss[j];

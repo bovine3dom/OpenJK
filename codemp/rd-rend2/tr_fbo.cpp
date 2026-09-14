@@ -608,6 +608,8 @@ void FBO_Init(void)
 	if (r_ssao->integer)
 	{
 		struct { FBO_t **fbo; image_t *image; const char *name; } extra[] = {
+			{&tr.aoScratchFbo[0], tr.aoScratchImage[0], "_aoScratch0"},
+			{&tr.aoScratchFbo[1], tr.aoScratchImage[1], "_aoScratch1"},
 			{&tr.ssaoRawFbo, tr.ssaoRawImage, "_ssaoRaw"},
 			{&tr.weaponDepthFloatFbo, tr.weaponDepthFloatImage, "_weaponDepthFloat"},
 			{&tr.weaponSsaoFbo, tr.weaponSsaoImage, "_weaponSsao"}
