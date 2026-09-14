@@ -15,6 +15,13 @@ Both tests must pass before it updates `build/ready`. The output gives a fixed
 package path under `build/packages/`. Do not change source files during packaging.
 Failed candidates remain available for diagnosis.
 
+The launcher enables all dismemberment categories (`g_dismemberment 3`),
+damage-based cuts (`g_dismemberProbabilities 0`), and ragdolls (`broadsword 1`).
+These launch settings also apply to existing profiles. Engine arguments can
+override them, for example `+set g_dismemberment 0 +set broadsword 0`.
+The probability setting is a random-roll multiplier, not a percentage.
+Saber damage and corpse-removal settings are separate from these defaults.
+
 Every successful build publishes its package through `build/ready`. For more
 checks, pass the printed package path to the relevant test with `--package`.
 

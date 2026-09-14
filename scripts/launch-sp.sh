@@ -50,4 +50,6 @@ fi
 cd -- "$package"
 exec ./openjk_sp.x86_64 \
     +set fs_basepath "$package" +set fs_cdpath "$assets" \
-    +set fs_homepath "$profile" +set fs_game OpenJK "${display[@]}" "$@"
+    +set fs_homepath "$profile" +set fs_game OpenJK \
+    +set g_dismemberment 3 +set g_dismemberProbabilities 0 +set broadsword 1 \
+    "${display[@]}" "$@"
