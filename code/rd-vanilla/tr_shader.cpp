@@ -3860,6 +3860,20 @@ static void CreateInternalShaders( void ) {
 	shader.defaultShader = true;
 
 	ARB_InitGlowShaders();
+
+	memset( &shader, 0, sizeof(shader) );
+	memset( &stages, 0, sizeof(stages) );
+	Q_strncpyz( shader.name, "<ui geometry>", sizeof(shader.name) );
+	memcpy( shader.lightmapIndex, lightmaps2d, sizeof(shader.lightmapIndex) );
+	memcpy( shader.styles, stylesDefault, sizeof(shader.styles) );
+	shader.cullType = CT_TWO_SIDED;
+	stages[0].active = true;
+	stages[0].bundle[0].image = tr.whiteImage;
+	stages[0].rgbGen = CGEN_EXACT_VERTEX;
+	stages[0].alphaGen = AGEN_VERTEX;
+	stages[0].stateBits = GLS_DEPTHTEST_DISABLE |
+		GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	tr.uiGeometryShader = FinishShader();
 }
 
 static void CreateExternalShaders( void ) {

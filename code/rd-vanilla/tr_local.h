@@ -996,6 +996,7 @@ typedef struct {
 	GLuint					blurImage;
 
 	shader_t				*defaultShader;
+	shader_t				*uiGeometryShader;
 	shader_t				*shadowShader;
 	shader_t				*distortionShader;
 	shader_t				*projectionShadowShader;
@@ -1738,6 +1739,15 @@ typedef struct {
 } stretchPicCommand_t;
 
 typedef struct {
+	int commandId;
+	int numVertices, numIndices;
+	qboolean hasClip;
+	int clip[4];
+	polyVert_t vertices[REF_UI_MAX_VERTICES];
+	int indices[REF_UI_MAX_INDICES];
+} uiGeometryCommand_t;
+
+typedef struct {
 	int		commandId;
 	shader_t	*shader;
 	float	x, y;
@@ -1771,6 +1781,7 @@ typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
 	RC_STRETCH_PIC,
+	RC_UI_GEOMETRY,
 	RC_SCISSOR,
 	RC_ROTATE_PIC,
 	RC_ROTATE_PIC2,
@@ -1807,6 +1818,8 @@ void R_IssuePendingRenderCommands( void );
 void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs );
 
 void RE_SetColor( const float *rgba );
+void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
+	int numIndices, const int *indices, const int *clip );
 void RE_StretchPic ( float x, float y, float w, float h,
 					  float s1, float t1, float s2, float t2, qhandle_t hShader );
 void RE_RotatePic ( float x, float y, float w, float h,

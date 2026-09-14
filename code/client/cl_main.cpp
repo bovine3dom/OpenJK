@@ -150,6 +150,9 @@ void CL_FlushMemory( void ) {
 
 	CL_ShutdownUI();
 
+#ifdef USE_RMLUI
+	CL_RmlUiShutdown();
+#endif
 	if ( re.Shutdown ) {
 		re.Shutdown( qfalse, qfalse );		// don't destroy window or context
 	}
@@ -892,6 +895,9 @@ CL_ShutdownRef
 ============
 */
 static void CL_ShutdownRef( qboolean restarting ) {
+#ifdef USE_RMLUI
+	CL_RmlUiShutdown();
+#endif
 	if ( re.Shutdown ) {
 		re.Shutdown( qtrue, restarting );
 	}
@@ -932,6 +938,10 @@ CL_InitRenderer
 void CL_InitRenderer( void ) {
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
+
+#ifdef USE_RMLUI
+	CL_RmlUiInit();
+#endif
 
 	// load character sets
 	cls.charSetShader = re.RegisterShaderNoMip("gfx/2d/charsgrid_med");
@@ -1378,4 +1388,3 @@ void CL_Shutdown( void ) {
 
 	Com_Printf( "-----------------------\n" );
 }
-

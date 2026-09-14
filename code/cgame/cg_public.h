@@ -221,6 +221,7 @@ Ghoul2 Insert End
 
 	CG_OPENJK_MENU_PAINT,
 	CG_OPENJK_GETMENU_BYNAME,
+	CG_R_DRAWRETICLE,
 } cgameImport_t;
 
 #ifdef JK2_MODE

@@ -1018,9 +1018,59 @@ const void	*RB_SetColor( const void *data ) {
 
 /*
 =============
-RB_StretchPic
+RB_DrawUiGeometry
 =============
 */
+static const void *RB_DrawUiGeometry( const void *data ) {
+	const uiGeometryCommand_t *cmd = (const uiGeometryCommand_t *)data;
+	static_assert( REF_UI_MAX_VERTICES < SHADER_MAX_VERTEXES &&
+		REF_UI_MAX_INDICES < SHADER_MAX_INDEXES, "UI geometry exceeds tess capacity" );
+	if ( tess.numIndexes ) {
+		RB_EndSurface();
+	}
+	if ( !backEnd.projection2D ) {
+		RB_SetGL2D();
+	}
+	GLint oldClip[4];
+	qglGetIntegerv( GL_SCISSOR_BOX, oldClip );
+	GLboolean oldClipEnabled = qglIsEnabled( GL_SCISSOR_TEST );
+	if ( cmd->hasClip ) {
+		// Clamp before conversion. Use double sums to prevent integer overflow.
+		int x = Com_Clamp( 0, glConfig.vidWidth, cmd->clip[0] );
+		int y = Com_Clamp( 0, glConfig.vidHeight, cmd->clip[1] );
+		int right = Com_Clamp( 0, glConfig.vidWidth, (double)cmd->clip[0] + cmd->clip[2] );
+		int bottom = Com_Clamp( 0, glConfig.vidHeight, (double)cmd->clip[1] + cmd->clip[3] );
+		qglEnable( GL_SCISSOR_TEST );
+		qglScissor( x, glConfig.vidHeight - bottom, right - x, bottom - y );
+	} else {
+		qglDisable( GL_SCISSOR_TEST );
+	}
+	backEnd.currentEntity = &backEnd.entity2D;
+	RB_BeginSurface( tr.uiGeometryShader, 0 );
+	for ( int i = 0; i < cmd->numVertices; ++i ) {
+		tess.xyz[i][0] = cmd->vertices[i].xyz[0];
+		tess.xyz[i][1] = cmd->vertices[i].xyz[1];
+		tess.xyz[i][2] = 0;
+		tess.texCoords[i][0][0] = tess.texCoords[i][0][1] = 0;
+		memcpy( tess.vertexColors[i], cmd->vertices[i].modulate, 4 );
+	}
+	for ( int i = 0; i < cmd->numIndices; ++i ) {
+		tess.indexes[i] = cmd->indices[i];
+	}
+	tess.numVertexes = cmd->numVertices;
+	tess.numIndexes = cmd->numIndices;
+	RB_EndSurface();
+	// Do not leave geometry pending when the scissor state is restored.
+	tess.numVertexes = tess.numIndexes = 0;
+	qglScissor( oldClip[0], oldClip[1], oldClip[2], oldClip[3] );
+	if ( oldClipEnabled ) {
+		qglEnable( GL_SCISSOR_TEST );
+	} else {
+		qglDisable( GL_SCISSOR_TEST );
+	}
+	return cmd + 1;
+}
+
 const void *RB_StretchPic ( const void *data ) {
 	const stretchPicCommand_t	*cmd;
 	shader_t *shader;
@@ -1615,6 +1665,9 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_STRETCH_PIC:
 			data = RB_StretchPic( data );
+			break;
+		case RC_UI_GEOMETRY:
+			data = RB_DrawUiGeometry( data );
 			break;
 		case RC_ROTATE_PIC:
 			data = RB_RotatePic( data );

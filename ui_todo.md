@@ -9,7 +9,23 @@
 - The Force wheel slows game time while held. Release selects a power. The normal activation button uses it.
 - Keep direct Force bindings. Cancel the wheel on focus loss, death, or a cinematic transition.
 - Update wheel animation and input in real time. Restore the appropriate game speed on close, not a fixed timescale of 1.
-- first MVP: replace the current 'stretched' reticle with an aspect-ratio neutral one that still moves based on collision like the current one and still does enemy/friendly identification
+- First MVP: replace the stretched reticle with an aspect-correct reticle. Keep collision-based movement and enemy/friendly identification.
+
+## Reticle MVP Status
+
+- [x] Integrate RmlUi 6.3 into the Jedi Academy SP client with static dependencies.
+- [x] Replace normal reticle artwork in vanilla and Rend2. Keep the existing collision and target-color logic.
+- [x] Add `cg_rmluiReticle` for legacy fallback and `cg_rmluiReticleScale` for independent size control.
+- [x] Destroy the RmlUi context before renderer shutdown and recreate it after registration.
+- [x] Test 4:3 and 16:9 output, equal pixel dimensions, scale, hiding, fallback, and `vid_restart` on both renderers.
+- [ ] Check collision movement, enemy/friendly colors, Force hints, vehicles, pickup animation, and reduced view size in gameplay.
+- [ ] Check the result on hardware graphics drivers.
+
+The MVP supports untextured geometry and rectangular clipping. It does not yet
+support text, images, input, or general UI screens. MP, Jedi Outcast, turret
+artwork, and the Force corona still use their existing paths.
+See [MVP use and tests](docs/rmlui-reticle.md) and
+[dependency records](docs/rmlui-dependencies.md).
 
 ## Migration
 
@@ -32,17 +48,17 @@ Keep existing screens available during migration.
 Keep CMake. Do not introduce Conan or vcpkg for this initial dependency set.
 Leave existing SDL, OpenGL, and other established dependency choices unchanged.
 
-- [ ] Pin RmlUi and FreeType source versions. Record release, exact revision or archive URL, SHA-256, build options, and local patches.
-- [ ] Use CMake FetchContent for the new dependencies. Do not track a moving branch or a latest-release URL.
-- [ ] Keep downloads and build output in an ignored cache. Support explicitly supplied local sources for offline builds.
+- [x] Pin RmlUi and FreeType source versions. Record release, exact revision or archive URL, SHA-256, build options, and local patches.
+- [x] Use CMake FetchContent for the new dependencies. Do not track a moving branch or a latest-release URL.
+- [x] Keep downloads and build output in an ignored cache. Support explicitly supplied local sources for offline builds.
 - [ ] Retain source archives used for published builds. A checksum does not guarantee future download availability.
-- [ ] Build and statically link the new UI libraries into the client-side integration. Do not require matching UI shared libraries on the desktop.
-- [ ] Select FreeType features explicitly. Do not silently use optional libraries found on one build machine.
-- [ ] Disable unused Lua, Lottie, sample, profiling, and other optional components.
+- [x] Build and statically link the new UI libraries into the client-side integration. Do not require matching UI shared libraries on the desktop.
+- [x] Select FreeType features explicitly. Do not silently use optional libraries found on one build machine.
+- [x] Disable unused Lua, Lottie, sample, profiling, and other optional components.
 - [ ] Add a pinned SVG dependency only if selected artwork needs it. Geometry does not require an SVG loader.
 - [ ] Version fonts, icons, layouts, and styles with their licenses and provenance. Do not rely on desktop-installed fonts.
-- [ ] Replace global language-standard flags with target-scoped requirements. RmlUi 6.3 requires C++17.
-- [ ] Raise the CMake minimum to match the integration actually used.
+- [x] Replace global language-standard flags with target-scoped requirements. RmlUi 6.3 requires C++17.
+- [x] Raise the CMake minimum to match the integration actually used.
 - [ ] Keep all builds, including dependency builds, at one job.
 
 Static UI libraries do not make the entire application static. Existing platform

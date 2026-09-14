@@ -3606,6 +3606,11 @@ static void FixRenderCommandList( int newShader ) {
 					curCmd = (const void *)(sp_cmd + 1);
 					break;
 					}
+#ifdef REND2_SP
+				case RC_UI_GEOMETRY:
+					curCmd = (const uiGeometryCommand_t *)curCmd + 1;
+					break;
+#endif
 				case RC_ROTATE_PIC:
 				case RC_ROTATE_PIC2:
 					{
@@ -5134,6 +5139,22 @@ static void CreateInternalShaders( void ) {
 	Q_strncpyz(shader.name, "<weather>", sizeof(shader.name));
 	shader.sort = SS_SEE_THROUGH;
 	tr.weatherInternalShader = FinishShader();
+
+#ifdef REND2_SP
+	memset( &shader, 0, sizeof(shader) );
+	memset( &stages, 0, sizeof(stages) );
+	Q_strncpyz( shader.name, "<ui geometry>", sizeof(shader.name) );
+	memcpy( shader.lightmapIndex, lightmaps2d, sizeof(shader.lightmapIndex) );
+	memcpy( shader.styles, stylesDefault, sizeof(shader.styles) );
+	shader.cullType = CT_TWO_SIDED;
+	stages[0].active = qtrue;
+	stages[0].bundle[0].image[0] = tr.whiteImage;
+	stages[0].rgbGen = CGEN_EXACT_VERTEX;
+	stages[0].alphaGen = AGEN_VERTEX;
+	stages[0].stateBits = GLS_DEPTHTEST_DISABLE |
+		GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+	tr.uiGeometryShader = FinishShader();
+#endif
 }
 
 static void CreateExternalShaders( void ) {

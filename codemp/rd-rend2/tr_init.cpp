@@ -2100,6 +2100,7 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	if (backEndData && glConfig.vidWidth)
 	{
 		R_IssuePendingRenderCommands();
+		RB_ClearPendingScreenshot();
 		qglFinish();
 		R_SP_UnloadWorld();
 		R_ShutdownBackEndFrameData();

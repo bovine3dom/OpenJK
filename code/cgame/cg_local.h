@@ -1037,6 +1037,7 @@ void	cgi_R_AddPolyToScene( qhandle_t hShader , int numVerts, const polyVert_t *v
 void	cgi_R_AddLightToScene( const vec3_t org, float intensity, float r, float g, float b );
 void	cgi_R_RenderScene( const refdef_t *fd );
 void	cgi_R_SetColor( const float *rgba );	// NULL = 1,1,1,1
+qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color);
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 	float s1, float t1, float s2, float t2, qhandle_t hShader );
 

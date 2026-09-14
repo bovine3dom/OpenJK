@@ -1020,6 +1020,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_DRAWSTRETCHPIC:
 		re.DrawStretchPic( VMF(1), VMF(2), VMF(3), VMF(4), VMF(5), VMF(6), VMF(7), VMF(8), args[9] );
 		return 0;
+	case CG_R_DRAWRETICLE:
+#ifdef USE_RMLUI
+		return CL_RmlUiDrawReticle(VMF(1), VMF(2), VMF(3), (const float*)VMA(4));
+#else
+		return qfalse;
+#endif
 		// The below was commented out for whatever reason... /me shrugs --eez
 	case CG_R_DRAWSCREENSHOT:
 		re.DrawStretchRaw( VMF(1), VMF(2), VMF(3), VMF(4), SG_SCR_WIDTH, SG_SCR_HEIGHT, SCR_GetScreenshot(0), 0, qtrue);
@@ -1662,4 +1668,3 @@ void CL_SetCGameTime( void ) {
 		CL_AdjustTimeDelta();
 	}
 }
-

@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "rd-common/tr_public.h"
 #include "rd-common/tr_common.h"
 #ifdef REND2_SP
-static_assert(REF_API_VERSION == 18, "Rend2 SP requires the SP private header path");
+static_assert(REF_API_VERSION == 19, "Rend2 SP requires the SP private header path");
 struct skin_t;
 #include "rd-rend2/tr_sp_import.h"
 #define ri riRend2
@@ -2493,6 +2493,9 @@ typedef struct trGlobals_s {
 	FBO_t					*weatherDepthFbo;
 
 	shader_t				*defaultShader;
+#ifdef REND2_SP
+	shader_t				*uiGeometryShader;
+#endif
 	shader_t				*shadowShader;
 	shader_t				*distortionShader;
 	shader_t				*projectionShadowShader;
@@ -2991,6 +2994,7 @@ byte *RE_TempRawImage_ReadFromFile(const char *name, int *width, int *height,
 	byte *resampleBuffer, qboolean verticalFlip);
 void RE_TempRawImage_CleanUp();
 void R_SP_CaptureScreen(qboolean finalFrame);
+void RB_ClearPendingScreenshot();
 image_t *R_SP_ScreenImage();
 int R_SP_SceneFlags(int flags);
 void R_SP_DrawGoggles();
@@ -3612,6 +3616,20 @@ typedef struct stretchPicCommand_s {
 	float	s2, t2;
 } stretchPicCommand_t;
 
+#ifdef REND2_SP
+typedef struct {
+	int commandId;
+	int numVertices, numIndices;
+	qboolean hasClip;
+	int clip[4];
+	polyVert_t vertices[REF_UI_MAX_VERTICES];
+	int indices[REF_UI_MAX_INDICES];
+} uiGeometryCommand_t;
+
+void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
+	int numIndices, const int *indices, const int *clip );
+#endif
+
 typedef struct rotatePicCommand_s {
 	int		commandId;
 	shader_t	*shader;
@@ -3692,6 +3710,9 @@ typedef enum {
 	RC_END_OF_LIST,
 	RC_SET_COLOR,
 	RC_STRETCH_PIC,
+#ifdef REND2_SP
+	RC_UI_GEOMETRY,
+#endif
 	RC_ROTATE_PIC,
 	RC_ROTATE_PIC2,
 	RC_DRAW_SURFS,

@@ -418,9 +418,53 @@ void RE_RotatePic2 ( float x, float y, float w, float h,
 
 /*
 =============
-RE_StretchPic
+RE_DrawUiGeometry
 =============
 */
+#ifdef REND2_SP
+void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
+	int numIndices, const int *indices, const int *clip ) {
+	static_assert( PAD(sizeof(uiGeometryCommand_t), sizeof(void *)) +
+		PAD(sizeof(swapBuffersCommand_t), sizeof(void *)) + sizeof(int) <= MAX_RENDER_COMMANDS,
+		"UI geometry exceeds command capacity" );
+	if ( !tr.registered || numVertices == 0 || numIndices == 0 ) {
+		return;
+	}
+	if ( !vertices || !indices || numVertices < 0 || numVertices > REF_UI_MAX_VERTICES ||
+		numIndices < 0 || numIndices > REF_UI_MAX_INDICES || numIndices % 3 ) {
+		ri.Printf( PRINT_WARNING, "DrawUiGeometry: invalid counts or data\n" );
+		return;
+	}
+	for ( int i = 0; i < numIndices; ++i ) {
+		if ( indices[i] < 0 || indices[i] >= numVertices ) {
+			ri.Printf( PRINT_WARNING, "DrawUiGeometry: invalid index\n" );
+			return;
+		}
+	}
+	if ( clip && (clip[2] <= 0 || clip[3] <= 0) ) {
+		return;
+	}
+	uiGeometryCommand_t *cmd = (uiGeometryCommand_t *)R_GetCommandBuffer( sizeof(*cmd) );
+	if ( !cmd ) {
+		R_IssuePendingRenderCommands();
+		cmd = (uiGeometryCommand_t *)R_GetCommandBuffer( sizeof(*cmd) );
+	}
+	if ( !cmd ) {
+		ri.Printf( PRINT_WARNING, "DrawUiGeometry: command buffer full\n" );
+		return;
+	}
+	cmd->commandId = RC_UI_GEOMETRY;
+	cmd->numVertices = numVertices;
+	cmd->numIndices = numIndices;
+	cmd->hasClip = clip ? qtrue : qfalse;
+	if ( clip ) {
+		memcpy( cmd->clip, clip, sizeof(cmd->clip) );
+	}
+	memcpy( cmd->vertices, vertices, numVertices * sizeof(*vertices) );
+	memcpy( cmd->indices, indices, numIndices * sizeof(*indices) );
+}
+#endif
+
 void RE_StretchPic ( float x, float y, float w, float h,
 					  float s1, float t1, float s2, float t2, qhandle_t hShader ) {
 	stretchPicCommand_t	*cmd;

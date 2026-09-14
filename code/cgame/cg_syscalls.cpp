@@ -334,6 +334,10 @@ void	cgi_R_SetColor( const float *rgba ) {
 	Q_syscall( CG_R_SETCOLOR, rgba );
 }
 
+qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color) {
+	return (qboolean)Q_syscall(CG_R_DRAWRETICLE, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(size), color);
+}
+
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 							   float s1, float t1, float s2, float t2, qhandle_t hShader ) {
 	Q_syscall( CG_R_DRAWSTRETCHPIC, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(w), PASSFLOAT(h), PASSFLOAT(s1), PASSFLOAT(t1), PASSFLOAT(s2), PASSFLOAT(t2), hShader );

@@ -2666,6 +2666,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 
 	ecolor[3] = 1.0;
 	cgi_R_SetColor( ecolor );
+	const vec4_t reticleColor = { ecolor[0], ecolor[1], ecolor[2], ecolor[3] };
 
 	if ( cg.forceCrosshairStartTime )
 	{
@@ -2767,9 +2768,12 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	{
 		hShader = cgs.media.crosshairShader[ cg_drawCrosshair.integer % NUM_CROSSHAIRS ];
 
-		cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w),
-			y + cg.refdef.y + 0.5 * (480 - h),
-			w, h, 0, 0, 1, 1, hShader );
+		if (!cgi_R_DrawReticle(x + cg.refdef.x + 320, y + cg.refdef.y + 240, w, reticleColor))
+		{
+			cgi_R_DrawStretchPic( x + cg.refdef.x + 0.5 * (640 - w),
+				y + cg.refdef.y + 0.5 * (480 - h),
+				w, h, 0, 0, 1, 1, hShader );
+		}
 	}
 
 	if ( cg.forceCrosshairStartTime && cg_crosshairForceHint.integer ) // drawing extra bits
@@ -4296,4 +4300,3 @@ void CG_DrawActive( stereoFrame_t stereoView ) {
 	CG_Draw2D();
 
 }
-

@@ -16,15 +16,18 @@
 # along with this program; if not, see <http://www.gnu.org/licenses/>.
 #============================================================================
 
-# The <min>...<policy_max> syntax is needed to remain compatible with 3.1, but also newer versions that dropped 3.1 compatibility
-# More info here: https://cmake.org/cmake/help/latest/command/cmake_minimum_required.html
-cmake_minimum_required(VERSION 3.1...3.31)
+# FetchContent EXCLUDE_FROM_ALL requires CMake 3.28.
+cmake_minimum_required(VERSION 3.28...3.31)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum OS X deployment version")
 
 set(InOpenJK ON)
 
 set(ProjectName "OpenJK" CACHE STRING "Project Name")
 project(${ProjectName})
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
@@ -57,6 +60,7 @@ option(UseAddressSanitizer "Whether to enable runtime address sanitizer" OFF)
 option(UseUndefinedSanitizer "Whether to enable runtime Undefined Behavior sanitizer" OFF)
 
 include(CMakeDependentOption)
+cmake_dependent_option(BuildRmlUi "Build the Academy SP RmlUi reticle" ON "BuildSPEngine" OFF)
 cmake_dependent_option(BuildSymbolServer "Build WIP Windows Symbol Server (experimental and unused)" OFF "NOT WIN32 OR NOT MSVC" OFF)
 
 # Configure the use of bundled libraries.  By default, we assume the user is on
@@ -272,9 +276,6 @@ elseif (("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU") OR ("${CMAKE_C_COMPILER_ID}" M
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
-	# enable somewhat modern C++
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-
 	if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-comment")
@@ -414,6 +415,11 @@ endif()
 add_subdirectory(lib/minizip)
 
 # Add projects
+if(BuildRmlUi)
+	include(RmlUiDependencies)
+	openjk_add_rmlui_dependencies()
+endif()
+
 if(BuildMPRend2 OR BuildSPRend2)
 	add_subdirectory(codemp/rd-rend2/glsl)
 endif()
