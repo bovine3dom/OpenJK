@@ -10,7 +10,7 @@ constexpr float Radius = 104, IconRadius = 80, DeadZone = 24;
 constexpr float Pi = 3.14159265359f;
 
 inline bool AllowsCommand(const char* command) {
-	const char* allowed[] = {"+forcewheel", "+forward", "+back", "+moveleft", "+moveright",
+	const char* allowed[] = {"+forcewheel", "forcenext", "forceprev", "+forward", "+back", "+moveleft", "+moveright",
 		"+moveup", "+movedown", "+speed", "+strafe", "+left", "+right"};
 	for (const char* name : allowed) {
 		std::size_t i = 0;
@@ -27,6 +27,23 @@ struct Frame {
 	bool allowed = false, open = false;
 	int selected = -1, hovered = -1;
 	float x = 0, y = 0;
+};
+
+inline int Highlighted(const Frame& frame) {
+	const int slot = frame.hovered >= 0 ? frame.hovered : frame.current;
+	return slot >= 0 && slot < MaxPowers && (frame.available & (1 << slot)) ? slot : -1;
+}
+
+// Passive cycling feedback uses real time and never owns input or game speed.
+class Preview {
+	double until = 0;
+public:
+	void Show(double now) { until = now + 2.0; }
+	void Cancel() { until = 0; }
+	float Opacity(double now) const {
+		const double remaining = until - now;
+		return remaining <= 0 ? 0 : remaining < 0.3 ? float(remaining / 0.3) : 1;
+	}
 };
 
 inline int Count(int mask) {

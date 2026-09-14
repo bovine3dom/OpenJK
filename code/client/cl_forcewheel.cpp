@@ -4,6 +4,7 @@
 
 namespace {
 ForceWheel::Selection selection;
+ForceWheel::Preview preview;
 ForceWheel::Frame available;
 
 bool Allowed() {
@@ -15,8 +16,10 @@ bool Allowed() {
 }
 
 void Down() {
-	if (Allowed() && selection.Press(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1, available.available))
+	if (Allowed() && selection.Press(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1, available.available)) {
+		preview.Cancel();
 		CL_ClearWheelActions();
+	}
 }
 void Up() {
 	if (!Allowed()) CL_ForceWheelCancel();
@@ -33,11 +36,13 @@ void DefaultBinding() {
 
 void Status() {
 	const usercmd_t& cmd = cl.cmds[cl.cmdNumber & CMD_MASK];
-	Com_Printf("forcewheel open=%d hovered=%d selected=%d mask=%d timescale=%.3f game=%d real=%d buttons=%d forward=%d right=%d up=%d force=%d active=%d catcher=%d yaw=%.3f pitch=%.3f\n",
+	ForceWheel::Frame frame = available;
+	frame.hovered = selection.Open() ? selection.Hovered() : -1;
+	Com_Printf("forcewheel open=%d hovered=%d selected=%d mask=%d timescale=%.3f game=%d real=%d buttons=%d forward=%d right=%d up=%d force=%d active=%d catcher=%d yaw=%.3f pitch=%.3f visible=%d highlighted=%d\n",
 		CL_ForceWheelActive(), selection.Hovered(), available.current, available.available,
 		Cvar_VariableValue("timescale"), cl.serverTime, Sys_Milliseconds(), cmd.buttons,
 		cmd.forwardmove, cmd.rightmove, cmd.upmove, available.energy, available.activePowers,
-		Key_GetCatcher(), cl.viewangles[YAW], cl.viewangles[PITCH]);
+		Key_GetCatcher(), cl.viewangles[YAW], cl.viewangles[PITCH], CL_ForceWheelVisible(), ForceWheel::Highlighted(frame));
 }
 }
 
@@ -55,11 +60,24 @@ void CL_InitForceWheel() {
 void CL_ForceWheelCancel() {
 	if (selection.CapturesInput()) CL_ClearWheelActions();
 	selection.Cancel();
+	preview.Cancel();
 }
 
 bool CL_ForceWheelActive() {
 	if (!Allowed()) CL_ForceWheelCancel();
 	return selection.Open();
+}
+
+bool CL_ForceWheelVisible() {
+	const bool held = CL_ForceWheelActive();
+	return held || (available.available && preview.Opacity(Sys_Milliseconds() * 0.001) > 0);
+}
+
+qboolean CL_ForceWheelPreview() {
+	if (!Allowed()) return qfalse;
+	CL_ForceWheelCancel();
+	preview.Show(Sys_Milliseconds() * 0.001);
+	return qtrue;
 }
 
 bool CL_ForceWheelCapturesInput() {
@@ -82,16 +100,18 @@ void CL_ForceWheelUpdate(ForceWheel::Frame* frame) {
 	if (!Allowed() || (selection.Open() && selection.Mask() != frame->available)) CL_ForceWheelCancel();
 	frame->selected = selection.TakeSelection();
 	if (frame->selected >= 0 && !(frame->available & (1 << frame->selected))) frame->selected = -1;
-	frame->open = selection.Open();
-	frame->hovered = selection.Hovered();
+	frame->open = CL_ForceWheelVisible();
+	frame->hovered = selection.Open() ? selection.Hovered() : -1;
 	frame->x = selection.X(); frame->y = selection.Y();
 }
 
-void CL_ForceWheelDraw(const char* label) {
-	if (!CL_ForceWheelActive()) return;
+int CL_ForceWheelDraw(const char* label) {
+	if (!CL_ForceWheelVisible()) return 0;
 	ForceWheel::Frame frame = available;
 	frame.open = true;
-	frame.hovered = selection.Hovered();
+	frame.hovered = selection.Open() ? selection.Hovered() : -1;
 	frame.x = selection.X(); frame.y = selection.Y();
-	CL_RmlUiDrawForceWheel(frame, label);
+	const float opacity = selection.Open() ? 1 : preview.Opacity(Sys_Milliseconds() * 0.001);
+	CL_RmlUiDrawForceWheel(frame, label, selection.Open(), opacity);
+	return int(opacity * 255);
 }

@@ -35,14 +35,16 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 void CL_InitForceWheel();
 void CL_ForceWheelCancel();
 bool CL_ForceWheelActive();
+bool CL_ForceWheelVisible();
+qboolean CL_ForceWheelPreview();
 bool CL_ForceWheelCapturesInput();
 bool CL_ForceWheelKey(int key);
 bool CL_ForceWheelMouse(int dx, int dy);
 void CL_ForceWheelUpdate(ForceWheel::Frame* frame);
-void CL_ForceWheelDraw(const char* label);
+int CL_ForceWheelDraw(const char* label);
 void CL_ClearWheelActions();
 bool CL_RmlUiAvailable();
-void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label);
+void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label, bool pointer, float opacity);
 void CL_RmlUiInit();
 void CL_RmlUiShutdown();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);

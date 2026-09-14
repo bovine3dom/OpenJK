@@ -63,8 +63,8 @@ def main():
             stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(lambda data: marker in data[start:])[start:])
 
-        def status():
-            text = cmd("wait 4; forcewheel_status")
+        def status(frames=4):
+            text = cmd(f"wait {frames}; forcewheel_status")
             line = re.findall(r"forcewheel open=[^\r\n]+", text)[-1]
             return {key: float(value) for key, value in (word.split("=") for word in line.split()[1:])}
 
@@ -108,9 +108,25 @@ def main():
             assert initial["mask"] == 4095 and initial["open"] == 0, initial
 
             cmd("set timescale 0.5")
+            xdo("key", "e")
+            cycled = status()
+            assert cycled["selected"] == 1 and cycled["highlighted"] == 1 and cycled["visible"] == 1 and cycled["open"] == 0, cycled
+            capture("force_cycle")
+            xdo("key", "q")
+            cycled = status()
+            assert cycled["selected"] == initial["selected"] and cycled["open"] == 0 and cycled["visible"] == 1, cycled
+            time.sleep(0.4)
+            later = status(1)
+            ratio = (later["game"] - cycled["game"]) / (later["real"] - cycled["real"])
+            assert 0.2 < ratio < 0.8 and later["timescale"] == 0.5, (ratio, later)
+            time.sleep(2)
+            assert status(1)["visible"] == 0
+            capture("force_cycle_idle")
             xdo("keydown", "g")
             opened = status()
             assert opened["open"] == 1 and opened["hovered"] == -1, opened
+            assert opened["highlighted"] == opened["selected"], opened
+            capture("force_deadzone")
             xdo("key", "f")  # Force use must not activate while the wheel owns input.
             xdo("mousemove_relative", "--", 80, 0)
             selected = status()
@@ -133,6 +149,14 @@ def main():
             assert status()["open"] == 1
             xdo("keyup", "g")
             assert status()["selected"] == 3  # Releasing in the dead zone does not select.
+            xdo("keydown", "g")
+            assert status()["open"] == 1
+            xdo("key", "e")
+            cycled = status()
+            assert cycled["open"] == 0 and cycled["selected"] == 4 and cycled["timescale"] == 0.5, cycled
+            xdo("keyup", "g")
+            xdo("key", "q")
+            assert status()["selected"] == 3
             xdo("keydown", "g")
             assert status()["open"] == 1
             xdo("mousemove_relative", "--", 0, -80)

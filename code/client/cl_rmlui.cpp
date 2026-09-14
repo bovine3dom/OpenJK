@@ -141,20 +141,22 @@ public:
 
 class ForceWheelElement final : public RadialElement {
 	ForceWheel::Frame frame;
+	bool pointer = true;
+	float opacity = 1;
 	void OnRender() override {
 		if (!frame.open || !frame.available) return;
 		Rml::Mesh mesh;
 		const int count = ForceWheel::Count(frame.available);
 		const float step = 360.0f / count;
 		for (int sector = 0; sector < count; ++sector) {
-			const bool selected = ForceWheel::Slot(frame.available, sector) == frame.hovered;
+			const bool selected = ForceWheel::Slot(frame.available, sector) == ForceWheel::Highlighted(frame);
 			const float start = -90 + sector * step - step / 2 + 1.5f;
 			Arc(mesh, ForceWheel::Radius, 44, start, step - 3,
-				selected ? Rml::Colourb(100, 180, 240) : Rml::Colourb(15, 20, 25), selected ? 0.28f : 0.4f);
-			Arc(mesh, ForceWheel::Radius, 0.8f, start, step - 3, {160, 205, 240}, selected ? 0.7f : 0.25f);
+				selected ? Rml::Colourb(100, 180, 240) : Rml::Colourb(15, 20, 25), (selected ? 0.28f : 0.4f) * opacity);
+			Arc(mesh, ForceWheel::Radius, 0.8f, start, step - 3, {160, 205, 240}, (selected ? 0.7f : 0.25f) * opacity);
 		}
 		const size_t cursorStart = mesh.vertices.size();
-		Arc(mesh, 2, 2, 0, 360, {255, 255, 255}, 0.65f);
+		if (pointer) Arc(mesh, 2, 2, 0, 360, {255, 255, 255}, 0.65f * opacity);
 		for (size_t i = cursorStart; i < mesh.vertices.size(); ++i)
 			mesh.vertices[i].position += Rml::Vector2f(frame.x, frame.y) * pixelScale;
 		geometry = GetRenderManager()->MakeGeometry(std::move(mesh));
@@ -162,7 +164,9 @@ class ForceWheelElement final : public RadialElement {
 	}
 public:
 	explicit ForceWheelElement(const Rml::String& tag) : RadialElement(tag) {}
-	void SetFrame(const ForceWheel::Frame& value, float scale) { frame = value; pixelScale = scale; }
+	void SetFrame(const ForceWheel::Frame& value, float scale, bool showPointer, float alpha) {
+		frame = value; pixelScale = scale; pointer = showPointer; opacity = alpha;
+	}
 };
 
 Rml::ElementInstancerGeneric<ForceWheelElement> wheelInstancer;
@@ -280,16 +284,17 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 
 bool CL_RmlUiAvailable() { return wheelElement && fontReady; }
 
-void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label) {
+void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label, bool pointer, float opacity) {
 	if (!CL_RmlUiAvailable()) return;
 	wheelContext->SetDimensions({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 	const float pixelScale = cls.glconfig.vidHeight / 480.0f;
-	wheelElement->SetFrame(frame, pixelScale);
+	wheelElement->SetFrame(frame, pixelScale, pointer, opacity);
 	const float labelWidth = std::round(120 * pixelScale);
 	wheelLabel->SetProperty(Rml::PropertyId::Width, Rml::Property(labelWidth, Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Left, Rml::Property(std::round((cls.glconfig.vidWidth - labelWidth) / 2), Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Top, Rml::Property(std::round(cls.glconfig.vidHeight / 2.0f + 18 * pixelScale), Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::FontSize, Rml::Property(std::round(14 * pixelScale), Rml::Unit::PX));
+	wheelLabel->SetProperty(Rml::PropertyId::Opacity, Rml::Property(opacity, Rml::Unit::NUMBER));
 	// Stock Western StringEd labels use single-byte characters, not UTF-8.
 	Rml::String text;
 	for (const unsigned char* p = reinterpret_cast<const unsigned char*>(label); p && *p; ++p)

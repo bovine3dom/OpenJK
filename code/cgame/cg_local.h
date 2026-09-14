@@ -1042,7 +1042,8 @@ void	cgi_R_SetColor( const float *rgba );	// NULL = 1,1,1,1
 qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color);
 int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const reticleHudState_t* state);
 void cgi_ForceWheelUpdate(ForceWheel::Frame* frame);
-void cgi_R_DrawForceWheel(const char* label);
+float cgi_R_DrawForceWheel(const char* label);
+qboolean cgi_ForceWheelPreview();
 void CG_UpdateForceWheel(qboolean allowed);
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 	float s1, float t1, float s2, float t2, qhandle_t hShader );

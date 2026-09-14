@@ -7,6 +7,23 @@
 
 int main() {
 	using namespace ForceWheel;
+	Frame frame;
+	frame.available = (1 << 2) | (1 << 5);
+	frame.current = 2;
+	assert(Highlighted(frame) == 2);
+	frame.hovered = 5;
+	assert(Highlighted(frame) == 5);
+	frame.hovered = -1;
+	frame.current = 0;
+	assert(Highlighted(frame) == -1);
+	Preview preview;
+	preview.Show(10);
+	assert(preview.Opacity(10) == 1 && preview.Opacity(11.85) > 0 && preview.Opacity(11.85) < 1 && preview.Opacity(12) == 0);
+	preview.Show(12);
+	assert(preview.Opacity(12) == 1);
+	preview.Cancel();
+	assert(preview.Opacity(12) == 0);
+	assert(AllowsCommand("forcenext") && AllowsCommand("forceprev"));
 	for (const char* action : {"+forward", "+back", "+moveleft", "+moveright", "+moveup", "+movedown", "+speed", "+strafe", "+FORWARD "})
 		assert(AllowsCommand(action));
 	for (const char* action : {"+attack", "+altattack", "+useforce", "force_throw", "+forwardevil", "weapon 1"})

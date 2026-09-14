@@ -1043,14 +1043,20 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 	case CG_R_DRAWFORCEWHEEL:
 #ifdef USE_RMLUI
-		CL_ForceWheelDraw("");
+		return CL_ForceWheelDraw("");
 #endif
 		return 0;
 	case CG_R_DRAWFORCEWHEELTEXT:
 #ifdef USE_RMLUI
-		CL_ForceWheelDraw((const char*)VMA(1));
+		return CL_ForceWheelDraw((const char*)VMA(1));
 #endif
 		return 0;
+	case CG_FORCEWHEEL_PREVIEW:
+#ifdef USE_RMLUI
+		return CL_ForceWheelPreview();
+#else
+		return qfalse;
+#endif
 	case CG_R_MODELBOUNDS:
 		re.ModelBounds( args[1], (float *) VMA(2), (float *) VMA(3) );
 		return 0;

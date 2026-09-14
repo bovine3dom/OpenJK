@@ -27,6 +27,17 @@ cancels the wheel. Focus loss, menus, death, cinematics, renderer restart, and
 changes to the available powers also cancel it. A cancelled held key cannot
 reopen the wheel through keyboard repeat.
 
+In the dead zone, the wheel highlights the currently selected power and shows
+its name. Pointing at another sector highlights that power without selecting
+it until release.
+
+Q/E use the existing previous/next Force bindings. They select immediately and
+show the radial wheel briefly instead of the bottom selection bar. This display
+does not slow time, capture the mouse, or block gameplay actions. Repeated steps
+restart its display timer. Cycling while the held wheel is open ends mouse
+selection and its slow-time effect; releasing the held button does not undo the
+cycled selection.
+
 ## Display And Input
 
 The wheel contains the known, selectable Force powers. Passive abilities do
