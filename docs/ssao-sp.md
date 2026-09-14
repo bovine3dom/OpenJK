@@ -29,7 +29,12 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | `r_ssao` | `0` disables SSAO; `1` enables SSAO. Use `vid_restart` after a change. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_ssaoAmbientOnly` | Default `1`: apply SSAO to ambient light and IBL. `0`: apply SSAO once to all per-pixel Lightall lighting. No restart is required. |
-| `r_ssaoDebug` | Default `0`: scene. `1`: raw AO from `quarterFbo[0]`. `2`: filtered AO. No restart is required. |
+| `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
+| `r_ssaoRadius` | World radius multiplier, from `0.05` to `4`. Default `1`. |
+| `r_ssaoViewModel` | Default `1`: enable first-person weapon self-occlusion. `0` disables it. |
+| `r_ssaoViewModelStrength` | Weapon strength, from `0` to `4`. Default `0.5`; `0` removes weapon AO from lighting. |
+| `r_ssaoViewModelRadius` | Weapon radius multiplier, from `0.05` to `4`. Default `1`. |
+| `r_ssaoDebug` | Default `0`: scene. `1`: raw world AO. `2`: filtered world AO. `3`: weapon mask. `4`: weapon AO. No restart is required. |
 | `r_depthPrepass` | Use `1` for AO generation. With `0`, debug mode must show the scene, not stale AO. |
 
 For a manual check in the game console:
@@ -56,6 +61,48 @@ Broader mode is experimental. It affects direct and baked per-pixel lighting,
 not HUD, sky, or unlit materials. It can darken light that already contains baked
 occlusion. Ambient-only remains the default. `r_ssaoAmbientOnly` is archived;
 `r_ssaoDebug` is not saved in the profile.
+
+The strength, radius, and weapon controls change live and are saved in the
+profile. Radius is a multiplier, not a distance in meters. Projection scaling
+keeps the reference sampling footprint consistent when FOV or aspect ratio
+changes. The default reproduces the old kernel at 80-degree horizontal FOV
+and 4:3 aspect. Sampling bias and quality remain fixed shader parameters.
+
+## First-Person Weapons
+
+Weapons use a separate depth image for AO. That pass uses normal depth rather
+than the compressed depth used to keep the visible gun in front of scenery.
+The visible gun retains its depth hack. Weapon geometry is omitted from world
+AO, and the weapon AO pass contains no world geometry. This prevents either
+layer from darkening the other.
+
+The depth layer includes opaque weapon geometry. Weapon AO applies to lit
+weapon surfaces regardless of `r_ssaoAmbientOnly`.
+Unlit effects are unchanged. The default weapon strength is deliberately lower
+than world strength. No weapon AO pass runs when no viewmodel is present.
+Its debug image is then white. Debug mode 3 shows black weapon geometry on a
+white background; mode 4 shows its self-occlusion. Debug images show the generated
+mask, before the lighting-strength adjustment.
+
+Run the weapon checks separately:
+
+```sh
+python3 scripts/test-ssao-weapons.py --package build/ready
+python3 scripts/test-ssao-weapons.py --package build/ready --hardware --width 1280 --height 720
+python3 scripts/test-ssao-weapons.py --package build/ready --hardware --width 1280 --height 720 --fov 100 --msaa 4
+```
+
+The hardware option uses offscreen EGL and rejects software renderers.
+The tests check world/weapon separation, wall independence, strength, radius,
+disable/re-enable, hidden weapons, firing, weapon changes, restart, and save/load.
+Small image differences are allowed for idle weapon motion. These checks do not
+replace campaign tests of every weapon, effect, or camera mode.
+
+These checks passed at 640 x 480 in software and at 1280 x 720 on the P630,
+with MSAA 0 and 4. A hardware run with FOV 100 and MSAA 4 also passed.
+The world test now checks zero strength, increased strength, and radius changes.
+At the reference view, zero world strength matches the no-AO lighting result,
+and strength 2 produces more darkening than strength 1.
 
 ## Fixture
 

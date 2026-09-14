@@ -65,6 +65,8 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_SpecularMap", GLSL_INT, 1 },
 	{ "u_SSAOMap",     GLSL_INT, 1 },
 	{ "u_SSAOAmbientOnly", GLSL_INT, 1 },
+	{ "u_SSAOParams", GLSL_VEC4, 1 },
+	{ "u_SSAODebug", GLSL_INT, 1 },
 
 	{ "u_TextureMap", GLSL_INT, 1 },
 	{ "u_LevelsMap",  GLSL_INT, 1 },

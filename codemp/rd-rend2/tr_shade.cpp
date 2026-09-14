@@ -614,6 +614,8 @@ static cullType_t RB_GetCullType( const viewParms_t *viewParms, const trRefEntit
 DepthRange RB_GetDepthRange( const trRefEntity_t *re, const shader_t *shader )
 {
 	DepthRange range = {0.0f, 1.0f};
+	if (backEnd.ssaoDepthLayer == backEndState_t::DEPTH_WEAPON_AO)
+		return range;
 	if ( shader->isSky )
 	{
 		// r_showsky will let all the sky blocks be drawn in
@@ -1702,7 +1704,10 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		{
 			int i;
 			vec4_t enableTextures = {};
-			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, r_ssaoAmbientOnly->integer);
+			const bool viewModel = R_IsViewModel(backEnd.currentEntity->e);
+			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, viewModel ? 0 : r_ssaoAmbientOnly->integer);
+			uniformDataWriter.SetUniformVec4(UNIFORM_SSAOPARAMS,
+				Com_Clamp(0.0f, 4.0f, viewModel ? r_ssaoViewModelStrength->value : r_ssaoStrength->value), 0, 0, 0);
 
 			if (r_sunlightMode->integer &&
 					(backEnd.viewParms.flags & VPF_USESUNLIGHT) &&
@@ -1802,7 +1807,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 					!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
 					!input->shader->isSky && !backEnd.framePostProcessed &&
 					backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm;
-				samplerBindingsWriter.AddStaticImage(useSsao ? tr.screenSsaoImage : tr.whiteImage, TB_SSAOMAP);
+				image_t *aoImage = useSsao ? tr.screenSsaoImage : tr.whiteImage;
+				if (viewModel)
+					aoImage = useSsao && r_ssaoViewModel->integer && backEnd.ssaoWeaponReady
+						? tr.weaponSsaoImage : tr.whiteImage;
+				samplerBindingsWriter.AddStaticImage(aoImage, TB_SSAOMAP);
 			}
 
 			uniformDataWriter.SetUniformVec4(UNIFORM_ENABLETEXTURES, enableTextures);

@@ -401,6 +401,7 @@ uniform sampler2DArrayShadow u_ShadowMap;
 #if defined(USE_SSAO)
 uniform sampler2D u_SSAOMap;
 uniform int u_SSAOAmbientOnly;
+uniform vec4 u_SSAOParams;
 #endif
 
 #if defined(USE_DSHADOWS)
@@ -1103,6 +1104,7 @@ void main()
 	#if defined (USE_SSAO)
 	vec2 windowTex = gl_FragCoord.xy / r_FBufScale;
 	screenAO = texture(u_SSAOMap, windowTex).r;
+	screenAO = u_SSAOParams.x <= 0.0 ? 1.0 : pow(clamp(screenAO, 0.0, 1.0), u_SSAOParams.x);
 	#endif
 	float materialAO = 1.0;
 

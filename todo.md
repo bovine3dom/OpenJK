@@ -159,6 +159,10 @@ and test commands.
 
 ## Rend2 Performance
 
+- [x] Add live world and weapon SSAO strength/radius controls. Preserve the old world sampling footprint at the reference FOV and aspect.
+- [x] Isolate viewmodel AO from world AO, with normal AO depth and the existing visible-weapon depth hack. Add weapon mask/AO debug views.
+- [x] Test MSAA 0/4, weapon visibility, wall independence, firing, switching, restart, and save/load on software and P630 hardware rendering.
+
 - [x] Add runtime SSAO ambient-only/broader-lighting comparison and raw/filtered debug views. Keep ambient-only as the default.
 - [x] Resolve current MSAA depth before SSAO. Verify controlled MSAA 0/4 captures, mode restoration, and prepass-off behavior.
 - [x] Capture SP console screenshots after postprocessing and drain pending requests before restart or quit.

@@ -47,7 +47,9 @@ def run(args, suite, index, settings):
     result = {"run": index, "settings_requested": settings, "command": command,
               "package_build_id": (args.package / "build-id.txt").read_text().strip(),
               "system": platform.platform(),
-              "cache_note": CACHE_NOTE, "scene": "t2_wedge fixed natural view; native NPCs active",
+              "cache_note": CACHE_NOTE,
+              "scene": {"map": "t2_wedge", "third_person": settings["cg_thirdPerson"],
+                        "npc_freeze": settings.get("d_npcfreeze", 0), "weapon_command": args.weapon},
               "environment": {k: env.get(k) for k in ("SDL_VIDEODRIVER", "EGL_PLATFORM",
                   "SDL_AUDIODRIVER", "LIBGL_ALWAYS_SOFTWARE", "XDG_CACHE_HOME", "MESA_SHADER_CACHE_DIR")}}
     lines = []
@@ -110,8 +112,15 @@ def run(args, suite, index, settings):
         result["actual_mode"] = [int(v) for v in modes[-1]]
         result["glsl_summary"] = [dict(zip(("total", "generic", "light", "other", "seconds"),
             [int(v) for v in m[:4]] + [float(m[4])])) for m in SHADERS.findall(text)]
-        send("exitview; god; setviewpos 2688 640 -60 315; set cg_thirdPerson 1; "
-             "set cg_draw2D 0; set d_npcfreeze 0; com_speeds 0; echo OJK_BENCH_SCENE")
+        if args.weapon is not None:
+            send("give all; echo OJK_BENCH_INVENTORY")
+            deadline = wait_for("OJK_BENCH_INVENTORY") + 1.0
+            while time.monotonic() < deadline:
+                receive(deadline)
+            send(f"weapon {args.weapon}")
+        send(f"exitview; god; setviewpos 2688 640 -60 315; set cg_thirdPerson {settings['cg_thirdPerson']}; "
+             f"set cg_draw2D {settings['cg_draw2D']}; set d_npcfreeze {settings.get('d_npcfreeze', 0)}; "
+             "com_speeds 0; echo OJK_BENCH_SCENE")
         scene = wait_for("OJK_BENCH_SCENE")
         deadline = scene + args.warmup
         while time.monotonic() < deadline:
@@ -210,6 +219,7 @@ def main():
     parser.add_argument("--warmup", type=float, default=5)
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--reloads", type=int, default=0, help="Measure same-process map reloads after the frame test")
+    parser.add_argument("--weapon", type=int, choices=range(2, 10), help="Equip a weapon for a first-person benchmark")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--map", choices=("t2_wedge",), default="t2_wedge")
@@ -248,6 +258,8 @@ def main():
         r_dynamicGlow=0, r_speeds=0, r_debugContext=0, r_arb_buffer_storage=0,
         r_ext_multisample=0)
     settings.update(args.cvar)
+    if args.weapon is not None:
+        settings["cg_thirdPerson"] = 0
     results = []
     try:
         for index in range(1, args.runs + 1):

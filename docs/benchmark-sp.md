@@ -55,6 +55,24 @@ renderers remain prohibited. Record the display mode for each comparison.
 
 ## Scene
 
+Use `--weapon 3` for a first-person weapon comparison. The controller grants
+weapons, allows a snapshot update, then selects the requested weapon command
+before warmup. For example:
+
+```sh
+python3 scripts/benchmark-sp.py --weapon 3 --cvar r_ssaoViewModel 0
+python3 scripts/benchmark-sp.py --weapon 3 --cvar r_ssaoViewModel 1
+```
+
+The result records the requested weapon, perspective, and NPC-freeze setting.
+Default runs retain the third-person scene below.
+
+A P630 check at 1280 x 720, weapon command 3, SSAO on, and MSAA off measured
+79.19 FPS median with weapon AO disabled and 79.18 FPS with it enabled. Each
+case used three runs and ten measurement seconds. Results are in
+`build/benchmark-sp/rdsp-rend2.nhbt5ali` and `rdsp-rend2.88w6txpm`.
+This single scene does not establish the cost for every weapon or resolution.
+
 Only `--map t2_wedge` is supported. The controller selects a fixed natural
 view in the Krildor interior: `setviewpos 2688 640 -60 315`, third person,
 FOV 80, aspect adjustment on, and HUD off. God mode protects the player.

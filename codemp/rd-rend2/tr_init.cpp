@@ -136,6 +136,8 @@ cvar_t  *r_depthPrepass;
 cvar_t  *r_ssao;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
+cvar_t *r_ssaoStrength, *r_ssaoRadius;
+cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
 cvar_t  *r_specularMapping;
@@ -1516,7 +1518,17 @@ void R_Register( void )
 	r_depthPrepass = ri.Cvar_Get( "r_depthPrepass", "1", CVAR_ARCHIVE, "" );
 	r_ssao = ri.Cvar_Get( "r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE, "" );
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
-	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 raw, 2 filtered." );
+	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
+	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
+	r_ssaoRadius = ri.Cvar_Get("r_ssaoRadius", "1", CVAR_ARCHIVE, "World AO radius multiplier.");
+	r_ssaoViewModel = ri.Cvar_Get("r_ssaoViewModel", "1", CVAR_ARCHIVE, "Enable isolated first-person weapon AO.");
+	r_ssaoViewModelStrength = ri.Cvar_Get("r_ssaoViewModelStrength", "0.5", CVAR_ARCHIVE, "Weapon self-occlusion strength.");
+	r_ssaoViewModelRadius = ri.Cvar_Get("r_ssaoViewModelRadius", "1", CVAR_ARCHIVE, "Weapon AO radius multiplier.");
+	ri.Cvar_CheckRange(r_ssaoStrength, 0, 4, qfalse);
+	ri.Cvar_CheckRange(r_ssaoRadius, 0.05f, 4, qfalse);
+	ri.Cvar_CheckRange(r_ssaoViewModel, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_ssaoViewModelStrength, 0, 4, qfalse);
+	ri.Cvar_CheckRange(r_ssaoViewModelRadius, 0.05f, 4, qfalse);
 
 	r_normalMapping = ri.Cvar_Get( "r_normalMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable normal mapping" );
 	r_specularMapping = ri.Cvar_Get( "r_specularMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable specular mapping" );

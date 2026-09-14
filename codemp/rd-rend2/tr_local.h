@@ -156,6 +156,11 @@ extern cvar_t  *r_depthPrepass;
 extern cvar_t  *r_ssao;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
+extern cvar_t  *r_ssaoStrength;
+extern cvar_t  *r_ssaoRadius;
+extern cvar_t  *r_ssaoViewModel;
+extern cvar_t  *r_ssaoViewModelStrength;
+extern cvar_t  *r_ssaoViewModelRadius;
 
 extern cvar_t  *r_normalMapping;
 extern cvar_t  *r_specularMapping;
@@ -1362,6 +1367,8 @@ typedef enum
 	UNIFORM_SPECULARMAP,
 	UNIFORM_SSAOMAP,
 	UNIFORM_SSAOAMBIENTONLY,
+	UNIFORM_SSAOPARAMS,
+	UNIFORM_SSAODEBUG,
 
 	UNIFORM_TEXTUREMAP,
 	UNIFORM_LEVELSMAP,
@@ -2402,6 +2409,9 @@ typedef struct {
 	qboolean    colorMask[4];
 	qboolean    framePostProcessed;
 	int         ssaoViewParm;
+	int         ssaoWeaponViewParm;
+	enum { DEPTH_ALL, DEPTH_WORLD, DEPTH_WEAPON_AO, DEPTH_WEAPON_NATIVE } ssaoDepthLayer;
+	bool        ssaoWeaponReady;
 	qboolean    depthFill;
 	qboolean    refractionFill;
 } backEndState_t;
@@ -2471,6 +2481,7 @@ typedef struct trGlobals_s {
 	image_t                 *screenShadowImage;
 	image_t                 *screenSsaoImage;
 	image_t					*hdrDepthImage;
+	image_t *ssaoRawImage, *weaponDepthImage, *weaponDepthFloatImage, *weaponSsaoImage;
 	image_t                 *renderCubeImage;
 	image_t                 *renderCubeDepthImage;
 	image_t					*envBrdfImage;
@@ -2492,6 +2503,7 @@ typedef struct trGlobals_s {
 	FBO_t					*screenShadowFbo;
 	FBO_t					*screenSsaoFbo;
 	FBO_t					*hdrDepthFbo;
+	FBO_t *ssaoRawFbo, *weaponDepthFbo, *weaponDepthFloatFbo, *weaponSsaoFbo;
 	FBO_t                   *renderCubeFbo[6];
 	FBO_t                   *filterCubeFbo;
 	FBO_t					*weatherDepthFbo;
@@ -4056,5 +4068,9 @@ void RB_FillDrawCommand(
 uint32_t RB_CreateSortKey( const DrawItem& item, int stage, int layer );
 void RB_AddDrawItem( Pass *pass, uint32_t sortKey, const DrawItem& drawItem );
 DepthRange RB_GetDepthRange( const trRefEntity_t *re, const shader_t *shader );
+inline bool R_IsViewModel(const refEntity_t &entity)
+{
+	return (entity.renderfx & (RF_FIRST_PERSON | RF_DEPTHHACK)) == (RF_FIRST_PERSON | RF_DEPTHHACK);
+}
 
 #endif //TR_LOCAL_H

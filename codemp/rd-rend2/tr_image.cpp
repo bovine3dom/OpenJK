@@ -3477,6 +3477,14 @@ void R_CreateBuiltinImages( void ) {
 
 	if (r_ssao->integer)
 	{
+		tr.ssaoRawImage = R_CreateImage("*ssaoRaw", NULL, width / 2, height / 2,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+		tr.weaponDepthImage = R_CreateImage("*weaponDepth", NULL, width, height,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+		tr.weaponDepthFloatImage = R_CreateImage("*weaponDepthFloat", NULL, width, height,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
+		tr.weaponSsaoImage = R_CreateImage("*weaponSsao", NULL, width / 2, height / 2,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
 		tr.screenSsaoImage = R_CreateImage(
 			"*screenSsao", NULL, width / 2, height / 2, IMGTYPE_COLORALPHA,
 			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);

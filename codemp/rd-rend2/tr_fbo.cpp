@@ -607,6 +607,25 @@ void FBO_Init(void)
 
 	if (r_ssao->integer)
 	{
+		struct { FBO_t **fbo; image_t *image; const char *name; } extra[] = {
+			{&tr.ssaoRawFbo, tr.ssaoRawImage, "_ssaoRaw"},
+			{&tr.weaponDepthFloatFbo, tr.weaponDepthFloatImage, "_weaponDepthFloat"},
+			{&tr.weaponSsaoFbo, tr.weaponSsaoImage, "_weaponSsao"}
+		};
+		for (const auto &entry : extra)
+		{
+			*entry.fbo = FBO_Create(entry.name, entry.image->width, entry.image->height);
+			FBO_Bind(*entry.fbo);
+			FBO_AttachTextureImage(entry.image, 0);
+			FBO_SetupDrawBuffers();
+			R_CheckFBO(*entry.fbo);
+		}
+		tr.weaponDepthFbo = FBO_Create("_weaponDepth", tr.weaponDepthImage->width, tr.weaponDepthImage->height);
+		FBO_Bind(tr.weaponDepthFbo);
+		R_AttachFBOTextureDepth(tr.weaponDepthImage->texnum);
+		qglDrawBuffer(GL_NONE);
+		qglReadBuffer(GL_NONE);
+		R_CheckFBO(tr.weaponDepthFbo);
 		tr.hdrDepthFbo = FBO_Create(
 			"_hdrDepth", tr.hdrDepthImage->width, tr.hdrDepthImage->height);
 

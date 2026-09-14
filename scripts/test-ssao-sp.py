@@ -40,7 +40,8 @@ def main():
     # Wall and floor: source pixels [224,416) x [224,448), away from windows and sky.
     x0, y0, x1, y1 = 56, 56, 104, 112
     print(f"Scene ROI at 160 x 120: {(x0, y0, x1, y1)}; AO masks use the full image", flush=True)
-    phases = ("ambient", "broad", "raw", "filtered", "restored", "prepass", "prepass_scene")
+    phases = ("ambient", "broad", "strength_zero", "strength_high", "radius_small", "radius_large",
+              "raw", "filtered", "restored", "prepass", "prepass_scene")
     for msaa in (0, 4):
         case = suite / f"msaa{msaa}"
         command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
@@ -96,7 +97,7 @@ def main():
             colored = sum(max(rgb[i:i+3]) - min(rgb[i:i+3]) > 2
                           for i in range(0, len(rgb), 3)) / (640 * 480)
             span = max(gray) - min(gray)
-            ao = phase in ("raw", "filtered")
+            ao = phase in ("raw", "filtered", "radius_small", "radius_large")
             mask = {(i % 160, i // 160) for i, value in enumerate(gray) if value < 250}
             coverage = len(mask) / len(gray)
             check(f"MSAA {msaa} {phase}", dict(colored=colored, span=span, below_250=coverage),
@@ -113,6 +114,11 @@ def main():
                         "-frames:v", "1", "-f", "null", "-"], check=True)
         compare(f"MSAA {msaa} round trip", images["ambient"], images["restored"])
         compare(f"MSAA {msaa} prepass off", images["prepass"], images["prepass_scene"])
+        compare(f"MSAA {msaa} zero strength", images["strength_zero"], images["prepass_scene"])
+        check(f"MSAA {msaa} strength monotonicity", "strength 2 is darker than strength 1",
+              sum(images["strength_high"]) < sum(images["broad"]))
+        check(f"MSAA {msaa} radius", "larger radius has greater AO coverage",
+              len(masks[msaa, "radius_large"]) > len(masks[msaa, "radius_small"]))
         delta = [a - b for a, b in zip(images["ambient"], images["broad"])]
         darkened = sum(d > 2 for d in delta) / len(delta)
         noise = sum(abs(a - b) > 2 for a, b in zip(images["ambient"], images["restored"])) / len(delta)

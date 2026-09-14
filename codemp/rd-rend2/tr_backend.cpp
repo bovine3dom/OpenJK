@@ -1215,6 +1215,13 @@ static void RB_SubmitDrawSurfsForDepthFill(
 
 		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
+		if (backEnd.ssaoDepthLayer)
+		{
+			const bool weapon = entityNum != REFENTITYNUM_WORLD &&
+				R_IsViewModel(backEnd.refdef.entities[entityNum].e);
+			if (weapon != (backEnd.ssaoDepthLayer != backEndState_t::DEPTH_WORLD))
+				continue;
+		}
 
 #ifdef REND2_SP
 		if (postRender)
@@ -2084,24 +2091,31 @@ static bool RB_SSAOEnabledForView()
 		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo);
 }
 
-static void RB_RenderSSAO()
+static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float radius)
 {
 	const float zmax = backEnd.viewParms.zFar;
 	const float zmin = r_znear->value;
 	const vec4_t viewInfo = { zmax / zmin, zmax, 0.0f, 0.0f };
 
-	FBO_Bind(tr.quarterFbo[0]);
+	FBO_Bind(raw);
 
-	qglViewport(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
-	qglScissor(0, 0, tr.quarterFbo[0]->width, tr.quarterFbo[0]->height);
+	qglViewport(0, 0, raw->width, raw->height);
+	qglScissor(0, 0, raw->width, raw->height);
 
 	GL_State( GLS_DEPTHTEST_DISABLE );
 
 	GLSL_BindProgram(&tr.ssaoShader);
 	GL_Cull(CT_TWO_SIDED);
 
-	GL_BindToTMU(tr.hdrDepthImage, TB_COLORMAP);
+	GL_BindToTMU(depth, TB_COLORMAP);
 	GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
+	// Preserve the old radius at 80-degree horizontal FOV and 4:3 aspect.
+	const float reference = tanf(DEG2RAD(40.0f));
+	const vec4_t params = {1.0f, Com_Clamp(0.05f, 4.0f, radius),
+		reference / tanf(DEG2RAD(backEnd.viewParms.fovX * 0.5f)),
+		0.75f * reference / tanf(DEG2RAD(backEnd.viewParms.fovY * 0.5f))};
+	GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_SSAOPARAMS, params);
+	GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG, 0);
 
 	RB_InstantTriangle();
 
@@ -2112,21 +2126,21 @@ static void RB_RenderSSAO()
 
 	GLSL_BindProgram(&tr.depthBlurShader[0]);
 
-	GL_BindToTMU(tr.quarterImage[0],  TB_COLORMAP);
-	GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
+	GL_BindToTMU(raw->colorImage[0], TB_COLORMAP);
+	GL_BindToTMU(depth, TB_LIGHTMAP);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
 
 	RB_InstantTriangle();
 
-	FBO_Bind(tr.screenSsaoFbo);
+	FBO_Bind(filtered);
 
-	qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
-	qglScissor(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
+	qglViewport(0, 0, filtered->width, filtered->height);
+	qglScissor(0, 0, filtered->width, filtered->height);
 
 	GLSL_BindProgram(&tr.depthBlurShader[1]);
 
 	GL_BindToTMU(tr.quarterImage[1],  TB_COLORMAP);
-	GL_BindToTMU(tr.hdrDepthImage, TB_LIGHTMAP);
+	GL_BindToTMU(depth, TB_LIGHTMAP);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
 
 	RB_InstantTriangle();
@@ -2143,6 +2157,8 @@ static void RB_RenderDepthOnly( drawSurf_t *drawSurfs, int numDrawSurfs )
 		!backEnd.colorMask[2],
 		!backEnd.colorMask[3]);
 	backEnd.depthFill = qfalse;
+	if (backEnd.ssaoDepthLayer >= backEndState_t::DEPTH_WEAPON_AO)
+		return;
 
 	if (glState.currentFBO != tr.renderFbo ||
 		(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) ||
@@ -2246,13 +2262,51 @@ static void RB_RenderAllDepthRelatedPasses( drawSurf_t *drawSurfs, int numDrawSu
 		qglEnable(GL_DEPTH_CLAMP);
 	}
 
+	const bool ssao = RB_SSAOEnabledForView() && oldFbo == tr.renderFbo;
+	backEnd.ssaoDepthLayer = ssao ? backEndState_t::DEPTH_WORLD : backEndState_t::DEPTH_ALL;
 	RB_RenderDepthOnly(drawSurfs, numDrawSurfs);
 
-	if (RB_SSAOEnabledForView() && oldFbo == tr.renderFbo)
+	if (ssao)
 	{
-		RB_RenderSSAO();
+		RB_RenderSSAO(tr.hdrDepthImage, tr.ssaoRawFbo, tr.screenSsaoFbo, r_ssaoRadius->value);
 		backEnd.ssaoViewParm = backEnd.viewParms.currentViewParm;
+		bool hasWeapon = false;
+		for (int i = 0; i < numDrawSurfs && !hasWeapon; ++i)
+		{
+			int entity, cube, post;
+			shader_t *shader;
+			R_DecomposeSort(drawSurfs[i].sort, &entity, &shader, &cube, &post);
+			hasWeapon = entity != REFENTITYNUM_WORLD && R_IsViewModel(backEnd.refdef.entities[entity].e);
+		}
+		if (hasWeapon)
+		{
+			if (r_ssaoViewModel->integer || r_ssaoDebug->integer == 3)
+			{
+				FBO_Bind(tr.weaponDepthFbo);
+				qglScissor(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+				GL_State(GLS_DEFAULT);
+				qglClearDepth(1.0);
+				qglClear(GL_DEPTH_BUFFER_BIT);
+				SetViewportAndScissor();
+				backEnd.ssaoDepthLayer = backEndState_t::DEPTH_WEAPON_AO;
+				RB_RenderDepthOnly(drawSurfs, numDrawSurfs);
+				backEnd.ssaoWeaponViewParm = backEnd.viewParms.currentViewParm;
+				if (r_ssaoViewModel->integer)
+				{
+					vec4i_t box = {0, tr.weaponDepthImage->height, tr.weaponDepthImage->width, -tr.weaponDepthImage->height};
+					FBO_BlitFromTexture(tr.weaponDepthImage, box, nullptr, tr.weaponDepthFloatFbo, nullptr, nullptr, nullptr, 0);
+					RB_RenderSSAO(tr.weaponDepthFloatImage, tr.quarterFbo[0], tr.weaponSsaoFbo, r_ssaoViewModelRadius->value);
+					backEnd.ssaoWeaponReady = true;
+				}
+			}
+			// Keep the original compressed depth for the visible weapon and world occlusion.
+			FBO_Bind(oldFbo);
+			SetViewportAndScissor();
+			backEnd.ssaoDepthLayer = backEndState_t::DEPTH_WEAPON_NATIVE;
+			RB_RenderDepthOnly(drawSurfs, numDrawSurfs);
+		}
 	}
+	backEnd.ssaoDepthLayer = backEndState_t::DEPTH_ALL;
 
 	// reset viewport and scissor
 	FBO_Bind(oldFbo);
@@ -2647,6 +2701,9 @@ void RB_UpdateConstants(const trRefdef_t *refdef)
 {
 	// Cached view indices are reused for each scene, including empty scenes.
 	backEnd.ssaoViewParm = -1;
+	backEnd.ssaoWeaponViewParm = -1;
+	backEnd.ssaoWeaponReady = false;
+	backEnd.ssaoDepthLayer = backEndState_t::DEPTH_ALL;
 	gpuFrame_t *frame = backEndData->currentFrame;
 	RB_BeginConstantsUpdate(frame);
 
@@ -3076,24 +3133,41 @@ const void *RB_PostProcess(const void *data)
 
 	if (RB_SSAOEnabledForView() &&
 		backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm &&
-		(r_ssaoDebug->integer == 1 || r_ssaoDebug->integer == 2))
+		(r_ssaoDebug->integer >= 1 && r_ssaoDebug->integer <= 4))
 	{
-		FBO_t *aoFbo = r_ssaoDebug->integer == 1 ? tr.quarterFbo[0] : tr.screenSsaoFbo;
+		FBO_t *aoFbo = r_ssaoDebug->integer == 1 ? tr.ssaoRawFbo : tr.screenSsaoFbo;
+		if (r_ssaoDebug->integer == 4)
+			aoFbo = backEnd.ssaoWeaponReady ? tr.weaponSsaoFbo : nullptr;
 		FBO_t *oldFbo = glState.currentFBO;
 		const uint32_t oldState = glState.glStateBits;
 		const int oldCull = glState.faceCulling;
 		GLint viewport[4], scissor[4];
 		qglGetIntegerv(GL_VIEWPORT, viewport);
 		qglGetIntegerv(GL_SCISSOR_BOX, scissor);
-		// Sun rays reuse the raw AO image. Restore it from the prepass depth.
-		if (r_ssaoDebug->integer == 1 && r_drawSunRays->integer)
-			RB_RenderSSAO();
-		srcBox[0] = dstBox[0] * aoFbo->width / glConfig.vidWidth;
-		srcBox[1] = dstBox[1] * aoFbo->height / glConfig.vidHeight;
-		srcBox[2] = dstBox[2] * aoFbo->width / glConfig.vidWidth;
-		srcBox[3] = dstBox[3] * aoFbo->height / glConfig.vidHeight;
-		// Draw after scene effects and before the HUD, without tone mapping.
-		FBO_Blit(aoFbo, srcBox, NULL, NULL, dstBox, NULL, NULL, 0);
+		if (r_ssaoDebug->integer == 3)
+		{
+			FBO_Bind(nullptr);
+			qglViewport(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+			qglScissor(dstBox[0], dstBox[1], dstBox[2], dstBox[3]);
+			GL_State(GLS_DEPTHTEST_DISABLE);
+			GL_Cull(CT_TWO_SIDED);
+			GLSL_BindProgram(&tr.ssaoShader);
+			GL_BindToTMU(backEnd.ssaoWeaponViewParm == backEnd.viewParms.currentViewParm
+				? tr.weaponDepthImage : tr.whiteImage, TB_COLORMAP);
+			GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG, 1);
+			RB_InstantTriangle();
+			GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG, 0);
+		}
+		else if (aoFbo)
+		{
+			srcBox[0] = dstBox[0] * aoFbo->width / glConfig.vidWidth;
+			srcBox[1] = dstBox[1] * aoFbo->height / glConfig.vidHeight;
+			srcBox[2] = dstBox[2] * aoFbo->width / glConfig.vidWidth;
+			srcBox[3] = dstBox[3] * aoFbo->height / glConfig.vidHeight;
+			FBO_Blit(aoFbo, srcBox, NULL, NULL, dstBox, NULL, NULL, 0);
+		}
+		else
+			FBO_BlitFromTexture(tr.whiteImage, nullptr, nullptr, nullptr, dstBox, nullptr, nullptr, 0);
 		FBO_Bind(oldFbo);
 		GL_State(oldState);
 		GL_Cull(oldCull);
@@ -3165,6 +3239,9 @@ static const void *RB_DrawSurfs(const void *data) {
 	cmd = (const drawSurfsCommand_t *)data;
 
 	backEnd.ssaoViewParm = -1;
+	backEnd.ssaoWeaponViewParm = -1;
+	backEnd.ssaoWeaponReady = false;
+	backEnd.ssaoDepthLayer = backEndState_t::DEPTH_ALL;
 	backEnd.refdef = cmd->refdef;
 	backEnd.viewParms = cmd->viewParms;
 

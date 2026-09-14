@@ -22,6 +22,8 @@ void main()
 /*[Fragment]*/
 uniform sampler2D u_ScreenDepthMap;
 uniform vec4 u_ViewInfo; // zfar / znear, zfar
+uniform vec4 u_SSAOParams; // strength (lighting only), radius scale, projection scale XY
+uniform int u_SSAODebug;
 
 in vec2 var_ScreenTex;
 
@@ -74,10 +76,11 @@ float ambientOcclusion(sampler2D depthMap, const vec2 tex, const float zFarDivZN
 
 	vec2 expectedSlope = vec2(dFdx(sampleZ), dFdy(sampleZ)) / vec2(dFdx(tex.x), dFdy(tex.y));
 
-	if (length(expectedSlope) > 5000.0)
+	// Compute derivatives before this branch, including at silhouette edges.
+	if (sampleZ >= zFar || length(expectedSlope) > 5000.0)
 		return 1.0;
 
-	vec2 offsetScale = vec2(3.0 / sampleZ);
+	vec2 offsetScale = (3.0 * u_SSAOParams.y / sampleZ) * u_SSAOParams.zw;
 
 	mat2 rmat = randomRotation(tex);
 
@@ -103,6 +106,11 @@ float ambientOcclusion(sampler2D depthMap, const vec2 tex, const float zFarDivZN
 
 void main()
 {
+	if (u_SSAODebug != 0)
+	{
+		out_Color = vec4(vec3(texture(u_ScreenDepthMap, var_ScreenTex).r >= 1.0 ? 1.0 : 0.0), 1.0);
+		return;
+	}
 	float result = ambientOcclusion(u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
 
 	out_Color = vec4(vec3(result), 1.0);
