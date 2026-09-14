@@ -1043,6 +1043,11 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		return 0;
 	case CG_R_DRAWFORCEWHEEL:
 #ifdef USE_RMLUI
+		CL_ForceWheelDraw("");
+#endif
+		return 0;
+	case CG_R_DRAWFORCEWHEELTEXT:
+#ifdef USE_RMLUI
 		CL_ForceWheelDraw((const char*)VMA(1));
 #endif
 		return 0;
