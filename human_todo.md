@@ -39,7 +39,7 @@ They need suitable material or map data. Test them separately if that data exist
 
 ## Play Campaign Sections
 
-- [ ] Complete a mission in Rend2. Check the debrief videos and audio, then click Continue and verify that mission progression completes. Compare with vanilla if it fails.
+- [ ] Complete a mission in Rend2. Check animated debrief portraits, voice playback, lip synchronization, and cursor visibility. Click Continue and Okay, then select the next mission. Compare with vanilla if it fails. See `docs/debrief-sp.md` for automated coverage.
 
 - [ ] Check conversations, faces, character animation, attached weapons, and cinematic transitions.
 - [ ] Check saber combat, ranged weapons, Force powers, and vehicle sections.

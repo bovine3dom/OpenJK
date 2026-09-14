@@ -4081,7 +4081,12 @@ UI_Report
 */
 void UI_Report(void)
 {
-  String_Report();
+	String_Report();
+	const menuDef_t *menu = Menu_GetFocused();
+	const char *item = menu && menu->cursorItem >= 0 && menu->cursorItem < menu->itemCount
+		? menu->items[menu->cursorItem]->window.name : "none";
+	Com_Printf("UI focus: %s; item: %s; cursor: %.0f %.0f\n",
+		menu ? menu->window.name : "none", item ? item : "unnamed", uiInfo.uiDC.cursorx, uiInfo.uiDC.cursory);
 }
 
 

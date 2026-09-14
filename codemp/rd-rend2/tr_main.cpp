@@ -2508,8 +2508,8 @@ void R_SetupViewParms(const trRefdef_t *refdef)
 	Com_Memset(&tr.viewParms, 0, sizeof(viewParms_t));
 	tr.viewParms.viewportX = refdef->x;
 
-	// Shoud be just refef->y but this flips the menu orientation for models, so its actually needed like this
-	if (!tr.world)
+	// Menu/model views use top-left UI coordinates even while a map is loaded.
+	if (!tr.world || (refdef->rdflags & RDF_NOWORLDMODEL))
 		tr.viewParms.viewportY = glConfig.vidHeight - (refdef->y + refdef->height);
 	else
 		tr.viewParms.viewportY = refdef->y;

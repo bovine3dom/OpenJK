@@ -847,7 +847,7 @@ void RB_EndConstantsUpdate(const gpuFrame_t *frame)
 {
 	qglFlushMappedBufferRange(
 		GL_UNIFORM_BUFFER,
-		frame->uboMapBase,
+		0, // Flush offsets are relative to the mapped range, not the buffer.
 		frame->uboWriteOffset - frame->uboMapBase);
 	qglUnmapBuffer(GL_UNIFORM_BUFFER);
 }
