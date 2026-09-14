@@ -332,14 +332,17 @@ void ST_IncomingFire( gentity_t *missile, const vec3_t start, const vec3_t end )
 		|| missile->damage <= 0 || missile->splashDamage || missile->s.pos.trType != TR_LINEAR )
 		return;
 	vec3_t direction, mins, maxs;
+	float radius = Com_Clamp( 0, 256, g_squadPressureRadius->value );
+	if ( radius <= 0 )
+		return;
 	VectorSubtract( end, start, direction );
 	float lengthSquared = VectorLengthSquared( direction );
 	if ( lengthSquared < 1 )
 		return;
 	for ( int axis = 0; axis < 3; ++axis )
 	{
-		mins[axis] = Q_min( start[axis], end[axis] ) - 72;
-		maxs[axis] = Q_max( start[axis], end[axis] ) + 72;
+		mins[axis] = Q_min( start[axis], end[axis] ) - radius;
+		maxs[axis] = Q_max( start[axis], end[axis] ) + radius;
 	}
 	gentity_t *nearby[MAX_GENTITIES];
 	int count = gi.EntitiesInBox( mins, maxs, nearby, MAX_GENTITIES );
@@ -357,11 +360,20 @@ void ST_IncomingFire( gentity_t *missile, const vec3_t start, const vec3_t end )
 		VectorSubtract( chest, start, offset );
 		float fraction = Com_Clamp( 0, 1, DotProduct( offset, direction )/lengthSquared );
 		VectorMA( start, fraction, direction, closest );
-		if ( DistanceSquared( closest, chest ) > 72*72 || !G_ClearLOS( self, closest, chest ) )
+		if ( DistanceSquared( closest, chest ) > radius*radius )
 			continue;
+		if ( !G_ClearLOS( self, closest, chest ) )
+		{
+			if ( TIMER_Done( self, "pressureWallTrace" ) )
+			{
+				TIMER_Set( self, "pressureWallTrace", 500 );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=pressure_ignored ent=%d reason=wall\n", self->s.number );
+			}
+			continue;
+		}
 		// This is local pressure, not a sight or target-acquisition report.
 		TIMER_Set( self, "incomingFire", 1500 );
-		TIMER_Set( self, "underFire", 2000 );
+		TIMER_Set( self, "underFire", Q_max( 2000, TIMER_Get( self, "underFire" )-level.time ) );
 		TIMER_Set( self, "pressureDebounce", 300 );
 		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=incoming_fire ent=%d missile=%d time=%d distance=%.1f\n",
 			self->s.number, missile->s.number, level.time, Distance( closest, chest ) );
@@ -2046,6 +2058,8 @@ void ST_ClearTactic( gentity_t *self, const char *reason )
 	TIMER_Remove( self, "coverPair" );
 	TIMER_Remove( self, "coverPaired" );
 	TIMER_Remove( self, "peekBlocked" );
+	TIMER_Remove( self, "peekBlockedOnce" );
+	TIMER_Remove( self, "coverSupport" );
 	info->movementSpeech = 0;
 	info->movementSpeechChance = 0.0f;
 	if ( info->goalEntity == info->tempGoal && info->tempGoal
@@ -2071,7 +2085,7 @@ void ST_ClearTactic( gentity_t *self, const char *reason )
 		for ( int i = 0; i < info->group->numGroup; i++ )
 		{
 			gentity_t *other = &g_entities[info->group->member[i].number];
-			if ( other->NPC && other->NPC->tacticRole == 5 )
+			if ( other->NPC && other->NPC->tacticRole == 5 && !TIMER_Exists( other, "coverSupport" ) )
 				ST_ClearTactic( other, reason );
 		}
 	}
@@ -2106,7 +2120,8 @@ static qboolean ST_SeesKnownThreat( gentity_t *self, const vec3_t known )
 static qboolean ST_ReadySupport( gentity_t *self, const vec3_t known )
 {
 	auto *info = self->NPC;
-	return (self->client->ps.weapon != WP_NONE && self->health*2 >= self->max_health
+	qboolean ready = (self->client->ps.weapon != WP_NONE && self->health*2 >= self->max_health
+		&& TIMER_Done( self, "incomingFire" ) && TIMER_Done( self, "coverRelocate" )
 		&& self->painDebounceTime <= level.time && (info->tacticRole == 0 || info->tacticRole == 5)
 		&& (info->scriptFlags & SCF_CHASE_ENEMIES) && !(info->scriptFlags & SCF_DONT_FIRE)
 		&& (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_FIRING
@@ -2114,6 +2129,13 @@ static qboolean ST_ReadySupport( gentity_t *self, const vec3_t known )
 		&& TIMER_Done( self, "attackDelay" ) && TIMER_Done( self, "flee" ) && !info->goalEntity
 		&& VectorCompare( self->client->ps.velocity, vec3_origin )
 		&& ST_SeesKnownThreat( self, known )) ? qtrue : qfalse;
+	if ( !ready )
+		return qfalse;
+	vec3_t muzzle;
+	CalcEntitySpot( self, SPOT_WEAPON, muzzle );
+	trace_t trace;
+	gi.trace( &trace, muzzle, NULL, NULL, known, self->s.number, MASK_SHOT, (EG2_Collision)0, 0 );
+	return (trace.fraction == 1.0f || (self->enemy && trace.entityNum == self->enemy->s.number)) ? qtrue : qfalse;
 }
 
 static void ST_AssignTactic( gentity_t *self, int role, int cp, const vec3_t known, const vec3_t goal )
@@ -2156,7 +2178,32 @@ static qboolean ST_ValidFlankGoal( gentity_t *self, gentity_t *support, const ve
 		&& NAV::InSameRegion( self, goal ) && NAV::SafePathExists( self->currentOrigin, goal, known, 128*128, self )) ? qtrue : qfalse;
 }
 
-static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean cover, vec3_t goal, int &cp, qboolean peek = qfalse, const float *from = NULL )
+static qboolean ST_CoverProtects( gentity_t *self, const vec3_t point, const vec3_t known, float tolerance = 16 )
+{
+	vec3_t threatHead, firing;
+	VectorCopy( known, threatHead );
+	threatHead[2] += 40;
+	for ( int side = 0; side < 12; ++side )
+	{
+		VectorCopy( point, firing );
+		firing[0] += side & 1 ? self->maxs[0]+tolerance : self->mins[0]-tolerance;
+		firing[1] += side & 2 ? self->maxs[1]+tolerance : self->mins[1]-tolerance;
+		float low = self->client->crouchheight*0.5f;
+		firing[2] += low + (self->client->standheight-low)*(side/4)*0.5f;
+		for ( int height = 0; height < 2; ++height )
+		{
+			trace_t trace;
+			gi.trace( &trace, firing, NULL, NULL, height ? threatHead : known,
+				self->s.number, CONTENTS_OPAQUE, (EG2_Collision)0, 0 );
+			// Check the body and arrival tolerance. Doors cannot supply reliable cover.
+			if ( trace.startsolid || trace.allsolid || trace.fraction == 1.0f || trace.entityNum != ENTITYNUM_WORLD )
+				return qfalse;
+		}
+	}
+	return qtrue;
+}
+
+static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean cover, vec3_t goal, int &cp, qboolean peek = qfalse, const float *from = NULL, qboolean requirePeek = qtrue )
 {
 	if ( !self->NPC->tempGoal || NAV::GetNearestNode( self ) == WAYPOINT_NONE )
 		return qfalse;
@@ -2258,41 +2305,15 @@ static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean 
 		}
 		if ( G_ClearLOS( self, firing, known ) == cover )
 			continue;
-		if ( cover )
-		{
-			// Check crouched and standing heights across the arrival tolerance, not just the muzzle.
-			vec3_t threatHead;
-			VectorCopy( known, threatHead );
-			threatHead[2] += 40;
-			bool exposed = false;
-			for ( int side = 0; side < 12 && !exposed; ++side )
-			{
-				VectorCopy( point, firing );
-				firing[0] += side & 1 ? self->maxs[0]+16 : self->mins[0]-16;
-				firing[1] += side & 2 ? self->maxs[1]+16 : self->mins[1]-16;
-				float low = self->client->crouchheight*0.5f;
-				firing[2] += low + (self->client->standheight-low)*(side/4)*0.5f;
-				for ( int height = 0; height < 2 && !exposed; ++height )
-				{
-					trace_t coverTrace;
-					gi.trace( &coverTrace, firing, NULL, NULL, height ? threatHead : known,
-						self->s.number, CONTENTS_OPAQUE, (EG2_Collision)0, 0 );
-					// Doors can open on approach. Only fixed world geometry supplies cover.
-					if ( coverTrace.startsolid || coverTrace.allsolid || coverTrace.fraction == 1.0f
-						|| coverTrace.entityNum != ENTITYNUM_WORLD )
-						exposed = true;
-				}
-			}
-			if ( exposed )
-				continue;
-		}
+		if ( cover && !ST_CoverProtects( self, point, known ) )
+			continue;
 		trace_t trace;
 		gi.trace( &trace, point, self->mins, self->maxs, point, self->s.number, self->clipmask, (EG2_Collision)0, 0 );
 		if ( trace.startsolid || trace.allsolid || NAV::GetNearestNode( point ) == WAYPOINT_NONE
 			|| !NAV::InSameRegion( self, point )
 			|| !NAV::SafePathExists( origin, point, known, 128*128, self ) )
 			continue;
-		if ( cover )
+		if ( cover && requirePeek )
 		{
 			vec3_t peekGoal;
 			int peekCP;
@@ -2314,17 +2335,40 @@ static qboolean ST_PeekCover( gentity_t *self )
 		return qfalse;
 	vec3_t known;
 	if ( !(info->scriptFlags & SCF_CHASE_ENEMIES)
-		|| (info->scriptFlags & (SCF_DONT_FLEE|SCF_DONT_FIRE|SCF_FIRE_WEAPON))
-		|| (ST_GetLastSeenPosition( self, known ) && DistanceSquared( known, info->tacticThreat ) > 64*64) )
+		|| (info->scriptFlags & (SCF_DONT_FLEE|SCF_DONT_FIRE|SCF_FIRE_WEAPON)) )
 	{
 		ST_ClearTactic( self, "cover_invalid" );
 		return qtrue;
 	}
+	if ( TIMER_Done( self, "coverRecheck" ) && ST_GetLastSeenPosition( self, known ) )
+	{
+		TIMER_Set( self, "coverRecheck", 500 );
+		if ( DistanceSquared( info->tacticCover, known ) < 128*128
+			|| !ST_CoverProtects( self, info->tacticCover, known, 0 )
+			|| (info->tacticRole == 1 && DistanceSquared( known, info->tacticThreat ) > 64*64) )
+		{
+			ST_ClearTactic( self, "cover_exposed" );
+			TIMER_Set( self, "coverRelocate", 3000 );
+			return qtrue;
+		}
+		if ( info->tacticRole == 2 )
+			VectorCopy( known, info->tacticThreat );
+	}
 	bool peeking = TIMER_Exists( self, "coverPeek" );
 	bool pressure = !TIMER_Done( self, "incomingFire" ) || !TIMER_Done( self, "underFire" );
+	bool blocked = info->tacticRole == 2 && TIMER_Exists( self, "peekBlocked" ) && TIMER_Done( self, "peekBlocked" );
+	if ( peeking && blocked )
+	{
+		if ( TIMER_Exists( self, "peekBlockedOnce" ) )
+		{
+			ST_ClearTactic( self, "firing_lane_blocked" );
+			TIMER_Set( self, "coverRelocate", 3000 );
+			return qtrue;
+		}
+		TIMER_Set( self, "peekBlockedOnce", 15000 );
+	}
 	if ( peeking && (pressure || self->health*2 < self->max_health || TIMER_Done( self, "coverPair" )
-		|| (info->tacticRole == 2 && (info->tacticDeadline <= level.time
-			|| (TIMER_Exists( self, "peekBlocked" ) && TIMER_Done( self, "peekBlocked" ))))) )
+		|| (info->tacticRole == 2 && (info->tacticDeadline <= level.time || blocked))) )
 	{
 		trace_t trace;
 		gi.trace( &trace, self->currentOrigin, self->mins, self->maxs, info->tacticCover,
@@ -2333,6 +2377,7 @@ static qboolean ST_PeekCover( gentity_t *self )
 			|| !NAV::SafePathExists( self->currentOrigin, info->tacticCover, info->tacticThreat, 128*128, self ) )
 		{
 			ST_ClearTactic( self, "cover_blocked" );
+			TIMER_Set( self, "coverRelocate", 3000 );
 			return qtrue;
 		}
 		TIMER_Remove( self, "coverPeek" );
@@ -2368,6 +2413,159 @@ static qboolean ST_PeekCover( gentity_t *self )
 	return qtrue;
 }
 
+static gentity_t *ST_RetreatingMember( gentity_t *self, AIGroupInfo_t *group )
+{
+	for ( int i = 0; i < group->numGroup; ++i )
+	{
+		gentity_t *other = &g_entities[group->member[i].number];
+		if ( other != self && AI_ValidateGroupMember( group, other, qtrue ) && other->enemy == self->enemy
+			&& other->NPC->tacticRole == 1 && !TIMER_Exists( other, "coverPeek" )
+			&& !TIMER_Exists( other, "coverReturn" ) && DistanceSquared( self->currentOrigin, other->currentOrigin ) <= 512*512 )
+			return other;
+	}
+	return NULL;
+}
+
+static gentity_t *ST_FindSupport( gentity_t *self, AIGroupInfo_t *group, const vec3_t known )
+{
+	for ( int i = 0; i < group->numGroup; ++i )
+	{
+		gentity_t *other = &g_entities[group->member[i].number];
+		if ( other != self && AI_ValidateGroupMember( group, other, qtrue ) && other->enemy == self->enemy
+			&& !other->NPC->tacticRole && ST_ReadySupport( other, known )
+			&& DistanceSquared( self->currentOrigin, other->currentOrigin ) <= 512*512
+			&& DistanceSquared( other->currentOrigin, known ) >= 128*128
+			&& NAV::InSameRegion( self, other ) && G_ClearLOS( other, other->enemy ) )
+			return other;
+	}
+	return NULL;
+}
+
+static void ST_CoverRetreat( gentity_t *support, gentity_t *mover )
+{
+	ST_AssignTactic( support, 5, -1, mover->NPC->tacticThreat, support->currentOrigin );
+	support->NPC->tacticDeadline = Q_min( level.time+6000, mover->NPC->tacticDeadline );
+	TIMER_Set( support, "coverSupport", 6000 );
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=retreat_support ent=%d mover=%d\n", support->s.number, mover->s.number );
+}
+
+static void ST_PressureDecision( gentity_t *self, const char *reason )
+{
+	if ( TIMER_Done( self, "pressureDecisionTrace" ) )
+	{
+		TIMER_Set( self, "pressureDecisionTrace", 500 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=pressure_response ent=%d time=%d role=%d reason=%s\n",
+			self->s.number, level.time, self->NPC->tacticRole, reason );
+	}
+}
+
+static qboolean ST_PressureResponse( gentity_t *self )
+{
+	auto *info = self->NPC;
+	if ( TIMER_Done( self, "incomingFire" ) && TIMER_Done( self, "coverRelocate" ) )
+		return qfalse;
+	AIGroupInfo_t *group = info->group;
+	if ( !d_squadTactics->integer || !AI_ValidateGroupMember( group, self, qtrue ) || self->enemy != group->enemy
+		|| !(info->scriptFlags & SCF_CHASE_ENEMIES) || (info->scriptFlags & (SCF_DONT_FLEE|SCF_FIRE_WEAPON))
+		|| !TIMER_Done( self, "flee" ) )
+	{
+		ST_PressureDecision( self, "restricted" );
+		return qfalse;
+	}
+	if ( info->goalEntity && info->goalEntity != self->enemy
+		&& (info->goalEntity != info->tempGoal || info->goalEntity->s.eType == ET_ITEM
+			|| (info->goalEntity->enemy && info->goalEntity->enemy->s.eType == ET_ITEM)
+			|| (info->tacticRole && !VectorCompare( info->goalEntity->currentOrigin, info->tacticGoal ))) )
+	{
+		ST_PressureDecision( self, "external_goal" );
+		return qfalse;
+	}
+	if ( TIMER_Exists( self, "coverPair" ) && ST_PeekCover( self ) && info->tacticRole )
+	{
+		ST_PressureDecision( self, "peek_or_hold" );
+		return qtrue;
+	}
+	if ( info->tacticRole == 1 && !TIMER_Exists( self, "coverReturn" ) && !TIMER_Exists( self, "coverPeek" ) )
+	{
+		ST_PressureDecision( self, "already_retreating" );
+		return qfalse;
+	}
+	vec3_t known;
+	if ( !ST_GetLastSeenPosition( self, known ) )
+	{
+		ST_PressureDecision( self, "no_record" );
+		return qtrue;
+	}
+	if ( (info->tacticRole == 0 || (info->tacticRole == 2 && !TIMER_Exists( self, "coverPeek" )))
+		&& DistanceSquared( self->currentOrigin, known ) >= 128*128
+		&& ST_CoverProtects( self, self->currentOrigin, known, 0 ) )
+	{
+		TIMER_Set( self, "duck", 1500 );
+		if ( info->tacticRole == 2 )
+			info->tacticDeadline = Q_max( info->tacticDeadline, level.time+1500 );
+		else if ( info->goalEntity )
+		{
+			info->goalEntity = NULL;
+			NAV::ClearPath( self );
+			info->aiFlags &= ~NPCAI_TOUCHED_GOAL;
+		}
+		ST_PressureDecision( self, "concealed" );
+		return qtrue;
+	}
+	if ( !TIMER_Done( self, "pressureSearch" ) )
+	{
+		ST_PressureDecision( self, "search_backoff" );
+		return qtrue;
+	}
+	TIMER_Set( self, "pressureSearch", 750 );
+	// Release offensive roles before assigning a retreat. Keep a flank only with a replacement supporter.
+	bool flankSupport = info->tacticRole == 5 && !TIMER_Exists( self, "coverSupport" );
+	ST_ClearTactic( self, "pressure" );
+	if ( flankSupport )
+	{
+		for ( int i = 0; i < group->numGroup; ++i )
+		{
+			gentity_t *flanker = &g_entities[group->member[i].number];
+			if ( !flanker->NPC || (flanker->NPC->tacticRole != 3 && flanker->NPC->tacticRole != 4) )
+				continue;
+			gentity_t *replacement = ST_FindSupport( self, group, flanker->NPC->tacticThreat );
+			if ( replacement )
+			{
+				ST_AssignTactic( replacement, 5, -1, flanker->NPC->tacticThreat, replacement->currentOrigin );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=support_handoff ent=%d replacement=%d mover=%d\n", self->s.number, replacement->s.number, flanker->s.number );
+			}
+			else
+				ST_ClearTactic( flanker, "support_pressure" );
+			break;
+		}
+	}
+	vec3_t goal;
+	int cp = -1;
+	if ( !ST_CyclePosition( self, known, qtrue, goal, cp, qfalse, NULL, qfalse ) )
+	{
+		ST_PressureDecision( self, "no_cover" );
+		return qtrue;
+	}
+	NPC_FreeCombatPoint( info->combatPoint );
+	info->combatPoint = -1;
+	if ( cp >= 0 && !NPC_SetCombatPoint( cp ) )
+	{
+		ST_PressureDecision( self, "reservation_failed" );
+		return qtrue;
+	}
+	NPC_SetMoveGoal( self, goal, 16, qtrue, cp );
+	ST_AssignTactic( self, 1, cp, known, goal );
+	TIMER_Set( self, "coverCycle", 9000 );
+	TIMER_Remove( self, "coverRelocate" );
+	ST_Speech( self, SPEECH_COVER, 0 );
+	gentity_t *support = ST_FindSupport( self, group, known );
+	if ( support )
+		ST_CoverRetreat( support, self );
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=pressure_cover ent=%d time=%d cp=%d goal=%.3f,%.3f,%.3f knownposition=%.3f,%.3f,%.3f\n",
+		self->s.number, level.time, cp, goal[0], goal[1], goal[2], known[0], known[1], known[2] );
+	return qtrue;
+}
+
 static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 {
 	auto *info = self->NPC;
@@ -2386,6 +2584,8 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		ST_ClearTactic( self );
 		return qfalse;
 	}
+	if ( ST_PressureResponse( self ) )
+		return qtrue;
 	gentity_t *buddy = NULL, *support = NULL, *flanker = NULL;
 	qboolean availableBuddy = qfalse;
 	for ( int i = 0; i < group->numGroup; i++ )
@@ -2404,6 +2604,7 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 			&& !(other->NPC->scriptFlags & SCF_DONT_FIRE))
 			availableBuddy = qtrue;
 		if ( ST_ReadySupport( other, info->tacticRole ? info->tacticThreat : group->enemyLastSeenPos )
+			&& !TIMER_Exists( other, "coverSupport" )
 			&& (!support || other->NPC->tacticRole == 5)
 			&& (info->tacticRole ? NAV::InSameRegion( self, other ) : AI_LocalGroupContact( self, other )) )
 			support = other;
@@ -2443,7 +2644,8 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		}
 		if ( ST_PeekCover( self ) )
 			return qtrue;
-		if ( info->tacticRole == 5 && (!flanker || lowHealth || !ST_ReadySupport( self, info->tacticThreat )) )
+		if ( info->tacticRole == 5 && ((TIMER_Exists( self, "coverSupport" ) ? !ST_RetreatingMember( self, group ) : !flanker)
+			|| lowHealth || !ST_ReadySupport( self, info->tacticThreat )) )
 		{
 			Debug_Printf(debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=support_unready ent=%d weaponstate=%d attack_delay=%d pain=%d velocity=%.1f,%.1f,%.1f\n", self->s.number, self->client->ps.weaponstate, TIMER_Get(self, "attackDelay")-level.time, self->painDebounceTime-level.time, self->client->ps.velocity[0], self->client->ps.velocity[1], self->client->ps.velocity[2]);
 			ST_ClearTactic( self, "support_lost" );
@@ -2493,6 +2695,12 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		return qfalse;
 	if ( !TIMER_Done( self, "regroupRetry" ) )
 		return qtrue;
+	gentity_t *retreat = ST_RetreatingMember( self, group );
+	if ( retreat && ST_ReadySupport( self, retreat->NPC->tacticThreat ) && G_ClearLOS( self, self->enemy ) )
+	{
+		ST_CoverRetreat( self, retreat );
+		return qtrue;
+	}
 	if ( TIMER_Exists( self, "coverExposure" ) && TIMER_Done( self, "coverExposure" )
 		&& !info->goalEntity && self->painDebounceTime <= level.time
 		&& VectorLengthSquared( self->client->ps.velocity ) < 16
@@ -2512,6 +2720,9 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 				ST_AssignTactic( self, 1, cp, group->enemyLastSeenPos, goal );
 				TIMER_Set( self, "coverCycle", 9000 );
 				ST_Speech( self, SPEECH_COVER, 0 );
+				gentity_t *coverSupport = ST_FindSupport( self, group, group->enemyLastSeenPos );
+				if ( coverSupport )
+					ST_CoverRetreat( coverSupport, self );
 				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=exposure_cover ent=%d cp=%d\n", self->s.number, cp );
 				return qtrue;
 			}
@@ -3272,6 +3483,7 @@ void NPC_BSST_Attack( void )
 	}
 
 	//Check for movement to take care of
+	ST_PressureResponse( NPC );
 	ST_CheckMoveState();
 
 	//See if we should override shooting decision with any special considerations

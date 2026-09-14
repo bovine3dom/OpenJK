@@ -30,6 +30,9 @@ def main():
              "pressure": ("pressure", 1),
              "peek-pressure": ("peek-pressure", 1),
              "peek-save": ("peek-save", 1),
+             "pressure-cooldown-async": ("pressure-cooldown", 1), "pressure-cooldown-sync": ("pressure-cooldown", 0),
+             **{name: (name, 1) for name in ("pressure-radius", "pressure-support", "pressure-contested", "handoff", "handoff-unavailable",
+                                            "cover-reassess", "cover-hidden", "save-outward", "save-withdrawal")},
              "regroup": ("regroup", 1), "solo": ("cycle-solo", 1), "cancel": ("cancel", 1), "save": ("save", 1),
              **{name: (name, 1) for name in ("death", "timeout", "cinematic", "contested", "save-reservation", "cp-low", "cp-high")}}
     parser = argparse.ArgumentParser(description=__doc__)
@@ -179,10 +182,95 @@ def main():
                           for s in contact_samples), "Contact cover not released within bounds")
                 assignments = [e for e in actor_events if e["event"] == "tactic_assign"]
                 check([e["role"] for e in assignments[:2]] == ["1", "2"], "Contact did not select retreat then hold")
-        elif case == "peek-save":
+        elif case.startswith("pressure-cooldown") or case == "pressure-support":
+            ready = samples["PRESSURED_READY"]["_memory_a"]
+            states = [s for s in history if s["name"] == "_memory_a" and s["phase"] == "RESPONSE"]
+            pressure = [e for e in events if e["event"] == "incoming_fire" and e["ent"] == ready["ent"]]
+            moves = [e for e in events if e["event"] == "pressure_cover" and e["ent"] == ready["ent"]]
+            check(pressure and moves and 0 <= int(moves[0]["time"])-int(pressure[0]["time"]) <= 250,
+                  f"Pressure did not start a prompt retreat: {pressure}, {moves}")
+            check(all(s["health"] == ready["health"] for s in states), "Pressure caused damage")
+            check(any(s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"]) for s in states), "No running retreat")
+            check(any(s["role"] == "2" and s["los"] == "0" and math.dist(point(s), point(moves[0], "goal")) < 24
+                      for s in states), "Pressure retreat did not reach cover")
+            if case.startswith("pressure-cooldown"):
+                check(int(ready["retry"]) >= 9000 and moves[0]["cp"] == "-1", "Fixture did not require local cover through cooldown")
+            else:
+                buddy = samples["PRESSURED_READY"]["_memory_b"]
+                check(any(e["event"] == "retreat_support" and e["ent"] == buddy["ent"] and e["mover"] == ready["ent"]
+                          for e in events), "No retreat supporter")
+                check(any(s["name"] == "_memory_b" and s["role"] == "5" and s["support"] == "1"
+                          for s in history), "Supporter did not hold position")
+                check(any(e["event"] == "fire_attempt" and e["ent"] == buddy["ent"] and e["role"] == "5"
+                          for e in events), "Supporter did not fire")
+        elif case == "pressure-contested":
+            ready = samples["PRESSURED_READY"]
+            claims = {}
+            for event in events:
+                if event["event"] == "pressure_cover" and event["ent"] in {s["ent"] for s in ready.values()}:
+                    claims.setdefault(event["ent"], event)
+            check(len(claims) == 2 and all(e["cp"] == "-1" for e in claims.values()), "Both actors did not use local cover")
+            goals = [point(e, "goal") for e in claims.values()]
+            check(math.dist(*goals) >= 48, "Actors selected overlapping local cover")
+            for name, actor in ready.items():
+                states = [s for s in history if s["name"] == name and s["phase"] == "RESPONSE"]
+                check(all(s["health"] == actor["health"] for s in states), "Contested cover changed health")
+                check(any(s["role"] == "1" and float(s["speed"]) > 0 for s in states), "Actor did not move toward its own cover")
+                check(any(s["role"] == "2" and s["los"] == "0"
+                          and math.dist(point(s), point(claims[actor["ent"]], "goal")) < 24 for s in states),
+                      "Contested cover did not reach a concealed position")
+        elif case == "pressure-radius":
+            for phase, expected in (("SMALL", "0"), ("LARGE", "1"), ("DECAY", "0"), ("WALL", "0")):
+                state = samples[phase]["_memory_wall" if phase == "WALL" else "_memory_a"]
+                check(state["pressure"] == expected and state["health"] == state["max_health"], str(state))
+            wall = samples["WALL"]["_memory_wall"]
+            check(not any(e["event"] == "incoming_fire" and (e["phase"] == "SMALL" or (e["phase"] == "WALL" and e["ent"] == wall["ent"]))
+                          for e in events), "Rejected shot caused pressure")
+            check(any(e["event"] == "pressure_ignored" and e["reason"] == "wall" and e["phase"] == "WALL"
+                      and e["ent"] == wall["ent"]
+                      for e in events), "Wall control did not test shielding")
+        elif case in ("handoff", "handoff-unavailable"):
+            ready = samples["HANDOFF_READY"]
+            a, b = ready["_memory_a"], ready["_memory_b"]
+            check(a["role"] == "5" and b["role"] == "3", f"No established flank: {ready}")
+            moves = [e for e in events if e["event"] == "pressure_cover" and e["ent"] == a["ent"]]
+            check(moves, "Pressured supporter did not retreat")
+            check(any(s["name"] == "_memory_a" and s["phase"] == "HANDOFF" and s["role"] == "1" for s in history), "Supporter stayed exposed")
+            if case == "handoff":
+                c = ready["_memory_c"]
+                check(any(e["event"] == "support_handoff" and e["ent"] == a["ent"] and e["replacement"] == c["ent"]
+                          and e["mover"] == b["ent"] for e in events), "No support handoff")
+                check(samples["HANDOFF"]["_memory_b"]["role"] in ("3", "4")
+                      and samples["HANDOFF"]["_memory_c"]["role"] == "5", str(samples["HANDOFF"]))
+                check(not any(e["event"] == "tactic_finish" and e["ent"] == b["ent"] and e["phase"] == "HANDOFF"
+                              and e["reason"] in ("support_pressure", "support_lost") for e in events), "Handoff cancelled the flank")
+            else:
+                check(any(e["event"] == "tactic_finish" and e["ent"] == b["ent"] and e["reason"] == "support_pressure"
+                          for e in events), "Unsupported flank continued")
+        elif case in ("cover-reassess", "cover-hidden"):
+            before, moved = (samples[p]["_memory_a"] for p in ("BEFORE", "TARGET_MOVED"))
+            check(point(before, "anchor") != (0, 0, 0) and before["role"] in ("1", "2"), "No active cover pair")
+            check(before["seen"] == moved["seen"] and before["seen_time"] == moved["seen_time"], "Frozen move changed sight")
+            if case == "cover-reassess":
+                check(any(e["event"] == "tactic_finish" and e["reason"] == "cover_exposed" for e in events), "Exposed cover was retained")
+                changes = [e for e in events if e["event"] == "pressure_cover" and e["ent"] == before["ent"]]
+                observed = samples["REASSESS"]["_memory_a"]
+                check(changes and math.dist(point(changes[0], "knownposition"), point(observed, "seen")) < 1, "Replan did not use confirmed new position")
+                check(math.dist(point(changes[0], "goal"), point(observed, "seen")) >= 128, "Replan approached the threat")
+            else:
+                hidden = samples["HIDDEN"]["_memory_a"]
+                check(hidden["los"] == "0", "Target was not hidden")
+                for key in ("seen", "seen_time", "shared", "group_time"):
+                    check(hidden[key] == before[key], f"Hidden movement changed {key}")
+                check(all(math.dist(point(e, "knownposition"), point(before, "seen")) < 1
+                          for e in events if e["event"] == "pressure_cover" and e["phase"] in ("TARGET_MOVED", "HIDDEN")),
+                      "Replan used the hidden target position")
+        elif case in ("peek-save", "save-outward", "save-withdrawal"):
             before, after = (samples[p]["_memory_a"] for p in ("SAVE", "RESTORED"))
             check(before["role"] in ("1", "2") and point(before, "anchor") != (0, 0, 0), str(before))
             check("Loaded saved game format 3" in text, "Wrong save version")
+            if case != "peek-save":
+                check(before["role"] == "1" and before["peek"] == ("1" if case == "save-outward" else "0"), "Captured the wrong movement phase")
             check(math.dist(point(before), point(after)) < 4, "Loaded actor moved away from cover")
             for key in ("role", "cp", "combat_cp", "occupied", "anchor", "peek", "deadline", "tactic_goal", "tactic_threat"):
                 check(before[key] == after[key], f"Save changed {key}: {before} -> {after}")

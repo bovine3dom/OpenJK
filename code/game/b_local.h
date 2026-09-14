@@ -62,6 +62,7 @@ extern cvar_t		*debugNPCFreeze;		// set to disable NPC ai and temporarily freeze
 extern cvar_t		*debugNPCName;
 extern cvar_t		*d_JediAI;
 extern cvar_t		*d_squadTactics;
+extern cvar_t		*g_squadPressureRadius;
 extern cvar_t		*d_saberCombat;
 extern void NPC_Think ( gentity_t *self);
 extern void pitch_roll_for_slope( gentity_t *forwhom, vec3_t pass_slope = NULL, vec3_t storeAngles = NULL, qboolean keepPitch = qfalse );

@@ -593,8 +593,30 @@ static void MemoryCommand( void )
 				5, DAMAGE_NO_PROTECTION | DAMAGE_NO_KNOCKBACK, MOD_BLASTER );
 			actor->flags |= protection;
 		}
+		else if ( !Q_stricmp(action, "cooldown") )
+		{
+			TIMER_Set( actor, "regroupRetry", 10000 );
+			TIMER_Set( actor, "coverRetry", 10000 );
+		}
+		else if ( !Q_stricmp(action, "blockcp") )
+		{
+			for ( int cp = 0; cp < level.numCombatPoints; ++cp )
+				NPC_ReserveCombatPoint( cp );
+		}
+		else if ( !Q_stricmp(action, "pauseout") || !Q_stricmp(action, "pausein") )
+		{
+			if ( actor->NPC->tacticRole != 1 || !TIMER_Exists( actor, "coverPair" )
+				|| TIMER_Exists( actor, "coverPeek" ) != !Q_stricmp(action, "pauseout") )
+				return;
+			gi.cvar_set( "d_npcfreeze", "1" );
+			gi.cvar_set( "squad_capture_loop", "" );
+			VectorClear( actor->client->ps.velocity );
+			VectorClear( actor->client->ps.moveDir );
+			memset( &actor->NPC->last_ucmd, 0, sizeof(actor->NPC->last_ucmd) );
+		}
 		else if ( !Q_stricmp(action, "nearshot") || !Q_stricmp(action, "friendlyshot") || !Q_stricmp(action, "farshot")
-			|| !Q_stricmp(action, "peekshot") )
+			|| !Q_stricmp(action, "peekshot") || !Q_stricmp(action, "shortshot") || !Q_stricmp(action, "wideshot")
+			|| !Q_stricmp(action, "wallshot") || !Q_stricmp(action, "sideshot") )
 		{
 			if ( !Q_stricmp(action, "peekshot") && (actor->NPC->tacticRole != 2 || !TIMER_Exists( actor, "coverPeek" )) )
 				return;
@@ -608,7 +630,43 @@ static void MemoryCommand( void )
 			origin[0] += !Q_stricmp(action, "farshot") ? 160 : 48;
 			origin[1] -= 80;
 			origin[2] += 16;
-			gentity_t *bolt = CreateMissile( origin, direction, 1000, 200,
+			if ( !Q_stricmp(action, "wideshot") || !Q_stricmp(action, "sideshot") )
+			{
+				VectorCopy( actor->currentOrigin, origin );
+				origin[0] -= 80;
+				origin[1] += !Q_stricmp(action, "sideshot") ? 48 : 96;
+				origin[2] += 16;
+				VectorSet( direction, 1, 0, 0 );
+			}
+			if ( !Q_stricmp(action, "wallshot") )
+			{
+				bool found = false;
+				vec3_t chest, end;
+				VectorCopy( actor->currentOrigin, chest );
+				chest[2] += 8;
+				for ( int sample = 0; sample < 96 && !found; ++sample )
+				{
+					float angle = (sample%32)*M_PI/16;
+					float radius = Com_Clamp( 48, 240, g_squadPressureRadius->value-16 )*(sample/32+1)/3;
+					VectorCopy( chest, origin );
+					origin[0] += cosf(angle)*radius;
+					origin[1] += sinf(angle)*radius;
+					VectorSet( direction, -sinf(angle), cosf(angle), 0 );
+					VectorMA( origin, 50, direction, end );
+					trace_t trace;
+					gi.trace( &trace, origin, NULL, NULL, end, actor->s.number, MASK_SHOT, (EG2_Collision)0, 0 );
+					found = !trace.startsolid && !trace.allsolid && trace.fraction == 1
+						&& !G_ClearLOS( actor, origin, chest ) && !G_ClearLOS( actor, end, chest );
+				}
+				if ( !found )
+				{
+					gi.Printf( "aimemory event=rejected reason=no_shielded_shot\n" );
+					return;
+				}
+			}
+			int life = !Q_stricmp(action, "shortshot") || !Q_stricmp(action, "wallshot")
+				|| !Q_stricmp(action, "wideshot") || !Q_stricmp(action, "sideshot") ? 100 : 200;
+			gentity_t *bolt = CreateMissile( origin, direction, 1000, life,
 				!Q_stricmp(action, "friendlyshot") ? actor : actor->enemy );
 			bolt->s.weapon = WP_BLASTER;
 			bolt->damage = 5;
@@ -729,7 +787,7 @@ static void MemoryCommand( void )
 		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
 		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
 		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
-	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f\n",
+	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f support=%d retry=%d\n",
 		name, actor->NPC->combatPoint,
 		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,
 		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState,
@@ -740,7 +798,8 @@ static void MemoryCommand( void )
 		actor->NPC->stats.walkSpeed, actor->NPC->stats.runSpeed,
 		actor->NPC->last_ucmd.forwardmove, actor->NPC->last_ucmd.rightmove,
 		TIMER_Exists( actor, "coverPeek" ), !TIMER_Done( actor, "incomingFire" ),
-		actor->NPC->tacticCover[0], actor->NPC->tacticCover[1], actor->NPC->tacticCover[2] );
+		actor->NPC->tacticCover[0], actor->NPC->tacticCover[1], actor->NPC->tacticCover[2],
+		TIMER_Exists( actor, "coverSupport" ), TIMER_Get( actor, "regroupRetry" )-level.time );
 }
 
 void Svcmd_Nav_f( void )

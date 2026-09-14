@@ -109,7 +109,9 @@ was needed for the automated checks on the build machine.
 - [x] Use recent damage to request retreat cover before a new flank. Keep a bounded crouched hold at the cover point. Verify damage, movement, arrival, release, and no-chase protection in three new cases. All 19 squad cases and 13 memory cases pass under vanilla.
 - [x] Add a timed firing-and-cover cycle without damage. Return to a checked firing position after a quiet crouched hold. Request running for autonomous tactical retreats. Add cycle, cancellation, and measured gait checks.
 - [x] Add short firing steps beside the same cover anchor, bounded firing intervals, and return movement. React to nearby hostile missile segments without changing enemy memory. Verify repeated peeks, pressure decay and withdrawal, friendly/distant controls, and active-pair save/load.
-- [ ] Extend contact combat with animated leaning. Test repeated hits, no available cover, wall-shielded pressure, pending exposure interruption, contested graph destinations, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
+- [x] Add an adjustable 112-unit pressure radius and immediate local cover through movement cooldowns. Add retreat support, flank-support replacement, and cancellation without a replacement. Recheck cover against confirmed enemy movement and repeated blocked shots.
+- [x] Add eleven cases for cooldown bypass, radius and wall shielding, support and handoff, competing local destinations, cover reassessment, hidden movement, and saves during both peek movement directions.
+- [ ] Extend contact combat with animated leaning. Test repeated hits, no available cover, pending exposure interruption, larger multi-squad encounters, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
 
 Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port
 experimental and opt-in. Vanilla remains the default.

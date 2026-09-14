@@ -29,7 +29,8 @@ remain separate from this new report path.
 
 ## Tactical Choices
 
-New assignments require recent shared sight. The policy uses these roles:
+New flank and exposure assignments require recent shared sight. Emergency cover
+can use an older valid sight record. The policy uses these roles:
 
 | Value | Role |
 | --- | --- |
@@ -38,7 +39,7 @@ New assignments require recent shared sight. The policy uses these roles:
 | 2 | Hold after regrouping, or hold when no safe point is available |
 | 3 | Move along a flank |
 | 4 | Hold the reached flank position |
-| 5 | Stay in support of a flanker |
+| 5 | Support a flank or a retreat |
 
 A flank needs a healthy, armed, stationary supporter with a firing opportunity.
 Only one flanker is assigned per group. The destination must be lateral to the
@@ -83,7 +84,10 @@ for 500 ms can end the firing interval early. Pressure delays the next peek.
 
 A cover pair has a 15-second budget. Each movement has a six-second limit. When
 the pair ends, the NPC can select a new firing position through the existing
-cycle. A changed known threat or a blocked return route cancels the pair.
+cycle. Every 500 ms, the pair checks cover against the latest valid sight record.
+An enemy within 128 units of the anchor, exposed cover, a changed threat during
+movement, or a blocked return route requests a new cover search. Two blocked
+firing intervals also request a new position.
 The decisions use recorded threat positions. They do not track a hidden target.
 
 The cycle checks an authored combat point, then up to 64 nearby graph positions
@@ -99,14 +103,42 @@ stores the cover anchor. Other actors avoid the anchor while its owner peeks.
 
 Non-explosive linear missiles apply pressure along their actual movement segment.
 An eligible NPC must already have an enemy. A hostile shot must pass within
-72 units of its body center, with a clear local line between the segment and the
+112 units of its body center, with a clear local line between the segment and the
 NPC. This includes nearby impacts. Walls can block the pressure signal. Friendly
 shots, stationary missiles, and explosive missiles do not use this path.
+
+Use `g_squadPressureRadius` to adjust the radius. Its default is `112`. The code
+limits it to 0 through 256 units. Zero disables new pressure detection.
 
 Pressure lasts 1.5 seconds and requests cover through a two-second under-fire
 timer. Updates are limited to one per NPC per 300 ms. Pressure does not assign
 an enemy or update sight times and positions. Existing grenade avoidance remains
 separate.
+
+Fresh pressure is checked on the actor's own combat update. It bypasses the
+general movement and exposure retry delays. Exposed actors search authored
+points, graph positions, and local floor samples for cover. An emergency retreat
+does not require a future firing step. Failed searches wait 750 ms before retry.
+Actors already retreating keep moving. Concealed actors crouch and delay their
+next peek. Scripted goals and movement restrictions retain control.
+
+At trace level 3, `pressure_cover` records a new destination. `pressure_response`
+explains a hold, an existing retreat, a restriction, or a failed search. Level 4
+also records `pressure_ignored reason=wall` for a blocked pressure signal.
+
+## Covering a Retreat
+
+A nearby, healthy, stationary teammate can cover a retreat instead of starting
+its own exposure move. The supporter needs a clear muzzle line and must not be
+under pressure. Support ends when the retreat ends, support becomes unavailable,
+or its deadline expires. Its deadline cannot exceed the mover's six-second limit.
+
+A pressured flank supporter can withdraw. A ready teammate takes over if one is
+available. Otherwise, the flank is cancelled. A direct pressure response can
+also interrupt the flanker. These decisions use the existing role and timer
+fields; the save format remains 3. `retreat_support` and `support_handoff` record
+the assignments. Actors under pressure can all retreat if no suitable supporter
+remains.
 
 Autonomous role-1 movement requests running. Explicit script-walk orders remain
 in control unless a script-run order has priority. Navigation can still slow an
@@ -150,7 +182,7 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 25 cases. `contact-async` and
+The suite has 36 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
 reservation release. `contact-hold` checks that damage does not override a
@@ -166,6 +198,15 @@ that projectiles hit their targets. Campaign combat quality needs manual tests.
 `pressure` checks a real nearby missile, friendly and distant controls, decay,
 and unchanged hidden-target memory. `peek-pressure` checks quick withdrawal
 without damage. `peek-save` checks the anchor and active phase across save/load.
+The new cases check:
+
+- Immediate local cover through a forced ten-second cooldown in both commander modes. All authored points are reserved in this fixture.
+- Detection with a 112-unit radius but not a 72-unit radius, plus shielding by map geometry with a 256-unit test radius.
+- Firing support during a retreat, support replacement, and flank cancellation without a replacement.
+- Distinct local destinations and arrivals for two pressured actors.
+- Cover replacement after a confirmed approach, with no hidden-position update.
+- Save/load during both the outward peek and the withdrawal. The fixture freezes each actor after the movement starts.
+
 For conflicting claims in older saves, reconstruction keeps the first valid
 living owner in entity order.
 The save does not identify which conflicting claimant was the original owner.
@@ -190,9 +231,9 @@ test invulnerability; `hit` applies five damage through the damage handler;
 ## Remaining Checks
 
 Contact tests are still needed for repeated hits, expired damage records, no
-available cover, and damage during active flank or support roles. Add wall-shielded
-pressure, pending-exposure interruption, contested graph destinations, and
-explicit script-walk tests. Animated leaning is not implemented. Blocked-shot
+available cover, and damage during active flank or support roles. Add
+pending-exposure interruption, larger multi-squad encounters, and explicit
+script-walk tests. Animated leaning is not implemented. Blocked-shot
 posture recovery and friendly-shot rejection need dedicated runtime tests.
 
 Manual campaign tests must assess difficulty, retreat pacing, and bark clarity.
