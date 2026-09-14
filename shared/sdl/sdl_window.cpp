@@ -655,7 +655,8 @@ static rserr_t GLimp_SetMode(glconfig_t *glConfig, const windowDesc_t *windowDes
 
 	SDL_FreeSurface( icon );
 
-	if (!GLimp_DetectAvailableModes())
+	// A valid windowed context does not require a list of fullscreen modes.
+	if (!GLimp_DetectAvailableModes() && fullscreen)
 	{
 		return RSERR_UNKNOWN;
 	}

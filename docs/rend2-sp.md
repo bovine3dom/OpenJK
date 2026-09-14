@@ -89,6 +89,12 @@ This does not verify all cinematic scenes.
 
 ## Next Milestones
 
+Desktop feedback reports much longer loading, stutter, and input lag. SSAO with
+`cg_shadows 3` received positive visual feedback. Keep those effects as a test
+configuration while investigating performance; do not assume SSAO causes the
+large slowdown. Hardware P630 benchmarks now run without a monitor. See
+`benchmark-sp.md` for initial measurements and their limits.
+
 1. Add a dedicated beam scene to check color, depth, and draw order. The beam fix has passed build checks only.
 2. Test effects, UI, cinematics, and progression across more campaign scenes.
 3. Check Rend2 on the NVIDIA GTX 1080 Ti. Record frame times, settings, driver, and resolution. Check audio and manual gameplay.
