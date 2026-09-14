@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define _CG_PUBLIC_H
 
 #include "qcommon/reticle_hud.h"
+#include "qcommon/force_wheel.h"
 
 #define NUM_EXPLOSION_SHADERS	8
 #define NUM_EXPLOSION_FRAMES	3
@@ -225,6 +226,8 @@ Ghoul2 Insert End
 	CG_OPENJK_GETMENU_BYNAME,
 	CG_R_DRAWRETICLE,
 	CG_R_DRAWRETICLEHUD,
+	CG_FORCEWHEEL_UPDATE,
+	CG_R_DRAWFORCEWHEEL,
 } cgameImport_t;
 
 #ifdef JK2_MODE

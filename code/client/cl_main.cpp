@@ -217,6 +217,9 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
+#ifdef USE_RMLUI
+	CL_ForceWheelCancel();
+#endif
 	CL_ShutdownCGame();
 
 	S_StopAllSounds();
@@ -936,6 +939,9 @@ CL_InitRenderer
 ============
 */
 void CL_InitRenderer( void ) {
+#ifdef USE_RMLUI
+	CL_RmlUiShutdown();
+#endif
 	// this sets up the renderer and calls R_Init
 	re.BeginRegistration( &cls.glconfig );
 

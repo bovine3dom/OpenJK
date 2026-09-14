@@ -3828,8 +3828,52 @@ void CG_PrevForcePower_f( void )
 CG_DrawForceSelect
 ===================
 */
+static ForceWheel::Frame forceWheelFrame;
+
+void CG_UpdateForceWheel(qboolean allowed)
+{
+	forceWheelFrame = {};
+	forceWheelFrame.allowed = allowed;
+	forceWheelFrame.current = cg.forcepowerSelect;
+	if (allowed) {
+		forceWheelFrame.energy = g_entities[0].client->ps.forcePower;
+		forceWheelFrame.activePowers = g_entities[0].client->ps.forcePowersActive;
+		for (int i = 0; i < MAX_SHOWPOWERS; ++i)
+			if (ForcePower_Valid(i)) forceWheelFrame.available |= 1 << i;
+	}
+	cgi_ForceWheelUpdate(&forceWheelFrame);
+	if (allowed && forceWheelFrame.selected >= 0 && forceWheelFrame.selected < MAX_SHOWPOWERS &&
+		ForcePower_Valid(forceWheelFrame.selected)) {
+		cg.forcepowerSelect = forceWheelFrame.selected;
+		cg.forcepowerSelectTime = 0;
+		cgi_S_StartSound(NULL, 0, CHAN_AUTO, cgs.media.selectSound2);
+	}
+}
+
+static void CG_DrawForceWheel()
+{
+	const int labelSlot = forceWheelFrame.hovered >= 0 ? forceWheelFrame.hovered : cg.forcepowerSelect;
+	char text[1024] = {};
+	if (labelSlot >= 0 && labelSlot < MAX_SHOWPOWERS && (forceWheelFrame.available & (1 << labelSlot)))
+		cgi_SP_GetStringTextString(showPowersName[labelSlot], text, sizeof(text));
+	cgi_R_DrawForceWheel(text);
+	const float aspect = (640.0f * cgs.glconfig.vidHeight) / (480.0f * cgs.glconfig.vidWidth);
+	const int count = ForceWheel::Count(forceWheelFrame.available);
+	for (int sector = 0; sector < count; ++sector) {
+		const int slot = ForceWheel::Slot(forceWheelFrame.available, sector);
+		const float angle = sector * 2 * ForceWheel::Pi / count - ForceWheel::Pi / 2;
+		const float size = slot == forceWheelFrame.hovered ? 28.0f : 22.0f;
+		const vec4_t color = {0.85f, 0.92f, 1.0f, slot == forceWheelFrame.hovered ? 1.0f : 0.65f};
+		cgi_R_SetColor(color);
+		CG_DrawPic(320 + (cosf(angle) * ForceWheel::IconRadius - size / 2) * aspect,
+			240 + sinf(angle) * ForceWheel::IconRadius - size / 2, size * aspect, size, force_icons[showPowers[slot]]);
+	}
+	cgi_R_SetColor(NULL);
+}
+
 void CG_DrawForceSelect( void )
 {
+	if (forceWheelFrame.open) { CG_DrawForceWheel(); return; }
 	int		i;
 	int		count;
 	int		holdX;
@@ -4421,7 +4465,4 @@ static void CG_RunCinematicFrame(int handle) {
 }
 #pragma warning ( default : 4505)
 */
-
-
-
 

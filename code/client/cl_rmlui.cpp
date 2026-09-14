@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/ElementInstancer.h>
+#include <RmlUi/Core/ElementText.h>
 #include <RmlUi/Core/Geometry.h>
 #include <RmlUi/Core/RenderManager.h>
 #include "client.h"
@@ -39,7 +40,7 @@ class ReticleRenderer final : public Rml::RenderInterface {
 public:
 	Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
 		Rml::Span<const int> indices) override {
-		// This adapter is limited to the embedded reticle, not arbitrary documents.
+		// Larger documents must split meshes at the renderer's command limits.
 		if (vertices.size() > REF_UI_MAX_VERTICES || indices.size() > REF_UI_MAX_INDICES) {
 			Com_Printf("RmlUi: reticle geometry exceeds renderer limits\n");
 			return 0;
@@ -51,7 +52,6 @@ public:
 	}
 	void RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector2f translation,
 		Rml::TextureHandle texture) override {
-		if (texture) return;
 		const auto& geometry = *reinterpret_cast<Geometry*>(handle);
 		polyVert_t vertices[REF_UI_MAX_VERTICES] = {};
 		for (size_t i = 0; i < geometry.vertices.size(); ++i) {
@@ -59,14 +59,12 @@ public:
 			auto& vertex = vertices[i];
 			vertex.xyz[0] = (source.position.x + translation.x) * 640.0f / cls.glconfig.vidWidth;
 			vertex.xyz[1] = (source.position.y + translation.y) * 480.0f / cls.glconfig.vidHeight;
-			// RmlUi uses premultiplied colors; the legacy renderer uses straight alpha.
-			for (int c = 0; c < 3; ++c)
-				vertex.modulate[c] = source.colour.alpha ? static_cast<byte>(std::min(255.0f,
-					source.colour[c] * 255.0f / source.colour.alpha)) : 0;
-			vertex.modulate[3] = source.colour.alpha;
+			vertex.st[0] = source.tex_coord.x;
+			vertex.st[1] = source.tex_coord.y;
+			for (int c = 0; c < 4; ++c) vertex.modulate[c] = source.colour[c];
 		}
 		re.DrawUiGeometry(static_cast<int>(geometry.vertices.size()), vertices,
-			static_cast<int>(geometry.indices.size()), geometry.indices.data(), scissor ? clip : nullptr);
+			static_cast<int>(geometry.indices.size()), geometry.indices.data(), scissor ? clip : nullptr, qhandle_t(texture));
 	}
 	void EnableScissorRegion(bool enable) override { scissor = enable; }
 	void SetScissorRegion(Rml::Rectanglei region) override {
@@ -74,13 +72,18 @@ public:
 		clip[2] = region.Width(); clip[3] = region.Height();
 	}
 	Rml::TextureHandle LoadTexture(Rml::Vector2i&, const Rml::String&) override { return 0; }
-	Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte>, Rml::Vector2i) override { return 0; }
-	void ReleaseTexture(Rml::TextureHandle) override {}
+	Rml::TextureHandle GenerateTexture(Rml::Span<const Rml::byte> data, Rml::Vector2i size) override {
+		if (size.x <= 0 || size.y <= 0 || data.size() != size_t(size.x) * size.y * 4) return 0;
+		const qhandle_t texture = re.CreateUiTexture(size.x, size.y, data.data());
+		if (!texture) Com_Printf("RmlUi: cannot upload font texture %dx%d\n", size.x, size.y);
+		return Rml::TextureHandle(texture);
+	}
+	void ReleaseTexture(Rml::TextureHandle texture) override { re.ReleaseUiTexture(qhandle_t(texture)); }
 };
 
-class ResourceRings final : public Rml::Element {
+class RadialElement : public Rml::Element {
+protected:
 	Rml::Geometry geometry;
-	ReticleHud::Display display;
 	float pixelScale = 1;
 
 	void Arc(Rml::Mesh& mesh, float radius, float thickness, float start, float sweep,
@@ -103,6 +106,12 @@ class ResourceRings final : public Rml::Element {
 			}
 		}
 	}
+public:
+	explicit RadialElement(const Rml::String& tag) : Rml::Element(tag) {}
+};
+
+class ResourceRings final : public RadialElement {
+	ReticleHud::Display display;
 	void Ring(Rml::Mesh& mesh, float radius, float value, Rml::Colourb color, float alpha) {
 		Arc(mesh, radius, 0.8f, -90, 360, color, alpha * 0.12f);
 		Arc(mesh, radius, 0.8f, -90, 360 * value, color, alpha * 0.55f);
@@ -126,10 +135,37 @@ class ResourceRings final : public Rml::Element {
 		geometry.Render(GetAbsoluteOffset());
 	}
 public:
-	explicit ResourceRings(const Rml::String& tag) : Rml::Element(tag) {}
+	explicit ResourceRings(const Rml::String& tag) : RadialElement(tag) {}
 	void SetDisplay(const ReticleHud::Display& value, float scale) { display = value; pixelScale = scale; }
 };
 
+class ForceWheelElement final : public RadialElement {
+	ForceWheel::Frame frame;
+	void OnRender() override {
+		if (!frame.open || !frame.available) return;
+		Rml::Mesh mesh;
+		const int count = ForceWheel::Count(frame.available);
+		const float step = 360.0f / count;
+		for (int sector = 0; sector < count; ++sector) {
+			const bool selected = ForceWheel::Slot(frame.available, sector) == frame.hovered;
+			const float start = -90 + sector * step - step / 2 + 1.5f;
+			Arc(mesh, ForceWheel::Radius, 44, start, step - 3,
+				selected ? Rml::Colourb(100, 180, 240) : Rml::Colourb(15, 20, 25), selected ? 0.28f : 0.4f);
+			Arc(mesh, ForceWheel::Radius, 0.8f, start, step - 3, {160, 205, 240}, selected ? 0.7f : 0.25f);
+		}
+		const size_t cursorStart = mesh.vertices.size();
+		Arc(mesh, 2, 2, 0, 360, {255, 255, 255}, 0.65f);
+		for (size_t i = cursorStart; i < mesh.vertices.size(); ++i)
+			mesh.vertices[i].position += Rml::Vector2f(frame.x, frame.y) * pixelScale;
+		geometry = GetRenderManager()->MakeGeometry(std::move(mesh));
+		geometry.Render(GetAbsoluteOffset());
+	}
+public:
+	explicit ForceWheelElement(const Rml::String& tag) : RadialElement(tag) {}
+	void SetFrame(const ForceWheel::Frame& value, float scale) { frame = value; pixelScale = scale; }
+};
+
+Rml::ElementInstancerGeneric<ForceWheelElement> wheelInstancer;
 Rml::ElementInstancerGeneric<ResourceRings> resourceInstancer;
 ReticleHud::Activity activity;
 ReticleSystem systemInterface;
@@ -138,6 +174,13 @@ Rml::Context* context = nullptr;
 Rml::ElementDocument* document = nullptr;
 Rml::Element* dot = nullptr;
 ResourceRings* resources = nullptr;
+Rml::Context* wheelContext = nullptr;
+Rml::ElementDocument* wheelDocument = nullptr;
+ForceWheelElement* wheelElement = nullptr;
+Rml::Element* wheelLabel = nullptr;
+Rml::ElementText* wheelLabelText = nullptr;
+void* fontData = nullptr;
+bool fontReady = false;
 bool initialized = false;
 cvar_t* enabled = nullptr;
 cvar_t* scale = nullptr;
@@ -146,11 +189,20 @@ cvar_t* hudEnabled = nullptr;
 } // namespace
 
 void CL_RmlUiShutdown() {
+	CL_ForceWheelCancel();
 	if (initialized) Rml::Shutdown();
+	if (fontData) FS_FreeFile(fontData);
+	fontData = nullptr;
+	fontReady = false;
 	context = nullptr;
 	document = nullptr;
 	dot = nullptr;
 	resources = nullptr;
+	wheelContext = nullptr;
+	wheelDocument = nullptr;
+	wheelElement = nullptr;
+	wheelLabel = nullptr;
+	wheelLabelText = nullptr;
 	activity.Reset();
 	initialized = false;
 }
@@ -164,20 +216,38 @@ void CL_RmlUiInit() {
 	Rml::SetRenderInterface(&renderInterface);
 	initialized = Rml::Initialise();
 	if (initialized) {
+		const int fontSize = FS_ReadFile("ui/fonts/plex/IBMPlexMono-Regular.ttf", &fontData);
+		fontReady = fontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(fontData), size_t(fontSize)},
+			"IBM Plex Mono", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal);
+		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; Force wheel unavailable\n");
 		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
+		Rml::Factory::RegisterElementInstancer("force-wheel", &wheelInstancer);
 		context = Rml::CreateContext("reticle", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 		if (context) document = context->LoadDocumentFromMemory(reticleRml);
+		wheelContext = Rml::CreateContext("force-wheel", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+		if (wheelContext) wheelDocument = wheelContext->LoadDocumentFromMemory(R"(
+<rml><head><style>
+body { margin: 0; width: 100%; height: 100%; }
+force-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#power-name { position: absolute; font-family: IBM Plex Mono; color: #e5ecf2; text-align: center; line-height: 120%; }
+</style></head><body><force-wheel id="wheel"/><div id="power-name">Force</div></body></rml>)");
 	}
 	if (document) {
 		dot = document->GetElementById("dot");
 		resources = static_cast<ResourceRings*>(document->GetElementById("resources"));
 	}
-	if (!document || !dot || !resources) {
+	if (wheelDocument) {
+		wheelElement = static_cast<ForceWheelElement*>(wheelDocument->GetElementById("wheel"));
+		wheelLabel = wheelDocument->GetElementById("power-name");
+		if (wheelLabel) wheelLabelText = static_cast<Rml::ElementText*>(wheelLabel->GetFirstChild());
+	}
+	if (!document || !dot || !resources || !wheelElement || !wheelLabelText) {
 		Com_Printf("RmlUi: reticle initialization failed; using legacy crosshair\n");
 		CL_RmlUiShutdown();
 		return;
 	}
 	document->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+	wheelDocument->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
 }
 
@@ -186,6 +256,7 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 	if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(size) || size <= 0) return qfalse;
 	const int width = cls.glconfig.vidWidth, height = cls.glconfig.vidHeight;
 	if (width <= 0 || height <= 0) return qfalse;
+	if (CL_ForceWheelActive()) return ReticleHud::DotDrawn | (state && hudEnabled->integer ? ReticleHud::ResourcesDrawn : 0);
 	const float uiScale = std::isfinite(scale->value) ? std::max(0.25f, std::min(4.0f, scale->value)) : 0.75f;
 	const float pixels = size * height / 480.0f * uiScale;
 	context->SetDimensions({width, height});
@@ -205,4 +276,25 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 	context->Update();
 	context->Render();
 	return ReticleHud::DotDrawn | (drawHud ? ReticleHud::ResourcesDrawn : 0);
+}
+
+bool CL_RmlUiAvailable() { return wheelElement && fontReady; }
+
+void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label) {
+	if (!CL_RmlUiAvailable()) return;
+	wheelContext->SetDimensions({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+	const float pixelScale = cls.glconfig.vidHeight / 480.0f;
+	wheelElement->SetFrame(frame, pixelScale);
+	const float labelWidth = std::round(120 * pixelScale);
+	wheelLabel->SetProperty(Rml::PropertyId::Width, Rml::Property(labelWidth, Rml::Unit::PX));
+	wheelLabel->SetProperty(Rml::PropertyId::Left, Rml::Property(std::round((cls.glconfig.vidWidth - labelWidth) / 2), Rml::Unit::PX));
+	wheelLabel->SetProperty(Rml::PropertyId::Top, Rml::Property(std::round(cls.glconfig.vidHeight / 2.0f + 18 * pixelScale), Rml::Unit::PX));
+	wheelLabel->SetProperty(Rml::PropertyId::FontSize, Rml::Property(std::round(14 * pixelScale), Rml::Unit::PX));
+	// Stock Western StringEd labels use single-byte characters, not UTF-8.
+	Rml::String text;
+	for (const unsigned char* p = reinterpret_cast<const unsigned char*>(label); p && *p; ++p)
+		text += Rml::StringUtilities::ToUTF8(Rml::Character(*p));
+	wheelLabelText->SetText(text);
+	wheelContext->Update();
+	wheelContext->Render();
 }

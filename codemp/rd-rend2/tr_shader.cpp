@@ -5152,7 +5152,7 @@ static void CreateInternalShaders( void ) {
 	stages[0].rgbGen = CGEN_EXACT_VERTEX;
 	stages[0].alphaGen = AGEN_VERTEX;
 	stages[0].stateBits = GLS_DEPTHTEST_DISABLE |
-		GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+		GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
 	tr.uiGeometryShader = FinishShader();
 #endif
 }

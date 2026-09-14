@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "rd-common/tr_public.h"
 #include "rd-common/tr_common.h"
 #ifdef REND2_SP
-static_assert(REF_API_VERSION == 19, "Rend2 SP requires the SP private header path");
+static_assert(REF_API_VERSION == 20, "Rend2 SP requires the SP private header path");
 struct skin_t;
 #include "rd-rend2/tr_sp_import.h"
 #define ri riRend2
@@ -3641,10 +3641,15 @@ typedef struct {
 	int clip[4];
 	polyVert_t vertices[REF_UI_MAX_VERTICES];
 	int indices[REF_UI_MAX_INDICES];
+	image_t* texture;
 } uiGeometryCommand_t;
 
 void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
-	int numIndices, const int *indices, const int *clip );
+	int numIndices, const int *indices, const int *clip, qhandle_t texture );
+image_t* R_GetUiTexture(qhandle_t handle);
+qhandle_t RE_CreateUiTexture(int width, int height, const byte* rgba);
+void RE_ReleaseUiTexture(qhandle_t handle);
+void R_DeleteUiTextures();
 #endif
 
 typedef struct rotatePicCommand_s {

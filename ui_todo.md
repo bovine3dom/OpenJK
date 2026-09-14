@@ -27,13 +27,20 @@
 - [ ] Check collision movement, enemy/friendly colors, Force hints, vehicles, pickup animation, and reduced view size in gameplay.
 - [ ] Check the result on hardware graphics drivers.
 
-The MVP supports untextured geometry and rectangular clipping. It does not yet
-support text, images, input, or general UI screens. MP, Jedi Outcast, turret
+The MVP supports geometry, rectangular clipping, and generated font textures.
+General UI screens and image-file loading are not yet supported. MP, Jedi Outcast, turret
 artwork, and the Force corona still use their existing paths.
 See [MVP use and tests](docs/rmlui-reticle.md) and
 [dependency records](docs/rmlui-dependencies.md).
 
 ## Migration
+
+The first SP Force wheel uses a normal controls-menu binding. G is the initial
+default when free. Middle mouse can be assigned in the menu. See
+[Force wheel controls and tests](docs/force-wheel.md).
+
+- [x] Keep movement active while the Force wheel is open. Block combat actions and camera turning.
+- [x] Render the wheel label with bundled IBM Plex Mono through FreeType at native pixel size.
 
 RmlUi is the leading candidate. Prove its integration before replacing many screens.
 Keep existing screens available during migration.
@@ -42,7 +49,8 @@ Keep existing screens available during migration.
 - [ ] Add filesystem, localization, font, and input adapters. Keep the existing event loop, cvar store, and binding store.
 - [ ] Give each screen one UI owner. Transfer focus explicitly between old and new menus.
 - [ ] Prove a simple test panel across resolutions, UI scales, focus changes, and `vid_restart`.
-- [ ] Add the Force wheel with a center dead zone, stable sector selection, and explicit select/cancel states.
+- [x] Add the SP mouse Force wheel with a center dead zone, stable sector selection, and explicit select/cancel states.
+- [ ] Check Force wheel icon readability and mouse feel during human play.
 - [ ] Separate settings definitions, validation, Apply/Discard, and restart rules from presentation.
 - [ ] Migrate settings screens, then main and pause menus.
 - [ ] Migrate HUD components individually. Disable the old drawing path for each replaced component.

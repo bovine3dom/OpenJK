@@ -30,7 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../ghoul2/G2.h"
 #include "../ghoul2/ghoul2_gore.h"
 
-#define	REF_API_VERSION		19
+#define	REF_API_VERSION		20
 
 #define REF_UI_MAX_VERTICES 512
 #define REF_UI_MAX_INDICES 1536
@@ -187,8 +187,8 @@ typedef struct {
 	qboolean(*GetLighting)( const vec3_t org, vec3_t ambientLight, vec3_t directedLight, vec3_t lightDir);
 
 	void	(*SetColor)( const float *rgba );	// NULL = 1,1,1,1
-	// Untextured triangles: xyz x/y use 640x480 coordinates; z and st are ignored.
-	// modulate is straight RGBA. clip is optional x,y,width,height in framebuffer
+	// UI triangles: xyz x/y use 640x480 coordinates; st are normalized UVs; z is ignored.
+	// modulate is premultiplied RGBA. clip is optional x,y,width,height in framebuffer
 	// pixels, with a top-left origin. NULL disables clipping for this draw only.
 	// Data is copied. Counts must not exceed REF_UI_MAX_*; indices must form
 	// complete triangles and refer to valid vertices. Invalid or queue-full
@@ -196,7 +196,12 @@ typedef struct {
 	// Each call reserves a fixed-size command for REF_UI_MAX_* elements.
 	// Zero counts or non-positive clip dimensions produce no draw.
 	void (*DrawUiGeometry)( int numVertices, const polyVert_t *vertices,
-		int numIndices, const int *indices, const int *clip );
+		int numIndices, const int *indices, const int *clip, qhandle_t texture );
+	// Textures use premultiplied RGBA8 and power-of-two dimensions. Zero means failure
+	// or untextured geometry. Upload copies the data; release drains queued draws.
+	// Handles expire on renderer shutdown. No mipmaps, gamma, or picmip are applied.
+	qhandle_t (*CreateUiTexture)(int width, int height, const byte* rgba);
+	void (*ReleaseUiTexture)(qhandle_t texture);
 	void	(*DrawStretchPic) ( float x, float y, float w, float h,
 		float s1, float t1, float s2, float t2, qhandle_t hShader );	// 0 = white
 	void	(*DrawRotatePic) ( float x, float y, float w, float h,

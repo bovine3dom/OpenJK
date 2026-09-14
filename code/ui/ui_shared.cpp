@@ -5490,6 +5490,9 @@ static const char *g_bindCommands[] = {
 #endif
 	"+force_grip",
 	"+force_lightning",
+#ifdef USE_RMLUI
+	"+forcewheel",
+#endif
 	"+forward",
 	"+left",
 	"+lookdown",
@@ -5731,6 +5734,38 @@ void Menu_PostParse(menuDef_t *menu)
 	{
 		return;
 	}
+
+#ifdef USE_RMLUI
+	if ((!Q_stricmp(menu->window.name, "controlsMenu") || !Q_stricmp(menu->window.name, "ingameControlsMenu")) &&
+		menu->itemCount < MAX_MENUITEMS && !Menu_FindItemByName(menu, "forcewheel")) {
+		// Add a bind row without replacing the game's menu assets.
+		for (int i = 0; i < menu->itemCount; ++i) {
+			const itemDef_t* source = menu->items[i];
+			if (!source->cvar || Q_stricmp(source->cvar, "forceprev")) continue;
+			itemDef_t* item = (itemDef_t*)UI_Alloc(sizeof(itemDef_t));
+			if (!item) break;
+			Item_Init(item);
+			item->parent = menu;
+			item->window = source->window;
+			item->window.name = (char*)String_Alloc("forcewheel");
+			item->window.rectClient.y += item->window.rectClient.h;
+			item->type = ITEM_TYPE_BIND;
+			item->text = (char*)String_Alloc("Force power wheel");
+			item->descText = String_Alloc("Hold to open. Move the mouse. Release to select a power.");
+			item->cvar = String_Alloc("+forcewheel");
+			item->font = source->font;
+			item->textscale = source->textscale;
+			item->textalignment = source->textalignment;
+			item->textalignx = source->textalignx;
+			item->textaligny = source->textaligny;
+			item->mouseEnter = String_Alloc("show keybindstatus;");
+			item->mouseExit = String_Alloc("hide keybindstatus;");
+			Item_ValidateTypeData(item);
+			menu->items[menu->itemCount++] = item;
+			break;
+		}
+	}
+#endif
 
 	if (menu->fullScreen)
 	{

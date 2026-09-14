@@ -2104,6 +2104,9 @@ RE_Shutdown
 ===============
 */
 void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
+#ifdef REND2_SP
+	R_DeleteUiTextures();
+#endif
 
 	ri.Printf( PRINT_ALL, "RE_Shutdown( %i )\n", destroyWindow );
 

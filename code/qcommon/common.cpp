@@ -1298,6 +1298,10 @@ Com_ModifyMsec
 */
 
 
+#ifdef USE_RMLUI
+extern bool CL_ForceWheelActive();
+#endif
+
 int Com_ModifyMsec( int msec, float &fraction )
 {
 	int		clampTime;
@@ -1318,6 +1322,15 @@ int Com_ModifyMsec( int msec, float &fraction )
 		msec=(int)floor(fraction);
 		fraction-=(float)msec;
 	}
+
+#ifdef USE_RMLUI
+	// Keep the wheel's slow time separate from gameplay's timescale ownership.
+	if (CL_ForceWheelActive()) {
+		const float slowed = (msec + fraction) * 0.2f;
+		msec = (int)floor(slowed);
+		fraction = slowed - msec;
+	}
+#endif
 
 	// don't let it scale below 1 msec
 	if ( msec < 1 )

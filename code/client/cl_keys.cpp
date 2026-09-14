@@ -1186,12 +1186,16 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 		end = strchr( p, ';' );
 		if( end )
 			*end = '\0';
+		qboolean runCommand = allCommands;
+#ifdef USE_RMLUI
+		if (down && CL_ForceWheelCapturesInput() && !ForceWheel::AllowsCommand(p)) runCommand = qfalse;
+#endif
 		if( *p == '+' )
 		{
 			// button commands add keynum and time as parameters
 			// so that multiple sources can be discriminated and
 			// subframe corrected
-			if ( allCommands || ( allowUpCmds && !down ) ) {
+			if ( runCommand || ( allowUpCmds && !down ) ) {
 				char cmd[1024];
 				Com_sprintf( cmd, sizeof( cmd ), "%c%s %d %d\n",
 					( down ) ? '+' : '-', p + 1, key, time );
@@ -1201,7 +1205,7 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 		else if( down )
 		{
 			// normal commands only execute on key press
-			if ( allCommands || CL_BindUICommand( p ) ) {
+			if ( runCommand || CL_BindUICommand( p ) ) {
 				Cbuf_AddText( p );
 				Cbuf_AddText( "\n" );
 			}
@@ -1242,6 +1246,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 	}
 
 	// keys can still be used for bound actions
+#ifdef USE_RMLUI
+	if (CL_ForceWheelKey(keynames[key].upper) && kg.keys[keynames[key].upper].repeats > 1) return;
+	if (CL_ForceWheelCapturesInput() && !Key_GetCatcher()) {
+		if (key == A_ESCAPE) { CL_ForceWheelCancel(); return; }
+	}
+#endif
 	if ( ( cls.state == CA_CINEMATIC || CL_IsRunningInGameCinematic()) && !Key_GetCatcher() )
 	{
 		SCR_StopCinematic(qtrue);
@@ -1356,6 +1366,9 @@ Key_ClearStates
 ===================
 */
 void Key_ClearStates( void ) {
+#ifdef USE_RMLUI
+	CL_ForceWheelCancel();
+#endif
 	kg.anykeydown = qfalse;
 	kg.keyDownCount = 0;
 

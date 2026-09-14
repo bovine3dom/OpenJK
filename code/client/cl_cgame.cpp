@@ -1036,6 +1036,16 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_DRAWSCREENSHOT:
 		re.DrawStretchRaw( VMF(1), VMF(2), VMF(3), VMF(4), SG_SCR_WIDTH, SG_SCR_HEIGHT, SCR_GetScreenshot(0), 0, qtrue);
 		return 0;
+	case CG_FORCEWHEEL_UPDATE:
+#ifdef USE_RMLUI
+		CL_ForceWheelUpdate((ForceWheel::Frame*)VMA(1));
+#endif
+		return 0;
+	case CG_R_DRAWFORCEWHEEL:
+#ifdef USE_RMLUI
+		CL_ForceWheelDraw((const char*)VMA(1));
+#endif
+		return 0;
 	case CG_R_MODELBOUNDS:
 		re.ModelBounds( args[1], (float *) VMA(2), (float *) VMA(3) );
 		return 0;

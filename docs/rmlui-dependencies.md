@@ -7,9 +7,10 @@ reticle to the Jedi Academy single-player client only. Set `BuildRmlUi=OFF`
 to omit the integration and its dependencies. Jedi Outcast and multiplayer
 targets do not link these libraries.
 
-The MVP uses geometry-only RML embedded in `code/client/cl_rmlui.cpp`.
-It does not need font files, textures, or a separate asset package.
-FreeType supplies the default RmlUi Core font engine.
+The MVP uses RML embedded in `code/client/cl_rmlui.cpp`. The reticle uses geometry
+only. The Force wheel label uses FreeType and the bundled IBM Plex Mono font.
+The package includes the font, license, and source record from `ui/fonts/plex`.
+No desktop font installation or separate asset download is required.
 
 ## Source Archives
 

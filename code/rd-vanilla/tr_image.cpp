@@ -829,6 +829,8 @@ void R_Images_DeleteLightMaps(void)
 	GL_ResetBinds();
 }
 
+#include "renderer/ui_texture.h"
+
 // special function currently only called by Dissolve code...
 //
 void R_Images_DeleteImage(image_t *pImage)
@@ -1500,4 +1502,3 @@ void R_DeleteTextures( void ) {
 	R_Images_Clear();
 	GL_ResetBinds();
 }
-

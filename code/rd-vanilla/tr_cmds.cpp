@@ -226,7 +226,7 @@ RE_DrawUiGeometry
 =============
 */
 void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
-	int numIndices, const int *indices, const int *clip ) {
+	int numIndices, const int *indices, const int *clip, qhandle_t texture ) {
 	static_assert( PAD(sizeof(uiGeometryCommand_t), sizeof(void *)) +
 		PAD(sizeof(swapBuffersCommand_t), sizeof(void *)) + sizeof(int) <= MAX_RENDER_COMMANDS,
 		"UI geometry exceeds command capacity" );
@@ -247,6 +247,8 @@ void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
 	if ( clip && (clip[2] <= 0 || clip[3] <= 0) ) {
 		return;
 	}
+	image_t* image = texture ? R_GetUiTexture(texture) : tr.whiteImage;
+	if (!image) return;
 	uiGeometryCommand_t *cmd = (uiGeometryCommand_t *)R_GetCommandBuffer( sizeof(*cmd) );
 	if ( !cmd ) {
 		R_IssuePendingRenderCommands();
@@ -257,6 +259,7 @@ void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
 		return;
 	}
 	cmd->commandId = RC_UI_GEOMETRY;
+	cmd->texture = image;
 	cmd->numVertices = numVertices;
 	cmd->numIndices = numIndices;
 	cmd->hasClip = clip ? qtrue : qfalse;

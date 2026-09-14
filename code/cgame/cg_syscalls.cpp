@@ -342,6 +342,9 @@ int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const
 	return Q_syscall(CG_R_DRAWRETICLEHUD, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(size), color, state);
 }
 
+void cgi_ForceWheelUpdate(ForceWheel::Frame* frame) { Q_syscall(CG_FORCEWHEEL_UPDATE, frame); }
+void cgi_R_DrawForceWheel(const char* label) { Q_syscall(CG_R_DRAWFORCEWHEEL, label); }
+
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 							   float s1, float t1, float s2, float t2, qhandle_t hShader ) {
 	Q_syscall( CG_R_DRAWSTRETCHPIC, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(w), PASSFLOAT(h), PASSFLOAT(s1), PASSFLOAT(t1), PASSFLOAT(s2), PASSFLOAT(t2), hShader );

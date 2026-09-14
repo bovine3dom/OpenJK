@@ -3648,6 +3648,10 @@ void R_InitImages( void ) {
 R_DeleteTextures
 ===============
 */
+#ifdef REND2_SP
+#include "renderer/ui_texture.h"
+#endif
+
 void R_DeleteTextures( void ) {
 #ifdef REND2_SP
 	R_SP_ShutdownEffects();

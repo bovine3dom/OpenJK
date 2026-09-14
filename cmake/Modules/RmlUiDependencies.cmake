@@ -41,8 +41,20 @@ function(openjk_add_rmlui_dependencies)
 		EXCLUDE_FROM_ALL)
 	FetchContent_MakeAvailable(rmlui)
 
+	file(SHA256 "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf" plex_hash)
+	if(NOT plex_hash STREQUAL "fe11304a5fe956d5744e9b6a246cc83d90425245e75a62230044966ca96a7f50")
+		message(FATAL_ERROR "IBM Plex Mono does not match its pinned source hash")
+	endif()
+	set(font_install_dir "${JKAInstallDir}/OpenJK/ui/fonts")
+	if(APPLE AND MakeApplicationBundles)
+		set(font_install_dir "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK/ui/fonts")
+	endif()
+	install(DIRECTORY "${CMAKE_SOURCE_DIR}/ui/fonts/plex"
+		DESTINATION "${font_install_dir}" COMPONENT ${JKASPClientComponent})
+
 	install(FILES "${CMAKE_SOURCE_DIR}/docs/rmlui-dependencies.md"
 		"${CMAKE_SOURCE_DIR}/docs/rmlui-reticle.md"
+		"${CMAKE_SOURCE_DIR}/docs/force-wheel.md"
 		DESTINATION "${JKAInstallDir}" COMPONENT ${JKASPClientComponent})
 	install(FILES "${rmlui_SOURCE_DIR}/LICENSE.txt"
 		DESTINATION "${JKAInstallDir}/licenses/rmlui" COMPONENT ${JKASPClientComponent})

@@ -68,6 +68,15 @@ kbutton_t	in_buttons[32];
 
 qboolean	in_mlooking;
 
+#ifdef USE_RMLUI
+void CL_ClearWheelActions() {
+	memset(in_buttons, 0, sizeof(in_buttons));
+	memset(cl.mouseDx, 0, sizeof(cl.mouseDx));
+	memset(cl.mouseDy, 0, sizeof(cl.mouseDy));
+	cl.gcmdSendValue = qfalse;
+}
+#endif
+
 extern cvar_t	*in_joystick;
 
 static void IN_UseGivenForce(void)
@@ -446,6 +455,9 @@ CL_MouseEvent
 =================
 */
 void CL_MouseEvent( int dx, int dy, int time ) {
+#ifdef USE_RMLUI
+	if (CL_ForceWheelMouse(dx, dy)) return;
+#endif
 	if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
 		_UI_MouseEvent( dx, dy );
 	}
@@ -677,6 +689,19 @@ qboolean cl_overrideAngles = qfalse;
 usercmd_t CL_CreateCmd( void ) {
 	usercmd_t	cmd;
 	vec3_t		oldAngles;
+
+#ifdef USE_RMLUI
+	if (CL_ForceWheelCapturesInput()) {
+		CL_ClearWheelActions();
+		memset(&cmd, 0, sizeof(cmd));
+		CL_KeyMove(&cmd);
+		VectorCopy(cl.viewangles, oldAngles);
+		CL_JoystickMove(&cmd);
+		VectorCopy(oldAngles, cl.viewangles);
+		CL_FinishMove(&cmd);
+		return cmd;
+	}
+#endif
 
 	VectorCopy( cl.viewangles, oldAngles );
 
@@ -938,6 +963,9 @@ CL_InitInput
 ============
 */
 void CL_InitInput( void ) {
+#ifdef USE_RMLUI
+	CL_InitForceWheel();
+#endif
 	Cmd_AddCommand ("centerview",IN_CenterView);
 
 	Cmd_AddCommand ("+moveup",IN_UpDown);
@@ -1036,4 +1064,3 @@ void CL_InitInput( void ) {
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
 	cl_debugMove = Cvar_Get ("cl_debugMove", "0", 0);
 }
-

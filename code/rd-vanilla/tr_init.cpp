@@ -1786,6 +1786,7 @@ RE_Shutdown
 */
 extern void R_ShutdownWorldEffects(void);
 void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
+	R_DeleteUiTextures();
 	for ( size_t i = 0; i < numCommands; i++ )
 		ri.Cmd_RemoveCommand( commands[i].cmd );
 
@@ -2025,6 +2026,8 @@ extern "C" Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *
 	REX(SetColor);
 	re.DrawStretchPic = RE_StretchPic;
 	re.DrawUiGeometry = RE_DrawUiGeometry;
+	re.CreateUiTexture = RE_CreateUiTexture;
+	re.ReleaseUiTexture = RE_ReleaseUiTexture;
 	re.DrawRotatePic = RE_RotatePic;
 	re.DrawRotatePic2 = RE_RotatePic2;
 	REX(LAGoggles);

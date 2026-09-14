@@ -164,6 +164,8 @@ extern "C" Q_EXPORT refexport_t *QDECL GetRefAPI(int apiVersion, refimport_t *im
 	REX(SetColor);
 	re.DrawStretchPic = RE_StretchPic;
 	re.DrawUiGeometry = RE_DrawUiGeometry;
+	re.CreateUiTexture = RE_CreateUiTexture;
+	re.ReleaseUiTexture = RE_ReleaseUiTexture;
 	re.DrawRotatePic = RE_RotatePic;
 	re.DrawRotatePic2 = RE_RotatePic2;
 	REX(LAGoggles);

@@ -4,7 +4,7 @@
 
 The Jedi Academy SP client enables the RmlUi reticle by default. Both vanilla
 and Rend2 support it. Use matching client, game, and renderer binaries from
-the same package. The SP renderer API version is now 19.
+the same package. The SP renderer API version is now 20.
 
 Use these console settings:
 
@@ -81,19 +81,21 @@ This change replaces the normal SP crosshair and both resource panels. It does n
 the panel-turret artwork, Force corona, MP reticle, or Jedi Outcast reticle.
 It does not change collision tests or the timing of target identification.
 
-The client owns one RmlUi context. It draws only when cgame requests a reticle.
-The context does not receive input or take focus. The client destroys it before
-renderer shutdown and creates it again after registration. This includes map
+The client owns the reticle and Force wheel contexts. The reticle context does
+not receive input or take focus. The client destroys the contexts before
+renderer shutdown and creates them again after registration. This includes map
 changes and `vid_restart`. Initialization failure selects the legacy path.
 
-The embedded RML is project-owned source under GPL-2.0-or-later. It needs no
-font or image files. The renderer adapter supports untextured triangles and
-rectangular clipping only. Text, textures, transforms, and advanced RmlUi
-effects are not supported by this MVP.
+The embedded RML is project-owned source under GPL-2.0-or-later. The reticle
+uses geometry only. The Force wheel label uses bundled IBM Plex Mono and
+FreeType. The renderer supports triangles, rectangular clipping, and generated
+RGBA font textures. Image-file loading, transforms, and advanced RmlUi effects
+are not supported by this MVP.
 
 Each renderer command owns its geometry and clip data. One command accepts at
-most 512 vertices and 1536 indices. It uses straight alpha and restores clipping
-after drawing. This is not yet a complete renderer for general RmlUi screens.
+most 512 vertices and 1536 indices. It uses premultiplied alpha and restores
+clipping after drawing. Generated textures have explicit release calls that
+drain queued draws. This is not yet a complete renderer for general RmlUi screens.
 
 ## Tests
 

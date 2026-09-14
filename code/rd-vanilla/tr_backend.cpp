@@ -1046,12 +1046,13 @@ static const void *RB_DrawUiGeometry( const void *data ) {
 		qglDisable( GL_SCISSOR_TEST );
 	}
 	backEnd.currentEntity = &backEnd.entity2D;
+	tr.uiGeometryShader->stages[0].bundle[0].image = cmd->texture;
 	RB_BeginSurface( tr.uiGeometryShader, 0 );
 	for ( int i = 0; i < cmd->numVertices; ++i ) {
 		tess.xyz[i][0] = cmd->vertices[i].xyz[0];
 		tess.xyz[i][1] = cmd->vertices[i].xyz[1];
 		tess.xyz[i][2] = 0;
-		tess.texCoords[i][0][0] = tess.texCoords[i][0][1] = 0;
+		memcpy(tess.texCoords[i][0], cmd->vertices[i].st, sizeof(vec2_t));
 		memcpy( tess.vertexColors[i], cmd->vertices[i].modulate, 4 );
 	}
 	for ( int i = 0; i < cmd->numIndices; ++i ) {
@@ -1061,6 +1062,7 @@ static const void *RB_DrawUiGeometry( const void *data ) {
 	tess.numIndexes = cmd->numIndices;
 	RB_EndSurface();
 	// Do not leave geometry pending when the scissor state is restored.
+	tr.uiGeometryShader->stages[0].bundle[0].image = tr.whiteImage;
 	tess.numVertexes = tess.numIndexes = 0;
 	qglScissor( oldClip[0], oldClip[1], oldClip[2], oldClip[3] );
 	if ( oldClipEnabled ) {

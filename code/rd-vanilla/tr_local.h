@@ -1745,6 +1745,7 @@ typedef struct {
 	int clip[4];
 	polyVert_t vertices[REF_UI_MAX_VERTICES];
 	int indices[REF_UI_MAX_INDICES];
+	image_t* texture;
 } uiGeometryCommand_t;
 
 typedef struct {
@@ -1819,7 +1820,11 @@ void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs );
 
 void RE_SetColor( const float *rgba );
 void RE_DrawUiGeometry( int numVertices, const polyVert_t *vertices,
-	int numIndices, const int *indices, const int *clip );
+	int numIndices, const int *indices, const int *clip, qhandle_t texture );
+image_t* R_GetUiTexture(qhandle_t handle);
+qhandle_t RE_CreateUiTexture(int width, int height, const byte* rgba);
+void RE_ReleaseUiTexture(qhandle_t handle);
+void R_DeleteUiTextures();
 void RE_StretchPic ( float x, float y, float w, float h,
 					  float s1, float t1, float s2, float t2, qhandle_t hShader );
 void RE_RotatePic ( float x, float y, float w, float h,
