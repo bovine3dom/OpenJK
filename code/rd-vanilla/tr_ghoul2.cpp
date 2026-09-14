@@ -2906,6 +2906,25 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 	const int baseIndex = tess.numIndexes;
 	mdxmVertex_t skinnedVertices[SHADER_MAX_VERTEXES];
 	mdxmVertexTexCoord_t skinnedTexCoords[SHADER_MAX_VERTEXES];
+	bool needsTangents = (tess.shader->vertexAttribs & ATTR_TANGENT) &&
+		!backEnd.depthFill && tess.shader != tr.shadowShader && !glState.genShadows &&
+		(r_normalMapping->integer || r_externalGLSL->integer);
+	if (needsTangents && !r_parallaxMapping->integer && !r_externalGLSL->integer)
+	{
+		// Built-in Lightall uses XY scale unchanged. Zero removes both tangent terms.
+		// Parallax uses the tangent basis even when the normal scale is zero.
+		needsTangents = false;
+		for (int i = 0; i < MAX_SHADER_STAGES && tess.xstages[i]; ++i)
+		{
+			const shaderStage_t *stage = tess.xstages[i];
+			if (stage->glslShaderGroup == tr.lightallShader &&
+				(stage->normalScale[0] != 0.0f || stage->normalScale[1] != 0.0f))
+			{
+				needsTangents = true;
+				break;
+			}
+		}
+	}
 
 	for (int j = 0; j < numVerts; ++j)
 	{
@@ -2932,8 +2951,11 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 		}
 		if (!VectorNormalize(normal))
 			VectorSet(normal, 0.0f, 0.0f, 1.0f);
-		VectorCopy(position, skinnedVertices[j].vertCoords);
-		VectorCopy(normal, skinnedVertices[j].normal);
+		if (needsTangents)
+		{
+			VectorCopy(position, skinnedVertices[j].vertCoords);
+			VectorCopy(normal, skinnedVertices[j].normal);
+		}
 		const int out = baseVertex + j;
 		VectorCopy(position, tess.xyz[out]);
 		tess.xyz[out][3] = 1.0f;
@@ -2955,7 +2977,8 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 				tess.texCoords[out][0][axis] = (goreTexCoords[2 * j + axis] - 0.5f) * surf->scale + 0.5f;
 		}
 #endif
-		VectorCopy2(tess.texCoords[out][0], skinnedTexCoords[j].texCoords);
+		if (needsTangents)
+			VectorCopy2(tess.texCoords[out][0], skinnedTexCoords[j].texCoords);
 		VectorCopy4(color, tess.vertexColors[out]);
 		for (int axis = 0; axis < 4; ++axis)
 			tess.svars.colors[out][axis] = (byte)(255.0f * color[axis]);
@@ -2966,8 +2989,11 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 		assert(triangles[j] >= 0 && triangles[j] < numVerts);
 		tess.indexes[baseIndex + j] = baseVertex + triangles[j];
 	}
-	R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords,
-		tess.tangent + baseVertex, (glIndex_t *)triangles);
+	if (needsTangents)
+	{
+		R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords,
+			tess.tangent + baseVertex, (glIndex_t *)triangles);
+	}
 	tess.numIndexes += numIndexes;
 	tess.numVertexes += numVerts;
 	if (sourceVerts)

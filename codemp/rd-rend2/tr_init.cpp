@@ -134,6 +134,8 @@ cvar_t  *r_forceAutoExposureMax;
 
 cvar_t  *r_depthPrepass;
 cvar_t  *r_ssao;
+cvar_t  *r_ssaoAmbientOnly;
+cvar_t  *r_ssaoDebug;
 
 cvar_t  *r_normalMapping;
 cvar_t  *r_specularMapping;
@@ -1513,6 +1515,8 @@ void R_Register( void )
 
 	r_depthPrepass = ri.Cvar_Get( "r_depthPrepass", "1", CVAR_ARCHIVE, "" );
 	r_ssao = ri.Cvar_Get( "r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE, "" );
+	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
+	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 raw, 2 filtered." );
 
 	r_normalMapping = ri.Cvar_Get( "r_normalMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable normal mapping" );
 	r_specularMapping = ri.Cvar_Get( "r_specularMapping", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable specular mapping" );
@@ -2100,7 +2104,8 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	if (backEndData && glConfig.vidWidth)
 	{
 		R_IssuePendingRenderCommands();
-		RB_ClearPendingScreenshot();
+		// A capture before quit or restart uses the last available frame, not new cvar values.
+		RB_FlushScreenshot();
 		qglFinish();
 		R_SP_UnloadWorld();
 		R_ShutdownBackEndFrameData();
@@ -2108,9 +2113,11 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 		FBO_Shutdown();
 		R_DeleteTextures();
 		R_DestroyGPUBuffers();
-		GLSL_ShutdownGPUShaders();
+		GLSL_ShutdownGPUShaders(destroyWindow);
 		qglDeleteVertexArrays(1, &tr.globalVao);
 	}
+	else if (glConfig.vidWidth)
+		GLSL_ShutdownGPUShaders(destroyWindow);
 	R_ShutdownFonts();
 	RE_TempRawImage_CleanUp();
 	RE_HunkClearCrap();

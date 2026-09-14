@@ -148,6 +148,24 @@ experimental and opt-in. Vanilla remains the default.
 - [x] Render and validate a non-black Rend2 scene at 3840x2160.
 - [ ] Test Rend2 performance on the NVIDIA GTX 1080 Ti, audio, and broader manual campaign play. Verify more effects, UI, and cinematic scenes.
 
-Rend2 tests used Xvfb and LLVMpipe only. Keep Rend2 experimental and opt-in.
+The original Rend2 functional tests used Xvfb and LLVMpipe. Hardware P630
+performance results are now available in `docs/benchmark-sp.md`.
+Keep Rend2 experimental and opt-in.
 Do not add ray tracing. See `docs/rend2-sp.md` for build, launch, fallback,
 and test commands.
+
+## Rend2 Performance
+
+- [x] Add runtime SSAO ambient-only/broader-lighting comparison and raw/filtered debug views. Keep ambient-only as the default.
+- [x] Resolve current MSAA depth before SSAO. Verify controlled MSAA 0/4 captures, mode restoration, and prepass-off behavior.
+- [x] Capture SP console screenshots after postprocessing and drain pending requests before restart or quit.
+- [ ] Test SSAO during camera motion and in portal views. Static captures do not establish motion-latency correctness. See `docs/ssao-sp.md`.
+
+- [x] Skip unnecessary SP MikkTSpace work and remove the experimental frame-pose tangent cache. Keep skinning and fallback/gore writes unchanged. See `docs/rend2-sp.md` for the final design and full-path conditions.
+- [x] Retain linked GL programs and CPU uniform state across soft map resets only. Keep independent mutable state, exact keys, and context cleanup. Do not add lazy compilation or a disk binary cache.
+- [x] Limit detailed uniform reflection and logging to `r_verbose`. Guard external-shader reads against missing files and null pointers.
+- [x] Pass SP Release, SP Debug, and MP builds; shadows-3 lifecycle checks with persistent buffers; program-cache source/SSAO miss, reuse, and hard-restart checks; and clean shutdown after deliberate external-shader failure.
+- [x] Pass parallax-enabled lifecycle smoke, 4K display, and genuine v1 migration checks with Rend2.
+- [x] Record paired P630 measurements and verify benchmark `--reloads` with old and new versions. Add recorded `--cvar NAME VALUE` overrides. See `docs/benchmark-sp.md` for results and limits.
+- [x] Complete final benchmarks, cache tests, lifecycle, parallax, 4K, and migration checks after frame-pose tangent-cache removal. Test shader failure before and after partial reuse.
+- [ ] Profile full-screen passes, copies, fence waits, character worst cases, and GPU times. Measure actual input lag manually on the target desktop; do not infer it from engine-work p99 or predict NVIDIA results from P630.

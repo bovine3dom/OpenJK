@@ -154,6 +154,8 @@ extern cvar_t  *r_forceAutoExposureMax;
 
 extern cvar_t  *r_depthPrepass;
 extern cvar_t  *r_ssao;
+extern cvar_t  *r_ssaoAmbientOnly;
+extern cvar_t  *r_ssaoDebug;
 
 extern cvar_t  *r_normalMapping;
 extern cvar_t  *r_specularMapping;
@@ -1359,6 +1361,7 @@ typedef enum
 	UNIFORM_DELUXEMAP,
 	UNIFORM_SPECULARMAP,
 	UNIFORM_SSAOMAP,
+	UNIFORM_SSAOAMBIENTONLY,
 
 	UNIFORM_TEXTUREMAP,
 	UNIFORM_LEVELSMAP,
@@ -2398,6 +2401,7 @@ typedef struct {
 	FBO_t *last2DFBO;
 	qboolean    colorMask[4];
 	qboolean    framePostProcessed;
+	int         ssaoViewParm;
 	qboolean    depthFill;
 	qboolean    refractionFill;
 } backEndState_t;
@@ -2994,8 +2998,9 @@ byte *RE_TempRawImage_ReadFromFile(const char *name, int *width, int *height,
 	byte *resampleBuffer, qboolean verticalFlip);
 void RE_TempRawImage_CleanUp();
 void R_SP_CaptureScreen(qboolean finalFrame);
-void RB_ClearPendingScreenshot();
 image_t *R_SP_ScreenImage();
+FBO_t *R_SP_ScreenFBO();
+void RB_FlushScreenshot();
 int R_SP_SceneFlags(int flags);
 void R_SP_DrawGoggles();
 void R_SP_ApplyScissor();
@@ -3351,7 +3356,7 @@ GLSL
 
 void GLSL_InitSplashScreenShader();
 void GLSL_LoadGPUShaders();
-void GLSL_ShutdownGPUShaders(void);
+void GLSL_ShutdownGPUShaders(qboolean destroyWindow = qtrue);
 void GLSL_VertexAttribsState(uint32_t stateBits, VertexArraysProperties *vertexArrays);
 void GLSL_VertexAttribPointers(const VertexArraysProperties *vertexArrays);
 void GL_VertexArraysToAttribs( vertexAttribute_t *attribs,
@@ -3763,6 +3768,9 @@ struct gpuFrame_t
 	void *uboMemory;
 
 	screenshotReadback_t screenshotReadback;
+#ifdef REND2_SP
+	screenshotCommand_t screenshotCommand;
+#endif
 
 	VBO_t *dynamicVbo;
 	void *dynamicVboMemory;

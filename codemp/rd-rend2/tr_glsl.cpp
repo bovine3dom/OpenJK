@@ -23,6 +23,10 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_local.h"
 #include "tr_allocator.h"
 #include "glsl_shaders.h"
+#include <map>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 #ifdef REND2_SP
 static const memtag_t shaderProgramTag = TAG_SHADERTEXT;
@@ -60,6 +64,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_DeluxeMap",   GLSL_INT, 1 },
 	{ "u_SpecularMap", GLSL_INT, 1 },
 	{ "u_SSAOMap",     GLSL_INT, 1 },
+	{ "u_SSAOAmbientOnly", GLSL_INT, 1 },
 
 	{ "u_TextureMap", GLSL_INT, 1 },
 	{ "u_LevelsMap",  GLSL_INT, 1 },
@@ -409,7 +414,6 @@ static bool GLSL_IsGPUShaderCompiled (GLuint shader)
 }
 
 static GLuint GLSL_CompileGPUShader(
-	GLuint program,
 	const GLchar *buffer,
 	int size,
 	GLenum shaderType)
@@ -430,7 +434,6 @@ static GLuint GLSL_CompileGPUShader(
 
 		qglDeleteShader(shader);
 
-		ri.Error(ERR_FATAL, "Couldn't compile shader");
 		return 0;
 	}
 
@@ -517,7 +520,7 @@ static size_t GLSL_LoadGPUShaderSource(
 	return result;
 }
 
-static void GLSL_LinkProgram(GLuint program)
+static bool GLSL_LinkProgram(GLuint program)
 {
 	qglLinkProgram(program);
 
@@ -527,8 +530,9 @@ static void GLSL_LinkProgram(GLuint program)
 	{
 		GLSL_PrintProgramInfoLog(program, qfalse);
 		ri.Printf(PRINT_ALL, "\n");
-		ri.Error(ERR_FATAL, "shaders failed to link");
+		return false;
 	}
+	return true;
 }
 
 static void GLSL_ShowProgramUniforms(GLuint program)
@@ -645,6 +649,35 @@ GLenum ToGLShaderType( GPUShaderType type )
 	return 0;
 }
 
+struct ShaderProgramKey
+{
+	std::string name;
+	uint32_t attribs;
+	uint32_t xfbVariables;
+	std::vector<std::pair<GLenum, std::string>> stages;
+
+	bool operator<(const ShaderProgramKey& other) const
+	{
+		return std::tie(name, attribs, xfbVariables, stages) <
+			std::tie(other.name, other.attribs, other.xfbVariables, other.stages);
+	}
+};
+
+// Binding names and fragment outputs in GLSL_BindShaderInterface are fixed.
+// Retained entries own GL and CPU state; active entries only track tr records.
+// Consume each match once so programs never share mutable uniform state.
+static std::multimap<ShaderProgramKey, shaderProgram_t> retainedPrograms;
+static std::vector<std::pair<ShaderProgramKey, shaderProgram_t *>> activePrograms;
+
+void GLSL_DeleteGPUShader(shaderProgram_t *program);
+
+static void GLSL_ClearRetainedPrograms()
+{
+	for (auto& entry : retainedPrograms)
+		GLSL_DeleteGPUShader(&entry.second);
+	retainedPrograms.clear();
+}
+
 class ShaderProgramBuilder
 {
 	public:
@@ -660,25 +693,25 @@ class ShaderProgramBuilder
 			const uint32_t xfbVariables);
 		bool AddShader(const GPUShaderDesc& shaderDesc, const char *extra);
 		bool Build(shaderProgram_t *program);
+		void Reset();
+		void PrintCacheStats() const;
 
 	private:
 		static const size_t MAX_SHADER_SOURCE_LEN = 16384;
 
 		void ReleaseShaders();
 
-		const char *name;
-		uint32_t attribs;
-		uint32_t xfbVariables;
+		ShaderProgramKey key;
 		GLuint program;
 		GLuint shaderNames[GPUSHADER_TYPE_COUNT];
 		size_t numShaderNames;
 		std::string shaderSource;
+		size_t programsLinked = 0;
+		size_t cacheHits = 0;
 };
 
 ShaderProgramBuilder::ShaderProgramBuilder()
-	: name(nullptr)
-	, attribs(0)
-	, program(0)
+	: program(0)
 	, shaderNames()
 	, numShaderNames(0)
 	, shaderSource(MAX_SHADER_SOURCE_LEN, '\0')
@@ -687,11 +720,24 @@ ShaderProgramBuilder::ShaderProgramBuilder()
 
 ShaderProgramBuilder::~ShaderProgramBuilder()
 {
+	Reset();
+}
+
+void ShaderProgramBuilder::Reset()
+{
 	if ( program )
 	{
 		ReleaseShaders();
 		qglDeleteProgram(program);
+		program = 0;
 	}
+	key.stages.clear();
+}
+
+void ShaderProgramBuilder::PrintCacheStats() const
+{
+	ri.Printf(PRINT_ALL, "GLSL programs: %zu linked, %zu reused, %zu unused released\n",
+		programsLinked, cacheHits, retainedPrograms.size());
 }
 
 void ShaderProgramBuilder::Start(
@@ -699,10 +745,10 @@ void ShaderProgramBuilder::Start(
 	const uint32_t attribs,
 	const uint32_t xfbVariables)
 {
-	this->program = qglCreateProgram();
-	this->name = name;
-	this->attribs = attribs;
-	this->xfbVariables = xfbVariables;
+	key.name = name;
+	key.attribs = attribs;
+	key.xfbVariables = xfbVariables;
+	key.stages.clear();
 }
 
 bool ShaderProgramBuilder::AddShader( const GPUShaderDesc& shaderDesc, const char *extra )
@@ -723,7 +769,7 @@ bool ShaderProgramBuilder::AddShader( const GPUShaderDesc& shaderDesc, const cha
 			shaderSource.size());
 
 		sourceLen = GLSL_LoadGPUShaderSource(
-				name,
+				key.name.c_str(),
 				shaderDesc.source,
 				apiShader,
 				&shaderSource[headerLen],
@@ -743,46 +789,76 @@ bool ShaderProgramBuilder::AddShader( const GPUShaderDesc& shaderDesc, const cha
 			PRINT_ALL,
 			"ShaderProgramBuilder::AddShader: Failed to allocate enough memory for "
 			"shader '%s'\n",
-			name);
+			key.name.c_str());
 
 		return false;
 	}
 
-	const GLuint shader = GLSL_CompileGPUShader(
-		program,
-		shaderSource.c_str(),
-		sourceLen + headerLen,
-		apiShader);
-	if ( shader == 0 )
-	{
-		ri.Printf(
-			PRINT_ALL,
-			"ShaderProgramBuilder::AddShader: Unable to load \"%s\"\n",
-			name);
-		return false;
-	}
-
-	qglAttachShader(program, shader);
-	shaderNames[numShaderNames++] = shader;
+	key.stages.emplace_back(apiShader,
+		std::string(shaderSource.c_str(), sourceLen + headerLen));
 
 	return true;
 }
 
 bool ShaderProgramBuilder::Build( shaderProgram_t *shaderProgram )
 {
-	const size_t nameBufferSize = strlen(name) + 1;
+	const auto cached = retainedPrograms.find(key);
+	if (cached != retainedPrograms.end())
+	{
+		*shaderProgram = cached->second;
+		retainedPrograms.erase(cached);
+		activePrograms.emplace_back(std::move(key), shaderProgram);
+		++cacheHits;
+		return true;
+	}
+
+	program = qglCreateProgram();
+	if (!program)
+	{
+		GLSL_ClearRetainedPrograms();
+		return false;
+	}
+	for (const auto& stage : key.stages)
+	{
+		const GLuint shader = GLSL_CompileGPUShader(
+			stage.second.c_str(), stage.second.size(), stage.first);
+		if (!shader)
+		{
+			Reset();
+			GLSL_ClearRetainedPrograms();
+			ri.Error(ERR_FATAL, "Couldn't compile shader '%s'", key.name.c_str());
+			return false;
+		}
+		qglAttachShader(program, shader);
+		shaderNames[numShaderNames++] = shader;
+	}
+
+	const size_t nameBufferSize = key.name.size() + 1;
 	shaderProgram->name = (char *)Z_Malloc(nameBufferSize, shaderProgramTag);
-	Q_strncpyz(shaderProgram->name, name, nameBufferSize);
+	Q_strncpyz(shaderProgram->name, key.name.c_str(), nameBufferSize);
 
 	shaderProgram->program = program;
-	shaderProgram->attribs = attribs;
-	shaderProgram->xfbVariables = xfbVariables;
+	shaderProgram->attribs = key.attribs;
+	shaderProgram->xfbVariables = key.xfbVariables;
 
 	GLSL_BindShaderInterface(shaderProgram);
-	GLSL_LinkProgram(shaderProgram->program);
+	if (!GLSL_LinkProgram(shaderProgram->program))
+	{
+		Reset();
+		shaderProgram->program = 0;
+		Z_Free(shaderProgram->name);
+		shaderProgram->name = nullptr;
+		GLSL_ClearRetainedPrograms();
+		ri.Error(ERR_FATAL, "shaders failed to link");
+		return false;
+	}
 
 	ReleaseShaders();
 	program = 0;
+	++programsLinked;
+#ifdef REND2_SP
+	activePrograms.emplace_back(std::move(key), shaderProgram);
+#endif
 
 	return true;
 }
@@ -813,6 +889,8 @@ static bool GLSL_LoadGPUShader(
 		const GPUShaderDesc& shaderDesc = programDesc.shaders[i];
 		if ( !builder.AddShader(shaderDesc, extra) )
 		{
+			builder.Reset();
+			GLSL_ClearRetainedPrograms();
 			return false;
 		}
 	}
@@ -821,6 +899,10 @@ static bool GLSL_LoadGPUShader(
 
 void GLSL_InitUniforms(shaderProgram_t *program)
 {
+	// Retained CPU values still match this program's GL uniform state.
+	if (program->uniforms)
+		return;
+
 	program->uniforms = (GLint *)Z_Malloc(
 			UNIFORM_COUNT * sizeof(*program->uniforms), shaderProgramTag);
 	program->uniformBufferOffsets = (short *)Z_Malloc(
@@ -872,17 +954,22 @@ void GLSL_InitUniforms(shaderProgram_t *program)
 			program->program, uniformBlocksInfo[i].name);
 		if (blockIndex == GL_INVALID_INDEX)
 			continue;
-		ri.Printf(
-			PRINT_DEVELOPER,
-			"Binding block %d (name '%s', size %zu bytes) to slot %d\n",
-			blockIndex,
-			uniformBlocksInfo[i].name,
-			uniformBlocksInfo[i].size,
-			uniformBlocksInfo[i].slot);
+		if (r_verbose->integer)
+			ri.Printf(
+				PRINT_DEVELOPER,
+				"Binding block %d (name '%s', size %zu bytes) to slot %d\n",
+				blockIndex,
+				uniformBlocksInfo[i].name,
+				uniformBlocksInfo[i].size,
+				uniformBlocksInfo[i].slot);
 		qglUniformBlockBinding(
 			program->program, blockIndex, uniformBlocksInfo[i].slot);
 		program->uniformBlocks |= (1u << i);
 	}
+
+	// The remaining reflection is diagnostic, not required for binding.
+	if (!r_verbose->integer)
+		return;
 
 	GLint numActiveUniformBlocks = 0;
 	qglGetProgramiv(program->program, GL_ACTIVE_UNIFORM_BLOCKS, &numActiveUniformBlocks);
@@ -972,7 +1059,8 @@ void GLSL_InitUniforms(shaderProgram_t *program)
 void GLSL_FinishGPUShader(shaderProgram_t *program)
 {
 #if defined(_DEBUG)
-	GLSL_ShowProgramUniforms(program->program);
+	if (r_verbose->integer)
+		GLSL_ShowProgramUniforms(program->program);
 	GL_CheckErrors();
 #endif
 }
@@ -1412,6 +1500,10 @@ void GLSL_InitSplashScreenShader()
 	qglAttachShader(program, vshader);
 	qglAttachShader(program, fshader);
 	qglLinkProgram(program);
+	qglDetachShader(program, vshader);
+	qglDetachShader(program, fshader);
+	qglDeleteShader(vshader);
+	qglDeleteShader(fshader);
 
 	size_t splashLen = strlen("splash");
 	tr.splashScreenShader.program = program;
@@ -1426,18 +1518,19 @@ static const GPUProgramDesc *LoadProgramSource(
 
 	if ( r_externalGLSL->integer )
 	{
-		char *buffer;
+		char *buffer = nullptr;
 		char programPath[MAX_QPATH];
 		Com_sprintf(programPath, sizeof(programPath), "glsl/%s.glsl", programName);
 
 		long size = ri.FS_ReadFile(programPath, (void **)&buffer);
-		if ( size )
+		if (size > 0 && buffer)
 		{
 			GPUProgramDesc *externalProgramDesc = ojkAlloc<GPUProgramDesc>(allocator);
 			*externalProgramDesc = ParseProgramSource(allocator, buffer);
 			result = externalProgramDesc;
-			ri.FS_FreeFile(buffer);
 		}
+		if (buffer)
+			ri.FS_FreeFile(buffer);
 	}
 
 	return result;
@@ -2401,21 +2494,45 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramSurfaceSprites(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramWeather(builder, allocator);
 
+	builder.PrintCacheStats();
+	builder.Reset();
+	GLSL_ClearRetainedPrograms();
 	ri.Printf(PRINT_ALL, "loaded %i GLSL shaders (%i gen %i light %i etc) in %5.2f seconds\n",
 		numGenShaders + numLightShaders + numEtcShaders, numGenShaders, numLightShaders,
 		numEtcShaders, (ri.Milliseconds() - startTime) / 1000.0);
 }
 
-void GLSL_ShutdownGPUShaders(void)
+void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 {
 	int i;
 
 	ri.Printf(PRINT_ALL, "------- GLSL_ShutdownGPUShaders -------\n");
 
-	for ( int i = 0; i < ATTR_INDEX_MAX; i++ )
-		qglDisableVertexAttribArray(i);
+	if (tr.globalVao)
+		for ( int i = 0; i < ATTR_INDEX_MAX; i++ )
+			qglDisableVertexAttribArray(i);
 
 	GLSL_BindNullProgram();
+	qglUseProgram(0);
+
+#ifdef REND2_SP
+	if (!destroyWindow)
+	{
+		for (auto& entry : activePrograms)
+		{
+			shaderProgram_t *program = entry.second;
+			if (program->program && program->uniforms &&
+				program->uniformBufferOffsets && program->uniformBuffer)
+			{
+				retainedPrograms.emplace(std::move(entry.first), *program);
+				*program = {};
+			}
+		}
+	}
+	else
+#endif
+		GLSL_ClearRetainedPrograms();
+	activePrograms.clear();
 
 	GLSL_DeleteGPUShader(&tr.splashScreenShader);
 

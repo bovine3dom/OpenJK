@@ -147,10 +147,19 @@ def run(args, suite, index, settings):
                       renderer_backend_work_ms=percentiles([s[3] for s in samples]))
         send("screenshot_png benchmark_end")
         wait_for("Wrote screenshots/benchmark_end.png")
+        result["reload_receipt_seconds"] = []
+        for index in range(args.reloads):
+            send(f'set activeAction "echo OJK_RELOAD_READY_{index}"; '
+                 f'echo OJK_RELOAD_BEGIN_{index}; devmap {args.map}')
+            load_begin = wait_for(f"OJK_RELOAD_BEGIN_{index}")
+            load_end = wait_for(f"OJK_RELOAD_READY_{index}")
+            result["reload_receipt_seconds"].append(load_end - load_begin)
         send("quit")
         if process.wait(timeout=args.timeout) != 0:
             raise RuntimeError("Game exited with a nonzero status")
         reader.join(timeout=args.timeout)
+        result["program_cache"] = [dict(zip(("linked", "reused", "unused_released"), map(int, values)))
+            for values in re.findall(r"GLSL programs: (\d+) linked, (\d+) reused, (\d+) unused released", "".join(lines))]
         image = profile / "OpenJK/screenshots/benchmark_end.png"
         with image.open("rb") as stream:
             header = stream.read(24)
@@ -200,6 +209,7 @@ def main():
     parser.add_argument("--seconds", type=float, default=15)
     parser.add_argument("--warmup", type=float, default=5)
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--reloads", type=int, default=0, help="Measure same-process map reloads after the frame test")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--map", choices=("t2_wedge",), default="t2_wedge")
@@ -207,8 +217,13 @@ def main():
     parser.add_argument("--gpu", default="Intel", help="Required GL_RENDERER substring")
     parser.add_argument("--timeout", type=float, default=180, help="Startup/command/exit timeout in seconds")
     parser.add_argument("--ffprobe", action="store_true", help="Decode the final PNG with ffprobe")
+    parser.add_argument("--cvar", nargs=2, action="append", default=[], metavar=("NAME", "VALUE"),
+                        help="Override a numeric or single-word setting for an A/B test")
     args = parser.parse_args()
-    if (not 64 <= args.width <= 16384 or not 64 <= args.height <= 16384 or args.runs < 1
+    for name, value in args.cvar:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not re.fullmatch(r"[A-Za-z0-9_.+-]+", value):
+            parser.error("Cvar overrides require a name and a numeric or single-word value")
+    if (not 64 <= args.width <= 16384 or not 64 <= args.height <= 16384 or args.runs < 1 or args.reloads < 0
             or not args.gpu.strip() or any(not math.isfinite(v) for v in
                 (args.seconds, args.warmup, args.timeout))
             or args.seconds <= 0 or args.warmup < 0 or args.timeout <= 0):
@@ -232,6 +247,7 @@ def main():
         r_dynamiclight=1, r_hdr=1, r_toneMap=1, r_autoExposure=1,
         r_dynamicGlow=0, r_speeds=0, r_debugContext=0, r_arb_buffer_storage=0,
         r_ext_multisample=0)
+    settings.update(args.cvar)
     results = []
     try:
         for index in range(1, args.runs + 1):

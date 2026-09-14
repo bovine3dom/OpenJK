@@ -27,14 +27,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
 
-#ifdef REND2_SP
-static screenshotCommand_t pendingScreenshot;
-
-void RB_ClearPendingScreenshot() {
-	pendingScreenshot.commandId = 0;
-}
-#endif
-
 static float	s_flipMatrix[16] = {
 	// convert from our coordinate system (looking down X)
 	// to OpenGL's coordinate system (looking down -Z)
@@ -2083,6 +2075,15 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 }
 
 
+static bool RB_SSAOEnabledForView()
+{
+	return r_ssao->integer && r_depthPrepass->integer && tr.world &&
+		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+		!(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_ORTHOGRAPHIC)) &&
+		!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
+		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo);
+}
+
 static void RB_RenderSSAO()
 {
 	const float zmax = backEnd.viewParms.zFar;
@@ -2097,6 +2098,7 @@ static void RB_RenderSSAO()
 	GL_State( GLS_DEPTHTEST_DISABLE );
 
 	GLSL_BindProgram(&tr.ssaoShader);
+	GL_Cull(CT_TWO_SIDED);
 
 	GL_BindToTMU(tr.hdrDepthImage, TB_COLORMAP);
 	GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
@@ -2142,8 +2144,16 @@ static void RB_RenderDepthOnly( drawSurf_t *drawSurfs, int numDrawSurfs )
 		!backEnd.colorMask[3]);
 	backEnd.depthFill = qfalse;
 
+	if (glState.currentFBO != tr.renderFbo ||
+		(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) ||
+		(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_ORTHOGRAPHIC)) ||
+		backEnd.viewParms.isPortal || backEnd.viewParms.isSkyPortal)
+	{
+		return;
+	}
+
 	// Only resolve the main pass depth
-	if (tr.msaaResolveFbo && backEnd.viewParms.targetFbo == tr.renderFbo)
+	if (tr.msaaResolveFbo)
 	{
 		FBO_FastBlit(
 			tr.renderFbo, NULL,
@@ -2162,9 +2172,7 @@ static void RB_RenderDepthOnly( drawSurf_t *drawSurfs, int numDrawSurfs )
 			glConfig.vidHeight, 0);
 	}
 
-	if (r_ssao->integer &&
-		!(backEnd.viewParms.flags & VPF_DEPTHSHADOW) &&
-		!(tr.viewParms.isSkyPortal))
+	if (RB_SSAOEnabledForView())
 	{
 		// need the depth in a texture we can do GL_LINEAR sampling on, so
 		// copy it to an HDR image
@@ -2240,11 +2248,10 @@ static void RB_RenderAllDepthRelatedPasses( drawSurf_t *drawSurfs, int numDrawSu
 
 	RB_RenderDepthOnly(drawSurfs, numDrawSurfs);
 
-	if (r_ssao->integer &&
-		!(backEnd.viewParms.flags & VPF_DEPTHSHADOW) &&
-		!(tr.viewParms.isSkyPortal))
+	if (RB_SSAOEnabledForView() && oldFbo == tr.renderFbo)
 	{
 		RB_RenderSSAO();
+		backEnd.ssaoViewParm = backEnd.viewParms.currentViewParm;
 	}
 
 	// reset viewport and scissor
@@ -2638,6 +2645,8 @@ static void RB_UpdateGhoul2Constants(gpuFrame_t *frame, const trRefdef_t *refdef
 
 void RB_UpdateConstants(const trRefdef_t *refdef)
 {
+	// Cached view indices are reused for each scene, including empty scenes.
+	backEnd.ssaoViewParm = -1;
 	gpuFrame_t *frame = backEndData->currentFrame;
 	RB_BeginConstantsUpdate(frame);
 
@@ -2794,6 +2803,25 @@ static const void *RB_ClearDepth(const void *data)
 }
 
 
+#ifdef REND2_SP
+void RB_FlushScreenshot()
+{
+	if (!backEndData || !backEndData->currentFrame)
+		return;
+	screenshotCommand_t& screenshot = backEndData->currentFrame->screenshotCommand;
+	if (!screenshot.fileName)
+		return;
+
+	if (!R_SP_ScreenFBO())
+		R_SP_CaptureScreen(qfalse);
+	FBO_t *previous = glState.currentFBO;
+	FBO_Bind(R_SP_ScreenFBO());
+	RB_TakeScreenshotCmd(&screenshot);
+	screenshot.fileName = nullptr;
+	FBO_Bind(previous);
+}
+#endif
+
 /*
 =============
 RB_SwapBuffers
@@ -2862,12 +2890,7 @@ static const void	*RB_SwapBuffers( const void *data ) {
 
 #ifdef REND2_SP
 	R_SP_CaptureScreen(qtrue);
-	if (pendingScreenshot.commandId == RC_SCREENSHOT)
-	{
-		FBO_Bind(nullptr);
-		RB_TakeScreenshotCmd(&pendingScreenshot);
-		pendingScreenshot.commandId = 0;
-	}
+	RB_FlushScreenshot();
 #endif
 	R_NewFrameSync();
 
@@ -2919,26 +2942,6 @@ const void *RB_PostProcess(const void *data)
 	dstBox[1] = backEnd.viewParms.viewportY;
 	dstBox[2] = backEnd.viewParms.viewportWidth;
 	dstBox[3] = backEnd.viewParms.viewportHeight;
-
-#if 0
-	if (r_ssao->integer)
-	{
-		srcBox[0] = backEnd.viewParms.viewportX      * tr.screenSsaoImage->width  / (float)glConfig.vidWidth;
-		srcBox[1] = backEnd.viewParms.viewportY      * tr.screenSsaoImage->height / (float)glConfig.vidHeight;
-		srcBox[2] = backEnd.viewParms.viewportWidth  * tr.screenSsaoImage->width  / (float)glConfig.vidWidth;
-		srcBox[3] = backEnd.viewParms.viewportHeight * tr.screenSsaoImage->height / (float)glConfig.vidHeight;
-
-		//FBO_BlitFromTexture(tr.screenSsaoImage, srcBox, NULL, srcFbo, dstBox, NULL, NULL, GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO);
-		srcBox[1] = tr.screenSsaoImage->height - srcBox[1];
-		srcBox[3] = -srcBox[3];
-
-		int blendMode = GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO;
-		if (r_ssao->integer == 2)
-			blendMode = GLS_SRCBLEND_ONE | GLS_DSTBLEND_ZERO;
-
-		FBO_Blit(tr.screenSsaoFbo, srcBox, NULL, srcFbo, dstBox, NULL, NULL, blendMode);
-	}
-#endif
 
 	if (r_dynamicGlow->integer)
 	{
@@ -3002,17 +3005,6 @@ const void *RB_PostProcess(const void *data)
 		FBO_BlitFromTexture(tr.renderDepthImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 		VectorSet4(dstBox, 512, glConfig.vidHeight - 256, 256, 256);
 		FBO_BlitFromTexture(tr.screenShadowImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-	}
-
-	if (0 && r_ssao->integer)
-	{
-		vec4i_t dstBox;
-		VectorSet4(dstBox, 0, glConfig.vidHeight, 512, -512);
-		FBO_BlitFromTexture(tr.screenSsaoImage, NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 512, glConfig.vidHeight, 512, -512);
-		FBO_BlitFromTexture(tr.quarterImage[0], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
-		VectorSet4(dstBox, 1024, glConfig.vidHeight, 512, -512);
-		FBO_BlitFromTexture(tr.quarterImage[1], NULL, NULL, NULL, dstBox, NULL, NULL, 0);
 	}
 
 	if (0)
@@ -3082,6 +3074,33 @@ const void *RB_PostProcess(const void *data)
 		R_SP_DrawGoggles();
 #endif
 
+	if (RB_SSAOEnabledForView() &&
+		backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm &&
+		(r_ssaoDebug->integer == 1 || r_ssaoDebug->integer == 2))
+	{
+		FBO_t *aoFbo = r_ssaoDebug->integer == 1 ? tr.quarterFbo[0] : tr.screenSsaoFbo;
+		FBO_t *oldFbo = glState.currentFBO;
+		const uint32_t oldState = glState.glStateBits;
+		const int oldCull = glState.faceCulling;
+		GLint viewport[4], scissor[4];
+		qglGetIntegerv(GL_VIEWPORT, viewport);
+		qglGetIntegerv(GL_SCISSOR_BOX, scissor);
+		// Sun rays reuse the raw AO image. Restore it from the prepass depth.
+		if (r_ssaoDebug->integer == 1 && r_drawSunRays->integer)
+			RB_RenderSSAO();
+		srcBox[0] = dstBox[0] * aoFbo->width / glConfig.vidWidth;
+		srcBox[1] = dstBox[1] * aoFbo->height / glConfig.vidHeight;
+		srcBox[2] = dstBox[2] * aoFbo->width / glConfig.vidWidth;
+		srcBox[3] = dstBox[3] * aoFbo->height / glConfig.vidHeight;
+		// Draw after scene effects and before the HUD, without tone mapping.
+		FBO_Blit(aoFbo, srcBox, NULL, NULL, dstBox, NULL, NULL, 0);
+		FBO_Bind(oldFbo);
+		GL_State(oldState);
+		GL_Cull(oldCull);
+		qglViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+		qglScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+	}
+
 	return (const void *)(cmd + 1);
 }
 
@@ -3145,6 +3164,7 @@ static const void *RB_DrawSurfs(const void *data) {
 
 	cmd = (const drawSurfsCommand_t *)data;
 
+	backEnd.ssaoViewParm = -1;
 	backEnd.refdef = cmd->refdef;
 	backEnd.viewParms = cmd->viewParms;
 
@@ -3204,9 +3224,12 @@ void RB_ExecuteRenderCommands( const void *data ) {
 			break;
 		case RC_SCREENSHOT:
 #ifdef REND2_SP
-			// Read the completed frame, after post-processing and HUD drawing.
-			pendingScreenshot = *(const screenshotCommand_t *)data;
-			data = (const screenshotCommand_t *)data + 1;
+		{
+			// Console captures can precede the scene. Read the completed frame at swap.
+			const screenshotCommand_t *cmd = (const screenshotCommand_t *)data;
+			backEndData->currentFrame->screenshotCommand = *cmd;
+			data = cmd + 1;
+		}
 			break;
 #else
 			data = RB_TakeScreenshotCmd( data );

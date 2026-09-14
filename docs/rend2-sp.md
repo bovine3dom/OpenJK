@@ -87,13 +87,60 @@ These results use software rendering only.
 The original cinematic camera was visible in initial smoke tests.
 This does not verify all cinematic scenes.
 
+## Performance Changes
+
+SP skips MikkTSpace tangent generation for passes that do not need tangents.
+It also skips this work for built-in Lightall when the effective normal-scale
+X and Y values are both zero and parallax is disabled. External GLSL and
+parallax retain the full path as a precaution. Materials with effective
+normal maps still use MikkTSpace. CPU skinning, fallback tangent writes, and
+gore writes are unchanged. The experimental frame-pose tangent cache was
+removed to keep the change small; it has no available cache cvar.
+
+Linked GL programs and their CPU uniform-state cache survive soft map resets
+only. Exact cache keys include the complete final sources, stage type and
+name, attribute mask, and transform-feedback mask. Duplicate keys retain
+independent mutable program state. The new initialization frees unused
+variants. `vid_restart` or context destruction clears the cache. There is
+no lazy shader compilation or disk program-binary cache. Detailed uniform
+reflection and its logging run only with `r_verbose` enabled.
+
+The external-shader loader also checks `size > 0` and valid pointers before
+parsing. Previously, a missing-file result of -1 passed a nonzero check and
+could call `ParseProgramSource(NULL)`.
+
+Checks completed during this work:
+
+- SP Release and Debug builds, and the MP build, passed.
+- `test-rend2-sp.py --shadows 3 --buffer-storage` passed.
+- Program-cache checks passed for source changes, SSAO switches, cache misses, reuse, and hard restart.
+- Deliberate external-shader failures ended with clean shutdowns, both before and after partial program reuse.
+- The parallax-enabled lifecycle smoke test, 4K display check, and genuine v1 save migration with Rend2 passed.
+
+Final tests passed after removal of the frame-pose tangent cache. Use
+`python3 scripts/test-rend2-cache.py --package build/ready` to repeat the cache
+checks. The two deliberate failure cases print expected smoke-test failures;
+the driver must then report successful error handling. See `benchmark-sp.md`
+for hardware measurements and their limits.
+
 ## Next Milestones
+
+### SSAO Comparison
+
+SSAO now resolves the current MSAA depth before use. `r_ssaoAmbientOnly 1`
+retains ambient/IBL-only application. Set it to `0` to compare broader per-pixel
+lighting, without a restart. `r_ssaoDebug 1` shows raw AO, `2` shows filtered AO,
+and `0` restores the scene. SSAO still requires `r_depthPrepass 1`.
+See `ssao-sp.md` for controls, tests, and limits. Console screenshots now capture
+the completed frame, including postprocessing and debug output.
+
+### Remaining Work
 
 Desktop feedback reports much longer loading, stutter, and input lag. SSAO with
 `cg_shadows 3` received positive visual feedback. Keep those effects as a test
 configuration while investigating performance; do not assume SSAO causes the
 large slowdown. Hardware P630 benchmarks now run without a monitor. See
-`benchmark-sp.md` for initial measurements and their limits.
+`benchmark-sp.md` for initial and recent measurements and their limits.
 
 1. Add a dedicated beam scene to check color, depth, and draw order. The beam fix has passed build checks only.
 2. Test effects, UI, cinematics, and progression across more campaign scenes.

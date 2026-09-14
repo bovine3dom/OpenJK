@@ -32,6 +32,16 @@ The defaults are 1280 x 720, 15 measurement seconds, 5 warmup seconds,
 exit timeout; its default is 180 seconds. Use `--help` for all options.
 The default asset directory is `GameData` in the repository.
 
+Use `--reloads N` to measure N same-process map reloads after the FPS
+measurement. Results include `reload_receipt_seconds` and `program_cache`
+statistics (`linked`, `reused`, and `unused_released`). Reload times use
+console receipt, not GPU completion. This option passed runtime checks with
+the old and new renderer versions.
+
+Use `--cvar NAME VALUE` for numeric or simple-word overrides. You can repeat
+this option. The controller records the settings and writes a configuration
+file instead of a large startup command line.
+
 To use a desktop display, select its native driver:
 
 ```sh
@@ -139,12 +149,43 @@ Raw results are in `build/benchmark-sp/` under `rdsp-vanilla._in1uasp`,
 `rdsp-rend2.x9cf86e0`, `rdsp-rend2.0kvcy26p`, and `rdsp-rend2.v78nrk1s`.
 No renderer performance fix is included in these baseline results.
 
+## Recent P630 Comparison
+
+The paired baseline is `build/benchmark-sp/rdsp-rend2.7eyabcfh`; the optimized
+result is `build/benchmark-sp/rdsp-rend2.x15tz3wl`. Both used hardware P630 at
+1280 x 720, SSAO 1, `cg_shadows 3`, and unlimited FPS. Each used three fresh
+processes, five warmup seconds, and fifteen measurement seconds. Each suite
+had a separate, initially empty benchmark shader cache. OS cache state was
+not controlled. The natural NPC scene is not deterministic.
+
+| Measurement | Paired baseline | Optimized |
+| --- | --- | --- |
+| Median approximate FPS | 13.52 | 85.37 |
+| First-process startup, seconds | 34.88 | 31.87 |
+| Later-process startup, seconds | 12.15, 12.14 | 8.35, 8.51 |
+| Map GLSL initialization, seconds | 3.5-3.7 | 0.03 |
+
+Optimized throughput was 88.04, 85.37, and 77.28 FPS. Map initialization
+reused 938 programs and linked none. The initial 16.41 FPS baseline above
+is a separate historical result, not the paired baseline.
+
+Three old same-process reloads in `rdsp-rend2.nofs55l2` took 7.92, 7.31,
+and 7.36 seconds. Three new reloads in `rdsp-rend2.x15tz3wl`, run 2, took
+4.20, 3.81, and 3.76 seconds. Engine-work p99 was about 89 ms in
+`rdsp-rend2.nofs55l2`, compared with 16-20 ms in the new runs. These are
+engine work times, not presentation latency.
+
+These final runs do not use the experimental frame-pose tangent cache.
+Cold shader compilation remains costly. These results do not establish a
+tenfold load improvement or predict NVIDIA performance.
+
 ## Next Measurements
 
 - Add separate timers for shader compilation, linking, and uniform setup.
 - Measure character skinning and tangent generation by render pass.
-- Measure frame-buffer copies, fence waits, and presentation separately.
+- Profile full-screen passes, frame-buffer copies, and fence waits separately.
 - Add controlled character-count scenes and camera routes with fixed inputs.
+- Measure character worst cases and GPU times with GPU timers.
 - Record frame-boundary intervals with a high-resolution monotonic clock before making precise stutter claims.
 - Compare 640 x 360, 1280 x 720, and 1920 x 1080 under the same workload.
 

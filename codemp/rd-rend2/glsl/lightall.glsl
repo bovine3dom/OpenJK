@@ -400,6 +400,7 @@ uniform sampler2DArrayShadow u_ShadowMap;
 
 #if defined(USE_SSAO)
 uniform sampler2D u_SSAOMap;
+uniform int u_SSAOAmbientOnly;
 #endif
 
 #if defined(USE_DSHADOWS)
@@ -1098,11 +1099,12 @@ void main()
 	// We dont compute it because cloth diffuse is dependent on NL
 	// So we just skip this. Reconsider this again when more BRDFS are added
 
-	float AO = 1.0;
+	float screenAO = 1.0;
 	#if defined (USE_SSAO)
 	vec2 windowTex = gl_FragCoord.xy / r_FBufScale;
-	AO = texture(u_SSAOMap, windowTex).r;
+	screenAO = texture(u_SSAOMap, windowTex).r;
 	#endif
+	float materialAO = 1.0;
 
 	vec4 specular = vec4(1.0);
 	float roughness = 0.99;
@@ -1115,13 +1117,18 @@ void main()
 	diffuse.rgb *= vec3(1.0 - ORMS.z);
 
 	roughness = mix(0.01, 1.0, ORMS.y);
-	AO = min(ORMS.x, AO);
+	materialAO = ORMS.x;
   #else
 	specular = texture(u_SpecularMap, texCoords);
 	specular.rgb *= u_SpecularScale.xyz;
 	roughness = mix(1.0, 0.01, specular.a * (1.0 - u_SpecularScale.w));
   #endif
   #endif
+	float AO = min(materialAO, 1.0);
+	#if defined(USE_SSAO)
+	if (u_SSAOAmbientOnly != 0)
+		AO = min(materialAO, screenAO);
+	#endif
 	ambientColor *= AO;
 
 	vec3  H  = normalize(L + E);
@@ -1169,6 +1176,11 @@ void main()
 
 	out_Color.rgb += CalcDynamicLightContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, diffuse.rgb, specular.rgb, vertexNormal);
 	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO);
+	#if defined(USE_SSAO)
+	// Experimental: apply screen AO once to all completed per-pixel lighting.
+	if (u_SSAOAmbientOnly == 0)
+		out_Color.rgb *= screenAO;
+	#endif
 #else
 	lightColor = var_Color.rgb;
   #if defined(USE_LIGHTMAP)

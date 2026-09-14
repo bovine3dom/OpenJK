@@ -167,6 +167,11 @@ image_t *R_SP_ScreenImage()
 	return screenImage;
 }
 
+FBO_t *R_SP_ScreenFBO()
+{
+	return screenFbo.frameBuffer && screenImage ? &screenFbo : nullptr;
+}
+
 void RE_GetScreenShot(byte *buffer, int width, int height)
 {
 	if (!tr.registered || !buffer || width <= 0 || height <= 0)

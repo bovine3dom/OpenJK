@@ -1702,6 +1702,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		{
 			int i;
 			vec4_t enableTextures = {};
+			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, r_ssaoAmbientOnly->integer);
 
 			if (r_sunlightMode->integer &&
 					(backEnd.viewParms.flags & VPF_USESUNLIGHT) &&
@@ -1786,18 +1787,22 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 					{
 						samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_SPECULARMAP);
 					}
-
-					if (r_ssao->integer && tr.world && backEnd.framePostProcessed == qfalse)
-						samplerBindingsWriter.AddStaticImage(tr.screenSsaoImage, TB_SSAOMAP);
-					else if (r_ssao->integer)
-						samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_SSAOMAP);
-
 				}
 
 				if ( enableCubeMaps )
 				{
 					enableTextures[3] =  1.0f;
 				}
+			}
+
+			if (r_ssao->integer)
+			{
+				const bool useSsao = r_depthPrepass->integer && tr.world &&
+					!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+					!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
+					!input->shader->isSky && !backEnd.framePostProcessed &&
+					backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm;
+				samplerBindingsWriter.AddStaticImage(useSsao ? tr.screenSsaoImage : tr.whiteImage, TB_SSAOMAP);
 			}
 
 			uniformDataWriter.SetUniformVec4(UNIFORM_ENABLETEXTURES, enableTextures);
