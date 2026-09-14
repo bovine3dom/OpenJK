@@ -137,7 +137,9 @@ float gtao(vec2 uv)
 	vec2 tanHalfFov = vec2(0.83909963, 0.62932472) / u_SSAOParams.zw;
 	vec2 extent = radius / (2.0 * tanHalfFov * p.z);
 	// Fixed spatial noise: no frame history or temporal jitter is required.
-	float noise = fract(52.9829189 * fract(dot(floor(uv / pixel), vec2(0.06711056, 0.00583715))));
+	// Index the AO pixel grid, not the full-resolution depth grid. Subsampling
+	// the latter skips noise samples and introduces a pattern at half resolution.
+	float noise = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
 	float visibility = 0.0;
 	for (int slice = 0; slice < slices; ++slice)
 	{

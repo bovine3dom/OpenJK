@@ -420,6 +420,7 @@ uniform vec4 u_EnableTextures;
 
 uniform vec4 u_NormalScale;
 uniform vec4 u_SpecularScale;
+uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale
 uniform float u_ParallaxBias;
 
 #if defined(PER_PIXEL_LIGHTING) && defined(USE_CUBEMAP)
@@ -655,6 +656,7 @@ float RayIntersectDisplaceMap(in vec2 inDp, in vec2 ds, in sampler2D normalMap, 
 vec2 GetParallaxOffset(in vec2 texCoords, in vec3 tangentDir)
 {
 #if defined(USE_PARALLAXMAP)
+	if (u_NormalScale.a == 0.0) return vec2(0.0);
 	ivec2 normalSize = textureSize(u_NormalMap, 0);
 	vec3 nonSquareScale = mix(vec3(normalSize.y / normalSize.x, 1.0, 1.0), vec3(1.0, normalSize.x / normalSize.y, 1.0), float(normalSize.y <= normalSize.x));
 	vec3 offsetDir = normalize(tangentDir * nonSquareScale);
@@ -773,7 +775,7 @@ vec3 CalcSpecular(
 	float V = V_Neubelt(NE, NL);
 #endif
 
-	return D * F * V;
+	return D * F * V * u_MaterialParams.x;
 }
 
 //Energy conserving wrap term.
@@ -1127,6 +1129,7 @@ void main()
   #endif
   #endif
 	float AO = min(materialAO, 1.0);
+	roughness = clamp(max(roughness * u_MaterialParams.z, u_MaterialParams.y), 0.01, 1.0);
 	#if defined(USE_SSAO)
 	if (u_SSAOAmbientOnly != 0)
 		AO = min(materialAO, screenAO);
@@ -1177,7 +1180,7 @@ void main()
   #endif
 
 	out_Color.rgb += CalcDynamicLightContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, diffuse.rgb, specular.rgb, vertexNormal);
-	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO);
+	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO) * u_MaterialParams.x;
 	#if defined(USE_SSAO)
 	// Experimental: apply screen AO once to all completed per-pixel lighting.
 	if (u_SSAOAmbientOnly == 0)

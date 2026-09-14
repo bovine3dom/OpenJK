@@ -121,6 +121,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_VertexLerp" ,   GLSL_FLOAT, 1 },
 	{ "u_NormalScale",   GLSL_VEC4, 1 },
 	{ "u_SpecularScale", GLSL_VEC4, 1 },
+	{ "u_MaterialParams", GLSL_VEC4, 1 },
 	{ "u_ParallaxBias",  GLSL_FLOAT, 1 },
 
 	{ "u_ViewInfo",				GLSL_VEC4, 1 },

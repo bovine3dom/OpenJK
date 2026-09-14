@@ -27,8 +27,9 @@ def image_pixels(path, width, height):
 
 def measure(pixels, background, width, height):
     bright = set()
-    for y in range(-56, 56):
-        for x in range(-56, 56):
+    # The largest tested dot is 12 pixels wide. Exclude distant scene changes.
+    for y in range(-16, 16):
+        for x in range(-16, 16):
             index = ((height // 2 + y) * width + width // 2 + x) * 3
             if all(pixels[index + c] - background[index + c] > 25 for c in range(3)):
                 bright.add((x, y))

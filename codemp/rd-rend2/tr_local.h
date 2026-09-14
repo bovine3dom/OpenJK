@@ -157,13 +157,15 @@ extern cvar_t  *r_ssao;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
 extern cvar_t  *r_ssaoStrength;
-extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes;
+extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoDenoise;
 extern cvar_t  *r_ssaoRadius;
 extern cvar_t  *r_ssaoViewModel;
 extern cvar_t  *r_ssaoViewModelStrength;
 extern cvar_t  *r_ssaoViewModelRadius;
 
 extern cvar_t  *r_normalMapping;
+extern cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
+extern cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
 extern cvar_t  *r_specularMapping;
 extern cvar_t  *r_deluxeMapping;
 extern cvar_t  *r_deluxeSpecular;
@@ -399,6 +401,7 @@ typedef struct image_s {
 
 	imgType_t   type;
 	int			flags;
+	bool generatedNormal;
 
 	struct image_s *next;
 	struct image_s *poolNext;
@@ -1424,6 +1427,7 @@ typedef enum
 	UNIFORM_VERTEXLERP,
 	UNIFORM_NORMALSCALE,
 	UNIFORM_SPECULARSCALE,
+	UNIFORM_MATERIALPARAMS,
 	UNIFORM_PARALLAXBIAS,
 
 	UNIFORM_VIEWINFO, // znear, zfar, width/2, height/2
@@ -2484,6 +2488,7 @@ typedef struct trGlobals_s {
 	image_t					*hdrDepthImage;
 	image_t *ssaoRawImage, *weaponDepthImage, *weaponDepthFloatImage, *weaponSsaoImage;
 	image_t *aoScratchImage[2];
+	int normalCacheHits, normalMapsGenerated, normalGenerationMsec;
 	image_t                 *renderCubeImage;
 	image_t                 *renderCubeDepthImage;
 	image_t					*envBrdfImage;

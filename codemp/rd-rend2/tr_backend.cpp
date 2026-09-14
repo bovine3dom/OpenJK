@@ -2148,6 +2148,8 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 	GL_BindToTMU(raw->colorImage[0], TB_COLORMAP);
 	GL_BindToTMU(depth, TB_LIGHTMAP);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_VIEWINFO, viewInfo);
+	const vec4_t denoiseParams = {float(r_gtaoHalfRes->integer && r_gtaoDenoise->integer), 0, 0, 0};
+	GLSL_SetUniformVec4(&tr.depthBlurShader[0], UNIFORM_SSAOPARAMS, denoiseParams);
 
 	RB_InstantTriangle();
 
@@ -2162,6 +2164,7 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 	GL_BindToTMU(tr.aoScratchImage[1], TB_COLORMAP);
 	GL_BindToTMU(depth, TB_LIGHTMAP);
 	GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_VIEWINFO, viewInfo);
+	GLSL_SetUniformVec4(&tr.depthBlurShader[1], UNIFORM_SSAOPARAMS, denoiseParams);
 
 	RB_InstantTriangle();
 	if (upsample)

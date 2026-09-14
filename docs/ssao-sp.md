@@ -30,7 +30,8 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
 | `r_ssaoMethod` | Default `0`: legacy SSAO. `1`: spatial GTAO. Use `vid_restart` after a change. |
-| `r_gtaoHalfRes` | Default `0`: native-resolution GTAO. `1`: calculate and filter at half width and half height, then upscale with full-resolution depth. Use `vid_restart` after a change. |
+| `r_gtaoHalfRes` | Default `1`: calculate and filter GTAO at half width and half height, then upscale with full-resolution depth. `0`: native-resolution GTAO. Use `vid_restart` after a change. |
+| `r_gtaoDenoise` | Default `1`: wider spatial filtering for half-resolution GTAO. `0`: narrower filtering. Changes are live. |
 | `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |
 | `r_ssaoAmbientOnly` | Default `1`: apply SSAO to ambient light and IBL. `0`: apply SSAO once to all per-pixel Lightall lighting. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
@@ -91,8 +92,8 @@ World and weapon AO remain separate. The debug modes work with both methods.
 
 GTAO reconstructs view-space positions and surface normals from depth. It
 calculates occlusion along hemisphere slices with a cosine-weighted integral.
-By default, calculation and filtering use full display resolution. Two
-depth-aware, five-tap passes filter the result. The sampling pattern is fixed in
+By default, calculation and filtering use half width and half height. Native
+resolution is optional. Two depth-aware, five-tap passes filter the native-resolution result. The sampling pattern is fixed in
 screen space. There is no frame history, temporal jitter, or TAA requirement.
 
 This is an independent GLSL implementation of the GTAO approach described by
@@ -123,6 +124,31 @@ pass compares full-resolution depth with the four nearby low-resolution samples.
 It rejects samples across depth edges and restores native-resolution output.
 World and weapon depth remain separate. Odd dimensions round up for the smaller
 buffers. The renderer log reports the calculation and output dimensions.
+
+Half-resolution GTAO now indexes its noise pattern with AO pixel coordinates.
+Using full-resolution depth coordinates skipped noise samples and produced a
+visible grid. Depth comparisons now extrapolate hardware depth across a plane,
+then convert back to view-space distance. This avoids treating a flat angled
+surface as a depth edge because view-space Z is not linear in screen space.
+
+With `r_gtaoDenoise 1`, the two half-resolution filter passes use nine taps and
+a wider Gaussian kernel. The filter uses the existing passes and scratch buffers.
+It needs no frame history or TAA. Native-resolution GTAO keeps its five-tap filter.
+The wider filter can soften fine contact detail. Use `r_gtaoDenoise 0` for a live
+comparison with the narrower filter.
+
+In the 720p flat-wall capture, correcting the noise coordinates reduced the
+high-frequency variation metric from about 0.91 to 0.22. Wider filtering reduced
+it further to 0.16. The filter round trip had zero error in the fixed region.
+Results are in `build/smoke/modern.jd59qv4y`. Weapon isolation and lifecycle checks
+also passed in `build/smoke/ssao-weapons.19mrvl2e`.
+
+Two 8-second P630 runs per mode, with GPU timing enabled, measured approximately
+40.48 FPS with narrow filtering and 40.06 FPS with wide filtering. One run's
+median world-AO GPU time was 2.75 ms narrow and 3.04 ms wide; weapon AO was
+0.89 ms narrow and 1.20 ms wide. Results are in
+`build/benchmark-sp/rdsp-rend2.z0ad5uxj` and `.xv64lcx7`. These are local scene
+measurements, not a GTX 1080 Ti prediction.
 
 Half resolution reduces the AO pixel count to about one quarter. The extra
 upsampling pass and full-resolution depth work limit the total speed increase.

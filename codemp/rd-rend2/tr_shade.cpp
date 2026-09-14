@@ -1643,6 +1643,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			backEnd.viewParms.isPortal ? -1.0f : 1.0f,
 			pStage->normalScale[3]
 		};
+		const image_t *normalImage = pStage->bundle[TB_NORMALMAP].image[0];
+		const float normalStrength = Com_Clamp(0, 4, r_normalStrength->value) *
+			(normalImage && normalImage->generatedNormal ? Com_Clamp(0, 4, r_generatedNormalStrength->value) : 1.0f);
+		normalScale[0] *= normalStrength;
+		normalScale[1] *= normalStrength;
+		normalScale[3] *= Com_Clamp(0, 4, r_parallaxScale->value);
 
 		uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, normalScale);
 #ifdef REND2_SP
@@ -1654,6 +1660,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		}
 #endif
 		uniformDataWriter.SetUniformVec4(UNIFORM_SPECULARSCALE, pStage->specularScale);
+		const vec4_t materialParams = {Com_Clamp(0, 4, r_specularStrength->value),
+			Com_Clamp(0, 1, r_roughnessFloor->value), Com_Clamp(0.05f, 4, r_roughnessScale->value), 0};
+		uniformDataWriter.SetUniformVec4(UNIFORM_MATERIALPARAMS, materialParams);
 
 		const float parallaxBias = r_forceParallaxBias->value > 0.0f ? r_forceParallaxBias->value : pStage->parallaxBias;
 		uniformDataWriter.SetUniformFloat(UNIFORM_PARALLAXBIAS, parallaxBias);

@@ -2298,6 +2298,7 @@ static image_t *R_AllocImage()
 	tr.images = result;
 
 	tr.numImages++;
+	result->generatedNormal = false;
 
 	return result;
 }
@@ -2842,107 +2843,96 @@ image_t *R_BuildSDRSpecGlossImage(shaderStage_t *stage, const char *specImageNam
 	return image;
 }
 
+static uint64_t NormalCacheHash(const byte *data, size_t size)
+{
+	uint64_t hash = UINT64_C(14695981039346656037);
+	for (size_t i = 0; i < size; ++i)
+		hash = (hash ^ data[i]) * UINT64_C(1099511628211);
+	return hash;
+}
+
+static byte *GenerateNormalPixels(const byte *pic, int width, int height, qboolean clampToEdge, byte **storage)
+{
+	const size_t bytes = size_t(width) * height * 4;
+	const size_t headerBytes = 8 * sizeof(uint32_t);
+	*storage = (byte *)Z_Malloc(bytes + headerBytes, TAG_GENERAL);
+	byte *normalPic = *storage + headerBytes;
+	// Cache raw pixels before upload, swizzling, mip generation, or lighting changes.
+	const bool cache = r_normalMapCache->integer && bytes <= 64 * 1024 * 1024;
+	char path[MAX_QPATH] = {};
+	uint32_t header[8] = {0x31434e52, uint32_t(width), uint32_t(height), uint32_t(clampToEdge)};
+	if (cache)
+	{
+		const uint64_t sourceHash = NormalCacheHash(pic, bytes);
+		header[4] = uint32_t(sourceHash);
+		header[5] = uint32_t(sourceHash >> 32);
+		Com_sprintf(path, sizeof(path), "cache/rd2n1/%08x%08x-%x-%x-%d.bin",
+			header[5], header[4], width, height, int(clampToEdge));
+		void *cached = nullptr;
+		const long length = ri.FS_ReadFile(path, &cached);
+		bool valid = cached && length == long(bytes + headerBytes);
+		uint32_t stored[8] = {};
+		if (valid)
+		{
+			memcpy(stored, cached, headerBytes);
+			for (int i = 0; i < 8; ++i) stored[i] = LittleLong(stored[i]);
+			const uint64_t payloadHash = NormalCacheHash((byte *)cached + headerBytes, bytes);
+			valid = !memcmp(stored, header, 6 * sizeof(uint32_t)) &&
+				stored[6] == uint32_t(payloadHash) && stored[7] == uint32_t(payloadHash >> 32);
+			if (valid) memcpy(normalPic, (byte *)cached + headerBytes, bytes);
+		}
+		if (cached) ri.FS_FreeFile(cached);
+		if (valid)
+		{
+			++tr.normalCacheHits;
+			return normalPic;
+		}
+	}
+	const int start = ri.Milliseconds();
+	RGBAtoNormal(pic, normalPic, width, height, clampToEdge);
+	tr.normalGenerationMsec += ri.Milliseconds() - start;
+	++tr.normalMapsGenerated;
+	if (cache)
+	{
+		const uint64_t payloadHash = NormalCacheHash(normalPic, bytes);
+		header[6] = uint32_t(payloadHash);
+		header[7] = uint32_t(payloadHash >> 32);
+		for (int i = 0; i < 8; ++i) header[i] = LittleLong(header[i]);
+		memcpy(*storage, header, headerBytes);
+		ri.FS_WriteFile(path, *storage, int(bytes + headerBytes));
+	}
+	return normalPic;
+}
+
 static void R_CreateNormalMap ( const char *name, byte *pic, int width, int height, int flags )
 {
 	char normalName[MAX_QPATH];
-	image_t *normalImage;
-	int normalWidth, normalHeight;
-	int normalFlags;
-
-	normalFlags = (flags & ~(IMGFLAG_GENNORMALMAP | IMGFLAG_SRGB)) | IMGFLAG_NOLIGHTSCALE;
+	const int normalFlags = (flags & ~(IMGFLAG_GENNORMALMAP | IMGFLAG_SRGB)) | IMGFLAG_NOLIGHTSCALE;
 
 	COM_StripExtension(name, normalName, sizeof(normalName));
 	Q_strcat(normalName, sizeof(normalName), "_n");
 
-	// find normalmap in case it's there
-	normalImage = R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags);
+	if (R_FindImageFile(normalName, IMGTYPE_NORMAL, normalFlags))
+		return;
 
-	// if not, generate it
-	if (normalImage == NULL)
+	byte *storage;
+	byte *normalPic = GenerateNormalPixels(pic, width, height, (qboolean)!!(flags & IMGFLAG_CLAMPTOEDGE), &storage);
+	const float brighten = Com_Clamp(0, 1, r_generatedNormalBrighten->value);
+	if (brighten > 0)
 	{
-		byte *normalPic;
-		int x, y;
-
-		normalWidth = width;
-		normalHeight = height;
-		normalPic = (byte *)Z_Malloc(width * height * 4, TAG_GENERAL);
-		RGBAtoNormal(pic, normalPic, width, height, (qboolean)(flags & IMGFLAG_CLAMPTOEDGE));
-
-#if 1
-		// Brighten up the original image to work with the normal map
 		RGBAtoYCoCgA(pic, pic, width, height);
-		for (y = 0; y < height; y++)
+		for (int i = 0; i < width * height; ++i)
 		{
-			byte *picbyte  = pic       + y * width * 4;
-			byte *normbyte = normalPic + y * width * 4;
-			for (x = 0; x < width; x++)
-			{
-				int div = MAX(normbyte[2] - 127, 16);
-				picbyte[0] = CLAMP(picbyte[0] * 128 / div, 0, 255);
-				picbyte  += 4;
-				normbyte += 4;
-			}
+			byte &luma = pic[i * 4];
+			const int div = MAX(normalPic[i * 4 + 2] - 127, 16);
+			const int boosted = CLAMP(luma * 128 / div, 0, 255);
+			luma += byte((boosted - luma) * brighten);
 		}
 		YCoCgAtoRGBA(pic, pic, width, height);
-#else
-		// Blur original image's luma to work with the normal map
-		{
-			byte *blurPic;
-
-			RGBAtoYCoCgA(pic, pic, width, height);
-			blurPic = ri.Malloc(width * height);
-
-			for (y = 1; y < height - 1; y++)
-			{
-				byte *picbyte  = pic     + y * width * 4;
-				byte *blurbyte = blurPic + y * width;
-
-				picbyte += 4;
-				blurbyte += 1;
-
-				for (x = 1; x < width - 1; x++)
-				{
-					int result;
-
-					result = *(picbyte - (width + 1) * 4) + *(picbyte - width * 4) + *(picbyte - (width - 1) * 4) +
-					*(picbyte -          1  * 4) + *(picbyte            ) + *(picbyte +          1  * 4) +
-					*(picbyte + (width - 1) * 4) + *(picbyte + width * 4) + *(picbyte + (width + 1) * 4);
-
-					result /= 9;
-
-					*blurbyte = result;
-					picbyte += 4;
-					blurbyte += 1;
-				}
-			}
-
-			// FIXME: do borders
-
-			for (y = 1; y < height - 1; y++)
-			{
-				byte *picbyte  = pic     + y * width * 4;
-				byte *blurbyte = blurPic + y * width;
-
-				picbyte += 4;
-				blurbyte += 1;
-
-				for (x = 1; x < width - 1; x++)
-				{
-					picbyte[0] = *blurbyte;
-					picbyte += 4;
-					blurbyte += 1;
-				}
-			}
-
-			ri.Free(blurPic);
-
-			YCoCgAtoRGBA(pic, pic, width, height);
-		}
-#endif
-
-		R_CreateImage( normalName, normalPic, normalWidth, normalHeight, IMGTYPE_NORMAL, normalFlags, 0 );
-		Z_Free( normalPic );
 	}
+	image_t *normalImage = R_CreateImage(normalName, normalPic, width, height, IMGTYPE_NORMAL, normalFlags, 0);
+	normalImage->generatedNormal = true;
+	Z_Free(storage);
 }
 
 /*

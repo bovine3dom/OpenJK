@@ -137,10 +137,12 @@ cvar_t  *r_ssao;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
-cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes;
+cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoDenoise;
 cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
+cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
+cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
 cvar_t  *r_specularMapping;
 cvar_t  *r_deluxeMapping;
 cvar_t  *r_deluxeSpecular;
@@ -768,6 +770,11 @@ R_SaveScreenshotPNG
 static void R_SaveScreenshotPNG(
 	const screenshotReadback_t *screenshotReadback, byte *pixels)
 {
+	// The PNG writer expects packed RGB rows, without GL pack-alignment padding.
+	if (screenshotReadback->strideInBytes != screenshotReadback->rowInBytes)
+		for (int y = 1; y < screenshotReadback->height; ++y)
+			memmove(pixels + y * screenshotReadback->rowInBytes,
+				pixels + y * screenshotReadback->strideInBytes, screenshotReadback->rowInBytes);
 	RE_SavePNG(
 		screenshotReadback->filename,
 		pixels,
@@ -1524,8 +1531,10 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_ssaoMethod, 0, 1, qtrue);
 	r_gtaoQuality = ri.Cvar_Get("r_gtaoQuality", "1", CVAR_ARCHIVE, "GTAO quality: 0 low, 1 medium, 2 high, 3 ultra.");
 	ri.Cvar_CheckRange(r_gtaoQuality, 0, 3, qtrue);
-	r_gtaoHalfRes = ri.Cvar_Get("r_gtaoHalfRes", "0", CVAR_ARCHIVE | CVAR_LATCH, "Calculate GTAO at half width and height, then depth-aware upsample.");
+	r_gtaoHalfRes = ri.Cvar_Get("r_gtaoHalfRes", "1", CVAR_ARCHIVE | CVAR_LATCH, "Calculate GTAO at half width and height, then depth-aware upsample.");
 	ri.Cvar_CheckRange(r_gtaoHalfRes, 0, 1, qtrue);
+	r_gtaoDenoise = ri.Cvar_Get("r_gtaoDenoise", "1", CVAR_ARCHIVE, "Use a wider spatial filter for half-resolution GTAO.");
+	ri.Cvar_CheckRange(r_gtaoDenoise, 0, 1, qtrue);
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
 	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
 	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
@@ -1557,6 +1566,20 @@ void R_Register( void )
 	r_imageUpsampleMaxSize = ri.Cvar_Get( "r_imageUpsampleMaxSize", "1024", CVAR_ARCHIVE | CVAR_LATCH, "" );
 	r_imageUpsampleType = ri.Cvar_Get( "r_imageUpsampleType", "1", CVAR_ARCHIVE | CVAR_LATCH, "" );
 	r_genNormalMaps = ri.Cvar_Get( "r_genNormalMaps", "0", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable generating normal maps from diffuse maps" );
+	r_normalStrength = ri.Cvar_Get("r_normalStrength", "1", CVAR_ARCHIVE, "Live normal-map strength multiplier.");
+	r_generatedNormalStrength = ri.Cvar_Get("r_generatedNormalStrength", "0.25", CVAR_ARCHIVE, "Additional strength multiplier for generated normal maps.");
+	r_parallaxScale = ri.Cvar_Get("r_parallaxScale", "0.5", CVAR_ARCHIVE, "Live parallax height multiplier.");
+	r_specularStrength = ri.Cvar_Get("r_specularStrength", "1", CVAR_ARCHIVE, "Live specular lighting multiplier.");
+	r_roughnessScale = ri.Cvar_Get("r_roughnessScale", "1", CVAR_ARCHIVE, "Live roughness multiplier; higher values broaden highlights.");
+	r_roughnessFloor = ri.Cvar_Get("r_roughnessFloor", "0", CVAR_ARCHIVE, "Minimum material roughness; higher values broaden highlights.");
+	r_generatedNormalBrighten = ri.Cvar_Get("r_generatedNormalBrighten", "0", CVAR_ARCHIVE | CVAR_LATCH, "Diffuse brightening for generated normals: 0 original, 1 legacy compensation.");
+	r_normalMapCache = ri.Cvar_Get("r_normalMapCache", "1", CVAR_ARCHIVE, "Read and write the local generated-normal cache.");
+	for (cvar_t *control : {r_normalStrength, r_generatedNormalStrength, r_parallaxScale, r_specularStrength})
+		ri.Cvar_CheckRange(control, 0, 4, qfalse);
+	ri.Cvar_CheckRange(r_roughnessFloor, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_roughnessScale, 0.05f, 4, qfalse);
+	ri.Cvar_CheckRange(r_generatedNormalBrighten, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_normalMapCache, 0, 1, qtrue);
 
 	r_forceSun = ri.Cvar_Get( "r_forceSun", "0", CVAR_CHEAT, "" );
 	r_forceSunMapLightScale = ri.Cvar_Get( "r_forceSunMapLightScale", "1.0", CVAR_CHEAT, "" );
@@ -2217,6 +2240,9 @@ Touch all images to make sure they are resident
 */
 void RE_EndRegistration( void ) {
 	R_IssuePendingRenderCommands();
+	if (r_genNormalMaps->integer)
+		ri.Printf(PRINT_ALL, "Normal maps: %d generated, %d cache hits, %d ms generation\n",
+			tr.normalMapsGenerated, tr.normalCacheHits, tr.normalGenerationMsec);
 	if (!ri.Sys_LowPhysicalMemory()) {
 		RB_ShowImages();
 	}

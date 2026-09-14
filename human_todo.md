@@ -39,6 +39,8 @@ They need suitable material or map data. Test them separately if that data exist
 
 ## Play Campaign Sections
 
+- [ ] Complete a mission in Rend2. Check the debrief videos and audio, then click Continue and verify that mission progression completes. Compare with vanilla if it fails.
+
 - [ ] Check conversations, faces, character animation, attached weapons, and cinematic transitions.
 - [ ] Check saber combat, ranged weapons, Force powers, and vehicle sections.
 - [ ] Complete selected objectives and mission transitions. Loading a map alone does not check progression.
@@ -54,6 +56,26 @@ They need suitable material or map data. Test them separately if that data exist
 - [ ] Separate first-load shader compilation from repeated runs. Include busy combat and weather scenes.
 - [ ] Measure AO, glow, shadows, and anti-aliasing separately before combining them.
 - [ ] Select a resolution and frame-rate target from the results. Do not label a preset as verified before these tests pass.
+
+## Material Calibration Decisions
+
+The user reports that half-resolution GTAO works well. It is now the default
+when GTAO is selected. Material calibration still needs desktop review.
+See `docs/materials-sp.md` for full control descriptions and cache details.
+
+- [ ] Choose a stock wall, a metal surface, a character, and a first-person weapon. Use fixed views and exposure for comparisons.
+- [ ] Compare `r_normalStrength 0` and `1`. Decide whether relief comes from the normal map or from colour already painted into the texture.
+- [ ] With `r_normalStrength 1`, compare `r_generatedNormalStrength 0.1`, `0.25`, `0.5`, and `1`. The current default is `0.25`. Select the preferred value for generated maps.
+- [ ] Test authored normal maps separately if a texture pack supplies them. Use `r_normalStrength` to adjust them; `r_generatedNormalStrength` does not affect them.
+- [ ] Check colour and exposure with `r_generatedNormalBrighten 0` (default). Compare with `1` only if needed; use `vid_restart` after each change. Decide whether any diffuse compensation is useful.
+- [ ] Compare `r_specularStrength 0` and `1`, then select a strength. Check floors and characters for excessive shine. The default is `1`.
+- [ ] Adjust `r_roughnessScale` (default `1`) and `r_roughnessFloor` (default `0`). Check that metal retains useful highlights and rough surfaces do not look wet.
+- [ ] On a material with height data, enable `r_parallaxMapping 1` and restart. Compare live `r_parallaxScale 0`, `0.25`, `0.5`, and `1`. The default is `0.5`. Check grazing angles and texture edges. Stock generated normals alone do not establish this result.
+- [ ] Load the same map twice with `r_genNormalMaps 1` and `r_normalMapCache 1`. Check perceived load time, image consistency, and the `Normal maps:` log counters. Repeat after a texture-pack change to check for stale relief.
+- [ ] Record the preferred values, map/save, texture pack, resolution, and screenshots. Confirm which values should become the final defaults. Current material defaults are a starting point.
+
+All strength and roughness controls above change live. Texture-generation
+enablement, diffuse compensation, and parallax enablement require a restart.
 
 ## Report Results
 

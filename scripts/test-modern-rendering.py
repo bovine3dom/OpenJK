@@ -87,6 +87,20 @@ def main():
     results["preset_delta"] = [difference(presets[i], presets[i + 1]) for i in range(3)]
     if min(results["preset_delta"]) < 0.01:
         raise RuntimeError("Quality presets did not change the AO")
+    narrow, wide, restored_ao = (pixels(name) for name in ("denoise_off", "denoise_on", "denoise_restored"))
+    region = [y * args.width + x for y in range(args.height * 3 // 10, args.height * 8 // 10)
+              for x in range(args.width // 20, args.width // 4)]
+    def variation(image):
+        return sum(abs(2 * image[i] - image[i - 1] - image[i + 1]) +
+                   abs(2 * image[i] - image[i - args.width] - image[i + args.width])
+                   for i in region) / len(region)
+    results["flat_surface_variation"] = [variation(narrow), variation(wide)]
+    print(f"Flat-surface variation (narrow, wide): {results['flat_surface_variation']}", flush=True)
+    results["denoise_restore_error"] = sum(abs(narrow[i] - restored_ao[i]) for i in region) / len(region)
+    if results["denoise_restore_error"] > 0.2:
+        raise RuntimeError("Denoising did not restore the static AO result")
+    if args.half_res and results["flat_surface_variation"][1] >= results["flat_surface_variation"][0] * 0.9:
+        raise RuntimeError("Denoising did not reduce flat-surface high-frequency variation")
     off, on, restored = (pixels(name) for name in ("aa_off", "aa_on", "aa_restored"))
     results["sample_shading_delta"] = difference(off, on)
     results["sample_shading_restore_error"] = difference(off, restored)
