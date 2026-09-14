@@ -15,10 +15,8 @@ Both tests must pass before it updates `build/ready`. The output gives a fixed
 package path under `build/packages/`. Do not change source files during packaging.
 Failed candidates remain available for diagnosis.
 
-For more checks, use `bash scripts/build-sp.sh --stage-only`. This runs both smoke
-tests without updating `build/ready`. Pass the printed candidate path to the
-relevant test with `--package`. Publish with the normal build command after checks
-pass.
+Every successful build publishes its package through `build/ready`. For more
+checks, pass the printed package path to the relevant test with `--package`.
 
 Build logs are in `build/sp/`. Test logs and screenshots are in a new directory
 under `build/smoke/` for each run. No original assets, configs, or saves are changed.

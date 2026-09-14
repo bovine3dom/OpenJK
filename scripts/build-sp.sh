@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[[ $# == 0 || ( $# == 1 && $1 == --stage-only ) ]] || { printf 'Usage: build-sp.sh [--stage-only]\n' >&2; exit 1; }
+[[ $# == 0 ]] || { printf 'Usage: build-sp.sh\n' >&2; exit 1; }
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$root"
@@ -68,10 +68,6 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
     bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
-if [[ ${1:-} == --stage-only ]]; then
-    printf 'Staged for further tests (not published): %s/\n' "$package"
-    exit 0
-fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"
 mv -Tf "$stage/ready" build/ready

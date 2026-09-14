@@ -50,8 +50,8 @@ after drawing. This is not yet a complete renderer for general RmlUi screens.
 Build and test with one build job:
 
 ```sh
-bash scripts/build-sp.sh --stage-only
-python3 scripts/test-rmlui-reticle.py /path/to/staged/JediAcademy
+bash scripts/build-sp.sh
+python3 scripts/test-rmlui-reticle.py build/ready
 ```
 
 The test uses Xvfb and software OpenGL. It checks both renderers at 960 by 720
