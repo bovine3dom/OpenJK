@@ -10,15 +10,10 @@ namespace {
 const char* reticleRml = R"(
 <rml><head><style>
 body { margin: 0; padding: 0; width: 32px; height: 32px; }
-div { position: absolute; background-color: white; border: 1px black;
-      box-sizing: border-box; }
-#top { left: 44%; top: 0%; width: 12%; height: 30%; }
-#bottom { left: 44%; top: 70%; width: 12%; height: 30%; }
-#left { left: 0%; top: 44%; width: 30%; height: 12%; }
-#right { left: 70%; top: 44%; width: 30%; height: 12%; }
-#dot { left: 45%; top: 45%; width: 10%; height: 10%; }
-</style></head><body><div id="top"/><div id="bottom"/>
-<div id="left"/><div id="right"/><div id="dot"/></body></rml>
+div { position: absolute; left: 43.75%; top: 43.75%; width: 12.5%; height: 12.5%;
+      background-color: rgba(255, 255, 255, 65%); border: 1px rgba(0, 0, 0, 25%);
+      border-radius: 100px; box-sizing: border-box; }
+</style></head><body><div/></body></rml>
 )";
 
 class ReticleSystem final : public Rml::SystemInterface {

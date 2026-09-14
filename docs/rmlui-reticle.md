@@ -16,12 +16,14 @@ Use these console settings:
 | `cg_crosshairSize 24` | Set the base size in legacy vertical UI units. |
 | `cg_drawCrosshair 0` | Hide the reticle. |
 
-The new reticle has one shape. Other nonzero `cg_drawCrosshair` values do not
+The new reticle is a small round dot with 65% fill opacity and a faint dark edge.
+Other nonzero `cg_drawCrosshair` values do not
 change that shape. They still select the legacy artwork when the new path is off.
 
 The reticle size uses the framebuffer height, not its width. At 720 pixels high,
-`cg_crosshairSize 32` gives a 48 by 48 pixel reticle at scale 1. Scale 2 gives
-96 by 96 pixels. The center keeps the existing collision-based position and
+`cg_crosshairSize 32` gives a 6 pixel diameter at scale 1. Scale 2 gives
+12 pixels. The dot uses one eighth of the legacy crosshair size.
+The center keeps the existing collision-based position and
 crosshair offsets. The existing target logic supplies the colors. Item pickup
 still changes the size. Existing zoom, death, and cinematic rules still apply.
 
@@ -55,8 +57,8 @@ python3 scripts/test-rmlui-reticle.py build/ready
 ```
 
 The test uses Xvfb and software OpenGL. It checks both renderers at 960 by 720
-and 1280 by 720. It measures the reticle center, equal width and height, scale,
-arms, and outline. It also checks hiding, legacy fallback, and `vid_restart`.
+and 1280 by 720. It measures the dot center, equal width and height, scale,
+rounded corners, and transparency. It also checks hiding, legacy fallback, and `vid_restart`.
 Each run stores screenshots, logs, and a JSON report in `build/reticle-tests`.
 
 Rend2 screenshots now capture the completed frame, including the HUD. Leave

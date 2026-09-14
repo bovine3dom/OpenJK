@@ -23,22 +23,18 @@ def image_pixels(path, width, height):
     return result.stdout
 
 
-def measure(pixels, width, height):
-    white = set()
-    black = set()
+def measure(pixels, background, width, height):
+    bright = set()
     for y in range(-56, 56):
         for x in range(-56, 56):
             index = ((height // 2 + y) * width + width // 2 + x) * 3
-            rgb = pixels[index:index + 3]
-            if min(rgb) >= 240:
-                white.add((x, y))
-            if max(rgb) <= 16:
-                black.add((x, y))
+            if all(pixels[index + c] - background[index + c] > 25 for c in range(3)):
+                bright.add((x, y))
     bbox = None
-    if white:
-        xs, ys = zip(*white)
+    if bright:
+        xs, ys = zip(*bright)
         bbox = [min(xs), min(ys), max(xs), max(ys)]
-    return white, black, bbox
+    return bright, bbox
 
 
 def main():
@@ -94,23 +90,26 @@ def main():
                 for state in states:
                     image = smoke / "profile" / "OpenJK" / "screenshots" / f"{state}.png"
                     captures[state] = image_pixels(image, width, height)
-                    white, black, bbox = measure(captures[state], width, height)
-                    samples[state] = white
-                    entry["images"][state] = {"path": str(image), "white_bbox": bbox,
-                                               "white_pixels": len(white)}
+                for state in states:
+                    bright, bbox = measure(captures[state], captures["legacy-hidden"], width, height)
+                    samples[state] = bright
+                    entry["images"][state] = {"bright_bbox": bbox, "bright_pixels": len(bright)}
                     if state in ("normal", "scaled", "restored", "restarted"):
-                        size = 96 if state == "scaled" else 48
+                        size = 12 if state == "scaled" else 6
                         half = size // 2
                         expected = [-half + 1, -half + 1, half - 2, half - 2]
-                        check(f"{state}: centered square {size}px outline",
+                        check(f"{state}: centered {size}px dot",
                               bbox is not None and all(abs(a - b) <= 1 for a, b in zip(bbox, expected)))
-                        # Test the white arm interiors and the black outer edges.
-                        arms = [(0, -half + 3), (0, half - 4), (-half + 3, 0), (half - 4, 0)]
-                        edges = [(0, -half), (0, half - 1), (-half, 0), (half - 1, 0)]
-                        check(f"{state}: four white arms", all(point in white for point in arms))
-                        check(f"{state}: four black edges", all(point in black for point in edges))
+                        check(f"{state}: filled center", (0, 0) in bright)
+                        corners = [(-half, -half), (half - 1, -half),
+                                   (-half, half - 1), (half - 1, half - 1)]
+                        check(f"{state}: rounded corners", all(point not in bright for point in corners))
+                        center = (height // 2 * width + width // 2) * 3
+                        alpha = [(captures[state][center + c] - captures["legacy-hidden"][center + c]) /
+                                 max(1, 255 - captures["legacy-hidden"][center + c]) for c in range(3)]
+                        check(f"{state}: translucent center", all(0.5 < value < 0.8 for value in alpha))
                 for state in ("hidden", "legacy-hidden"):
-                    check(f"{state}: no white reticle pixels", not samples[state])
+                    check(f"{state}: no bright reticle pixels", not samples[state])
                 # The legacy texture is translucent. Test its change, not opaque white.
                 changed = 0
                 for y in range(height // 2 - 24, height // 2 + 24):
