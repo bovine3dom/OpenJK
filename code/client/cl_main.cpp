@@ -218,7 +218,7 @@ Called before parsing a gamestate
 */
 void CL_ClearState (void) {
 #ifdef USE_RMLUI
-	CL_ForceWheelCancel();
+	CL_SelectionWheelsCancel();
 #endif
 	CL_ShutdownCGame();
 

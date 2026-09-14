@@ -55,6 +55,7 @@ function(openjk_add_rmlui_dependencies)
 	install(FILES "${CMAKE_SOURCE_DIR}/docs/rmlui-dependencies.md"
 		"${CMAKE_SOURCE_DIR}/docs/rmlui-reticle.md"
 		"${CMAKE_SOURCE_DIR}/docs/force-wheel.md"
+		"${CMAKE_SOURCE_DIR}/docs/weapon-wheel.md"
 		DESTINATION "${JKAInstallDir}" COMPONENT ${JKASPClientComponent})
 	install(FILES "${rmlui_SOURCE_DIR}/LICENSE.txt"
 		DESTINATION "${JKAInstallDir}/licenses/rmlui" COMPONENT ${JKASPClientComponent})

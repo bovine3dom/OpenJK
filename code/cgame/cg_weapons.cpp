@@ -1745,6 +1745,31 @@ void CG_DrawDataPadIconBackground(const int backgroundType)
 SetWeaponSelectTime
 ===============
 */
+static WeaponWheel::Frame weaponWheelFrame;
+static bool weaponWheelOwnsSelection = false;
+
+// Keep the concussion rifle between the flechette and rocket launcher, as in cycling.
+static const int weaponWheelOrder[] = {
+	WP_SABER, WP_BLASTER_PISTOL, WP_BLASTER, WP_DISRUPTOR, WP_BOWCASTER,
+	WP_REPEATER, WP_DEMP2, WP_FLECHETTE, WP_CONCUSSION, WP_ROCKET_LAUNCHER,
+	WP_THERMAL, WP_TRIP_MINE, WP_DET_PACK, WP_MELEE, WP_ATST_MAIN, WP_ATST_SIDE, WP_STUN_BATON
+};
+
+void CG_UpdateWeaponWheel(qboolean allowed)
+{
+	weaponWheelFrame = {};
+	weaponWheelFrame.allowed = allowed;
+	weaponWheelFrame.weapon = cg.weaponSelect;
+	weaponWheelFrame.view.slotCount = ARRAY_LEN(weaponWheelOrder);
+	for (int slot = 0; slot < int(ARRAY_LEN(weaponWheelOrder)); ++slot) {
+		const int weapon = weaponWheelOrder[slot];
+		if (allowed && (cg.snap->ps.stats[STAT_WEAPONS] & (1 << weapon)))
+			weaponWheelFrame.view.available |= 1u << slot;
+		if (weapon == cg.weaponSelect) weaponWheelFrame.view.current = slot;
+	}
+	cgi_WeaponWheelUpdate(&weaponWheelFrame);
+}
+
 void SetWeaponSelectTime(void)
 {
 
@@ -1759,6 +1784,7 @@ void SetWeaponSelectTime(void)
 	{
 		cg.weaponSelectTime = cg.time;
 	}
+	weaponWheelOwnsSelection = cgi_WeaponWheelPreview() != qfalse;
 }
 
 /*
@@ -1769,8 +1795,40 @@ CG_DrawWeaponSelect
 extern Vehicle_t *G_IsRidingVehicle( gentity_t *ent );
 extern bool G_IsRidingTurboVehicle( gentity_t *ent );
 
+static void CG_DrawWeaponWheel()
+{
+	CG_RegisterWeapon(cg.weaponSelect);
+	const gitem_t* item = cg_weapons[cg.weaponSelect].item;
+	char text[1024] = {};
+	if (item && item->classname && item->classname[0])
+		cgi_SP_GetStringTextString(va("SP_INGAME_%s", item->classname), text, sizeof(text));
+	const float opacity = cgi_R_DrawWeaponWheel(text);
+	const RadialWheel::View& view = weaponWheelFrame.view;
+	const int count = RadialWheel::Count(view.available, view.slotCount);
+	const float aspect = (640.0f * cgs.glconfig.vidHeight) / (480.0f * cgs.glconfig.vidWidth);
+	for (int sector = 0; sector < count; ++sector) {
+		const int slot = RadialWheel::Slot(view.available, sector, view.slotCount);
+		const int weapon = weaponWheelOrder[slot];
+		if (!weaponData[weapon].weaponIcon[0]) continue;
+		CG_RegisterWeapon(weapon);
+		const bool selected = slot == view.current;
+		const float size = selected ? 30.0f : 24.0f;
+		const float angle = sector * 2 * RadialWheel::Pi / count - RadialWheel::Pi / 2;
+		const vec4_t color = {1, 1, 1, (selected ? 1.0f : 0.65f) * opacity};
+		cgi_R_SetColor(color);
+		CG_DrawPic(320 + (cosf(angle) * RadialWheel::IconRadius - size / 2) * aspect,
+			240 + sinf(angle) * RadialWheel::IconRadius - size / 2, size * aspect, size,
+			CG_WeaponCheck(weapon) ? cg_weapons[weapon].weaponIcon : cg_weapons[weapon].weaponIconNoAmmo);
+	}
+	cgi_R_SetColor(NULL);
+}
+
 void CG_DrawWeaponSelect( void )
 {
+	if (weaponWheelOwnsSelection && weaponWheelFrame.supported) {
+		if (weaponWheelFrame.visible) CG_DrawWeaponWheel();
+		return;
+	}
 	int		i;
 	int		bits;
 	int		count;
@@ -2215,6 +2273,7 @@ void CG_NextWeapon_f( void ) {
 	original = cg.weaponSelect;
 
 	int firstWeapon = FIRST_WEAPON;
+	weaponWheelOwnsSelection = cgi_WeaponWheelPreview() != qfalse;
 	if (G_IsRidingVehicle(&g_entities[cg.snap->ps.viewEntity]))
 	{
 		firstWeapon = 0;	// include WP_NONE here
@@ -2419,6 +2478,7 @@ void CG_PrevWeapon_f( void ) {
 	original = cg.weaponSelect;
 
 	int firstWeapon = FIRST_WEAPON;
+	weaponWheelOwnsSelection = cgi_WeaponWheelPreview() != qfalse;
 	if (G_IsRidingVehicle(&g_entities[cg.snap->ps.viewEntity]))
 	{
 		firstWeapon = 0;	// include WP_NONE here

@@ -81,13 +81,13 @@ This change replaces the normal SP crosshair and both resource panels. It does n
 the panel-turret artwork, Force corona, MP reticle, or Jedi Outcast reticle.
 It does not change collision tests or the timing of target identification.
 
-The client owns the reticle and Force wheel contexts. The reticle context does
+The client owns the reticle and selection-wheel contexts. The reticle context does
 not receive input or take focus. The client destroys the contexts before
 renderer shutdown and creates them again after registration. This includes map
 changes and `vid_restart`. Initialization failure selects the legacy path.
 
 The embedded RML is project-owned source under GPL-2.0-or-later. The reticle
-uses geometry only. The Force wheel label uses bundled IBM Plex Mono and
+uses geometry only. The Force and weapon wheel labels use bundled IBM Plex Mono and
 FreeType. The renderer supports triangles, rectangular clipping, and generated
 RGBA font textures. Image-file loading, transforms, and advanced RmlUi effects
 are not supported by this MVP.

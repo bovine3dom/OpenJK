@@ -3963,10 +3963,12 @@ static void CG_Draw2D( void )
 	char	text[1024]={0};
 	int		w,y_pos;
 	centity_t *cent = &cg_entities[cg.snap->ps.clientNum];
-	CG_UpdateForceWheel((qboolean)(!cg.levelShot && cg_draw2D.integer && !in_camera && !cg.zoomMode &&
+	const bool wheelAllowed = !cg.levelShot && cg_draw2D.integer && !in_camera &&
 		cg.snap->ps.pm_type != PM_INTERMISSION && cg.snap->ps.stats[STAT_HEALTH] > 0 &&
 		!cg.snap->ps.viewEntity && cent->gent && cent->gent->client && !G_IsRidingVehicle(cent->gent) &&
-		!(cent->currentState.eFlags & (EF_IN_ATST | EF_LOCKED_TO_WEAPON))));
+		!(cent->currentState.eFlags & (EF_IN_ATST | EF_LOCKED_TO_WEAPON));
+	CG_UpdateForceWheel((qboolean)(wheelAllowed && !cg.zoomMode));
+	CG_UpdateWeaponWheel((qboolean)(wheelAllowed && !(g_entities[0].flags & FL_LOCK_PLAYER_WEAPONS)));
 
 	// if we are taking a levelshot for the menu, don't draw anything
 	if ( cg.levelShot )

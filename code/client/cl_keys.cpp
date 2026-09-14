@@ -1367,7 +1367,7 @@ Key_ClearStates
 */
 void Key_ClearStates( void ) {
 #ifdef USE_RMLUI
-	CL_ForceWheelCancel();
+	CL_SelectionWheelsCancel();
 #endif
 	kg.anykeydown = qfalse;
 	kg.keyDownCount = 0;

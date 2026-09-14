@@ -18,11 +18,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package", type=Path)
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
+    parser.add_argument("--weapons", action="store_true", help="Test weapon scrolling and wheel ownership")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 1280x720x24",
-                                sys.executable, __file__, str(args.package), "--renderer", args.renderer, "--inside"])
+                                sys.executable, __file__, str(args.package), "--renderer", args.renderer, "--inside"] +
+                               (["--weapons"] if args.weapons else []))
 
     output = ROOT / "build/force-wheel-tests"
     output.mkdir(parents=True, exist_ok=True)
@@ -68,6 +70,11 @@ def main():
             line = re.findall(r"forcewheel open=[^\r\n]+", text)[-1]
             return {key: float(value) for key, value in (word.split("=") for word in line.split()[1:])}
 
+        def weapon_status():
+            text = cmd("wait 4; weaponwheel_status")
+            line = re.findall(r"weaponwheel visible=[^\r\n]+", text)[-1]
+            return {key: float(value) for key, value in (word.split("=") for word in line.split()[1:])}
+
         def xdo(*arguments):
             return subprocess.check_output(["xdotool", *map(str, arguments)], text=True, timeout=10).strip()
 
@@ -97,6 +104,14 @@ def main():
             xdo("mousemove_relative", "--", x - x // 2, y - y // 2)
             cmd("wait 2")
 
+        def finish():
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            text = log.read_text(errors="replace")
+            assert text.count("RmlUi: IBM Plex Mono loaded") >= 2
+            assert not re.search(r"Leaking |geometry exceeds|DrawUiGeometry:|cannot upload font texture|reticle initialization failed|Unknown command|trying to load fallback renderer", text), log
+
         try:
             wait_for(lambda text: "WHEEL_TEST_READY" in text)
             assert "RmlUi: IBM Plex Mono loaded" in log.read_text(errors="replace")
@@ -106,6 +121,83 @@ def main():
             assert re.search(r'\bMOUSE3\s*=\s*"saberAttackCycle"', bindings, re.I), bindings
             initial = status()
             assert initial["mask"] == 4095 and initial["open"] == 0, initial
+
+            if args.weapons:
+                cmd("give weapons; give ammo -1; wait 10; weapon 3; wait 80")
+                start = weapon_status()
+                assert start["weapon"] == 3 and start["count"] == 13, start
+                cmd("set timescale 0.5")
+                xdo("click", 5)  # Scroll down is weapnext.
+                cycled = weapon_status()
+                assert cycled["weapon"] == 4 and cycled["visible"] == 1 and cycled["forceopen"] == 0, cycled
+                capture("weapon_cycle")
+                time.sleep(0.4)
+                later = weapon_status()
+                ratio = (later["game"] - cycled["game"]) / (later["real"] - cycled["real"])
+                assert 0.2 < ratio < 0.8 and later["timescale"] == 0.5, (ratio, later)
+                assert later["equipped"] == 4, later
+                cmd("wait 30")
+                xdo("click", 4)
+                previous = weapon_status()
+                assert previous["weapon"] == 3 and previous["visible"] == 1, previous
+                xdo("keydown", "w")
+                xdo("mousedown", 1)
+                playing = status()
+                assert playing["forward"] > 0 and int(playing["buttons"]) & 1, playing
+                xdo("keyup", "w")
+                xdo("mouseup", 1)
+                time.sleep(2)
+                idle = weapon_status()
+                assert idle["visible"] == 0 and idle["equipped"] == 3, idle
+                capture("weapon_cycle_idle")
+
+                cmd("give ammo 0; wait 30")
+                xdo("click", 5)
+                empty = weapon_status()
+                assert empty["weapon"] == 12 and empty["count"] == 13, empty  # Detpacks remain selectable.
+                capture("weapon_empty_ammo")
+                cmd("wait 30")
+                xdo("click", 5)
+                assert weapon_status()["weapon"] == 1
+                cmd("give ammo -1; wait 80; weapon 8; wait 30")
+                assert weapon_status()["weapon"] == 8
+                xdo("click", 5)
+                assert weapon_status()["weapon"] == 13  # Concussion comes before rockets.
+                cmd("wait 30")
+                xdo("click", 5)
+                assert weapon_status()["weapon"] == 9
+                cmd("wait 30")
+                xdo("click", 4)
+                assert weapon_status()["weapon"] == 13
+
+                xdo("keydown", "g")
+                assert status()["open"] == 1
+                assert weapon_status()["visible"] == 0
+                xdo("click", 5)
+                swapped = weapon_status()
+                assert swapped["visible"] == 1 and swapped["forceopen"] == 0 and swapped["timescale"] == 0.5, swapped
+                xdo("keyup", "g")
+                xdo("key", "e")
+                force = status()
+                assert force["open"] == 0 and force["visible"] == 1, force
+                assert weapon_status()["visible"] == 0
+
+                cmd("wait 30; weapnext")
+                assert weapon_status()["visible"] == 1
+                cmd("vid_restart; wait 30")
+                focus_game()
+                assert weapon_status()["visible"] == 0
+                cmd("wait 30; weapnext")
+                assert weapon_status()["visible"] == 1
+                cmd("cam_enable")
+                assert weapon_status()["visible"] == 0
+                cmd("cam_disable; wait 30; weapnext")
+                assert weapon_status()["visible"] == 1
+                cmd("kill; wait 10")
+                assert weapon_status()["visible"] == 0
+                finish()
+                print(f"PASS: {args.renderer} weapon cycling, ammo rules, order, time, input, ownership, and lifecycle. {run}")
+                return 0
 
             cmd("set timescale 0.5")
             xdo("key", "e")
@@ -254,12 +346,7 @@ def main():
             assert status()["open"] == 1
             cmd("kill; wait 10")
             assert status()["open"] == 0
-            stdin.write("quit\n")
-            stdin.flush()
-            assert process.wait(timeout=30) == 0
-            text = log.read_text(errors="replace")
-            assert text.count("RmlUi: IBM Plex Mono loaded") >= 2
-            assert not re.search(r"Leaking |geometry exceeds|DrawUiGeometry:|cannot upload font texture|reticle initialization failed|Unknown command|trying to load fallback renderer", text), log
+            finish()
             print(f"PASS: {args.renderer} wheel selection, time, input, focus, restart, death, and menu bindings. {run}")
         finally:
             if process.poll() is None:

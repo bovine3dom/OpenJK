@@ -3,14 +3,18 @@
 #include <cmath>
 #include <cctype>
 #include <cstddef>
+#include "qcommon/radial_wheel.h"
 
 namespace ForceWheel {
 constexpr int MaxPowers = 12;
-constexpr float Radius = 104, IconRadius = 80, DeadZone = 24;
-constexpr float Pi = 3.14159265359f;
+using RadialWheel::Radius;
+using RadialWheel::IconRadius;
+using RadialWheel::DeadZone;
+using RadialWheel::Pi;
+using RadialWheel::Preview;
 
 inline bool AllowsCommand(const char* command) {
-	const char* allowed[] = {"+forcewheel", "forcenext", "forceprev", "+forward", "+back", "+moveleft", "+moveright",
+	const char* allowed[] = {"+forcewheel", "forcenext", "forceprev", "weapnext", "weapprev", "+forward", "+back", "+moveleft", "+moveright",
 		"+moveup", "+movedown", "+speed", "+strafe", "+left", "+right"};
 	for (const char* name : allowed) {
 		std::size_t i = 0;
@@ -30,31 +34,14 @@ struct Frame {
 };
 
 inline int Highlighted(const Frame& frame) {
-	const int slot = frame.hovered >= 0 ? frame.hovered : frame.current;
-	return slot >= 0 && slot < MaxPowers && (frame.available & (1 << slot)) ? slot : -1;
+	return RadialWheel::Highlighted(frame.available, frame.current, frame.hovered, MaxPowers);
 }
-
-// Passive cycling feedback uses real time and never owns input or game speed.
-class Preview {
-	double until = 0;
-public:
-	void Show(double now) { until = now + 2.0; }
-	void Cancel() { until = 0; }
-	float Opacity(double now) const {
-		const double remaining = until - now;
-		return remaining <= 0 ? 0 : remaining < 0.3 ? float(remaining / 0.3) : 1;
-	}
-};
 
 inline int Count(int mask) {
-	int count = 0;
-	for (int i = 0; i < MaxPowers; ++i) if (mask & (1 << i)) ++count;
-	return count;
+	return RadialWheel::Count(mask, MaxPowers);
 }
 inline int Slot(int mask, int sector) {
-	for (int i = 0; i < MaxPowers; ++i)
-		if ((mask & (1 << i)) && sector-- == 0) return i;
-	return -1;
+	return RadialWheel::Slot(mask, sector, MaxPowers);
 }
 
 class Selection {

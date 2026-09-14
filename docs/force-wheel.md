@@ -38,6 +38,10 @@ restart its display timer. Cycling while the held wheel is open ends mouse
 selection and its slow-time effect; releasing the held button does not undo the
 cycled selection.
 
+Weapon scrolling uses a separate radial display with the same input-free,
+normal-time behavior. The latest Force or weapon selection replaces the other
+display. See [Weapon Wheel](weapon-wheel.md).
+
 ## Display And Input
 
 The wheel contains the known, selectable Force powers. Passive abilities do

@@ -965,6 +965,7 @@ CL_InitInput
 void CL_InitInput( void ) {
 #ifdef USE_RMLUI
 	CL_InitForceWheel();
+	CL_InitWeaponWheel();
 #endif
 	Cmd_AddCommand ("centerview",IN_CenterView);
 

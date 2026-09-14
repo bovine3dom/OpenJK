@@ -139,37 +139,39 @@ public:
 	void SetDisplay(const ReticleHud::Display& value, float scale) { display = value; pixelScale = scale; }
 };
 
-class ForceWheelElement final : public RadialElement {
-	ForceWheel::Frame frame;
-	bool pointer = true;
+class SelectionWheelElement final : public RadialElement {
+	RadialWheel::View view;
 	float opacity = 1;
 	void OnRender() override {
-		if (!frame.open || !frame.available) return;
+		const int count = RadialWheel::Count(view.available, view.slotCount);
+		if (!count) return;
 		Rml::Mesh mesh;
-		const int count = ForceWheel::Count(frame.available);
 		const float step = 360.0f / count;
+		const bool weapon = view.kind == RadialWheel::Kind::Weapon;
+		const Rml::Colourb accent = weapon ? Rml::Colourb(240, 215, 145) : Rml::Colourb(100, 180, 240);
+		const Rml::Colourb edge = weapon ? Rml::Colourb(245, 225, 175) : Rml::Colourb(160, 205, 240);
 		for (int sector = 0; sector < count; ++sector) {
-			const bool selected = ForceWheel::Slot(frame.available, sector) == ForceWheel::Highlighted(frame);
+			const bool selected = RadialWheel::Slot(view.available, sector, view.slotCount) == RadialWheel::Highlighted(view);
 			const float start = -90 + sector * step - step / 2 + 1.5f;
-			Arc(mesh, ForceWheel::Radius, 44, start, step - 3,
-				selected ? Rml::Colourb(100, 180, 240) : Rml::Colourb(15, 20, 25), (selected ? 0.28f : 0.4f) * opacity);
-			Arc(mesh, ForceWheel::Radius, 0.8f, start, step - 3, {160, 205, 240}, (selected ? 0.7f : 0.25f) * opacity);
+			Arc(mesh, RadialWheel::Radius, 44, start, step - 3,
+				selected ? accent : Rml::Colourb(15, 20, 25), (selected ? 0.28f : 0.4f) * opacity);
+			Arc(mesh, RadialWheel::Radius, 0.8f, start, step - 3, edge, (selected ? 0.7f : 0.25f) * opacity);
 		}
 		const size_t cursorStart = mesh.vertices.size();
-		if (pointer) Arc(mesh, 2, 2, 0, 360, {255, 255, 255}, 0.65f * opacity);
+		if (view.pointer) Arc(mesh, 2, 2, 0, 360, {255, 255, 255}, 0.65f * opacity);
 		for (size_t i = cursorStart; i < mesh.vertices.size(); ++i)
-			mesh.vertices[i].position += Rml::Vector2f(frame.x, frame.y) * pixelScale;
+			mesh.vertices[i].position += Rml::Vector2f(view.x, view.y) * pixelScale;
 		geometry = GetRenderManager()->MakeGeometry(std::move(mesh));
 		geometry.Render(GetAbsoluteOffset());
 	}
 public:
-	explicit ForceWheelElement(const Rml::String& tag) : RadialElement(tag) {}
-	void SetFrame(const ForceWheel::Frame& value, float scale, bool showPointer, float alpha) {
-		frame = value; pixelScale = scale; pointer = showPointer; opacity = alpha;
+	explicit SelectionWheelElement(const Rml::String& tag) : RadialElement(tag) {}
+	void SetView(const RadialWheel::View& value, float scale, float alpha) {
+		view = value; pixelScale = scale; opacity = alpha;
 	}
 };
 
-Rml::ElementInstancerGeneric<ForceWheelElement> wheelInstancer;
+Rml::ElementInstancerGeneric<SelectionWheelElement> wheelInstancer;
 Rml::ElementInstancerGeneric<ResourceRings> resourceInstancer;
 ReticleHud::Activity activity;
 ReticleSystem systemInterface;
@@ -180,7 +182,7 @@ Rml::Element* dot = nullptr;
 ResourceRings* resources = nullptr;
 Rml::Context* wheelContext = nullptr;
 Rml::ElementDocument* wheelDocument = nullptr;
-ForceWheelElement* wheelElement = nullptr;
+SelectionWheelElement* wheelElement = nullptr;
 Rml::Element* wheelLabel = nullptr;
 Rml::ElementText* wheelLabelText = nullptr;
 void* fontData = nullptr;
@@ -193,7 +195,7 @@ cvar_t* hudEnabled = nullptr;
 } // namespace
 
 void CL_RmlUiShutdown() {
-	CL_ForceWheelCancel();
+	CL_SelectionWheelsCancel();
 	if (initialized) Rml::Shutdown();
 	if (fontData) FS_FreeFile(fontData);
 	fontData = nullptr;
@@ -223,26 +225,26 @@ void CL_RmlUiInit() {
 		const int fontSize = FS_ReadFile("ui/fonts/plex/IBMPlexMono-Regular.ttf", &fontData);
 		fontReady = fontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(fontData), size_t(fontSize)},
 			"IBM Plex Mono", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal);
-		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; Force wheel unavailable\n");
+		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; selection wheels unavailable\n");
 		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
-		Rml::Factory::RegisterElementInstancer("force-wheel", &wheelInstancer);
+		Rml::Factory::RegisterElementInstancer("selection-wheel", &wheelInstancer);
 		context = Rml::CreateContext("reticle", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 		if (context) document = context->LoadDocumentFromMemory(reticleRml);
-		wheelContext = Rml::CreateContext("force-wheel", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+		wheelContext = Rml::CreateContext("selection-wheel", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 		if (wheelContext) wheelDocument = wheelContext->LoadDocumentFromMemory(R"(
 <rml><head><style>
 body { margin: 0; width: 100%; height: 100%; }
-force-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-#power-name { position: absolute; font-family: IBM Plex Mono; color: #e5ecf2; text-align: center; line-height: 120%; }
-</style></head><body><force-wheel id="wheel"/><div id="power-name">Force</div></body></rml>)");
+selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#selection-name { position: absolute; font-family: IBM Plex Mono; color: #e5ecf2; text-align: center; line-height: 120%; }
+</style></head><body><selection-wheel id="wheel"/><div id="selection-name">Force</div></body></rml>)");
 	}
 	if (document) {
 		dot = document->GetElementById("dot");
 		resources = static_cast<ResourceRings*>(document->GetElementById("resources"));
 	}
 	if (wheelDocument) {
-		wheelElement = static_cast<ForceWheelElement*>(wheelDocument->GetElementById("wheel"));
-		wheelLabel = wheelDocument->GetElementById("power-name");
+		wheelElement = static_cast<SelectionWheelElement*>(wheelDocument->GetElementById("wheel"));
+		wheelLabel = wheelDocument->GetElementById("selection-name");
 		if (wheelLabel) wheelLabelText = static_cast<Rml::ElementText*>(wheelLabel->GetFirstChild());
 	}
 	if (!document || !dot || !resources || !wheelElement || !wheelLabelText) {
@@ -284,16 +286,17 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 
 bool CL_RmlUiAvailable() { return wheelElement && fontReady; }
 
-void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label, bool pointer, float opacity) {
+void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label, float opacity) {
 	if (!CL_RmlUiAvailable()) return;
 	wheelContext->SetDimensions({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 	const float pixelScale = cls.glconfig.vidHeight / 480.0f;
-	wheelElement->SetFrame(frame, pixelScale, pointer, opacity);
+	wheelElement->SetView(view, pixelScale, opacity);
 	const float labelWidth = std::round(120 * pixelScale);
 	wheelLabel->SetProperty(Rml::PropertyId::Width, Rml::Property(labelWidth, Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Left, Rml::Property(std::round((cls.glconfig.vidWidth - labelWidth) / 2), Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Top, Rml::Property(std::round(cls.glconfig.vidHeight / 2.0f + 18 * pixelScale), Rml::Unit::PX));
-	wheelLabel->SetProperty(Rml::PropertyId::FontSize, Rml::Property(std::round(14 * pixelScale), Rml::Unit::PX));
+	const float fontSize = view.kind == RadialWheel::Kind::Weapon ? 12 : 14;
+	wheelLabel->SetProperty(Rml::PropertyId::FontSize, Rml::Property(std::round(fontSize * pixelScale), Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Opacity, Rml::Property(opacity, Rml::Unit::NUMBER));
 	// Stock Western StringEd labels use single-byte characters, not UTF-8.
 	Rml::String text;

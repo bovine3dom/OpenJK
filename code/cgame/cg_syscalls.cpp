@@ -345,6 +345,9 @@ int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const
 void cgi_ForceWheelUpdate(ForceWheel::Frame* frame) { Q_syscall(CG_FORCEWHEEL_UPDATE, frame); }
 float cgi_R_DrawForceWheel(const char* label) { return Q_syscall(CG_R_DRAWFORCEWHEELTEXT, label) / 255.0f; }
 qboolean cgi_ForceWheelPreview() { return (qboolean)Q_syscall(CG_FORCEWHEEL_PREVIEW); }
+void cgi_WeaponWheelUpdate(WeaponWheel::Frame* frame) { Q_syscall(CG_WEAPONWHEEL_UPDATE, frame); }
+qboolean cgi_WeaponWheelPreview() { return (qboolean)Q_syscall(CG_WEAPONWHEEL_PREVIEW); }
+float cgi_R_DrawWeaponWheel(const char* label) { return Q_syscall(CG_R_DRAWWEAPONWHEEL, label) / 255.0f; }
 
 void	cgi_R_DrawStretchPic( float x, float y, float w, float h,
 							   float s1, float t1, float s2, float t2, qhandle_t hShader ) {

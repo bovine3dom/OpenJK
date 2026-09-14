@@ -41,6 +41,8 @@ default when free. Middle mouse can be assigned in the menu. See
 
 - [x] Keep movement active while the Force wheel is open. Block combat actions and camera turning.
 - [x] Render the wheel label with bundled IBM Plex Mono through FreeType at native pixel size.
+- [x] Highlight the current Force power in the dead zone and use the radial display for Q/E cycling without slow time.
+- [x] Use a separate radial weapon display for scroll cycling without slow time.
 
 RmlUi is the leading candidate. Prove its integration before replacing many screens.
 Keep existing screens available during migration.

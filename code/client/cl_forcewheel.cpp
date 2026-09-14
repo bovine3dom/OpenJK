@@ -2,21 +2,24 @@
 #include "client.h"
 #include "../game/statindex.h"
 
+bool CL_WheelGameplayAllowed() {
+	return cls.state == CA_ACTIVE && cls.cgameStarted && cl.frame.valid &&
+		cl.frame.ps.stats[STAT_HEALTH] > 0 && !Key_GetCatcher() &&
+		!Cvar_VariableIntegerValue("com_unfocused") && !Cvar_VariableIntegerValue("com_minimized") &&
+		!Cvar_VariableIntegerValue("cl_paused") && !CL_IsRunningInGameCinematic() &&
+		CL_RmlUiAvailable();
+}
+
 namespace {
 ForceWheel::Selection selection;
 ForceWheel::Preview preview;
 ForceWheel::Frame available;
 
-bool Allowed() {
-	return cls.state == CA_ACTIVE && cls.cgameStarted && cl.frame.valid &&
-		cl.frame.ps.stats[STAT_HEALTH] > 0 && !Key_GetCatcher() &&
-		!Cvar_VariableIntegerValue("com_unfocused") && !Cvar_VariableIntegerValue("com_minimized") &&
-		!Cvar_VariableIntegerValue("cl_paused") && !CL_IsRunningInGameCinematic() &&
-		available.allowed && CL_RmlUiAvailable();
-}
+bool Allowed() { return available.allowed && CL_WheelGameplayAllowed(); }
 
 void Down() {
 	if (Allowed() && selection.Press(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1, available.available)) {
+		CL_WeaponWheelCancel();
 		preview.Cancel();
 		CL_ClearWheelActions();
 	}
@@ -63,6 +66,11 @@ void CL_ForceWheelCancel() {
 	preview.Cancel();
 }
 
+void CL_SelectionWheelsCancel() {
+	CL_ForceWheelCancel();
+	CL_WeaponWheelCancel();
+}
+
 bool CL_ForceWheelActive() {
 	if (!Allowed()) CL_ForceWheelCancel();
 	return selection.Open();
@@ -75,6 +83,7 @@ bool CL_ForceWheelVisible() {
 
 qboolean CL_ForceWheelPreview() {
 	if (!Allowed()) return qfalse;
+	CL_WeaponWheelCancel();
 	CL_ForceWheelCancel();
 	preview.Show(Sys_Milliseconds() * 0.001);
 	return qtrue;
@@ -107,11 +116,14 @@ void CL_ForceWheelUpdate(ForceWheel::Frame* frame) {
 
 int CL_ForceWheelDraw(const char* label) {
 	if (!CL_ForceWheelVisible()) return 0;
-	ForceWheel::Frame frame = available;
-	frame.open = true;
-	frame.hovered = selection.Open() ? selection.Hovered() : -1;
-	frame.x = selection.X(); frame.y = selection.Y();
+	RadialWheel::View view;
+	view.available = available.available;
+	view.slotCount = ForceWheel::MaxPowers;
+	view.current = available.current;
+	view.hovered = selection.Open() ? selection.Hovered() : -1;
+	view.pointer = selection.Open();
+	view.x = selection.X(); view.y = selection.Y();
 	const float opacity = selection.Open() ? 1 : preview.Opacity(Sys_Milliseconds() * 0.001);
-	CL_RmlUiDrawForceWheel(frame, label, selection.Open(), opacity);
+	CL_RmlUiDrawSelectionWheel(view, label, opacity);
 	return int(opacity * 255);
 }

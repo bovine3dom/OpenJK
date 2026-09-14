@@ -1057,6 +1057,23 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #else
 		return qfalse;
 #endif
+	case CG_WEAPONWHEEL_UPDATE:
+#ifdef USE_RMLUI
+		CL_WeaponWheelUpdate((WeaponWheel::Frame*)VMA(1));
+#endif
+		return 0;
+	case CG_WEAPONWHEEL_PREVIEW:
+#ifdef USE_RMLUI
+		return CL_WeaponWheelPreview();
+#else
+		return qfalse;
+#endif
+	case CG_R_DRAWWEAPONWHEEL:
+#ifdef USE_RMLUI
+		return CL_WeaponWheelDraw((const char*)VMA(1));
+#else
+		return 0;
+#endif
 	case CG_R_MODELBOUNDS:
 		re.ModelBounds( args[1], (float *) VMA(2), (float *) VMA(3) );
 		return 0;

@@ -32,6 +32,14 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../cgame/cg_public.h"
 
 #ifdef USE_RMLUI
+bool CL_WheelGameplayAllowed();
+void CL_SelectionWheelsCancel();
+void CL_InitWeaponWheel();
+void CL_WeaponWheelCancel();
+bool CL_WeaponWheelVisible();
+qboolean CL_WeaponWheelPreview();
+void CL_WeaponWheelUpdate(WeaponWheel::Frame* frame);
+int CL_WeaponWheelDraw(const char* label);
 void CL_InitForceWheel();
 void CL_ForceWheelCancel();
 bool CL_ForceWheelActive();
@@ -44,7 +52,7 @@ void CL_ForceWheelUpdate(ForceWheel::Frame* frame);
 int CL_ForceWheelDraw(const char* label);
 void CL_ClearWheelActions();
 bool CL_RmlUiAvailable();
-void CL_RmlUiDrawForceWheel(const ForceWheel::Frame& frame, const char* label, bool pointer, float opacity);
+void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label, float opacity);
 void CL_RmlUiInit();
 void CL_RmlUiShutdown();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
