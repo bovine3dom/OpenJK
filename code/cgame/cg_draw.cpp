@@ -1824,6 +1824,7 @@ static bool reticleHudDrawn = false;
 
 static void CG_DrawHUD( centity_t *cent )
 {
+	if (reticleHudDrawn) return;
 	int value;
 	int	sectionXPos,sectionYPos,sectionWidth,sectionHeight;
 
@@ -1835,8 +1836,6 @@ static void CG_DrawHUD( centity_t *cent )
 		SimpleHud_DrawString( x + 16, y + 40, va( "%i", cg.snap->ps.stats[STAT_HEALTH] ), colorTable[CT_HUD_RED] );
 
 		SimpleHud_DrawString( x + 18 + 14, y + 40 + 14, va( "%i", cg.snap->ps.stats[STAT_ARMOR] ), colorTable[CT_HUD_GREEN] );
-
-		if (reticleHudDrawn) return;
 
 		CG_DrawSimpleForcePower( cent );
 
@@ -1889,7 +1888,6 @@ static void CG_DrawHUD( centity_t *cent )
 
 
 	// Draw the lower right section of the HUD
-	if (reticleHudDrawn) return;
 	if (cgi_UI_GetMenuInfo("righthud",&sectionXPos,&sectionYPos,&sectionWidth,&sectionHeight))
 	{
 		// Draw all the HUD elements --eez
@@ -2551,6 +2549,9 @@ static reticleHudState_t CG_ReticleHudState()
 	const playerState_t& live = g_entities[ps.clientNum].client->ps;
 	reticleHudState_t state;
 	state.time = cg.time;
+	state.health = ps.stats[STAT_HEALTH];
+	state.armor = ps.stats[STAT_ARMOR];
+	state.healthMax = ps.stats[STAT_MAX_HEALTH];
 	state.weapon = cg_entities[ps.clientNum].currentState.weapon;
 	state.force = live.forcePower;
 	state.forceMax = live.forcePowersKnown ? live.forcePowerMax : 0;

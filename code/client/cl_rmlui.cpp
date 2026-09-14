@@ -108,7 +108,8 @@ class ResourceRings final : public Rml::Element {
 		Arc(mesh, radius, 0.8f, -90, 360 * value, color, alpha * 0.55f);
 	}
 	void OnRender() override {
-		if (display.forceAlpha <= 0 && display.ammoAlpha <= 0 && display.stanceAlpha <= 0) return;
+		if (display.forceAlpha <= 0 && display.ammoAlpha <= 0 && display.stanceAlpha <= 0 &&
+			display.healthAlpha <= 0 && display.armorAlpha <= 0) return;
 		Rml::Mesh mesh;
 		Ring(mesh, 10, display.force, {135, 205, 255}, display.forceAlpha);
 		Ring(mesh, 14, display.ammo, {255, 225, 140}, display.ammoAlpha);
@@ -116,6 +117,11 @@ class ResourceRings final : public Rml::Element {
 			const Rml::Colourb colors[] = {{110, 175, 255}, {255, 225, 125}, {255, 105, 100}};
 			Arc(mesh, 14, 1.8f, -170.0f + display.stance * 60, 40, colors[display.stance], display.stanceAlpha * 0.65f);
 		}
+		const Rml::Colourb healthColor{240, 115, 115}, armorColor{135, 215, 155};
+		Arc(mesh, 18, 0.8f, 100, 75, healthColor, display.healthAlpha * 0.12f);
+		Arc(mesh, 18, 0.8f, 100, 75 * display.health, healthColor, display.healthAlpha * 0.55f);
+		Arc(mesh, 18, 0.8f, 5, 75, armorColor, display.armorAlpha * 0.12f);
+		Arc(mesh, 18, 0.8f, 80 - 75 * display.armor, 75 * display.armor, armorColor, display.armorAlpha * 0.55f);
 		geometry = GetRenderManager()->MakeGeometry(std::move(mesh));
 		geometry.Render(GetAbsoluteOffset());
 	}

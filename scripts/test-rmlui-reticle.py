@@ -82,10 +82,52 @@ def check_hud(captures, width, height, check):
         check(f"{state}: restores the panel", panel_pixels(state) > panel_pixels("hud_idle") + 50)
 
 
+def check_vitals(captures, width, height, check):
+    baseline = captures["vitals_idle"]
+
+    def colored_pixels(state, health):
+        count = 0
+        background = captures["vitals_noreticle"] if state == "vitals_full_resources" else baseline
+        color = (240, 115, 115) if health else (135, 215, 155)
+        for y in range(0, 23):
+            for x in range(-23, 23):
+                if (x < 0) != health or not 18.5 <= math.hypot(x + 0.5, y + 0.5) <= 21:
+                    continue
+                i = ((height // 2 + y) * width + width // 2 + x) * 3
+                delta = [captures[state][i + c] - background[i + c] for c in range(3)]
+                # Fit the translucent color to the background, including channels it darkens.
+                blend = [color[c] - background[i + c] for c in range(3)]
+                alpha = sum(d * b for d, b in zip(delta, blend)) / max(1, sum(b * b for b in blend))
+                count += 0.2 < alpha < 0.75 and max(abs(d - alpha * b) for d, b in zip(delta, blend)) < 4
+        return count
+
+    for state in ("vitals_damage", "vitals_pickup", "vitals_shield_hit", "vitals_full_resources"):
+        check(f"{state}: health at lower left", colored_pixels(state, True) >= 3)
+        # A 10% shield arc covers only one or two pixels at this scale.
+        check(f"{state}: shields at lower right", colored_pixels(state, False) >= (1 if state == "vitals_shield_hit" else 3))
+    for state in ("vitals_damage_idle", "vitals_pickup_idle", "vitals_recovered"):
+        check(f"{state}: no persistent health arc", colored_pixels(state, True) < 3)
+        check(f"{state}: no persistent shield arc", colored_pixels(state, False) < 3)
+    for state in ("vitals_critical", "vitals_critical_restart"):
+        check(f"{state}: persistent critical-health arc", colored_pixels(state, True) >= 3)
+        check(f"{state}: empty shields do not persist", colored_pixels(state, False) < 3)
+
+    def panel_pixels(state):
+        return sum(captures[state][i + 2] - captures[state][i] > 40
+                   for y in range(height * 3 // 4, height)
+                   for x in range(width // 4)
+                   for i in [(y * width + x) * 3])
+
+    for state in ("vitals_legacy", "vitals_noreticle"):
+        check(f"{state}: restores the left panel", panel_pixels(state) > panel_pixels("vitals_idle") + 50)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("package", type=Path)
-    parser.add_argument("--hud", action="store_true", help="Test contextual resource rings and stance indicators")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--hud", action="store_true", help="Test contextual resource rings and stance indicators")
+    mode.add_argument("--vitals", action="store_true", help="Test contextual health and shield arcs")
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "reticle-tests")
     args = parser.parse_args()
     package = args.package.resolve()
@@ -93,7 +135,7 @@ def main():
     output = Path(tempfile.mkdtemp(prefix="reticle.", dir=args.output.resolve()))
     assets = Path(os.environ.get("OJK_ASSETS", ROOT / "GameData")).resolve()
     overlay = output / "assets"
-    fixture = "rmlui-hud.cfg" if args.hud else "rmlui-reticle.cfg"
+    fixture = "rmlui-vitals.cfg" if args.vitals else "rmlui-hud.cfg" if args.hud else "rmlui-reticle.cfg"
     overlay.mkdir()
     (overlay / "base").symlink_to(assets / "base", target_is_directory=True)
     (overlay / "OpenJK").mkdir()
@@ -125,6 +167,10 @@ def main():
                 states = ("hud_idle", "hud_legacy", "hud_resources", "hud_fast", "hud_medium", "hud_strong",
                           "hud_stance_idle", "hud_saber_active", "hud_ammo_active", "hud_ammo_idle",
                           "hud_noreticle", "hud_legacyreticle")
+            elif args.vitals:
+                states = ("vitals_idle", "vitals_legacy", "vitals_damage", "vitals_damage_idle",
+                          "vitals_pickup", "vitals_pickup_idle", "vitals_critical", "vitals_critical_restart",
+                          "vitals_recovered", "vitals_shield_hit", "vitals_full_resources", "vitals_noreticle")
             env = dict(os.environ, OJK_SMOKE_DISPLAY=f"{width}x{height}",
                        OJK_SMOKE_RENDERER=renderer, OJK_SMOKE_ROOT=str(run),
                        OJK_SMOKE_TIMEOUT="600", OJK_ASSETS=str(overlay))
@@ -148,6 +194,9 @@ def main():
                     captures[state] = image_pixels(image, width, height)
                 if args.hud:
                     check_hud(captures, width, height, check)
+                    continue
+                if args.vitals:
+                    check_vitals(captures, width, height, check)
                     continue
                 for state in states:
                     bright, bbox = measure(captures[state], captures["legacy-hidden"], width, height)

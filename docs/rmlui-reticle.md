@@ -14,9 +14,9 @@ Use these console settings:
 | `cg_rmluiReticle 0` | Use the selected legacy crosshair. |
 | `cg_rmluiReticleScale 0.75` | Use the default dot and indicator scale. The range is 0.25 to 4. |
 | `cg_rmluiHud 1` | Use contextual resource indicators. This is the default. |
-| `cg_rmluiHud 0` | Restore the bottom-right panel. Keep the RmlUi dot. |
+| `cg_rmluiHud 0` | Restore both bottom panels. Keep the RmlUi dot. |
 | `cg_crosshairSize 24` | Set the base size in legacy vertical UI units. |
-| `cg_drawCrosshair 0` | Hide the reticle and restore the bottom-right panel. |
+| `cg_drawCrosshair 0` | Hide the reticle and restore both bottom panels. |
 
 The new reticle is a small round dot with 65% fill opacity and a faint dark edge.
 Other nonzero `cg_drawCrosshair` values do not
@@ -50,19 +50,34 @@ pixel scaling and fixed radii, so item pickup does not expand the rings.
   panel. Stance changes, attacks, blocks, locks, and saber throws reveal it.
   It stays visible for 0.8 seconds after activity, then fades for 0.6 seconds.
 
-The resource arcs start at the top and extend clockwise. A faint full outline
+The Force and ammo arcs start at the top and extend clockwise. A faint full outline
 shows the capacity, including when the resource is empty. The Force ring can
 appear with either ammo or stance. There are no permanent numbers or labels.
-At idle with full Force energy, only the small dot remains.
+At idle with full Force energy and health above 25%, only the small dot remains.
 
-The bottom-right panel is hidden only when the new HUD can draw in that frame.
-The panel returns if the dot is disabled or cannot be drawn. Vehicles and
-controlled entities keep their existing HUDs. The health and armor panel,
-weapon selection, datapad, and other HUD elements are unchanged.
+## Health And Shields
+
+Two short arcs sit below the resource rings. Health is muted red at the lower
+left. Shields are green at the lower right. Each arc shows its own remaining
+percentage. The game uses maximum health as the shield capacity.
+
+- Health or shield loss reveals both arcs for 5 seconds after the last loss.
+- Healing or a health or shield pickup reveals both arcs for 3 seconds. A pickup
+  does not shorten an active damage display.
+- Both arcs then fade for 0.6 seconds. Partial depletion does not keep them visible.
+- At 25% health or below, a faint health arc remains visible. It does not pulse
+  or flash. This also applies after a save load or renderer restart.
+- Empty shields do not cause a persistent warning. Their empty outline appears
+  with the health arc after damage, then fades.
+
+The bottom panels are hidden only when the new HUD can draw in that frame.
+They return if the dot is disabled or cannot be drawn. Vehicles and controlled
+entities keep their existing HUDs. Weapon selection and the datapad are unchanged.
+The first version has no hold-to-check binding or numeric status display.
 
 ## Integration Limits
 
-This change replaces the normal SP crosshair and resource panel. It does not replace
+This change replaces the normal SP crosshair and both resource panels. It does not replace
 the panel-turret artwork, Force corona, MP reticle, or Jedi Outcast reticle.
 It does not change collision tests or the timing of target identification.
 
@@ -88,6 +103,7 @@ Build and test with one build job:
 bash scripts/build-sp.sh
 python3 scripts/test-rmlui-reticle.py build/ready
 python3 scripts/test-rmlui-reticle.py --hud build/ready
+python3 scripts/test-rmlui-reticle.py --vitals build/ready
 c++ -std=c++11 -I shared tests/reticle_hud.cpp -o build/reticle-hud-test
 build/reticle-hud-test
 ```
@@ -99,6 +115,8 @@ Each run stores screenshots, logs, and a JSON report in `build/reticle-tests`.
 The HUD test uses gameplay commands to check resource arcs, stance positions,
 attack visibility, idle fading, and panel replacement. The C++ test checks
 activity timing, resource limits, simultaneous states, and reset behavior.
+The vitals test checks health and shield changes, critical health, recovery,
+restart behavior, left-panel fallback, and simultaneous resource drawing.
 
 Rend2 screenshots now capture the completed frame, including the HUD. Leave
 at least two `wait` frames after a screenshot command before changing the test

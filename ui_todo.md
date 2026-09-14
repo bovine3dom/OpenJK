@@ -15,6 +15,8 @@
 
 - [x] Set the default dot scale to 0.75.
 - [x] Replace the bottom-right SP resource panel with contextual Force and ammo rings and a stance arc.
+- [x] Replace the bottom-left panel with paired health and shield arcs. Retain a faint critical-health arc at 25% or below.
+- [ ] Choose a status-check binding and add a held view with exact resource values.
 - [ ] Check ring size, opacity, fade timing, and stance readability during human play.
 
 - [x] Integrate RmlUi 6.3 into the Jedi Academy SP client with static dependencies.

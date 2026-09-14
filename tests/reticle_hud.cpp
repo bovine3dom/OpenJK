@@ -73,5 +73,58 @@ int main() {
 	state.time = -100; // A loaded save starts a fresh activity history.
 	state.force = 100;
 	assert(tick().forceAlpha == 0);
+
+	activity.Reset();
+	state.healthMax = state.health = state.armor = 100;
+	view = tick();
+	assert(view.healthAlpha == 0 && view.armorAlpha == 0);
+	auto after = [&](int ticks) { ReticleHud::Display v; for (int i = 0; i < ticks; ++i) v = tick(); return v; };
+	state.armor = 60; // Shield-only damage reveals both resources.
+	view = tick();
+	assert(view.healthAlpha == 1 && view.armorAlpha == 1 && view.armor == 0.6f);
+	assert(after(40).healthAlpha == 1);
+	view = after(12);
+	assert(view.healthAlpha > 0 && view.healthAlpha < 1);
+	assert(after(6).armorAlpha == 0);
+	state.health = 80;
+	tick();
+	state.health = 90; // A pickup must not shorten an existing damage hold.
+	tick();
+	assert(after(40).healthAlpha == 1);
+	assert(after(20).healthAlpha == 0);
+	state.health = 99;
+	assert(tick().healthAlpha == 1);
+	assert(after(25).healthAlpha == 1);
+	view = after(8);
+	assert(view.healthAlpha > 0 && view.healthAlpha < 1);
+	assert(after(5).healthAlpha == 0);
+	state.health = 25;
+	assert(tick().healthAlpha == 1);
+	view = after(60);
+	assert(view.healthAlpha == 0.45f && view.armorAlpha == 0);
+	assert(after(30).healthAlpha == 0.45f); // Critical health stays steady, without pulsing.
+	state.health = 26;
+	tick();
+	assert(after(40).healthAlpha == 0);
+	state.armor = 0;
+	assert(tick().armorAlpha == 1);
+	view = after(60);
+	assert(view.healthAlpha == 0 && view.armorAlpha == 0);
+	state.health = 0;
+	view = tick();
+	assert(view.healthAlpha == 0 && view.armorAlpha == 0);
+	activity.Reset();
+	state.health = 25;
+	assert(tick().healthAlpha == 0.45f); // Loading at critical health needs no damage event.
+	activity.Reset();
+	state.healthMax = 200;
+	state.health = 50;
+	assert(tick().healthAlpha == 0.45f);
+	state.healthMax = 0;
+	assert(tick().healthAlpha == 0);
+	state.healthMax = 100;
+	state.health = state.armor = 200;
+	view = tick();
+	assert(view.health == 1 && view.armor == 1);
 	std::puts("PASS: reticle HUD activity, fades, limits, weapon changes, and reset");
 }
