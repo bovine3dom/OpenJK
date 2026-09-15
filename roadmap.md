@@ -178,11 +178,18 @@ group removal clear movement speech and chance. CP release clears all NPC claims
 failed replacement clears the ID. Full-save load restores occupancy from NPC
 claims; autosave load does not.
 
-Thirteen memory and 16 tactical cases are verified, including `solo-switch`,
-`cp-low`, and `cp-high`. The timeout test forces a
-deadline, not physical route obstruction. The cinematic test simulates
+Thirteen memory and 59 tactical cases have passed across test runs, including
+`solo-switch`, `cp-low`, and `cp-high`. The `route-recovery` test uses a physical
+enclosure and checks claim release before timeout. The cinematic test simulates
 `BS_CINEMATIC` with an external goal, not a full pending ICARUS script. Contested
 reservation testing uses the API, not a real encounter with multiple squads.
+
+Local recruitment now has an adjustable 768-unit default radius. Member-contact
+merges preserve active tactical plans. Cover selection can prefer a nearby ally's
+rally position. Blocked-route recovery measures actual travel and retains valid
+detours. Dedicated radius-boundary and rally-hold tests remain open. One native
+short-shot test missed its missile before a passing repeat. See
+`docs/squad-tactics.md` for the test limits.
 
 Solo fixtures use `d_noGroupAI 1`. `SCF_NO_GROUPS` selects the separate legacy
 formation controller, `AI_HazardTrooper`; its hearing, steering, and chase

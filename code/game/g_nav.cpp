@@ -629,6 +629,65 @@ static void MemoryCommand( void )
 			NPC_ChangeWeapon( weapon );
 			RestoreNPCGlobals();
 		}
+		else if ( !Q_stricmp(action, "split") )
+		{
+			AIGroupInfo_t *slot = NULL;
+			for ( int i = 0; i < MAX_FRAME_GROUPS; ++i )
+				if ( !level.groups[i].numGroup && &level.groups[i] != actor->NPC->group )
+				{
+					slot = &level.groups[i];
+					break;
+				}
+			if ( !slot || !actor->enemy )
+			{
+				gi.Printf("aimemory event=rejected reason=split_group\n");
+				return;
+			}
+			if ( actor->NPC->group )
+				AI_DeleteSelfFromGroup(actor);
+			memset(slot, 0, sizeof(*slot));
+			slot->enemy = actor->enemy;
+			slot->team = actor->client->playerTeam;
+			slot->lastSeenEnemyTime = actor->NPC->enemyLastSeenTime;
+			VectorCopy(actor->NPC->enemyLastSeenLocation, slot->enemyLastSeenPos);
+			AI_InsertGroupMember(slot, actor);
+		}
+		else if ( !Q_stricmp(action, "blockroute") )
+		{
+			if ( !actor->NPC->goalEntity || (actor->NPC->tacticRole != 1 && actor->NPC->tacticRole != 3) )
+				return;
+			if ( G_Find(NULL, FOFS(targetname), "_memory_routewall") )
+			{
+				gi.Printf("aimemory event=rejected reason=route_wall\n");
+				return;
+			}
+			// Close the passage on all sides so steering cannot slide along a wall.
+			for ( int side = 0; side < 4; ++side )
+			{
+				int axis = side/2;
+				vec3_t point;
+				VectorCopy(actor->currentOrigin, point);
+				point[axis] += side%2 ? 40 : -40;
+				gentity_t *wall = G_Spawn();
+				wall->targetname = G_NewString("_memory_routewall");
+				wall->classname = G_NewString("ai_route_wall");
+				wall->contents = CONTENTS_SOLID;
+				wall->svFlags |= SVF_NOCLIENT;
+				VectorSet(wall->mins, -64, -64, -24);
+				VectorSet(wall->maxs, 64, 64, 256);
+				wall->mins[axis] = -16;
+				wall->maxs[axis] = 16;
+				G_SetOrigin(wall, point);
+				gi.linkentity(wall);
+			}
+			gi.cvar_set("route_wait", "");
+		}
+		else if ( !Q_stricmp(action, "unblockroute") )
+		{
+			gentity_t *wall;
+			while ( (wall = G_Find(NULL, FOFS(targetname), "_memory_routewall")) != NULL )
+				G_FreeEntity(wall);
+		}
 		else if ( !Q_stricmp(action, "cooldown") )
 		{
 			TIMER_Set( actor, "regroupRetry", 10000 );
@@ -818,11 +877,12 @@ static void MemoryCommand( void )
 		actor->NPC->tacticRole, actor->NPC->tacticCP, actor->NPC->tacticDeadline,
 		actor->NPC->tacticGoal[0], actor->NPC->tacticGoal[1], actor->NPC->tacticGoal[2],
 		actor->NPC->tacticThreat[0], actor->NPC->tacticThreat[1], actor->NPC->tacticThreat[2] );
-	gi.Printf( "aimemory event=path name=%s group_wp=%d seen_wp=%d member_wp=%d actor_wp=%d path_cost=%d target_wp=%d troop=%d\n",
+	gi.Printf( "aimemory event=path name=%s group_wp=%d seen_wp=%d member_wp=%d actor_wp=%d path_cost=%d target_wp=%d troop=%d buddy=%d\n",
 		name, group ? group->enemyWP : WAYPOINT_NONE,
 		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
 		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
-		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
+		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop,
+		member ? member->closestBuddy : ENTITYNUM_NONE );
 	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f support=%d retry=%d enemy_weapon=%d enemy_saber=%d no_flee=%d pressure_move=%d script_flags=%u sv_flags=%u type=%s class=%d scripted=%d spawn_script=%s native_name=%s\n",
 		name, actor->NPC->combatPoint,
 		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,

@@ -532,7 +532,16 @@ static qboolean ST_Move( void )
 	if (moved==qfalse)
 	{
 		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=move_failed ent=%d cp=%d goal=%d nodes=%d\n", NPC->s.number, NPCInfo->combatPoint, NPCInfo->goalEntity ? NPCInfo->goalEntity->s.number : -1, NAV::PathNodesRemaining(NPC) );
-		ST_HoldPosition();
+		if ( NPCInfo->tacticRole )
+		{
+			if ( NPCInfo->tacticCP >= 0 )
+				NPCInfo->lastFailedCombatPoint = NPCInfo->tacticCP;
+			ST_ClearTactic( NPC, "route_failed" );
+			TIMER_Set( NPC, "routeRetry", 4000 );
+			TIMER_Set( NPC, "coverRelocate", 3000 );
+		}
+		else
+			ST_HoldPosition();
 	}
 
 	NPC_ST_SayMovementSpeech();
@@ -2014,7 +2023,7 @@ static void ST_ReportNearby( AIGroupInfo_t *group )
 		}
 	}
 	int observed = group->lastSeenEnemyTime;
-	if ( observed <= 0 || observed > level.time || level.time-observed > 1500 )
+	if ( observed <= 0 || observed > level.time || level.time-observed > 3000 )
 		return;
 	vec3_t known;
 	VectorCopy( group->enemyLastSeenPos, known );
@@ -2036,10 +2045,11 @@ static void ST_ReportNearby( AIGroupInfo_t *group )
 	if ( !source )
 		return;
 	vec3_t mins, maxs;
+	float radius = Com_Clamp( 0, 1024, g_squadRecruitRadius->value );
 	for ( int axis = 0; axis < 3; axis++ )
 	{
-		mins[axis] = source->currentOrigin[axis] - 512;
-		maxs[axis] = source->currentOrigin[axis] + 512;
+		mins[axis] = source->currentOrigin[axis] - radius;
+		maxs[axis] = source->currentOrigin[axis] + radius;
 	}
 	gentity_t *nearby[128];
 	int count = gi.EntitiesInBox( mins, maxs, nearby, 128 ), attempts = 0;
@@ -2121,6 +2131,10 @@ void ST_ClearTactic( gentity_t *self, const char *reason )
 	TIMER_Remove( self, "peekBlocked" );
 	TIMER_Remove( self, "peekBlockedOnce" );
 	TIMER_Remove( self, "coverSupport" );
+	TIMER_Remove( self, "supportGrace" );
+	TIMER_Remove( self, "rallyHold" );
+	TIMER_Remove( self, "rallyIntent" );
+	TIMER_Remove( self, "routeStall" );
 	info->movementSpeech = 0;
 	info->movementSpeechChance = 0.0f;
 	if ( info->goalEntity == info->tempGoal && info->tempGoal
@@ -2181,22 +2195,30 @@ static qboolean ST_SeesKnownThreat( gentity_t *self, const vec3_t known )
 static qboolean ST_ReadySupport( gentity_t *self, const vec3_t known )
 {
 	auto *info = self->NPC;
+	bool canFire = (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_FIRING
+		|| self->client->ps.weaponstate == WEAPON_IDLE) && TIMER_Done( self, "attackDelay" );
 	qboolean ready = (self->client->ps.weapon != WP_NONE && self->client->ps.weapon != WP_DISRUPTOR && self->health*2 >= self->max_health
 		&& TIMER_Done( self, "incomingFire" ) && TIMER_Done( self, "underFire" ) && TIMER_Done( self, "coverRelocate" )
 		&& self->painDebounceTime <= level.time && (info->tacticRole == 0 || info->tacticRole == 5)
 		&& (info->scriptFlags & SCF_CHASE_ENEMIES) && !(info->scriptFlags & SCF_DONT_FIRE)
-		&& (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_FIRING
-			|| self->client->ps.weaponstate == WEAPON_IDLE)
-		&& TIMER_Done( self, "attackDelay" ) && TIMER_Done( self, "flee" ) && !info->goalEntity
+		&& TIMER_Done( self, "flee" ) && !info->goalEntity
 		&& VectorCompare( self->client->ps.velocity, vec3_origin )
 		&& ST_SeesKnownThreat( self, known )) ? qtrue : qfalse;
 	if ( !ready )
+	{
+		TIMER_Remove( self, "supportGrace" );
 		return qfalse;
+	}
 	vec3_t muzzle;
 	CalcEntitySpot( self, SPOT_WEAPON, muzzle );
 	trace_t trace;
 	gi.trace( &trace, muzzle, NULL, NULL, known, self->s.number, MASK_SHOT, (EG2_Collision)0, 0 );
-	return (trace.fraction == 1.0f || (self->enemy && trace.entityNum == self->enemy->s.number)) ? qtrue : qfalse;
+	if ( canFire && (trace.fraction == 1.0f || (self->enemy && trace.entityNum == self->enemy->s.number)) )
+	{
+		TIMER_Set( self, "supportGrace", 750 );
+		return qtrue;
+	}
+	return info->tacticRole == 5 && !TIMER_Done( self, "supportGrace" ) ? qtrue : qfalse;
 }
 
 static void ST_AssignTactic( gentity_t *self, int role, int cp, const vec3_t known, const vec3_t goal )
@@ -2206,9 +2228,18 @@ static void ST_AssignTactic( gentity_t *self, int role, int cp, const vec3_t kno
 	info->tacticCP = cp;
 	info->tacticEnemy = self->enemy->s.number;
 	info->tacticDeadline = level.time + (role == 5 ? 9000 : (role == 1 || role == 3) ? 6000 : 3000);
+	if ( role == 1 && TIMER_Exists( self, "rallyIntent" ) )
+	{
+		TIMER_Remove( self, "rallyIntent" );
+		TIMER_Set( self, "rallyHold", 10000 );
+	}
+	if ( role == 2 && TIMER_Exists( self, "rallyHold" ) )
+		info->tacticDeadline = level.time+4000;
 	VectorCopy( goal, info->tacticGoal );
 	VectorCopy( known, info->tacticThreat );
-	info->aiFlags &= ~(NPCAI_STOP_AT_LOS|NPCAI_TOUCHED_GOAL);
+	info->aiFlags &= ~(NPCAI_STOP_AT_LOS|NPCAI_TOUCHED_GOAL|NPCAI_BLOCKED);
+	info->blockedDebounceTime = 0;
+	TIMER_Remove( self, "routeStall" );
 	info->movementSpeech = 0;
 	NAV::ClearPath( self );
 	AI_GroupUpdateSquadstates( info->group, self, role == 1 ? SQUAD_RETREAT : role == 3 ? SQUAD_TRANSITION : role == 2 ? SQUAD_COVER : SQUAD_STAND_AND_SHOOT );
@@ -2291,6 +2322,33 @@ static qboolean ST_DirectEscape( gentity_t *self, const vec3_t start, const vec3
 	return qtrue;
 }
 
+static gentity_t *ST_RallyAnchor( gentity_t *self, const vec3_t known, vec3_t anchor )
+{
+	AIGroupInfo_t *group = self->NPC->group;
+	gentity_t *best = NULL;
+	float cost = Q3_INFINITE;
+	for ( int i = 0; group && i < group->numGroup; ++i )
+	{
+		gentity_t *other = &g_entities[group->member[i].number];
+		if ( other == self || !AI_ValidateGroupMember( group, other, qtrue ) || other->enemy != self->enemy
+			|| !NAV::InSameRegion( self, other ) )
+			continue;
+		bool retreat = (other->NPC->tacticRole == 1 || other->NPC->tacticRole == 2)
+			&& !TIMER_Exists( other, "coverPeek" ) && !TIMER_Exists( other, "coverReturn" );
+		if ( !retreat && !ST_ReadySupport( other, known ) )
+			continue;
+		const float *point = retreat ? other->NPC->tacticGoal : other->currentOrigin;
+		float distance = DistanceSquared( self->currentOrigin, point );
+		if ( distance < cost && distance <= 768*768 )
+		{
+			cost = distance;
+			best = other;
+			VectorCopy( point, anchor );
+		}
+	}
+	return best;
+}
+
 static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean cover, vec3_t goal, int &cp, qboolean peek = qfalse, const float *from = NULL, qboolean requirePeek = qtrue, float retreatDistance = 0 )
 {
 	if ( !self->NPC->tempGoal || NAV::GetNearestNode( self ) == WAYPOINT_NONE )
@@ -2308,6 +2366,12 @@ static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean 
 	vec3_t muzzleOffset;
 	CalcEntitySpot( self, SPOT_WEAPON, muzzleOffset );
 	VectorSubtract( muzzleOffset, self->currentOrigin, muzzleOffset );
+	vec3_t rally, bestGoal;
+	gentity_t *buddy = cover && retreatDistance <= 0 ? ST_RallyAnchor( self, known, rally ) : NULL;
+	float bestScore = Q3_INFINITE;
+	int bestCP = -1, candidates = 0;
+	if ( cover )
+		TIMER_Remove( self, "rallyIntent" );
 	// Try an authored point first, then nearby graph positions in travel order.
 	for ( int i = -1; i < count; ++i )
 	{
@@ -2361,6 +2425,8 @@ static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean 
 		else
 			VectorCopy( i == -1 ? level.combatPoints[cp].origin : NAV::GetNodePosition( nodes[i] ), point );
 		float travel = DistanceSquared( origin, point );
+		if ( !TIMER_Done( self, "routeRetry" ) && DistanceSquared( point, self->NPC->tacticGoal ) < 64*64 )
+			continue;
 		if ( travel < 32*32 || travel > 384*384 || DistanceSquared( point, known ) < 128*128 )
 			continue;
 		if ( retreatDistance > 0 && DistanceSquared( point, known ) < retreatDistance*retreatDistance )
@@ -2411,9 +2477,29 @@ static qboolean ST_CyclePosition( gentity_t *self, const vec3_t known, qboolean 
 			if ( !ST_CyclePosition( self, known, qfalse, peekGoal, peekCP, qtrue, point ) )
 				continue;
 		}
-		VectorCopy( point, goal );
-		if ( i >= 0 )
-			cp = -1;
+		if ( !buddy )
+		{
+			VectorCopy( point, goal );
+			if ( i >= 0 )
+				cp = -1;
+			return qtrue;
+		}
+		float score = sqrtf(travel) + 0.75f*fabsf(Distance(point, rally)-128);
+		if ( score < bestScore )
+		{
+			bestScore = score;
+			bestCP = i == -1 ? cp : -1;
+			VectorCopy( point, bestGoal );
+		}
+		if ( ++candidates >= 8 )
+			break;
+	}
+	if ( candidates )
+	{
+		VectorCopy( bestGoal, goal );
+		cp = bestCP;
+		TIMER_Set( self, "rallyIntent", 1000 );
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=rally_choice ent=%d ally=%d goal=%.3f,%.3f,%.3f\n", self->s.number, buddy->s.number, goal[0], goal[1], goal[2] );
 		return qtrue;
 	}
 	return qfalse;
@@ -2763,6 +2849,45 @@ static qboolean ST_Tactics( gentity_t *self, AIGroupInfo_t *group )
 		{
 			ST_ClearTactic( self );
 			return qtrue;
+		}
+		if ( moving && level.time-info->last_ucmd.serverTime > 250 )
+		{
+			// A paused actor has not been testing its route during the gap.
+			info->aiFlags &= ~NPCAI_BLOCKED;
+			info->blockedDebounceTime = 0;
+			TIMER_Remove( self, "routeStall" );
+		}
+		if ( moving )
+		{
+			// Measure actual travel, including detours. Discard samples after a time rollback.
+			static struct { vec3_t origin; int time; } progress[MAX_GENTITIES];
+			auto &sample = progress[self->s.number];
+			if ( !TIMER_Exists( self, "routeStall" ) || level.time < sample.time
+				|| DistanceSquared( self->currentOrigin, sample.origin ) > 16*16 )
+			{
+				VectorCopy( self->currentOrigin, sample.origin );
+				TIMER_Set( self, "routeStall", 1500 );
+			}
+			sample.time = level.time;
+		}
+		if ( moving && !arrived && info->tacticDeadline > level.time && (info->aiFlags & NPCAI_BLOCKED)
+			&& TIMER_Exists( self, "routeStall" ) && TIMER_Done( self, "routeStall" ) )
+		{
+			if ( info->tacticCP >= 0 )
+				info->lastFailedCombatPoint = info->tacticCP;
+			ST_ClearTactic( self, "route_blocked" );
+			TIMER_Set( self, "routeRetry", 4000 );
+			TIMER_Set( self, "coverRelocate", 3000 );
+			TIMER_Set( self, "pressureSearch", 0 );
+			return qtrue;
+		}
+		if ( role == 2 && TIMER_Exists( self, "rallyHold" ) && group->lastSeenEnemyTime > 0
+			&& level.time-group->lastSeenEnemyTime <= 1500
+			&& DistanceSquared( self->currentOrigin, group->enemyLastSeenPos ) < 384*384 )
+		{
+			TIMER_Remove( self, "rallyHold" );
+			info->tacticDeadline = level.time;
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=rally_contact ent=%d source=shared_sight\n", self->s.number );
 		}
 		if ( role == 2 && info->tacticDeadline <= level.time && TIMER_Exists( self, "coverCycle" )
 			&& !TIMER_Exists( self, "coverPaired" ) && !lowHealth )

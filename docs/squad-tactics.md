@@ -19,14 +19,15 @@ native NPC checks and the class-conversion fix.
 ## Local Reports
 
 - A group evaluates recruitment at most once per second and makes at most two assignment attempts per pass.
-- A caller must have a confirmed personal sight record that matches the group's latest record, no older than 1500 ms. Eligible observers take turns as callers.
-- The caller searches at most 128 nearby entities, with a strict 512-unit radius.
+- A caller must have a confirmed personal sight record that matches the group's latest record, no older than 3000 ms. Eligible observers take turns as callers.
+- The caller searches at most 128 nearby entities. `g_squadRecruitRadius` defaults to 768 units. Its limits are 0 through 1024; zero disables local contact.
 - A common observation hook confirms sight for controllers outside trooper AI. A report source must have a matching confirmed-sight stamp; a controller's private sight timer alone is not sufficient.
 - Both NPCs need a usable navigation connection. Beyond 256 units, they also need LOS to each other. Within 256 units, a short neighboring-node connection can substitute for LOS. This is a limited approximation of local hearing.
 - The recipient need not see the Jedi. Delivery assigns awareness and joins the source group without changing the recipient's personal sight time or position.
 - Receiving a report does not refresh its observation time. A recipient without personal sight cannot become a sight-report source.
 - Ordinary team-alert recipients no longer trigger recursive anger alerts. This prevents an initial alert from propagating through an unrestricted chain of newly alerted NPCs.
-- Group merges require the same team and local contact. Dead, confused, charmed, captured, frozen, ignored, locked-target, no-group, and scripted-navigation cases retain their restrictions.
+- Groups with the same enemy and team can merge through contact between eligible members. The combined group cannot have more than one flanker. Its bounding-box diagonal cannot exceed twice the recruitment radius. Transfers preserve active goals, cover claims, report acknowledgements, and speech delays.
+- Dead, confused, charmed, captured, frozen, ignored, locked-target, no-group, and scripted-navigation cases retain their restrictions.
 
 There is no map-wide radio channel. Reports use shared sight memory, not the
 hidden target's current coordinates. Existing damage, death, and sound awareness
@@ -193,6 +194,27 @@ ID. Full-save load restores combat-point occupancy from NPC claims; autosave loa
 does not. Scripted goals are not cleared as if they belonged to a tactic. Existing
 grenade danger handling runs before tactical decisions can suppress it.
 
+An active supporter can retain its role through a weapon delay or blocked muzzle
+for up to 750 ms. Pressure, pain, movement, or loss of sight ends this allowance.
+
+## Rally Positions and Blocked Routes
+
+Cover selection can use a nearby retreating ally or ready supporter as a reference
+position. It compares up to eight valid candidates and prefers spacing near 128
+units from that reference. Route, cover, and occupancy checks still apply. A rally
+hold can last four seconds. Recent shared sight within 384 units ends it early.
+The traces are `rally_choice` and `rally_contact`.
+
+A failed movement request releases the tactical goal and cover claim. A blocked
+actor also releases them after 1500 ms without more than 16 units of measured
+travel. Detours count as travel. Pauses and time rollback reset the movement
+sample. This temporary sample does not change the save format.
+
+Recovery requests a new cover search. For four seconds, the cycle search rejects
+positions within 64 units of the failed destination. The NPC can hold if it is
+already concealed or cannot find a suitable point. The traces are `route_failed`
+and `route_blocked` on `tactic_finish`.
+
 ## Barks
 
 Successful recruitment attempts a detected/contact call. The recipient queues a
@@ -223,7 +245,7 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 57 cases. `contact-async` and
+The suite has 59 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
 reservation release. `contact-hold` checks the no-chase opt-out with overrides
@@ -253,6 +275,14 @@ The new cases check:
 - Cinematic control remains protected. An active hold-order override survives save/load and clears after arrival.
 - Native `t1_sour` mercenaries, Rodians, Trandoshans, Weequays, and a sniper move under pressure. These tests use the original spawners and scripts. See `encounter-tatooine.md`.
 - Mixed trooper/Sith, Sith-only, trooper/sniper, and trooper/droid squads share reports. Membership does not assign trooper movement roles to Sith or droids.
+- `merge-plan` separates an ally into another group, then checks that a merge preserves the active flank and support assignments.
+- `route-recovery` closes a physical enclosure after retreat movement starts. It checks cancellation and claim release before the deadline, then movement after removal or a deliberate hold after a cover search.
+
+All 59 cases passed across the September 15, 2026 test runs. The 13 memory cases
+also passed. Both renderer smoke tests passed before publication. One `sour-shot`
+run did not detect its short-lived test missile; the repeat passed. This fixture
+still needs a more reliable trigger. The regroup fixture now allows more time
+for its final sample after arrival.
 
 General squad fixtures equip the player with a blaster. Saber-specific fixtures
 select and activate the saber explicitly.

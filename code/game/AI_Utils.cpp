@@ -42,7 +42,8 @@ qboolean AI_LocalGroupContact( gentity_t *source, gentity_t *recipient )
 		|| source->health <= 0 || recipient->health <= 0 || source->client->playerTeam != recipient->client->playerTeam )
 		return qfalse;
 	float distance = DistanceSquared( source->currentOrigin, recipient->currentOrigin );
-	if ( distance > 512*512 )
+	float radius = Com_Clamp( 0, 1024, g_squadRecruitRadius->value );
+	if ( radius <= 0 || distance > radius*radius )
 		return qfalse;
 	int from = NAV::GetNearestNode( source, true ), to = NAV::GetNearestNode( recipient, true );
 	if ( from == WAYPOINT_NONE || to == WAYPOINT_NONE || !NAV::InSameRegion( source, recipient )
@@ -122,6 +123,8 @@ void AI_SetClosestBuddy( AIGroupInfo_t *group )
 		bestDist = Q3_INFINITE;
 		for ( j = 0; j < group->numGroup; j++ )
 		{
+			if ( i == j || g_entities[group->member[j].number].health <= 0 )
+				continue;
 			dist = DistanceSquared( g_entities[group->member[i].number].currentOrigin, g_entities[group->member[j].number].currentOrigin );
 			if ( dist < bestDist )
 			{
@@ -246,6 +249,7 @@ void AI_InsertGroupMember( AIGroupInfo_t *group, gentity_t *member )
 		group->commander = member;
 	}
 	member->NPC->group = group;
+	AI_SetClosestBuddy( group );
 }
 
 qboolean AI_TryJoinPreviousGroup( gentity_t *self )
@@ -591,7 +595,6 @@ void AI_GetGroup( gentity_t *self )
 	}
 
 	AI_SortGroupByPathCostToEnemy( self->NPC->group );
-	AI_SetClosestBuddy( self->NPC->group );
 }
 
 void AI_SetNewGroupCommander( AIGroupInfo_t *group )
@@ -609,14 +612,20 @@ void AI_SetNewGroupCommander( AIGroupInfo_t *group )
 	}
 }
 
-void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
+void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum, qboolean transfer = qfalse )
 {
-	TIMER_Remove( &g_entities[group->member[memberNum].number], "reportAck" );
-	ST_ClearTactic( &g_entities[group->member[memberNum].number] );
+	if ( !transfer )
+	{
+		TIMER_Remove( &g_entities[group->member[memberNum].number], "reportAck" );
+		ST_ClearTactic( &g_entities[group->member[memberNum].number] );
+	}
 	if ( g_entities[group->member[memberNum].number].NPC )
 	{
-		g_entities[group->member[memberNum].number].NPC->movementSpeech = 0;
-		g_entities[group->member[memberNum].number].NPC->movementSpeechChance = 0.0f;
+		if ( !transfer )
+		{
+			g_entities[group->member[memberNum].number].NPC->movementSpeech = 0;
+			g_entities[group->member[memberNum].number].NPC->movementSpeechChance = 0.0f;
+		}
 		int state = g_entities[group->member[memberNum].number].NPC->squadState;
 		if ( group->numState[state] > 0 )
 			group->numState[state]--;
@@ -648,6 +657,7 @@ void AI_DeleteGroupMember( AIGroupInfo_t *group, int memberNum )
 		group->numGroup = 0;
 	}
 	AI_SetNewGroupCommander( group );
+	AI_SetClosestBuddy( group );
 }
 
 void AI_DeleteSelfFromGroup( gentity_t *self )
@@ -791,6 +801,40 @@ void AI_GroupUpdateSquadstates( AIGroupInfo_t *group, gentity_t *member, int new
 	}
 }
 
+static qboolean AI_GroupsInContact( AIGroupInfo_t *a, AIGroupInfo_t *b )
+{
+	if ( !a->numGroup || !b->numGroup )
+		return qfalse;
+	int flankers = 0;
+	vec3_t mins, maxs;
+	VectorCopy( g_entities[a->member[0].number].currentOrigin, mins );
+	VectorCopy( mins, maxs );
+	AIGroupInfo_t *groups[] = {a, b};
+	for ( AIGroupInfo_t *group : groups )
+		for ( int i = 0; i < group->numGroup; ++i )
+		{
+			gentity_t *member = &g_entities[group->member[i].number];
+			for ( int axis = 0; axis < 3; ++axis )
+			{
+				mins[axis] = Q_min( mins[axis], member->currentOrigin[axis] );
+				maxs[axis] = Q_max( maxs[axis], member->currentOrigin[axis] );
+			}
+			if ( member->NPC && (member->NPC->tacticRole == 3 || member->NPC->tacticRole == 4) )
+				++flankers;
+		}
+	float span = 2*Com_Clamp( 0, 1024, g_squadRecruitRadius->value );
+	if ( flankers > 1 || DistanceSquared( mins, maxs ) > span*span )
+		return qfalse;
+	for ( int i = 0; i < a->numGroup; ++i )
+		for ( int j = 0; j < b->numGroup; ++j )
+		{
+			gentity_t *from = &g_entities[a->member[i].number], *to = &g_entities[b->member[j].number];
+			if ( AI_CanReport(from) && AI_CanReport(to) && AI_LocalGroupContact(from, to) )
+				return qtrue;
+		}
+	return qfalse;
+}
+
 qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 {
 	gentity_t	*member;
@@ -806,12 +850,13 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 		else
 		{
 			if ( level.groups[i].enemy == group->enemy && level.groups[i].team == group->team
-				&& (!group->enemy || AI_LocalGroupContact( group->commander, level.groups[i].commander )) )
+				&& (!group->enemy || AI_GroupsInContact( group, &level.groups[i] )) )
 			{//2 groups with same enemy
-				if ( level.groups[i].numGroup+group->numGroup < (MAX_GROUP_MEMBERS - 1) )
+				if ( level.groups[i].numGroup+group->numGroup <= (MAX_GROUP_MEMBERS - 1) )
 				{//combining the members would fit in one group
 					if ( group->nextReportTime > level.groups[i].nextReportTime )
 						level.groups[i].nextReportTime = group->nextReportTime;
+					level.groups[i].speechDebounceTime = Q_max( level.groups[i].speechDebounceTime, group->speechDebounceTime );
 					if ( group->enemy && group->lastSeenEnemyTime > level.groups[i].lastSeenEnemyTime )
 					{
 						level.groups[i].lastSeenEnemyTime = group->lastSeenEnemyTime;
@@ -831,7 +876,7 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 							}
 						}
 						//remove this member from this group
-						AI_DeleteGroupMember( group, j );
+						AI_DeleteGroupMember( group, j, qtrue );
 						//keep marker at same place since we deleted this guy and shifted everyone up one
 						j--;
 						//add them to the earlier group
@@ -840,6 +885,7 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 					//return and delete this group
 					if ( deleteWhenDone )
 					{
+						Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=group_merge from=%d to=%d members=%d\n", (int)(group-level.groups), i, level.groups[i].numGroup );
 						return qfalse;
 					}
 				}

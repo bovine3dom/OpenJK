@@ -103,7 +103,7 @@ was needed for the automated checks on the build machine.
 - [x] Verify 16 tactical cases: the baseline nine plus death, timeout, cinematic interruption, contested reservation, save-reservation, and non-tactical ownership checks.
 - [x] Clear movement speech and chance on tactic cancellation or group removal. Restore full-save CP occupancy from NPC claims, not autosaves. Release all NPC ownership claims and clear the ID when replacement fails.
 - [x] Verify `cp-low` and `cp-high`: release/reuse/save/load in both entity orders, failed replacement, and stale occupancy cleanup.
-- [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Current checks force a deadline, simulate `BS_CINEMATIC` with an external goal, and contest points through the reservation API. They do not cover physical route obstruction, a full pending ICARUS script, or a real multi-squad encounter.
+- [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Add a full pending ICARUS script and a native multi-squad encounter.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information. Defer manual Rend2 checks to the root `human_todo.md` checklist.
 - [x] Use recent damage to request retreat cover before a new flank. Keep a bounded crouched hold at the cover point. Verify damage, movement, arrival, release, and no-chase protection in three new cases. All 19 squad cases and 13 memory cases pass under vanilla.
@@ -115,6 +115,9 @@ was needed for the automated checks on the build machine.
 - [x] Let shot, damage, and saber pressure temporarily override combat no-chase and no-retreat orders. Preserve the original flags and active script control. Add held-actor, opt-out, cinematic, and save/load checks.
 - [x] Check native `t1_sour` spawners and hold scripts. Enable pressure movement for native ranged classes and snipers. Override scripted crouch and walk during the retreat, then resume the original stance.
 - [x] Separate squad membership and reports from ranged movement roles. Include Sith, snipers, and combat droids in local squads while preserving their combat controllers.
+- [x] Add adjustable local recruitment, member-contact merges that preserve active plans, rally cover selection, and a short support allowance. Check all 59 squad cases and 13 memory cases across runs.
+- [x] Detect blocked movement from actual position changes. Test physical enclosure, claim release before timeout, and recovery after removal. Retain detours and reset samples after pauses or time rollback.
+- [ ] Add dedicated recruitment-radius, large-group merge, and rally-hold tests. Make the native `sour-shot` trigger reliable; one run missed its short-lived missile before a passing repeat.
 - [ ] Extend contact combat with animated leaning. Test repeated hits, no available cover, pending exposure interruption, larger multi-squad encounters, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
 
 Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port

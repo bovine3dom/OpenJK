@@ -35,6 +35,7 @@ def main():
              "saber-close": ("saber-close", 1),
              **{name: (name, 1) for name in ("held-shot", "held-damage", "held-saber", "held-noflee", "held-cinematic", "held-save")},
              "sour-merc": ("sour-probe", 1),
+             "merge-plan": ("merge-plan", 1), "route-recovery": ("route-recovery", 1),
              **{name: (name, 1) for name in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid")},
              **{name: (name, 1) for name in ("sour-rodian", "sour-trandoshan", "sour-weequay", "sour-sniper", "sour-shot", "sour-saber")},
              "pressure-cooldown-async": ("pressure-cooldown", 1), "pressure-cooldown-sync": ("pressure-cooldown", 0),
@@ -119,6 +120,34 @@ def main():
                 check(any(e["event"] == source_event and e["ent"] == before["ent"] for e in events), "Native pressure source missing")
             else:
                 check(states and 0 < int(states[0]["health"]) < int(before["health"]), "Native damage did not reach the pain handler")
+        elif case == "merge-plan":
+            before, after = samples["SPLIT"], samples["MERGED"]
+            check(before["_memory_a"]["group"] == before["_memory_b"]["group"] != before["_memory_c"]["group"], "Groups were not separate")
+            check(math.dist(point(before["_memory_a"]), point(before["_memory_c"])) > 256, "Commanders are within contact range")
+            check(len({s["group"] for s in after.values()}) == 1, "Member contact did not merge groups")
+            for name in ("_memory_a", "_memory_b"):
+                check(before[name]["role"] in ("3", "5"), "No active plan to preserve")
+                for key in ("role", "tactic_goal", "tactic_threat", "deadline", "cp"):
+                    check(after[name][key] == before[name][key], f"Merge changed {name}.{key}")
+            check(any(e["event"] == "group_merge" for e in events), "No merge evidence")
+        elif case == "route-recovery":
+            before = samples["BLOCK_READY"]["_memory_a"]
+            check(before["role"] == "1", "Route was not active before blocking")
+            failures = [e for e in events if e["event"] == "tactic_finish" and e["ent"] == before["ent"]
+                        and e["phase"] == "BLOCKED" and e.get("reason") in ("route_blocked", "route_failed")]
+            moves = [e for e in events if e["event"] == "pressure_cover" and e["phase"] == "BLOCKED"]
+            check(failures, "Blocked route did not trigger recovery")
+            check(any(s["phase"] == "BLOCKED" and s["order"] > failures[0]["order"]
+                      and int(s["time"]) < int(before["deadline"]) and s["combat_cp"] == "-1"
+                      for s in history), "Blocked route retained its cover claim until timeout")
+            if moves:
+                check(math.dist(point(moves[0], "goal"), point(before, "tactic_goal")) >= 64, "Recovery selected the same blocked destination")
+                check(any(s["phase"] == "RECOVERED" and math.dist(point(s), point(before)) >= 32 for s in history),
+                      "No physical movement after the enclosure was removed")
+            else:
+                check(any(e["event"] == "pressure_response" and e["reason"] in ("concealed", "no_cover") and e["phase"] == "BLOCKED" for e in events)
+                      and any(s["phase"] == "BLOCKED" and s["role"] == "0" and s["goal"] == "-1" for s in history),
+                      "Recovery neither replanned nor held after checking for cover")
         elif case in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid"):
             a, b = (samples["JOINED"][name] for name in ("_memory_a", "_memory_b"))
             check(a["group"] == b["group"] != "-1" and a["enemy"] == b["enemy"] == "0", str(samples["JOINED"]))
@@ -220,7 +249,7 @@ def main():
                           and s["combat_cp"] == cp and math.dist(point(s), point(moving, "tactic_goal")) < 24
                           for s in covered), f"No crouched hold in blocked cover: {covered}")
                 check(math.dist(point(covered[0]), point(prehit)) >= 32, "Contact actor did not move to cover")
-                check(0 < int(covered[0]["deadline"]) - int(covered[0]["time"]) <= 3000
+                check(0 < int(covered[0]["deadline"]) - int(covered[0]["time"]) <= 4000
                       and int(covered[0]["deadline"]) - int(hit["time"]) <= 10000, "Unbounded cover hold")
                 check(any(e["event"] == "tactic_arrival" and e["cp"] == cp for e in actor_events), "No cover arrival")
                 # Damage now uses the pressure cycle; reservation release is checked by the cycle/lifecycle cases.
