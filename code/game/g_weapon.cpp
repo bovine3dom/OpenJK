@@ -1380,6 +1380,16 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 		}
 	}
 
+	if ( NPC_FireControlRole( ent ) )
+	{
+		vec3_t end, mins = {-8,-8,-8}, maxs = {8,8,8};
+		VectorMA( muzzle, 1024, forwardVec, end );
+		trace_t trace;
+		gi.trace( &trace, muzzle, mins, maxs, end, ent->s.number, MASK_SHOT, (EG2_Collision)0, 0 );
+		if ( trace.entityNum < ENTITYNUM_WORLD && g_entities[trace.entityNum].client
+			&& OnSameTeam( ent, &g_entities[trace.entityNum] ) )
+			return;
+	}
 	// fire the specific weapon
 	switch( ent->s.weapon )
 	{
@@ -1541,6 +1551,7 @@ void FireWeapon( gentity_t *ent, qboolean alt_fire )
 		break;
 	}
 
+	NPC_FireControlShot( ent );
 	if ( !ent->s.number )
 	{
 		if ( ent->s.weapon == WP_FLECHETTE || (ent->s.weapon == WP_BOWCASTER && !alt_fire) )

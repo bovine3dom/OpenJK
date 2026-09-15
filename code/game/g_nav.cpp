@@ -620,6 +620,8 @@ static void MemoryCommand( void )
 			else
 				actor->enemy->client->ps.SaberDeactivate();
 		}
+		else if ( !Q_stricmp(action, "firehold") )
+			actor->NPC->scriptFlags &= ~SCF_DONT_FIRE;
 		else if ( !Q_stricmp(action, "throw") )
 		{
 			if ( actor->client->ps.weapon != WP_THERMAL || actor->s.weapon != WP_THERMAL )
@@ -629,9 +631,11 @@ static void MemoryCommand( void )
 			}
 			FireWeapon( actor, qfalse );
 		}
-		else if ( !Q_stricmp(action, "melee") || !Q_stricmp(action, "ranged") || !Q_stricmp(action, "thermal") )
+		else if ( !Q_stricmp(action, "melee") || !Q_stricmp(action, "ranged") || !Q_stricmp(action, "thermal")
+			|| !Q_stricmp(action, "automatic") || !Q_stricmp(action, "sharpshooter") )
 		{
-			int weapon = !Q_stricmp(action, "melee") ? WP_STUN_BATON : !Q_stricmp(action, "thermal") ? WP_THERMAL : WP_BLASTER;
+			int weapon = !Q_stricmp(action, "melee") ? WP_STUN_BATON : !Q_stricmp(action, "thermal") ? WP_THERMAL
+				: !Q_stricmp(action, "automatic") ? WP_REPEATER : !Q_stricmp(action, "sharpshooter") ? WP_DISRUPTOR : WP_BLASTER;
 			actor->client->ps.stats[STAT_WEAPONS] = 1 << weapon;
 			SaveNPCGlobals();
 			SetNPCGlobals(actor);

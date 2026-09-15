@@ -106,7 +106,9 @@ was needed for the automated checks on the build machine.
 - [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Add a full pending ICARUS script and a native multi-squad encounter.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [x] Coordinate autonomous thermal throws with recent recorded targets, group cooldowns, teammate checks, and arc rejection. Check normal combat release, hidden-target memory, stale records, and save/load in three headless cases.
-- [ ] Improve role-based fire control and suppression from recorded contact. Investigate delayed tactical activation in native campaign encounters.
+- [x] Add role-based fire control that counts actual releases. Check three firing profiles, bounded suppression, and stale-contact rejection.
+- [x] Add earlier cover requests after visible contact. Check proactive native movement and its opt-out without damage or close-pressure triggers.
+- [ ] Playtest firing pauses, suppression points, and proactive retreat frequency. Add moving-ally firing-line, fire-control opt-out, and dedicated burst-state save/load cases.
 - [ ] Playtest with diagnostics hidden. Check that movement and barks explain coordination without revealing hidden player information. Defer manual Rend2 checks to the root `human_todo.md` checklist.
 - [x] Use recent damage to request retreat cover before a new flank. Keep a bounded crouched hold at the cover point. Verify damage, movement, arrival, release, and no-chase protection in three new cases. All 19 squad cases and 13 memory cases pass under vanilla.
 - [x] Add a timed firing-and-cover cycle without damage. Return to a checked firing position after a quiet crouched hold. Request running for autonomous tactical retreats. Add cycle, cancellation, and measured gait checks.

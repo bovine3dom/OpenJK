@@ -178,7 +178,7 @@ group removal clear movement speech and chance. CP release clears all NPC claims
 failed replacement clears the ID. Full-save load restores occupancy from NPC
 claims; autosave load does not.
 
-Thirteen memory and 59 tactical cases have passed across test runs, including
+Thirteen memory and 67 tactical cases have passed across test runs, including
 `solo-switch`, `cp-low`, and `cp-high`. The `route-recovery` test uses a physical
 enclosure and checks claim release before timeout. The cinematic test simulates
 `BS_CINEMATIC` with an external goal, not a full pending ICARUS script. Contested
@@ -190,6 +190,13 @@ rally position. Blocked-route recovery measures actual travel and retains valid
 detours. Dedicated radius-boundary and rally-hold tests remain open. One native
 short-shot test missed its missile before a passing repeat. See
 `docs/squad-tactics.md` for the test limits.
+
+Autonomous grenades now use recent recorded contact, group cooldowns, teammate
+checks, and arc rejection. Fire control counts actual releases and separates
+short bursts, deliberate shots, and automatic-weapon support. Suppression uses
+bounded hypotheses around recent contact. Proactive cover can start before
+damage or nearby shots. The suite now contains 67 cases. See
+`docs/fire-control-research.md` for sources and game-specific intervals.
 
 Solo fixtures use `d_noGroupAI 1`. `SCF_NO_GROUPS` selects the separate legacy
 formation controller, `AI_HazardTrooper`; its hearing, steering, and chase

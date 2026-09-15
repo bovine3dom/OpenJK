@@ -76,6 +76,7 @@ cvar_t		*g_squadPressureRadius;
 cvar_t		*g_squadSaberPressureRadius;
 cvar_t		*g_squadPressureOverrides;
 cvar_t		*g_squadRecruitRadius;
+cvar_t *g_squadFireControl, *g_squadProactive;
 cvar_t		*d_slowmodeath;
 
 extern qboolean	stop_icarus;
@@ -2555,6 +2556,8 @@ void NPC_InitAI ( void )
 	g_squadSaberPressureRadius = gi.cvar ( "g_squadSaberPressureRadius", "192", CVAR_ARCHIVE );
 	g_squadPressureOverrides = gi.cvar ( "g_squadPressureOverrides", "1", CVAR_ARCHIVE );
 	g_squadRecruitRadius = gi.cvar ( "g_squadRecruitRadius", "768", CVAR_ARCHIVE );
+	g_squadFireControl = gi.cvar ( "g_squadFireControl", "1", CVAR_ARCHIVE );
+	g_squadProactive = gi.cvar ( "g_squadProactive", "1", CVAR_ARCHIVE );
 
 	//0 = never (BORING)
 	//1 = kyle only

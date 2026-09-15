@@ -39,6 +39,8 @@ def main():
              "grenade": ("grenade", 1),
              "grenade-ally": ("grenade-ally", 1),
              "grenade-auto": ("grenade-auto", 1),
+             **{name: (name, 1) for name in ("fire-trooper", "fire-automatic", "fire-sharpshooter")},
+             **{name: (name, 1) for name in ("sour-proactive", "sour-proactive-off")},
              **{name: (name, 1) for name in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid")},
              **{name: (name, 1) for name in ("sour-rodian", "sour-trandoshan", "sour-weequay", "sour-sniper", "sour-shot", "sour-saber")},
              "pressure-cooldown-async": ("pressure-cooldown", 1), "pressure-cooldown-sync": ("pressure-cooldown", 0),
@@ -112,17 +114,41 @@ def main():
             if case == "sour-sniper":
                 check(before["weapon"] == "4", "Sniper control is not using a disruptor")
             moving = [s for s in states if s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"])]
-            check(moving and any(s["crouched"] == s["walking"] == "0" for s in moving), "Native actor did not run standing")
-            check(max(math.dist(point(before), point(s)) for s in states) >= 32, "Native actor remained at its authored position")
+            if case == "sour-proactive-off":
+                check(not moving and not any(e["event"] == "proactive_cover" for e in events), "Proactive opt-out failed")
+            else:
+                check(moving and any(s["crouched"] == s["walking"] == "0" for s in moving), "Native actor did not run standing")
+                check(max(math.dist(point(before), point(s)) for s in states) >= 32, "Native actor remained at its authored position")
             if case != "sour-weequay":
                 check(all(s["script_flags"] == before["script_flags"] for s in [*states, final]), "Native script flags were overwritten")
                 check(final["pressure_move"] == "0" and final["crouched"] == "1", "Native hold stance did not resume")
-            if case in ("sour-shot", "sour-saber"):
+            if case in ("sour-shot", "sour-saber", "sour-proactive", "sour-proactive-off"):
                 check(all(s["health"] == before["health"] for s in states), "Native pressure needed damage")
-                source_event = "incoming_fire" if case == "sour-shot" else "saber_pressure"
-                check(any(e["event"] == source_event and e["ent"] == before["ent"] for e in events), "Native pressure source missing")
+                source_event = "incoming_fire" if case == "sour-shot" else "saber_pressure" if case == "sour-saber" else "proactive_cover"
+                check(any(e["event"] == source_event and e["ent"] == before["ent"] for e in events) == (case != "sour-proactive-off"), "Native trigger mismatch")
+                if case.startswith("sour-proactive"):
+                    check(not any(e["event"] in ("incoming_fire", "saber_pressure") and e["ent"] == before["ent"] for e in events),
+                          "Proactive movement depended on pressure")
             else:
                 check(states and 0 < int(states[0]["health"]) < int(before["health"]), "Native damage did not reach the pain handler")
+        elif case.startswith("fire-"):
+            profile = {"fire-trooper": "1", "fire-sharpshooter": "2", "fire-automatic": "3"}[case]
+            actor = samples["FIRE_VISIBLE"]["_memory_a"]
+            shots = [e for e in events if e["event"] == "fire_shot" and e["ent"] == actor["ent"]]
+            visible = [e for e in shots if e["phase"] == "FIRE_VISIBLE"]
+            check(len(visible) >= 3 and all(e["profile"] == profile for e in shots), "Missing role-specific weapon releases")
+            check(all(int(b["time"]) >= int(a["next"]) for a, b in zip(visible, visible[1:])), "Actual shots bypassed cadence")
+            burst = {"1": 3, "2": 1, "3": 6}[profile]
+            check(any(e["pause"] == "1" for e in visible), "No burst pause")
+            check(all(e["pause"] == str(int((i+1) % burst == 0)) for i, e in enumerate(visible)), "Burst counted requests instead of shots")
+            hidden = samples["FIRE_HIDDEN"]["_memory_a"]
+            check(hidden["los"] == "0" and hidden["seen"] == actor["seen"], "Hidden control changed sight")
+            suppression = [e for e in shots if e["phase"] == "FIRE_HIDDEN" and e["suppress"] == "1"]
+            check(bool(suppression) == (profile != "2"), "Wrong suppression policy for firing role")
+            check(not any(e["phase"] == "FIRE_STALE" for e in shots), "Fire continued after contact expired")
+            for event in (e for e in events if e["event"] == "suppress_target" and e["ent"] == actor["ent"]):
+                check(point(event, "known") == point(actor, "seen"), "Suppression used hidden coordinates")
+                check(math.dist(point(event, "known"), point(event, "target")) <= 164, "Suppression left the contact area")
         elif case == "grenade-auto":
             throws = [e for e in events if e["event"] == "grenade_throw"]
             check(throws, "Grenadier did not throw through its combat controller")
@@ -507,7 +533,7 @@ def main():
             check(any(e["event"] == "fire_attempt" and e["role"] == "0"
                       and e["order"] < starts[0]["order"] for e in actor_events), "No firing before cover")
             check(min(int(s["time"]) for s in states if s["order"] > starts[0]["order"])
-                  - int(ready["time"]) >= 2500, "Cover started before the exposure delay")
+                  - int(ready["time"]) >= 1250, "Cover started before the exposure delay")
             # fire_attempt means an attack command, not a confirmed shot.
             check(not any(e["event"] == "fire_attempt" and e["role"] == "2" and e["peek"] == "0" for e in actor_events),
                   "Actor tried to fire in cover")

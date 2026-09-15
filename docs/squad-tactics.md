@@ -78,7 +78,7 @@ and script restrictions apply to normal regrouping. Damage does not supply a
 new sight position. The hold-order override below also responds to damage.
 
 Healthy stationary shooters also seek cover without damage. A firing opportunity
-starts a 2.5-to-4-second exposure timer. Normal pauses between shots do not reset
+starts a 1.25-to-2-second exposure timer. Normal pauses between shots do not reset
 it. Movement, loss of sight, or an incompatible order clears pending exposure.
 After exposure, the NPC runs to checked cover within 384 units, crouches for
 three seconds without firing, then steps out beside that cover. The firing step
@@ -215,6 +215,36 @@ positions within 64 units of the failed destination. The NPC can hold if it is
 already concealed or cannot find a suitable point. The traces are `route_failed`
 and `route_blocked` on `tactic_finish`.
 
+## Fire Control and Early Cover
+
+`g_squadFireControl` defaults to `1`. Eligible blaster and pistol users fire short
+bursts. Primary-fire repeaters use longer bursts. Disruptor users take deliberate
+shots. Burst counters advance on actual weapon releases. A final firing-line
+check can stop a shot at a teammate. See `fire-control-research.md` for the sources,
+game intervals, and scope.
+
+Stationary troopers and automatic-weapon users can suppress a recent last-seen
+position or nearby visible navigation points. These points represent possible
+exits, not confirmed enemy locations. The code preserves the selected aim instead
+of replacing it with movement-facing angles. Suppression ends as the contact
+record expires. The traces are `fire_shot` and `suppress_target`.
+
+`g_squadProactive` defaults to `1`. A held gun user can request defensive cover
+after one second of visible saber-user contact in its field of view. It does not
+need damage, a nearby missile, or an active saber within the close-pressure radius.
+The enemy must be within 768 game units. The existing hold override and script
+protections apply. Requests have a five-second retry delay. This does not authorize
+an offensive flank through a hold order.
+
+Set `g_squadProactive 0` to disable this early held-actor response and restore the
+2.5-to-4-second exposure interval for free actors. Set `g_squadFireControl 0` to
+restore the earlier fire scheduling and suppression path.
+
+The native proactive test disables shot and close-saber pressure. It checks
+standing movement without damage and unchanged hold-script flags. Its opt-out
+case checks that the actor stays put. Native pressure fixtures disable proactive
+movement during setup so each test can isolate its intended trigger.
+
 ## Grenade Coordination
 
 Autonomous thermal throws use a personal or shared sight record no older than
@@ -232,7 +262,7 @@ The original fuse, warning sound, explosion, and Force interactions remain in us
 Three headless cases passed: `grenade` checks shared cooldown, fixed recorded aim,
 stale-record rejection, and save/load; `grenade-ally` checks a teammate beside the
 target; `grenade-auto` checks throws through the normal combat controller.
-The suite now contains 62 cases. Larger encounters and moving blast-area
+Larger encounters and moving blast-area
 conflicts need further tests.
 
 ## Barks
@@ -265,7 +295,7 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 62 cases. `contact-async` and
+The suite has 67 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
 reservation release. `contact-hold` checks the no-chase opt-out with overrides
@@ -298,7 +328,7 @@ The new cases check:
 - `merge-plan` separates an ally into another group, then checks that a merge preserves the active flank and support assignments.
 - `route-recovery` closes a physical enclosure after retreat movement starts. It checks cancellation and claim release before the deadline, then movement after removal or a deliberate hold after a cover search.
 
-All 59 cases passed across the September 15, 2026 test runs. The 13 memory cases
+All 67 cases passed across the September 15, 2026 test runs. The 13 memory cases
 also passed. Both renderer smoke tests passed before publication. One `sour-shot`
 run did not detect its short-lived test missile; the repeat passed. This fixture
 still needs a more reliable trigger. The regroup fixture now allows more time

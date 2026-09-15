@@ -76,6 +76,8 @@ static qboolean hitAlly;
 static qboolean faceEnemy;
 static qboolean doMove;
 static qboolean shoot;
+static qboolean suppressing;
+static vec3_t suppressTarget;
 static float	enemyDist;
 static vec3_t	impactPos;
 
@@ -1668,8 +1670,62 @@ ST_CheckFireState
 -------------------------
 */
 
+static qboolean ST_SuppressiveFire( void )
+{
+	int role = NPC_FireControlRole( NPC );
+	if ( !role || role == 2 || (NPCInfo->scriptFlags & SCF_DONT_FIRE) )
+		return qfalse;
+	int observed = NPCInfo->enemyLastSeenTime;
+	vec3_t known;
+	VectorCopy( NPCInfo->enemyLastSeenLocation, known );
+	AIGroupInfo_t *group = NPCInfo->group;
+	if ( group && group->enemy == NPC->enemy && group->lastSeenEnemyTime > observed )
+	{
+		observed = group->lastSeenEnemyTime;
+		VectorCopy( group->enemyLastSeenPos, known );
+	}
+	if ( observed <= 0 || observed > level.time || level.time-observed > (role == 3 ? 4500 : 2500) )
+		return qfalse;
+	vec3_t muzzle, target, angles, dir, mins = {-4,-4,-4}, maxs = {4,4,4};
+	CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
+	NAV::TNodeHandle nodes[8];
+	int count = NAV::GetNearbyGroundNodes( known, nodes, 8 );
+	for ( int offset = 0; offset <= count; ++offset )
+	{
+		int candidate = (offset+level.time/1200+NPC->s.number)%(count+1)-1;
+		VectorCopy( candidate < 0 ? known : NAV::GetNodePosition(nodes[candidate]), target );
+		if ( DistanceSquared( known, target ) > 160*160 || !G_ClearLOS( NPC, known, target ) )
+			continue;
+		target[2] += 24;
+		if ( DistanceSquared( muzzle, target ) < 128*128
+			|| !InFOV( target, muzzle, NPC->client->ps.viewangles, 90, 90 ) )
+			continue;
+		trace_t trace;
+		gi.trace( &trace, muzzle, mins, maxs, target, NPC->s.number, MASK_SHOT, (EG2_Collision)0, 0 );
+		if ( trace.startsolid || trace.allsolid || (trace.fraction < 1 && trace.entityNum != NPC->enemy->s.number) )
+			continue;
+		VectorCopy( target, suppressTarget );
+		VectorSubtract( target, muzzle, dir );
+		vectoangles( dir, angles );
+		NPCInfo->desiredYaw = angles[YAW];
+		NPCInfo->desiredPitch = angles[PITCH];
+		doMove = faceEnemy = qfalse;
+		TIMER_Set( NPC, "suppressFire", 200 );
+		if ( TIMER_Done( NPC, "suppressTrace" ) )
+		{
+			TIMER_Set( NPC, "suppressTrace", 500 );
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=suppress_target ent=%d time=%d observed=%d known=%.3f,%.3f,%.3f target=%.3f,%.3f,%.3f\n",
+				NPC->s.number, level.time, observed, known[0], known[1], known[2], target[0], target[1], target[2] );
+		}
+		return qtrue;
+	}
+	return qfalse;
+}
+
 static void ST_CheckFireState( void )
 {
+	suppressing = qfalse;
+	TIMER_Remove( NPC, "suppressFire" );
 	if ( enemyCS )
 	{//if have a clear shot, always try
 		return;
@@ -1686,6 +1742,12 @@ static void ST_CheckFireState( void )
 	}
 
 	//See if we should continue to fire on their last position
+	if ( NPC_FireControlRole( NPC ) )
+	{
+		suppressing = ST_SuppressiveFire();
+		shoot = suppressing;
+		return;
+	}
 	//!TIMER_Done( NPC, "stick" ) ||
 	if ( !hitAlly //we're not going to hit an ally
 		&& enemyInFOV //enemy is in our FOV //FIXME: or we don't have a clear LOS?
@@ -3902,7 +3964,14 @@ void NPC_BSST_Attack( void )
 
 	//FIXME: check scf_face_move_dir here?
 
-	if ( !faceEnemy )
+	if ( suppressing )
+	{
+		NPC_UpdateAngles( qtrue, qtrue );
+		vec3_t muzzle;
+		CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
+		shoot = InFOV( suppressTarget, muzzle, NPC->client->ps.viewangles, 8, 8 );
+	}
+	else if ( !faceEnemy )
 	{//we want to face in the dir we're running
 		if ( !doMove )
 		{//if we haven't moved, we should look in the direction we last looked?
@@ -4016,10 +4085,31 @@ void NPC_BSST_Attack( void )
 	{
 		// Count exposure across burst pauses, but start only with a firing opportunity.
 		if ( !TIMER_Exists( NPC, "coverExposure" ) && shoot && enemyCS )
-			TIMER_Set( NPC, "coverExposure", Q_irand( 2500, 4000 ) );
+			TIMER_Set( NPC, "coverExposure", g_squadProactive->integer ? Q_irand( 1250, 2000 ) : Q_irand( 2500, 4000 ) );
 	}
 	else
 		TIMER_Remove( NPC, "coverExposure" );
+	if ( g_squadProactive->integer && g_squadPressureOverrides->integer && d_squadTactics->integer
+		&& !NPCInfo->tacticRole && enemyLOS && enemyInFOV && NPC->enemy->client
+		&& NPC->enemy->client->ps.weapon == WP_SABER && enemyDist < 768*768
+		&& AI_ValidateTacticalMember( NPCInfo->group, NPC ) && !NPCInfo->goalEntity
+		&& !(NPCInfo->scriptFlags & (SCF_DONT_FIRE|SCF_FIRE_WEAPON))
+		&& (!(NPCInfo->scriptFlags & SCF_CHASE_ENEMIES) || (NPCInfo->scriptFlags & (SCF_DONT_FLEE|SCF_CROUCHED)))
+		&& NPC->painDebounceTime <= level.time && TIMER_Done( NPC, "flee" )
+		&& TIMER_Done( NPC, "proactiveRetry" ) )
+	{
+		if ( !TIMER_Exists( NPC, "proactiveObserve" ) )
+			TIMER_Set( NPC, "proactiveObserve", 1000 );
+		else if ( TIMER_Done( NPC, "proactiveObserve" ) )
+		{
+			TIMER_Set( NPC, "coverRelocate", 3000 );
+			TIMER_Set( NPC, "proactiveRetry", 5000 );
+			TIMER_Remove( NPC, "proactiveObserve" );
+			Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=proactive_cover ent=%d time=%d source=visible_contact\n", NPC->s.number, level.time );
+		}
+	}
+	else
+		TIMER_Remove( NPC, "proactiveObserve" );
 }
 
 qboolean NPC_ST_PressureThink( void )

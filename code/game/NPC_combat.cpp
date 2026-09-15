@@ -1147,6 +1147,49 @@ void NPC_ApplyWeaponFireDelay(void)
 ShootThink
 -------------------------
 */
+int NPC_FireControlRole( gentity_t *self )
+{
+	if ( !g_squadFireControl->integer || !self->NPC || !self->enemy
+		|| (self->NPC->scriptFlags & SCF_FIRE_WEAPON)
+		|| !AI_ValidateTacticalMember( self->NPC->group, self ) )
+		return 0;
+	switch ( self->client->ps.weapon )
+	{
+	case WP_BLASTER: case WP_BLASTER_PISTOL: case WP_BRYAR_PISTOL:
+		return 1;
+	case WP_DISRUPTOR:
+		return 2;
+	case WP_REPEATER:
+		return self->NPC->scriptFlags & SCF_ALT_FIRE ? 0 : 3;
+	default:
+		return 0;
+	}
+}
+
+void NPC_FireControlShot( gentity_t *self )
+{
+	int role = NPC_FireControlRole( self );
+	if ( !role )
+		return;
+	auto *info = self->NPC;
+	int shots = role == 3 ? 6 : role == 2 ? 1 : 3;
+	int interval = role == 3 ? 140 : 250;
+	bool pause = ++info->burstCount >= shots;
+	if ( pause )
+	{
+		info->burstCount = 0;
+		interval = role == 2 ? 1800 : role == 3 ? 750 : 1000;
+		if ( role != 2 && info->tacticRole == 5 )
+			interval -= 200;
+		interval += Q_irand( 0, 150 );
+	}
+	info->shotTime = level.time+interval;
+	self->client->ps.weaponTime = Q_max( self->client->ps.weaponTime, interval );
+	self->attackDebounceTime = info->shotTime;
+	Debug_Printf( debugNPCAI, DEBUG_LEVEL_DETAIL, "squad event=fire_shot ent=%d time=%d profile=%d pause=%d next=%d suppress=%d\n",
+		self->s.number, level.time, role, pause, info->shotTime, !TIMER_Done( self, "suppressFire" ) );
+}
+
 void ShootThink( void )
 {
 	int			delay;
@@ -1156,6 +1199,8 @@ void ShootThink( void )
 	NPCInfo->currentAmmo = client->ps.ammo[weaponData[client->ps.weapon].ammoIndex];	// checkme
 
 	NPC_ApplyWeaponFireDelay();
+	if ( NPC_FireControlRole( NPC ) )
+		return; // Count the actual weapon release, not this attack request.
 
 	if ( NPCInfo->aiFlags & NPCAI_BURST_WEAPON )
 	{
