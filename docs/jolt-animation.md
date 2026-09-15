@@ -2,11 +2,15 @@
 
 ## Scope
 
-The prototype supports one selected stock stormtrooper. Its goal is a visible
-impact, loss of balance, physical fall, and return to animation.
+Projectile hits now create Jolt reactions automatically for validated stock
+stormtrooper rigs. `stormtrooper2` and other NPC definitions that use the same
+class and model are eligible. Manual selection is a debug tool, not a gameplay
+requirement. The goal is a visible impact, loss of balance, physical fall, and
+return to animation.
 
-Small hits drive torso and head motors. The selected actor does not play a
-normal pain clip over these reactions. Running speed, leg hits, and repeated
+Small hits drive torso and head motors. An accepted Jolt hit replaces the
+normal pain clip. Pain chances, voice events, debounce timing, damage, armour,
+and combat callbacks still use the game code. Running speed, leg hits, and repeated
 impacts increase an instability value. When this value reaches its limit,
 eleven bodies take control of the pose. They retain the actor's velocity and
 fall under gravity. Eligible game knockdown requests also start a physical
@@ -18,8 +22,24 @@ supplies the rigid-body solver; it does not supply those behaviours.
 
 ## Use
 
-Load a map with cheats enabled, for example `devmap t1_sour`. Wait for the
-opening scene to finish. Stand on clear ground, then enter:
+`g_joltReactions` defaults to `1`, is saved in the configuration, and does not
+require cheats. Shoot an eligible stormtrooper during normal play. Use
+`set g_joltReactions 0` to restore the normal reaction path.
+
+Supported direct-hit types are blaster primary/alternate fire, Bryar
+primary/charged fire, bowcaster bolts, repeater primary fire, flechette primary
+fire, emplaced bolts, and seeker bolts. Only accepted nonfatal health damage
+starts a reaction. God mode, blocked damage, fatal hits, unsupported rigs,
+explosions, electric effects, and melee keep their existing handling. Eligible
+game knockdown requests can still use the physical fall path.
+
+There are up to 16 independent reaction records and one full-body fall at a
+time. Other actors can still react while that fall is active. Idle reaction
+records expire after six seconds unless selected for debugging. The normal
+pain path remains available when the budget is full or a rig cannot initialize.
+
+For manual tests, load a cheat-enabled map, such as `devmap t1_sour`. Wait for
+the opening scene to finish. Stand on clear ground, then enter:
 
 ```text
 set g_joltReactions 1
@@ -39,8 +59,9 @@ Caching these meshes is a later step.
 
 `jolt_select` without an argument selects the actor under the crosshair.
 `jolt_select nearest` selects the nearest eligible actor within 512 game units.
-Only the `stormtrooper` NPC type with the stock stormtrooper model is eligible.
-Selection replaces the previous rig.
+`jolt_select <targetname>` selects a uniquely named actor. Selection resets
+that actor's record and keeps it available for the debug commands. Other
+actors keep their own reactions.
 
 Shoot the selected actor with a blaster or Bryar pistol. For repeatable tests:
 
@@ -70,8 +91,14 @@ single `jolt_impulse left` while the actor stands still. Repeat with
 the small additive reaction only; full-body falls always show their physical
 pose.
 
-Use `set g_joltReactions 0` to remove the rig. The setting defaults to zero and
-requires cheats. It is not archived. No selection is stored in a save.
+`jolt_status all` lists the current records. `jolt_status <targetname>` reports
+one actor, including an actor that has no Jolt record. For a real projectile
+test, use `jolt_shoot <targetname>` or `jolt_shoot <targetname> alt`. These
+cheat commands fire the normal blaster missile toward the actor. Walls,
+intervening actors, and normal damage rules still apply.
+
+Disabling Jolt removes all records. No reaction state or debug selection is
+stored in a save.
 
 ## Rig and Ownership
 
@@ -120,10 +147,21 @@ Native mover pushes yield to the kinematic collision bodies during the fall.
 Normal platform carry resumes during the get-up blend.
 
 Recovery requires low body speed for 600 ms and at least 1.2 seconds of fall
-time. The game searches the current position and eight nearby positions for
-ground and standing clearance. If no position is clear, the actor stays down.
-A quaternion blend connects the settled pose to `BOTH_GETUP1` over 900 ms.
-This is an initial recovery blend; pose-specific get-up selection is pending.
+time. The game samples the first frame of five existing get-up clips on a
+temporary model. It fits yaw and root position to the settled pelvis and
+scores both bone positions and orientations. This permits different clips
+for front and back falls.
+
+The chosen root must have ground and standing clearance. The initial pelvis
+height correction cannot exceed eight game units. If no grounded fit is
+available, the actor stays down and retries twice per second. It does not
+move to a distant free standing position.
+
+A 180 ms blend connects the physical pose to the fixed, grounded first frame.
+The full get-up clip then starts from that frame. The blend no longer follows
+an advancing upright pose, which caused the previous lifting effect. This is
+still an animation handoff; crawling, bracing, and contact-driven recovery
+remain future work.
 
 The solver uses fixed 1/120-second steps in game time. Display poses use
 quaternion interpolation between steps. A time jump above 250 ms resets the
@@ -160,6 +198,8 @@ cmake --build build/sp --target jolt-reaction-test --parallel 1
 build/sp/jolt-reaction-test
 python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-vanilla
 python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-rend2
+python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-vanilla --projectiles
+python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-rend2 --projectiles
 ```
 
 The solver test checks impact direction, joint limits, return to the neutral
@@ -168,6 +208,9 @@ full-body falls and moving or disabled platform colliders. The game test
 checks actual damage, pain-clip isolation, animation-only comparison,
 physical falls, movement-triggered falls, recovery, slow time, disable,
 saving during a fall, loading, renderer restart, actor removal, and shutdown.
+The projectile test uses actual blaster missiles. It compares enabled and
+disabled damage, checks independent reactions on two unselected actors,
+checks a fatal alternate-fire hit, and checks protected and unsupported targets.
 Captures and logs are stored under `build/jolt-tests/`.
 
 `jolt_status` reports the selected entity, active state, hit count, bone-update
@@ -177,15 +220,18 @@ the full-body solver's step count and mean microseconds per step. Timings
 exclude animation, drawing, and collision-mesh construction. `launch`
 reports game velocity carried into a fall. `pose_error` is the largest
 position error across the eleven controlled bones when debug drawing is on.
+`tracked` is the number of reaction records. `recovery_clip` identifies the
+chosen get-up animation; `recovery_lift` records its initial pelvis correction
+in game units.
 
 ## Next Stage
 
 Add balance steps and bracing before the instability limit releases the root.
 Calibrate anatomical joint limits and add self-collision. Improve recovery
-with face-up/face-down detection and aligned get-up clips. Cache collision
+with support-aware motion and obstacle handling. Cache collision
 shapes before combat to remove construction pauses. Validate doors,
 slopes, stairs, ledges, Force powers, and dismemberment across campaign maps
-before increasing the actor count.
+before increasing the full-body fall budget or enabling other rigs.
 
 ## Sources
 

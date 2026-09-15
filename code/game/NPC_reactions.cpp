@@ -217,7 +217,8 @@ NPC_ChoosePainAnimation
 extern int G_PickPainAnim( gentity_t *self, const vec3_t point, int damage, int hitLoc );
 void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, const vec3_t point, int damage, int mod, int hitLoc, int voiceEvent = -1 )
 {
-	if (G_JoltOwns(self) || ((mod == MOD_BLASTER || mod == MOD_BRYAR || mod == MOD_BRYAR_ALT) && G_JoltSuppressPain(self))) return;
+	if (G_JoltOwns(self)) return;
+	const bool physicalReaction = G_JoltSuppressPain(self, mod);
 	//If we've already taken pain, then don't take it again
 	if ( level.time < self->painDebounceTime && mod != MOD_ELECTROCUTE && mod != MOD_MELEE )
 	{//FIXME: if hit while recoving from losing a saber lock, we should still play a pain anim?
@@ -360,7 +361,7 @@ void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, const vec3_t po
 					parts = SETANIM_LEGS;
 				}
 				self->NPC->aiFlags &= ~NPCAI_KNEEL;
-				NPC_SetAnim( self, parts, pain_anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+				if (!physicalReaction) NPC_SetAnim( self, parts, pain_anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 			}
 			if ( voiceEvent != -1 )
 			{

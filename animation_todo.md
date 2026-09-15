@@ -2,8 +2,9 @@
 
 ## Status and Scope
 
-The first Jolt reaction prototype is implemented for one selected stock
-stormtrooper. It uses the existing mesh, skeleton, skin weights, and animation
+Jolt projectile reactions are enabled for validated stock stormtroopers without
+manual selection. Each actor has an independent reaction record; one actor can
+use full-body physics at a time. The system uses the existing mesh, skeleton, skin weights, and animation
 clips. See [Jolt Animation Prototype](docs/jolt-animation.md) for controls,
 rig parameters, tests, and limits. The prototype now supports eleven-body
 falls, retained running momentum, and a checked get-up blend. Balance steps
@@ -22,6 +23,8 @@ and bracing remain pending.
 - [x] Add brush and patch collision, kinematic brush models, and full-body falls.
 - [x] Add a non-damaging impulse, pose comparison, and debug joint drawing.
 - [x] Use movement and impact location to increase instability.
+- [x] Replace handled projectile pain clips while retaining normal damage and combat callbacks.
+- [x] Match a grounded first-frame get-up pose before playing the authored rise.
 - [ ] Add balance steps, bracing, and pose-specific recovery.
 
 Euphoria combines physical simulation with motor control, balance, stepping,
@@ -67,7 +70,7 @@ not provide an autonomous balance or recovery controller.
   saber timing under game control.
 - [ ] Blend into falls after strong Force pushes or loss of support.
 - [x] Blend into an existing get-up clip after settling and a clearance check.
-- [ ] Select the get-up clip from the settled orientation and align its start pose.
+- [x] Select the get-up clip from the settled orientation and align its start pose.
 - [ ] Add balance steps and bracing only after the first reaction/fall loop works.
 
 ## Integration Requirements
