@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "tr_skin_profiles.h"
 
 // tr_shader.c -- this file deals with the parsing and definition of shaders
 
@@ -3925,6 +3926,7 @@ from the current global working shader
 =========================
 */
 static shader_t *FinishShader( void ) {
+	R_InitSkinProfile(shader);
 	int stage;
 	uint32_t shaderStateBits = 0;
 	qboolean hasLightmapStage = qfalse;

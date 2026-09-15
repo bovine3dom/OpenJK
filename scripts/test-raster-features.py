@@ -61,11 +61,15 @@ def main():
              "particle_base", "particle_on", "particle_restored", "additive_base", "additive_on", "additive_restored",
              "skin_restarted", "skin_loaded", "skin_ineligible", "particle_no_depth_base", "particle_no_depth_on",
              "skin_irradiance", "skin_filtered", "skin_difference", "skin_difference_zero",
-             "skin_zero_reference", "skin_zero_radius", "skin_exaggerated", "skin_split")
+             "skin_zero_reference", "skin_zero_radius", "skin_exaggerated", "skin_split",
+             "skin_kyle", "skin_rosh", "skin_cultist", "skin_rodian", "skin_desann", "skin_human",
+             "skin_human_female", "skin_zabrak", "skin_kel_dor", "skin_rodian_player")
     data = {name: image(name) for name in names}
     def delta(a, b):
         return sum(abs(x-y) for x, y in zip(data[a], data[b])) / len(data[a])
     results = {"msaa": args.msaa}
+    results["limb_capsules"] = [(part, int(count)) for part, count in
+                               re.findall(r"Capsules: models/players/kyle/model.glm root=(\w+) count=(\d+)", log)]
     for effect in ("caps", "smaa"):
         results[effect] = dict(effect_delta=delta(effect + "_base", effect + "_on"),
                                restore_error=delta(effect + "_base", effect + "_restored"))
@@ -92,6 +96,9 @@ def main():
     results["caps"]["parameter_deltas"] = {name: delta("caps_on", name)
                                             for name in ("caps_sharp", "caps_thin", "caps_short", "caps_walls")}
     results["skin"]["zero_radius_delta"] = skin_delta("skin_zero_reference", "skin_zero_radius")
+    results["humanoid_masks"] = {name: sum(data[name][i] > 128 for i in range(0, len(data[name]), 3))
+                                 for name in ("skin_kyle", "skin_rosh", "skin_cultist", "skin_rodian", "skin_desann", "skin_human",
+                                              "skin_human_female", "skin_zabrak", "skin_kel_dor", "skin_rodian_player")}
     results["skin"]["exaggerated_delta"] = skin_delta("skin_zero_reference", "skin_exaggerated")
     results["skin"]["difference_pixels"] = sum(max(data["skin_difference"][i:i+3]) > 8
                                                 for i in range(0, len(data["skin_difference"]), 3))
@@ -138,6 +145,10 @@ def main():
         raise RuntimeError("Zero radius/strength did not remove the scattering correction")
     if results["skin"]["difference_pixels"] < 10 or results["skin"]["exaggerated_delta"] <= results["skin"]["effect_delta"]:
         raise RuntimeError("SSS diagnostics/exaggeration did not show a stronger effect")
+    if min(results["humanoid_masks"].values()) < 10:
+        raise RuntimeError("A humanoid skin profile produced an empty mask")
+    if results["limb_capsules"] != [("stupidtriangle", 12), ("r_hand", 1), ("r_arm", 3), ("head", 1), ("hips", 9)]:
+        raise RuntimeError("Capsules did not follow the visible dismemberment surfaces")
     for name in ("skin_restarted", "skin_loaded"):
         if sum(data[name][i] > 128 for i in range(0, len(data[name]), 3)) < 10:
             raise RuntimeError(f"Missing skin after lifecycle transition: {name}")

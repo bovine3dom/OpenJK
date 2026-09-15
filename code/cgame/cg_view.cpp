@@ -125,6 +125,7 @@ void CG_TestG2Model_f (void) {
 	angles[ROLL] = 0;
 
 	AnglesToAxis( angles, cg.testModelEntity.axis );
+	VectorCopy(angles, cg.testModelEntity.angles);
 }
 
 void CG_ListModelSurfaces_f (void)
@@ -150,13 +151,16 @@ void CG_ListModelBones_f (void)
 void CG_TestModelSurfaceOnOff_f(void)
 {
 	// test to see if we got enough args
-	if ( cgi_Argc() < 3 )
+	if ( cgi_Argc() < 3 || !cg.testModelEntity.ghoul2 || !cg.testModelEntity.ghoul2->size() )
 	{
 		return;
 	}
 	CGhoul2Info_v	&ghoul2 = *((CGhoul2Info_v *)cg.testModelEntity.ghoul2);
 
-	gi.G2API_SetSurfaceOnOff(&ghoul2[cg.testModel], CG_Argv(1), atoi(CG_Argv(2)));
+	if (!Q_stricmp(CG_Argv(2), "root"))
+		gi.G2API_SetRootSurface(ghoul2, cg.testModel, CG_Argv(1));
+	else
+		gi.G2API_SetSurfaceOnOff(&ghoul2[cg.testModel], CG_Argv(1), atoi(CG_Argv(2)));
 }
 
 void CG_TestModelSetAnglespre_f(void)

@@ -1330,7 +1330,7 @@ static void RB_SubmitDrawSurfs(
 			R_IsSoftParticle(backEnd.refdef.entities[entityNum].e);
 		fogNum = drawSurf->fogIndex;
 		dlighted = drawSurf->dlightBits;
-		if (backEnd.sssFill && (fogNum || !R_IsSkinShader(shader))) continue;
+		if (backEnd.sssFill && (fogNum || !R_IsSkinSurface(shader, drawSurf->surface))) continue;
 #ifdef REND2_SP
 		if (backEnd.sssFill && entityNum != REFENTITYNUM_WORLD &&
 			(backEnd.refdef.entities[entityNum].e.renderfx & (RF_FORCE_ENT_ALPHA | RF_ALPHA_FADE | RF_DISINTEGRATE1 | RF_DISINTEGRATE2))) continue;
@@ -2124,10 +2124,14 @@ static void RB_RenderCapsules()
 {
 #ifdef REND2_SP
 	if (!r_capsuleShadows->integer || r_capsuleShadowStrength->value <= 0 || !RB_FullMainView()) return;
+	const bool report = r_capsuleShadowDebug->integer != 0;
+	if (report) ri.Cvar_Set("r_capsuleShadowDebug", "0");
 	static const char *bones[] = {"pelvis", "thoracic", "cranium", "lfemurYZ", "ltibia", "ltalus",
 		"rfemurYZ", "rtibia", "rtalus", "lhumerus", "lradius", "lhand", "rhumerus", "rradius", "rhand"};
-	static const int links[][2] = {{0,1},{1,2},{3,4},{4,5},{6,7},{7,8},{9,10},{10,11},{12,13},{13,14}};
-	static const float radii[] = {7,5,4,3,4,3,3,2.5f,3,2.5f};
+	static const int links[][2] = {{0,1},{1,2},{3,4},{4,5},{6,7},{7,8},{9,10},{10,11},{12,13},{13,14},{11,11},{14,14}};
+	static const float radii[] = {7,5,4,3,4,3,3,2.5f,3,2.5f,2.5f,2.5f};
+	static const char *parts[] = {"torso", "head", "l_leg", "l_leg", "r_leg", "r_leg",
+		"l_arm", "l_arm", "r_arm", "r_arm", "l_hand", "r_hand"};
 	const auto &view = backEnd.viewParms;
 	FBO_Bind(tr.screenSsaoFbo);
 	qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
@@ -2164,6 +2168,22 @@ static void RB_RenderCapsules()
 		CGhoul2Info_v &g2 = *e.ghoul2;
 		const char *gla = G2API_GetGLAName(&g2[0]);
 		if (!gla || !strstr(gla, "_humanoid")) continue;
+		// A detached limb retains the full skeleton. Follow the rendered surface tree.
+		const model_t *model = g2[0].currentModel;
+		if (!model || !model->mdxm) continue;
+		std::vector<int> active(model->mdxm->numSurfaces, 0);
+		G2_FindRecursiveSurface(model, g2[0].mSurfaceRoot, g2[0].mSlist, active.data());
+		const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(model->mdxm + 1);
+		bool visible[12] = {}, hips = false;
+		for (int surface = 0; surface < model->mdxm->numSurfaces; ++surface)
+		{
+			if (!active[surface] || !static_cast<const mdxmSurface_t *>(G2_FindSurface(model, surface, 0))->numTriangles) continue;
+			const auto *info = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[surface]);
+			if (strstr(info->name, "_cap_")) continue;
+			hips |= !Q_strncmp(info->name, "hips", 4);
+			for (int link = 0; link < 12; ++link)
+				visible[link] |= !Q_strncmp(info->name, parts[link], strlen(parts[link]));
+		}
 		vec3_t points[15], mins, maxs;
 		bool valid[15] = {};
 		ClearBounds(mins, maxs);
@@ -2178,7 +2198,6 @@ static void RB_RenderCapsules()
 			if (valid[b])
 			{
 				for (int axis = 0; axis < 3; ++axis) points[b][axis] = matrix.matrix[axis][3];
-				AddPointToBounds(points[b], mins, maxs);
 			}
 		}
 		vec4_t a[12] = {}, b[12] = {};
@@ -2186,13 +2205,21 @@ static void RB_RenderCapsules()
 		float scale = MAX(fabsf(e.modelScale[0]), MAX(fabsf(e.modelScale[1]), fabsf(e.modelScale[2])));
 		if (!scale) scale = 1;
 		scale *= r_capsuleShadowRadius->value;
-		for (int link = 0; link < 10; ++link)
-			if (valid[links[link][0]] && valid[links[link][1]])
+		for (int link = 0; link < 12; ++link)
+			if ((visible[link] || (link == 0 && hips)) && valid[links[link][0]] && valid[links[link][1]])
 			{
-				VectorCopy(points[links[link][0]], a[count]); a[count][3] = radii[link] * scale;
-				VectorCopy(points[links[link][1]], b[count]); ++count;
+				VectorCopy(points[link == 1 && !visible[0] ? 2 : links[link][0]], a[count]); a[count][3] = radii[link] * scale;
+				VectorCopy(points[link == 0 && !visible[0] ? 0 : links[link][1]], b[count]);
+				AddPointToBounds(a[count], mins, maxs);
+				AddPointToBounds(b[count], mins, maxs);
+				++count;
 			}
 		if (!count) continue;
+		if (report)
+		{
+			const auto *root = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[g2[0].mSurfaceRoot]);
+			ri.Printf(PRINT_ALL, "Capsules: %s root=%s count=%d\n", g2[0].mFileName, root->name, count);
+		}
 		// Bound the screen work to the actor and its short-range ground shadow.
 		const float reach = 7 * scale * (1 + strength[1]) + strength[2] * 0.6f * strength[1];
 		for (int axis = 0; axis < 3; ++axis)
@@ -3159,7 +3186,7 @@ static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 		int entity, cube, post;
 		shader_t *shader;
 		R_DecomposeSort(backEnd.refdef.drawSurfs[i].sort, &entity, &shader, &cube, &post);
-		eligible = R_IsSkinShader(shader);
+		eligible = R_IsSkinSurface(shader, backEnd.refdef.drawSurfs[i].surface);
 	}
 	if (!eligible && !r_sssDebug->integer) return scene;
 	if (!tr.sssFbo)

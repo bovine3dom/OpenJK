@@ -1667,6 +1667,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		uniformDataWriter.SetUniformVec4(UNIFORM_MATERIALPARAMS, materialParams);
 		const vec4_t sssParams = {backEnd.sssFill ? 1.0f : 0.0f, 0, 0, 0};
 		uniformDataWriter.SetUniformVec4(UNIFORM_SSSPARAMS, sssParams);
+		if (backEnd.sssFill)
+		{
+			const vec4_t full = {0, 0, 1, 1};
+			uniformDataWriter.SetUniformVec4(UNIFORM_SKINBOUNDS,
+				tess.shader->skinBounds[2] > tess.shader->skinBounds[0] ? tess.shader->skinBounds : full);
+		}
 		if (pStage->glslShaderGroup == tr.lightallShader && !forceRefraction)
 			samplerBindingsWriter.AddStaticImage(backEnd.sssFill ? tr.renderDepthImage : tr.whiteImage, TB_SKINDEPTHMAP);
 		vec4_t softParams = {};

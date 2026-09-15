@@ -124,6 +124,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_MaterialParams", GLSL_VEC4, 1 },
 	{ "u_SoftParticleParams", GLSL_VEC4, 1 },
 	{ "u_SSSParams", GLSL_VEC4, 1 },
+	{ "u_SkinBounds", GLSL_VEC4, 1 },
 	{ "u_CapsuleA", GLSL_VEC4, 12 },
 	{ "u_CapsuleB", GLSL_VEC4, 12 },
 	{ "u_ParallaxBias",  GLSL_FLOAT, 1 },

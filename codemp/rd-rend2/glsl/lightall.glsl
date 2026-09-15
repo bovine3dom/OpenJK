@@ -422,6 +422,7 @@ uniform vec4 u_NormalScale;
 uniform vec4 u_SpecularScale;
 uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale
 uniform vec4 u_SSSParams;
+uniform vec4 u_SkinBounds;
 uniform sampler2D u_ScreenDepthMap;
 uniform float u_ParallaxBias;
 
@@ -1001,6 +1002,7 @@ void main()
 	vec3 viewDir, lightColor, ambientColor;
 	if (u_SSSParams.x > 0.0)
 	{
+		if (any(lessThan(var_TexCoords.xy, u_SkinBounds.xy)) || any(greaterThan(var_TexCoords.xy, u_SkinBounds.zw))) discard;
 		float sceneDepth = texture(u_ScreenDepthMap, gl_FragCoord.xy / r_FBufScale).r;
 		// Allow the subpixel depth displacement introduced by an MSAA resolve.
 		if (abs(sceneDepth - gl_FragCoord.z) > max(fwidth(gl_FragCoord.z), 0.000001)) discard;

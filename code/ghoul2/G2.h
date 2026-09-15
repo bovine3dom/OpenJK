@@ -50,6 +50,7 @@ qboolean	G2_SetRootSurface( CGhoul2Info_v &ghoul2, const int modelIndex,const ch
 int			G2_AddSurface(CGhoul2Info *ghoul2, int surfaceNumber, int polyNumber, float BarycentricI, float BarycentricJ, int lod );
 qboolean	G2_RemoveSurface(surfaceInfo_v &slist, const int index);
 const surfaceInfo_t *G2_FindOverrideSurface(int surfaceNum, const surfaceInfo_v &surfaceList);
+void G2_FindRecursiveSurface(const model_s *currentModel, int surfaceNum, surfaceInfo_v &rootList, int *activeSurfaces);
 int			G2_IsSurfaceLegal(const model_s *, const char *surfaceName, uint32_t *flags);
 int			G2_GetParentSurface(CGhoul2Info *ghlInfo, const int index);
 int			G2_GetSurfaceIndex(CGhoul2Info *ghlInfo, const char *surfaceName);

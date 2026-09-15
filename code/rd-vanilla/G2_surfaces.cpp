@@ -277,11 +277,10 @@ void G2_FindRecursiveSurface(const model_t *currentModel, int surfaceNum, surfac
 	}
 
 	// if this surface is not off, indicate as such in the active surface list
-	if (!(offFlags & G2SURFACEFLAG_OFF))
+	if (!offFlags)
 	{
 		activeSurfaces[surfaceNum] = 1;
 	}
- 	else
 	// if we are turning off all descendants, then stop this recursion now
 	if (offFlags & G2SURFACEFLAG_NODESCENDANTS)
 	{

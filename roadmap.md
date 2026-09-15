@@ -39,7 +39,9 @@ Sources:
 - [IGN PC review](https://www.ign.com/articles/2003/09/16/star-wars-jedi-knight-jedi-academy-review)
 - [Eurogamer Xbox follow-up](https://www.eurogamer.net/r-jediacademy-x)
 
-## Vulkan Investigation
+## Vulkan Investigation (Deferred)
+
+Vulkan work is deferred at the user's request. Keep the current OpenGL renderer.
 
 Measure CPU submission time, GPU pass time, and load phases before a renderer
 migration. Vulkan can reduce driver overhead, but texture decoding, CPU skinning,

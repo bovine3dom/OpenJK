@@ -157,6 +157,7 @@ extern cvar_t  *r_ssao;
 extern cvar_t *r_softParticles, *r_softParticleDistance;
 extern cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
+extern cvar_t *r_capsuleShadowDebug;
 extern cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
@@ -982,6 +983,7 @@ typedef struct {
 
 
 typedef struct shader_s {
+	vec4_t skinBounds;
 	char		name[MAX_QPATH];		// game path, including extension
 	int			lightmapIndex[MAXLIGHTMAPS];	// for a shader to match, both name and all lightmapIndex must match
 	byte		styles[MAXLIGHTMAPS];
@@ -1436,6 +1438,7 @@ typedef enum
 	UNIFORM_MATERIALPARAMS,
 	UNIFORM_SOFTPARTICLEPARAMS,
 	UNIFORM_SSSPARAMS,
+	UNIFORM_SKINBOUNDS,
 	UNIFORM_CAPSULEA,
 	UNIFORM_CAPSULEB,
 	UNIFORM_PARALLAXBIAS,
@@ -4119,20 +4122,18 @@ inline bool R_IsSoftParticle(const refEntity_t &entity)
 		);
 }
 
-inline bool R_IsSkinShader(const shader_t *shader)
+inline bool R_IsSkinSurface(const shader_t *shader, const surfaceType_t *surface)
 {
-	char name[MAX_QPATH];
-	COM_StripExtension(shader->name, name, sizeof(name));
-	static const char *materials[] = {"face", "face_01", "face_02", "face_03",
-		"head", "head_01", "head_02", "head_03",
-		"tentacles", "tentacles_01", "tentacles_02", "tentacles_03",
-		"torso_01_arms", "torso_02_arms", "torso_01_hands",
-		"torso_01_skin", "torso_02_skin", "torso_03_skin"};
-	const char *prefix = "models/players/jedi_tf/";
-	if (Q_stricmpn(name, prefix, strlen(prefix))) return false;
-	for (const char *material : materials)
-		if (!Q_stricmp(name + strlen(prefix), material)) return true;
-	return false;
+	if (*surface != SF_MDX) return false;
+	const auto *mesh = reinterpret_cast<const CRenderableSurface *>(surface)->surfaceData;
+	const auto *header = reinterpret_cast<const mdxmHeader_t *>(reinterpret_cast<const byte *>(mesh) + mesh->ofsHeader);
+	const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(header + 1);
+	const auto *info = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[mesh->thisSurfaceIndex]);
+	for (const char *part : {"mouth", "teeth", "eyes", "hair", "_cap_", "armor", "cuff", "gauntlet", "helmet", "_mask", "_hat", "_plate"})
+		if (strstr(info->name, part)) return false;
+	return shader->skinBounds[2] > shader->skinBounds[0] ||
+		(strstr(info->name, "skin") && (!Q_stricmpn(shader->name, "models/players/jedi_", 20) ||
+		!Q_stricmpn(shader->name, "models/players/alora2/", 22)));
 }
 
 #endif //TR_LOCAL_H
