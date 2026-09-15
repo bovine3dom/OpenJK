@@ -77,6 +77,9 @@ profile. Do not use original JO saves or copy JA saves into it.
 - Use the shared save and load menus to continue a test.
 - Enter `campaign_status` in the console to print the campaign, map, camera
   state, equipment, ammunition, position, and active objectives.
+- Enter `cinematic_status NPC_NAME` to print a cinematic actor's position,
+  movement, animations, and pending tasks. For example, use
+  `cinematic_status cinematic4_kyle` during the Artus opening.
 - Set `g_subtitles 2` to show subtitles for all voiceovers.
 - Press **Keypad 4** to toggle acquired light-amplification goggles. **U/O** select
   inventory items and **I** uses the selected item. The first selection press
@@ -101,10 +104,11 @@ python3 scripts/test-import-jo.py
 python3 scripts/test-play-sp.py
 python3 scripts/test-jo-sp.py --package build/ready --renderer rdsp-rend2 --sss
 python3 scripts/test-jo-sp.py --package build/ready --content --renderer rdsp-rend2
+python3 scripts/test-jo-cinematics.py --package build/ready --renderer rdsp-rend2
 ```
 
 The build script checks JA with both renderers. If `GameData_JO/base` is present,
-it also checks JO map loading and runs the vanilla JO integration test before
+it also runs the vanilla JO integration, AI, content, and cinematic checks before
 publication. Set `OJK_JO_ASSETS` to select a different JO installation.
 The desktop updater requires the JO check results when you select JO.
 
@@ -117,6 +121,8 @@ still need a manual test.
 The optional `--sss` check tests imported skin masks on Kyle, Jan, both cinematic
 clones, the acrobat and fencer Reborn, a prisoner, Gran, and Ugnaught. It also
 checks that stormtrooper armour has no eligible skin pixels.
+The Python JO tests retain logs, captures, and saves, but remove each run's large
+generated asset archive after the game exits. The launcher can regenerate it.
 
 ## Implementation and Limits
 
@@ -133,9 +139,10 @@ checks that stormtrooper armour has no eligible skin pixels.
   include the Bryar pistol and stun baton when owned and usable.
 - The JO loading screen uses the supplied title artwork and the shared progress
   bar. Some retail level previews are empty placeholders.
-- The two cockpit actors use a separate JO skeleton. Their script animation
-  names map to JA's existing cinematic animation slots. Other JO-specific
-  cinematic animations still need review.
+- The cockpit actors and cinematic Galak use a separate JO skeleton. Their
+  script animation names map to JA's existing cinematic animation slots. New
+  gesture aliases follow the existing cockpit slots to preserve their indices.
+  Other JO-specific cinematic animations still need review.
 - JO NPC definitions and objective names load as campaign data. Objective slot
   zero stays reserved for JA's light-side state. The save layout is unchanged.
 - JO NPC class names convert to JA names. Earlier MVP saves repair invalid NPC
@@ -166,3 +173,34 @@ positions. It does not complete the route to those entities through normal play.
 The reported missing flame jets still need an exact save or screenshot. The
 generator's glowing pipe material and sampled walkway flame effects rendered
 during investigation; this does not establish that the reported scene is fixed.
+
+## Kejim CCTV and Artus Opening
+
+The Kejim Base CCTV sequence needs Galak on the bridge. JA's `NPC_Galak`
+spawner was empty, so the actor never appeared and the sequence could not
+complete. The unarmoured spawner now creates the actor. Three JO gesture
+animations are included for his dialogue. The armoured Galak boss still needs
+its separate JO controller.
+
+The Artus opening gives Kyle the `DROPTOFLOOR` spawn flag. JA interpreted the
+same bit as a Jedi ceiling ambush and enabled noclip. JO Kyle now retains ground
+collision and uses his walking animation. Cinematic music also retains its full
+filename when a track loops.
+
+The cinematic tests run the original scripts without player-requested skipping.
+They check that Galak speaks and performs a gesture, the CCTV actors are removed,
+the following cinematic starts, and the Artus opening returns player control.
+Movement samples check Kyle's walking animation, ground contact, and disabled
+noclip. Screenshots are stored under `build/jo-cinematics/`.
+
+Load a save from before the CCTV sequence to replay it after updating. Earlier
+MVP saves repair the inert Galak spawner on load. The named Artus cinematic Kyle
+also has the erroneous noclip state cleared when loaded. A save already stalled
+inside the CCTV script cannot recover the tasks that ran without Galak; use an
+earlier save for that case.
+
+To check an earlier save in a separate test profile:
+
+```bash
+python3 scripts/test-jo-cinematics.py --package build/ready --case cctv --save /path/to/before_cctv.sav
+```

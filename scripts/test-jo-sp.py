@@ -296,6 +296,7 @@ def main():
             if process.poll() is None:
                 process.kill()
                 process.wait()
+            (profile / "campaigns/jo/OpenJK/zz_jo_campaign.pk3").unlink(missing_ok=True)
     return 0
 
 

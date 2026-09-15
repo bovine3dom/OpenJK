@@ -839,6 +839,30 @@ static void Svcmd_CampaignStatus_f(void)
 				pl->client->sess.mission_objectives[i].status);
 }
 
+static void Svcmd_CinematicStatus_f(void)
+{
+	if (gi.argc() != 2)
+	{
+		gi.Printf("Usage: cinematic_status <targetname>\n");
+		return;
+	}
+	extern stringID_table_t animTable[];
+	gentity_t *ent = NULL;
+	while ((ent = G_Find(ent, FOFS(targetname), gi.argv(1))) != NULL)
+	{
+		if (!ent->client || !ent->NPC) continue;
+		const playerState_t &ps = ent->client->ps;
+		gi.Printf("cinematic name=%s time=%d camera=%d ent=%d origin=%.2f,%.2f,%.2f velocity=%.2f,%.2f,%.2f ground=%d legs=%s torso=%s legs_timer=%d torso_timer=%d nav=%d lower=%d upper=%d both=%d voice=%d behavior=%d noclip=%d\n",
+			ent->targetname, level.time, in_camera, ent->s.number,
+			ps.origin[0], ps.origin[1], ps.origin[2], ps.velocity[0], ps.velocity[1], ps.velocity[2], ps.groundEntityNum,
+			GetStringForID(animTable, ps.legsAnim), GetStringForID(animTable, ps.torsoAnim), ps.legsAnimTimer, ps.torsoAnimTimer,
+			Q3_TaskIDPending(ent, TID_MOVE_NAV), Q3_TaskIDPending(ent, TID_ANIM_LOWER), Q3_TaskIDPending(ent, TID_ANIM_UPPER),
+			Q3_TaskIDPending(ent, TID_ANIM_BOTH), Q3_TaskIDPending(ent, TID_CHAN_VOICE), ent->NPC->behaviorState, ent->client->noclip);
+		return;
+	}
+	gi.Printf("cinematic name=%s time=%d camera=%d absent=1\n", gi.argv(1), level.time, in_camera);
+}
+
 static void Svcmd_Secrets_f(void)
 {
 	const gentity_t *pl = &g_entities[0];
@@ -917,6 +941,7 @@ static int svcmdcmp( const void *a, const void *b ) {
 // FIXME some of these should be made CMD_ALIVE too!
 static svcmd_t svcmds[] = {
 	{ "campaign_status", Svcmd_CampaignStatus_f, CMD_NONE },
+	{ "cinematic_status", Svcmd_CinematicStatus_f, CMD_NONE },
 	{ "entitylist",					Svcmd_EntityList_f,							CMD_NONE },
 	{ "game_memory",				Svcmd_GameMem_f,							CMD_NONE },
 

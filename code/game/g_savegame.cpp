@@ -1206,6 +1206,7 @@ static void ReadGEntities(qboolean qbAutosave)
 		}
 
 		NPC_RestoreOutcastClass(pEnt);
+		NPC_RestoreOutcastCinematics(pEnt);
 		// NPCs and other ents store waypoints that aren't valid after a load
 		pEnt->waypoint = 0;
 

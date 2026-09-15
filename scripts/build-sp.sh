@@ -93,6 +93,8 @@ if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         python3 scripts/test-jo-sp.py --package "$package" --ai | tee "$package/jo-ai-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-sp.py --package "$package" --content | tee "$package/jo-content-result.txt"
+    OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
+        python3 scripts/test-jo-cinematics.py --package "$package" | tee "$package/jo-cinematics-result.txt"
 fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"

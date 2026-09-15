@@ -439,7 +439,9 @@ void NPC_SetMiscDefaultData( gentity_t *ent )
 			|| ent->client->NPC_class == CLASS_LUKE )
 		{//good jedi
 			ent->client->enemyTeam = TEAM_ENEMY;
-			if ( ent->spawnflags & JSF_AMBUSH )
+			// JO Kyle uses this bit for DROPTOFLOOR, not a ceiling ambush.
+			if ( (ent->spawnflags & JSF_AMBUSH)
+				&& !(G_IsOutcast() && ent->client->NPC_class == CLASS_KYLE) )
 			{//ambusher
 				ent->NPC->scriptFlags |= SCF_IGNORE_ALERTS;
 				ent->client->noclip = true;//hang
@@ -1977,10 +1979,10 @@ delay - after spawned or triggered, how many seconds to wait to spawn the NPC
 */
 extern qboolean	spawning;				// the G_Spawn*() functions are valid  (only turned on during one function)
 extern void	NPC_PrecacheByClassName(const char*);
+extern void NPC_PrecacheAnimationCFG(const char *NPC_type);
 
 void SP_NPC_spawner( gentity_t *self)
 {
-	extern void NPC_PrecacheAnimationCFG( const char *NPC_type );
 	float	fDelay;
 
 	//register/precache the models needed for this NPC, not anymore
@@ -2354,6 +2356,31 @@ SHY - Spawner is shy
 */
 void SP_NPC_Galak( gentity_t *self)
 {
+	// The armored variant still requires JO's separate boss controller.
+	if (self->spawnflags & 1) return;
+	self->NPC_type = "Galak";
+	if (G_IsOutcast() && (self->spawnflags & SFB_CINEMATIC))
+		self->NPC_type = "jo_cinematic_galak";
+	SP_NPC_spawner(self);
+}
+
+void NPC_RestoreOutcastCinematics(gentity_t *self)
+{
+	if (!G_IsOutcast() || !self->targetname) return;
+	if (!Q_stricmp(level.mapname, "artus_mine") && !Q_stricmp(self->targetname, "cinematic4_kyle")
+		&& self->NPC && self->client && self->NPC->behaviorState == BS_CINEMATIC)
+		self->client->noclip = qfalse;
+	if (Q_stricmp(level.mapname, "kejim_base") || Q_stricmp(self->targetname, "cinematic_galak")
+		|| self->client || !self->classname || Q_stricmp(self->classname, "NPC_Galak") || self->e_UseFunc != useF_NULL)
+		return;
+	// The old empty spawner saved no spawn callback. Restore the retail cinematic's defaults.
+	self->NPC_type = "jo_cinematic_galak";
+	self->count = 1;
+	self->wait = 500;
+	self->e_UseFunc = useF_NPC_Spawn;
+	self->svFlags |= SVF_NPC_PRECACHE;
+	NPC_PrecacheAnimationCFG(self->NPC_type);
+	gi.Printf("JO save: restored cinematic Galak spawner\n");
 }
 
 /*QUAKED NPC_Desann(1 0 0) (-16 -16 -24) (16 16 40) x x x x CEILING CINEMATIC NOTSOLID STARTINSOLID SHY

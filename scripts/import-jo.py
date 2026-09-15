@@ -127,13 +127,15 @@ def build_overlay(ja, jo, output):
         humanoid = "models/players/_humanoid/"
         ja_anims = read(academy, humanoid + "animation.cfg")
         jo_anims = read(outcast, humanoid + "animation.cfg")
-        # Cockpit actors use JO's 72-bone skeleton. Gameplay actors use JA's
+        # Cinematic actors use JO's 72-bone skeleton. Gameplay actors use JA's
         # skeleton and the renderer's existing JO mesh conversion.
         cockpit = sorted(set(re.findall(rb"BOTH_COCKPIT_\w+", jo_anims)))
-        if len(cockpit) > 50:
-            raise ValueError("Too many cockpit animations")
+        # Append aliases so existing cockpit slot numbers remain stable.
+        cinematic_anims = cockpit + [b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2"]
+        if len(cinematic_anims) > 50:
+            raise ValueError("Too many cinematic animations")
         aliases = {name + b"\0": f"BOTH_CIN_{i + 1}".encode() + b"\0"
-                   for i, name in enumerate(cockpit)}
+                   for i, name in enumerate(cinematic_anims)}
         cinematic_cfg = jo_anims
         for old, new in aliases.items():
             cinematic_cfg = re.sub(rb"\b" + old[:-1] + rb"\b", new[:-1], cinematic_cfg)
@@ -157,7 +159,7 @@ def build_overlay(ja, jo, output):
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
             npcs = convert_npcs(read(outcast, "ext_data/npcs.cfg").decode("cp1252"))
-            for actor in ("kyle", "jan"):
+            for actor in ("kyle", "jan", "galak"):
                 model = bytearray(read(outcast, f"models/players/{actor}/model.glm"))
                 animation = b"models/players/jo_cinematic/jo_cinematic"
                 model[72:136] = animation.ljust(64, b"\0")

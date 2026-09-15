@@ -144,6 +144,8 @@ See `docs/jo-campaign.md` for setup and renderer options.
 - [ ] Check doors, lifts, switches, code notifications, and datapad objectives. Record a sequence that stops or an objective that does not update.
 - [ ] Check weapon pickups, ammunition, enemy reactions, and friendly fire. Compare a nearby missed shot with a direct hit when investigating an unresponsive enemy.
 - [ ] Check dialogue, subtitles, music changes between exploration and combat, and cinematic transitions. Test cinematic skipping in a separate session.
+- [ ] Replay the Kejim Base CCTV cinematic from an earlier save. Check that Galak appears, the bridge dialogue completes, and the following cinematic starts without a skip.
+- [ ] Watch the Artus Mine opening (`artus_mine`). Kyle must walk across the terrain, complete the conversation, and return player control.
 - [ ] Supply a save or screenshot of the passage with missing flames, before turning the pipes off. The generator pipe material and sampled walkway flame effects render in the diagnostic checks; the exact reported failure remains unconfirmed.
 - [ ] Save during combat and during a scripted task. Load each save and check that the encounter or task continues.
 - [ ] Die and reload. Check that objectives, equipment, and required NPCs remain correct.
