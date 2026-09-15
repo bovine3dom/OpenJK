@@ -158,8 +158,8 @@ If `~/.local/bin` is on `PATH`, use `openjk-play`. Extra arguments go to the eng
 openjk-play +devmap t2_wedge +exec krildor-route.cfg
 ```
 
-The engine and launcher still default to `rdsp-vanilla`. Rend2 is experimental
-and opt-in. Select it explicitly, or return to vanilla:
+The published build selects Rend2 for new profiles. Existing profiles retain
+their renderer choice. Select either renderer explicitly:
 
 ```bash
 openjk-play +set cl_renderer rdsp-rend2

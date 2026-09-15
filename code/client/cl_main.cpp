@@ -1092,9 +1092,14 @@ static CMiniHeap *GetG2VertSpaceServer( void ) {
 
 // NOTENOTE: If you change the output name of rd-vanilla, change this define too!
 #ifdef JK2_MODE
-#define DEFAULT_RENDER_LIBRARY	"rdjosp-vanilla"
+#define FALLBACK_RENDER_LIBRARY	"rdjosp-vanilla"
 #else
-#define DEFAULT_RENDER_LIBRARY	"rdsp-vanilla"
+#define FALLBACK_RENDER_LIBRARY	"rdsp-vanilla"
+#endif
+#if defined(REND2_DEFAULT) && !defined(JK2_MODE)
+#define DEFAULT_RENDER_LIBRARY	"rdsp-rend2"
+#else
+#define DEFAULT_RENDER_LIBRARY	FALLBACK_RENDER_LIBRARY
 #endif
 
 void CL_InitRef( void ) {
@@ -1108,12 +1113,12 @@ void CL_InitRef( void ) {
 
 	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
 
-	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
+	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, FALLBACK_RENDER_LIBRARY ) )
 	{
 		Com_Printf( "failed: trying to load fallback renderer\n" );
-		Cvar_ForceReset( "cl_renderer" );
+		Cvar_Set( "cl_renderer", FALLBACK_RENDER_LIBRARY );
 
-		Com_sprintf( dllName, sizeof( dllName ), DEFAULT_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT );
+		Com_sprintf( dllName, sizeof( dllName ), FALLBACK_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT );
 		rendererLib = Sys_LoadDll( dllName, qfalse );
 	}
 

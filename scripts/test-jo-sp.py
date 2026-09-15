@@ -42,8 +42,6 @@ def main():
                "+set", "r_mode", "3", "+set", "s_initsound", "1", "+set", "developer", "1",
                "+set", "logfile", "2", "+set", "com_maxfps", "60", "+set", "g_subtitles", "2",
                "+set", "cg_thirdPerson", "0", "+wait", "150", "+echo", "JO_READY"]
-    if args.renderer == "rdsp-rend2":
-        command += ["+set", "r_ssao", "1", "+set", "r_ssaoMethod", "1"]
     print(f"JO integration results: {run}", flush=True)
     with log.open("w") as stream:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stream, stderr=subprocess.STDOUT,

@@ -1540,7 +1540,7 @@ void R_Register( void )
 	r_sssRadius = ri.Cvar_Get("r_sssRadius", "0.5", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
 	r_sssDebug = ri.Cvar_Get("r_sssDebug", "0", 0, "SSS views: 0 scene, 1 mask, 2 raw irradiance, 3 filtered irradiance, 4 difference, 5 split scene.");
 	r_sssDebugGain = ri.Cvar_Get("r_sssDebugGain", "16", 0, "Gain for the SSS difference view.");
-	r_capsuleShadows = ri.Cvar_Get("r_capsuleShadows", "0", CVAR_ARCHIVE, "Skeletal capsule ground occlusion; requires screen AO and depth prepass.");
+	r_capsuleShadows = ri.Cvar_Get("r_capsuleShadows", "1", CVAR_ARCHIVE, "Skeletal capsule occlusion; requires screen AO and depth prepass.");
 	r_capsuleShadowStrength = ri.Cvar_Get("r_capsuleShadowStrength", "0.25", CVAR_ARCHIVE, "Capsule ground-shadow strength.");
 	r_capsuleShadowSoftness = ri.Cvar_Get("r_capsuleShadowSoftness", "1", CVAR_ARCHIVE, "Capsule penumbra multiplier; smaller values sharpen the shadow.");
 	r_capsuleShadowRadius = ri.Cvar_Get("r_capsuleShadowRadius", "1", CVAR_ARCHIVE, "Capsule radius multiplier.");
@@ -1557,10 +1557,10 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_capsuleShadowSoftness, 0, 2, qfalse);
 	ri.Cvar_CheckRange(r_capsuleShadowRadius, 0.25f, 2, qfalse);
 	ri.Cvar_CheckRange(r_capsuleShadowRange, 8, 128, qfalse);
-	r_ssao = ri.Cvar_Get( "r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE, "" );
+	r_ssao = ri.Cvar_Get( "r_ssao", "1", CVAR_LATCH | CVAR_ARCHIVE, "" );
 	r_sampleShading = ri.Cvar_Get("r_sampleShading", "0", CVAR_ARCHIVE, "Minimum shaded sample fraction for multisample scene rendering.");
 	ri.Cvar_CheckRange(r_sampleShading, 0, 1, qfalse);
-	r_ssaoMethod = ri.Cvar_Get("r_ssaoMethod", "0", CVAR_ARCHIVE | CVAR_LATCH, "AO method: 0 legacy SSAO, 1 spatial GTAO.");
+	r_ssaoMethod = ri.Cvar_Get("r_ssaoMethod", "1", CVAR_ARCHIVE | CVAR_LATCH, "AO method: 0 legacy SSAO, 1 spatial GTAO.");
 	ri.Cvar_CheckRange(r_ssaoMethod, 0, 1, qtrue);
 	r_gtaoQuality = ri.Cvar_Get("r_gtaoQuality", "1", CVAR_ARCHIVE, "GTAO quality: 0 low, 1 medium, 2 high, 3 ultra.");
 	ri.Cvar_CheckRange(r_gtaoQuality, 0, 3, qtrue);

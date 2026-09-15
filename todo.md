@@ -124,8 +124,8 @@ was needed for the automated checks on the build machine.
 - [ ] Add dedicated recruitment-radius, large-group merge, and rally-hold tests. Make the native `sour-shot` trigger reliable; one run missed its short-lived missile before a passing repeat.
 - [ ] Extend contact combat with animated leaning. Test repeated hits, no available cover, pending exposure interruption, larger multi-squad encounters, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
 
-Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port
-experimental and opt-in. Vanilla remains the default.
+Use `roadmap.md` for detailed acceptance checks. Builds that include the
+raster-only Rend2 port now select it by default.
 
 ## Door Follow-up
 
@@ -151,7 +151,7 @@ experimental and opt-in. Vanilla remains the default.
 ## Rend2 Port
 
 - [x] Replace the compile-only `BuildSPRend2Port` option with `BuildSPRend2`. Link and install `rdsp-rend2_x86_64.so` with shared MP raster code and one shader generator.
-- [x] Build both SP renderers with Linux GCC and one job. Keep vanilla as the engine and launcher default.
+- [x] Build both SP renderers with Linux GCC and one job. Rend2 is now the default; vanilla remains available.
 - [x] Adapt SP scene/entity submission and native API 18 imports and exports. Retain native SP Ghoul2 array and handle ownership, bones, collision, save data, IK, and ragdolls.
 - [x] Add CPU skinning with packed normals and tangents in Rend2 dynamic buffers.
 - [x] Require both renderer smoke tests before publication. Verify Rend2 identity and reject vanilla fallback in strict tests.
@@ -166,7 +166,7 @@ experimental and opt-in. Vanilla remains the default.
 
 The original Rend2 functional tests used Xvfb and LLVMpipe. Hardware P630
 performance results are now available in `docs/benchmark-sp.md`.
-Keep Rend2 experimental and opt-in.
+Keep both renderer options available.
 Do not add ray tracing. See `docs/rend2-sp.md` for build, launch, fallback,
 and test commands.
 

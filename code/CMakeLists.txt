@@ -37,6 +37,9 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 	endif(WIN32)
 	# Defines
 	set(SPEngineDefines ${SharedDefines} "_JK2EXE") # it's called JK2EXE but it really just means Singleplayer Exe
+	if(BuildSPRend2)
+		list(APPEND SPEngineDefines "REND2_DEFAULT")
+	endif()
 
 	set(SPEngineIncludeDirectories
 		${SPEngineIncludeDirectories}

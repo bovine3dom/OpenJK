@@ -30,10 +30,11 @@ def main():
     (profile / "shaders/raster_test.shader").write_text(
         "raster/soft_alpha { cull disable\n { map $whiteimage\n blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA\n rgbGen vertex\n alphaGen vertex\n } }\n"
         "raster/soft_add { cull disable\n { map $whiteimage\n blendFunc GL_ONE GL_ONE\n rgbGen vertex\n } }\n")
-    settings = dict(cl_renderer="rdsp-rend2", r_mode=-1, r_customwidth=960, r_customheight=720,
-                    r_fullscreen=0, r_ssao=1, r_ssaoMethod=1, r_softParticles=1,
-                    r_ext_multisample=args.msaa, com_maxfps=60, developer=1,
+    settings = dict(r_mode=-1, r_customwidth=960, r_customheight=720,
+                    r_fullscreen=0, com_maxfps=60, developer=1,
                     r_ignoreGLErrors=0, r_debugContext=1, s_initsound=0)
+    if args.msaa:
+        settings["r_ext_multisample"] = args.msaa
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("// Controlled graphics fixture.\n")
     env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_VIDEODRIVER="offscreen",
@@ -45,6 +46,16 @@ def main():
                         os.environ.get("OJK_ASSETS", str(root / "GameData")), "+devmap", "t2_wedge", "+exec", fixture],
                        env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
     log = (suite / "console.log").read_text(errors="replace")
+    defaults = dict(cl_renderer="rdsp-rend2", r_ssao=1, r_ssaoMethod=1, r_gtaoQuality=1,
+                    r_gtaoHalfRes=1, r_gtaoDenoise=1, r_capsuleShadows=1, r_capsuleShadowWalls=1,
+                    r_smaa=1, r_sss=1, r_sssRadius=0.5, r_softParticles=1, r_softParticleDistance=8,
+                    r_genNormalMaps=1, r_normalStrength=1, r_generatedNormalStrength=0.25,
+                    r_generatedNormalBrighten=0, r_normalMapCache=1, r_sampleShading=0,
+                    r_ext_multisample=args.msaa)
+    plain = re.sub(r"\^[0-9]", "", log)
+    for name, value in defaults.items():
+        if f'{name} = "{value}"' not in plain:
+            raise RuntimeError(f"Unexpected graphics default: {name} (expected {value})")
     if ("OJK_FEATURES_DONE" not in log or "----- rdsp-rend2 -----" not in log or
             re.search(r"llvmpipe|softpipe|trying to load fallback|GL_INVALID_|GL_OUT_OF_MEMORY|"
                       r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]", log, re.I)):

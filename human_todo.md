@@ -77,6 +77,8 @@ SSS eligibility gate. See `docs/raster-features-sp.md` for controls and limits.
 - [ ] Compare `r_smaa 0` and `1` with sample shading disabled. Check diagonals, foliage, small geometry, and motion shimmer. HUD and menu text should retain native-resolution sharpness.
 - [ ] Repeat SMAA comparison after the pass-definition fix, with `r_smaaDebug 0`. The normal result must not contain red/green diagnostic edges.
 - [x] User confirmed that corrected SMAA looks good. SMAA now defaults to `1`.
+- [x] Audit the graphics defaults. Enable GTAO and capsule shadows, and select Rend2 in builds that include it. Keep MSAA and per-sample shading off.
+- [ ] Apply `exec rend2-defaults.cfg` in each existing campaign profile, then check normal gameplay with the approved graphics settings.
 - [ ] Measure effects separately before enabling them together. Record resolution, MSAA, build ID, and slow frame times. Capsule shadows, SSS, and SMAA currently start disabled.
 
 ## Material Calibration Decisions

@@ -1,13 +1,13 @@
 # Additional Raster Features
 
-These features use the stock game assets. SMAA, skin diffusion, and soft particles
-start enabled. Capsule shadows remain optional. Their wall mode starts enabled.
+These features use the stock game assets. GTAO, capsule shadows with wall
+occlusion, SMAA, skin diffusion, and soft particles start enabled in Rend2.
 
 ## Controls
 
 | Setting | Default | Effect |
 | --- | ---: | --- |
-| `r_capsuleShadows` | `0` | Set to `1` for skeletal capsule occlusion. Requires `r_ssao 1` and `r_depthPrepass 1`. |
+| `r_capsuleShadows` | `1` | Skeletal capsule occlusion. Requires `r_ssao 1` and `r_depthPrepass 1`. |
 | `r_capsuleShadowStrength` | `0.25` | Capsule shadow strength, from `0` to `1`. |
 | `r_capsuleShadowSoftness` | `1` | Penumbra multiplier, from `0` to `2`. Try `0.25` for sharper shadows. |
 | `r_capsuleShadowRadius` | `1` | Capsule thickness multiplier, from `0.25` to `2`. |
@@ -26,6 +26,43 @@ start enabled. Capsule shadows remain optional. Their wall mode starts enabled.
 Except for `r_softParticles`, these controls change live. Debug controls are not
 archived. Other controls are saved in the profile.
 Existing profiles keep their saved values when defaults change.
+
+## Graphics Default Audit
+
+New profiles select Rend2 when the build includes it. GTAO uses medium quality,
+half-resolution calculation, denoising, and separate weapon AO. Normal and
+specular mapping are enabled. Generated normals use strength `0.25`, and their
+local cache is enabled. HDR rendering, tone mapping, and automatic exposure
+retain their enabled defaults.
+
+MSAA (`r_ext_multisample 0`) and per-sample shading (`r_sampleShading 0`) remain
+off by request. SMAA supplies the default anti-aliasing pass.
+
+Other off settings have separate purposes:
+
+- `r_generatedNormalBrighten 0`: the old diffuse-colour compensation was
+  deliberately disabled during material calibration.
+- `r_parallaxMapping 0` and `r_cubeMapping 0`: inherited optional material
+  features. They were not approved as stock-asset defaults. The parallax,
+  specular, and roughness calibration did not show a clear desktop benefit.
+- `r_dynamicGlow 0`, `r_drawSunRays 0`, and `r_flares 0`: inherited optional
+  effects, not the new approved raster passes.
+- `r_arb_buffer_storage 0`: an optional buffer-upload path, not a visual effect.
+- Debug views and forced lighting remain off. Legacy `cg_shadows` remains `1`.
+
+Vulkan, volumetric fog, new light shafts, and indirect-lighting work are deferred.
+Ray tracing is outside the project scope. A persistent driver shader-binary
+cache is not implemented; linked programs are reused across soft map resets.
+
+To apply the approved settings to an existing JA or JO profile, enter:
+
+```text
+exec rend2-defaults.cfg
+```
+
+This packaged preset also disables MSAA and per-sample shading, clears the
+graphics debug views, and restarts the renderer. Apply it separately in each
+campaign profile. Other settings retain their current values.
 
 ## Capsule Contact Shadows
 

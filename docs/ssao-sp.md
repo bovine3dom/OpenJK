@@ -26,10 +26,10 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 
 | Control | Values and effect |
 | --- | --- |
-| `r_ssao` | `0` disables SSAO; `1` enables SSAO. Use `vid_restart` after a change. |
+| `r_ssao` | Default `1`: enable screen-space AO. `0` disables it. Use `vid_restart` after a change. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
-| `r_ssaoMethod` | Default `0`: legacy SSAO. `1`: spatial GTAO. Use `vid_restart` after a change. |
+| `r_ssaoMethod` | Default `1`: spatial GTAO. `0`: legacy SSAO. Use `vid_restart` after a change. |
 | `r_gtaoHalfRes` | Default `1`: calculate and filter GTAO at half width and half height, then upscale with full-resolution depth. `0`: native-resolution GTAO. Use `vid_restart` after a change. |
 | `r_gtaoDenoise` | Default `1`: wider spatial filtering for half-resolution GTAO. `0`: narrower filtering. Changes are live. |
 | `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |

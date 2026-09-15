@@ -2172,6 +2172,7 @@ static void RB_RenderCapsules()
 		const model_t *model = g2[0].currentModel;
 		if (!model || !model->mdxm) continue;
 		std::vector<int> active(model->mdxm->numSurfaces, 0);
+		G2_FindOverrideSurface(-1, g2[0].mSlist); // Initialize the per-model override lookup.
 		G2_FindRecursiveSurface(model, g2[0].mSurfaceRoot, g2[0].mSlist, active.data());
 		const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(model->mdxm + 1);
 		bool visible[12] = {}, hips = false;

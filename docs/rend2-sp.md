@@ -3,8 +3,9 @@
 ## Current Status
 
 SP Rend2 now links and installs as `rdsp-rend2_x86_64.so` on Linux x86-64.
-It is playable, but remains experimental and opt-in. The engine and launcher
-still default to `rdsp-vanilla`.
+Builds that include SP Rend2 now select it by default for new profiles.
+Vanilla remains available and is the fallback if the selected renderer library
+cannot load. Builds without SP Rend2 retain the vanilla default.
 
 The module uses native SP API 18 imports and exports. Native SP Ghoul2 retains
 ownership of arrays and handles. It supplies bone evaluation, collision, Ghoul2

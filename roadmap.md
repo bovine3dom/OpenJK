@@ -128,7 +128,7 @@ Compare `codemp/rd-rend2/` with `code/rd-vanilla/` and the renderer build target
 4. Add and measure raster lighting, shadows, and material features individually. Provide quality settings for expensive features. Do not add ray tracing.
 5. Compare fixed camera captures and frame times on each target GPU. Record unsupported features and visual defects.
 
-Rend2 remains experimental and opt-in. Vanilla is still the default.
+Builds that include SP Rend2 now select it by default. Vanilla remains available.
 Linux GCC builds used one job. Xvfb and LLVMpipe checks passed for renderer
 lifecycle, active AI tactic save/load, and save migration.
 Migration and renderer lifecycle checks passed after the CP ownership changes.
