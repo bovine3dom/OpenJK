@@ -2,6 +2,8 @@
 
 These features use the stock game assets. GTAO, capsule shadows with wall
 occlusion, SMAA, skin diffusion, and soft particles start enabled in Rend2.
+The [weapon torch](torch-sp.md) is a separate player toggle. Press L to enable
+its shadowed beam; it starts off in a new profile.
 
 ## Controls
 

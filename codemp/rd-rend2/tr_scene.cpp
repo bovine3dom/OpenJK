@@ -330,7 +330,22 @@ void RE_BeginScene(const refdef_t *fd)
 	tr.refdef.time = fd->time;
 	tr.refdef.rdflags = fd->rdflags;
 	tr.refdef.frameTime = fd->time - tr.refdef.lastTime;
+	VectorClear4(tr.refdef.torchOrigin);
+	VectorClear4(tr.refdef.torchDirection);
+	VectorClear4(tr.refdef.torchParams);
+	Matrix16Identity(tr.refdef.torchVP);
 #ifdef REND2_SP
+	if (!(fd->rdflags & (RDF_NOWORLDMODEL | RDF_SKYBOXPORTAL)) && fd->torchRange > 0 && fd->torchIntensity > 0)
+	{
+		VectorCopy(fd->torchOrigin, tr.refdef.torchOrigin);
+		tr.refdef.torchOrigin[3] = Com_Clamp(0, 16, fd->torchIntensity);
+		VectorCopy(fd->torchDirection, tr.refdef.torchDirection);
+		if (!VectorNormalize(tr.refdef.torchDirection)) tr.refdef.torchOrigin[3] = 0;
+		const float angle = DEG2RAD(Com_Clamp(20, 100, fd->torchFov) * 0.5f);
+		tr.refdef.torchDirection[3] = cosf(angle);
+		tr.refdef.torchParams[0] = Com_Clamp(64, 2048, fd->torchRange);
+		tr.refdef.torchParams[1] = cosf(angle * 0.7f);
+	}
 	tr.refdef.rdflags = R_SP_SceneFlags(tr.refdef.rdflags);
 	tr.refdef.frameTime = Com_Clampi(0, 200, tr.refdef.frameTime);
 #endif

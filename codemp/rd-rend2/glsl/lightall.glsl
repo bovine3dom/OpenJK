@@ -373,6 +373,8 @@ layout(std140) uniform Lights
 	uniform mat4 u_ShadowMvp3;
 	int u_NumLights;
 	Light u_Lights[32];
+	mat4 u_TorchVP;
+	vec4 u_TorchOrigin, u_TorchDirection, u_TorchParams;
 };
 
 uniform int u_LightMask;
@@ -423,6 +425,8 @@ uniform vec4 u_SpecularScale;
 uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale
 uniform vec4 u_SSSParams;
 uniform vec4 u_SkinBounds;
+uniform sampler2D u_TorchShadowMap;
+uniform int u_TorchEnabled;
 uniform sampler2D u_ScreenDepthMap;
 uniform float u_ParallaxBias;
 
@@ -947,6 +951,35 @@ vec3 CalcDynamicLightContribution(
 
 		outColor += light.color * reflectance * attenuation * NL;
 		diffuseContribution += light.color * diffuse * attenuation * NL;
+	}
+	if (u_TorchOrigin.w > 0.0 && u_TorchEnabled != 0)
+	{
+		vec3 L = u_TorchOrigin.xyz - position;
+		float distance = max(length(L), 0.001);
+		L /= distance;
+		float cone = smoothstep(u_TorchDirection.w, u_TorchParams.y, dot(-L, u_TorchDirection.xyz));
+		float fade = 1.0 - smoothstep(u_TorchParams.x * 0.6, u_TorchParams.x, distance);
+		float attenuation = cone * fade * u_TorchOrigin.w / (1.0 + distance * distance / (192.0 * 192.0));
+		float NL = max(dot(N, L), 0.0);
+		if (attenuation * NL > 0.0)
+		{
+			if (u_TorchParams.z > 0.0)
+			{
+				vec4 projected = u_TorchVP * vec4(position + vertexNormal * min(distance * 0.25, 0.3 + 0.7 * (1.0 - NL)), 1.0);
+				vec3 uv = projected.xyz / projected.w * 0.5 + 0.5;
+				float visibility = 0.0;
+				if (projected.w > 0.0 && all(greaterThanEqual(uv.xy, vec2(0.0))) && all(lessThanEqual(uv, vec3(1.0))))
+					for (int y = -1; y <= 1; ++y)
+						for (int x = -1; x <= 1; ++x)
+							visibility += step(uv.z - 0.00001, texture(u_TorchShadowMap, uv.xy + vec2(x, y) * u_TorchParams.w).r);
+				attenuation *= visibility / 9.0;
+			}
+			vec3 H = normalize(L + E);
+			vec3 light = vec3(1.0, 0.96, 0.88) * attenuation * NL;
+			outColor += light * (diffuse + CalcSpecular(specular, max(dot(N, H), 0.0), NL, NE,
+				max(dot(L, H), 0.0), max(dot(E, H), 0.0), roughness));
+			diffuseContribution += light * diffuse;
+		}
 	}
 	return outColor;
 }

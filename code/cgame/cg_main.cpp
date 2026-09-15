@@ -279,6 +279,7 @@ vmCvar_t	cg_debugEvents;
 vmCvar_t	cg_errorDecay;
 vmCvar_t	cg_addMarks;
 vmCvar_t	cg_drawGun;
+vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 vmCvar_t	cg_autoswitch;
 vmCvar_t	cg_simpleItems;
 vmCvar_t	cg_fov;
@@ -356,6 +357,10 @@ typedef struct {
 static cvarTable_t cvarTable[] = {
 	{ &cg_autoswitch, "cg_autoswitch", "1", CVAR_ARCHIVE },
 	{ &cg_drawGun, "cg_drawGun", "1", CVAR_ARCHIVE },
+	{ &cg_torch, "cg_torch", "0", CVAR_ARCHIVE },
+	{ &cg_torchRange, "cg_torchRange", "768", CVAR_ARCHIVE },
+	{ &cg_torchIntensity, "cg_torchIntensity", "4", CVAR_ARCHIVE },
+	{ &cg_torchFov, "cg_torchFov", "50", CVAR_ARCHIVE },
 	{ &cg_fov, "cg_fov", "80", CVAR_ARCHIVE },
 	{ &cg_fovAspectAdjust, "cg_fovAspectAdjust", "0", CVAR_ARCHIVE },
 	{ &cg_stereoSeparation, "cg_stereoSeparation", "0.4", CVAR_ARCHIVE  },

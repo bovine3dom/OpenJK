@@ -294,6 +294,68 @@ void CG_TestParticle_f()
 	CG_Printf("Test particle: %.1f %.1f %.1f\n", particle.origin[0], particle.origin[1], particle.origin[2]);
 }
 
+static bool torchWeaponMount, torchClipped;
+
+void CG_Torch_f()
+{
+	if (!cg.snap || in_camera) return;
+	cgi_Cvar_Update(&cg_torch);
+	cgi_Cvar_Set("cg_torch", cg_torch.integer ? "0" : "1");
+	cgi_Cvar_Update(&cg_torch);
+	CG_Printf("Torch %s\n", cg_torch.integer ? "on" : "off");
+}
+
+void CG_TorchStatus_f()
+{
+	cgi_Cvar_Update(&cg_torch);
+	CG_Printf("torch enabled=%d active=%d mount=%s clipped=%d weapon=%d thirdperson=%d origin=%.3f,%.3f,%.3f direction=%.3f,%.3f,%.3f range=%.1f\n",
+		cg_torch.integer, cg.refdef.torchIntensity > 0, torchWeaponMount ? "weapon" : "view", torchClipped,
+		cg.predicted_player_state.weapon, cg.renderingThirdPerson,
+		cg.refdef.torchOrigin[0], cg.refdef.torchOrigin[1], cg.refdef.torchOrigin[2],
+		cg.refdef.torchDirection[0], cg.refdef.torchDirection[1], cg.refdef.torchDirection[2], cg.refdef.torchRange);
+}
+
+static void CG_AddTorch()
+{
+	torchWeaponMount = torchClipped = false;
+	const playerState_t &ps = cg.predicted_player_state;
+	if (!cg_torch.integer || in_camera || cg.hyperspace || cg_pano.integer || ps.stats[STAT_HEALTH] <= 0 || ps.pm_type == PM_INTERMISSION ||
+		(ps.viewEntity > 0 && ps.viewEntity < ENTITYNUM_WORLD) || G_IsRidingVehicle(&g_entities[0]) || (ps.eFlags & EF_LOCKED_TO_WEAPON)) return;
+	vec3_t eye, axis[3], target, origin;
+	VectorCopy(cg.refdef.vieworg, eye);
+	AxisCopy(cg.refdef.viewaxis, axis);
+	if (cg.renderingThirdPerson)
+	{
+		VectorCopy(ps.origin, eye);
+		eye[2] += ps.viewheight;
+		AnglesToAxis(ps.viewangles, axis);
+	}
+	VectorMA(eye, 14, axis[0], origin);
+	VectorMA(origin, -6, axis[1], origin);
+	VectorMA(origin, -6, axis[2], origin);
+	const gentity_t *ent = cg_entities[ps.clientNum].gent;
+	if (ps.weapon != WP_NONE && ps.weapon != WP_SABER && ps.weapon != WP_MELEE &&
+		cg_drawGun.integer && !cg.zoomMode && ent && ent->client && ent->client->renderInfo.mPCalcTime == cg.time &&
+		DistanceSquared(eye, ent->client->renderInfo.muzzlePoint) < 96 * 96)
+	{
+		VectorMA(ent->client->renderInfo.muzzlePoint, -2, axis[2], origin);
+		torchWeaponMount = true;
+	}
+	trace_t trace;
+	CG_Trace(&trace, eye, nullptr, nullptr, origin, ps.clientNum, MASK_SOLID);
+	torchClipped = trace.startsolid || trace.fraction < 1.0f;
+	if (trace.startsolid || trace.allsolid) return;
+	if (torchClipped) VectorMA(trace.endpos, 2, trace.plane.normal, origin);
+	VectorMA(eye, 4096, axis[0], target);
+	CG_Trace(&trace, eye, nullptr, nullptr, target, ps.clientNum, MASK_SOLID);
+	VectorSubtract(trace.endpos, origin, cg.refdef.torchDirection);
+	if (!VectorNormalize(cg.refdef.torchDirection)) VectorCopy(axis[0], cg.refdef.torchDirection);
+	VectorCopy(origin, cg.refdef.torchOrigin);
+	cg.refdef.torchRange = Com_Clamp(64, 2048, cg_torchRange.value);
+	cg.refdef.torchIntensity = Com_Clamp(0, 16, cg_torchIntensity.value);
+	cg.refdef.torchFov = Com_Clamp(20, 100, cg_torchFov.value);
+}
+
 static void CG_AddTestModel (void) {
 	// re-register the model, because the level may have changed
 /*	cg.testModelEntity.hModel = cgi_R_RegisterModel( cg.testModelName );
@@ -2221,6 +2283,8 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 			CG_AddViewWeapon( &g_entities[cg.snap->ps.viewEntity ].client->ps );	// HAX - because I wanted to --eez
 		}
 	}
+
+	CG_AddTorch();
 
 	if ( !cg.hyperspace && fx_freeze.integer<2 )
 	{

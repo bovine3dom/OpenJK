@@ -979,6 +979,14 @@ void CL_InitInput( void ) {
 #ifdef USE_RMLUI
 	CL_InitForceWheel();
 	CL_InitWeaponWheel();
+#ifndef JK2_MODE
+	if (!Cvar_Get("cg_torchBindInitialized", "0", CVAR_ARCHIVE)->integer)
+	{
+		if (Key_GetKey("torch") < 0 && (!Key_GetBinding('l') || !*Key_GetBinding('l')))
+			Key_SetBinding('l', "torch");
+		Cvar_Set("cg_torchBindInitialized", "1");
+	}
+#endif
 #endif
 	Cmd_AddCommand ("centerview",IN_CenterView);
 

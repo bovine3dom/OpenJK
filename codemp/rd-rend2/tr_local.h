@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "rd-common/tr_public.h"
 #include "rd-common/tr_common.h"
 #ifdef REND2_SP
-static_assert(REF_API_VERSION == 21, "Rend2 SP requires the SP private header path");
+static_assert(REF_API_VERSION == 22, "Rend2 SP requires the SP private header path");
 struct skin_t;
 #include "rd-rend2/tr_sp_import.h"
 #define ri riRend2
@@ -158,6 +158,7 @@ extern cvar_t *r_softParticles, *r_softParticleDistance;
 extern cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 extern cvar_t *r_capsuleShadowDebug;
+extern cvar_t *r_torchShadows, *r_torchShadowMapSize;
 extern cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
@@ -773,6 +774,8 @@ struct LightsBlock
 	float pad0[3];
 
 	Light lights[MAX_DLIGHTS];
+	matrix_t torchVP;
+	vec4_t torchOrigin, torchDirection, torchParams;
 };
 
 struct FogsBlock
@@ -880,7 +883,8 @@ enum
 	TB_SHADOWMAPARRAY  = 8,
 	TB_SSAOMAP     = 9,
 	TB_SKINDEPTHMAP = 10,
-	NUM_TEXTURE_BUNDLES = 11
+	TB_TORCHSHADOWMAP = 11,
+	NUM_TEXTURE_BUNDLES = 12
 };
 
 typedef enum
@@ -1439,6 +1443,8 @@ typedef enum
 	UNIFORM_SOFTPARTICLEPARAMS,
 	UNIFORM_SSSPARAMS,
 	UNIFORM_SKINBOUNDS,
+	UNIFORM_TORCHSHADOWMAP,
+	UNIFORM_TORCHENABLED,
 	UNIFORM_CAPSULEA,
 	UNIFORM_CAPSULEB,
 	UNIFORM_PARALLAXBIAS,
@@ -1545,6 +1551,8 @@ typedef struct {
 	struct pshadow_s *pshadows;
 
 	float       sunShadowMvp[3][16];
+	matrix_t torchVP;
+	vec4_t torchOrigin, torchDirection, torchParams;
 	float       sunDir[4];
 	float       sunCol[4];
 	float       sunAmbCol[4];
@@ -2497,6 +2505,7 @@ typedef struct trGlobals_s {
 	image_t					*targetLevelsImage;
 	image_t					*fixedLevelsImage;
 	image_t					*sunShadowArrayImage;
+	image_t *torchShadowImage;
 	image_t					*pointShadowArrayImage;
 	image_t                 *screenShadowImage;
 	image_t                 *screenSsaoImage;
@@ -2525,6 +2534,7 @@ typedef struct trGlobals_s {
 	FBO_t					*calcLevelsFbo;
 	FBO_t					*targetLevelsFbo;
 	FBO_t					*sunShadowFbo[3];
+	FBO_t *torchShadowFbo;
 	FBO_t					*screenShadowFbo;
 	FBO_t					*screenSsaoFbo;
 	FBO_t					*hdrDepthFbo;
@@ -2619,7 +2629,7 @@ typedef struct trGlobals_s {
 	// -----------------------------------------
 
 	viewParms_t				viewParms;
-	viewParms_t				cachedViewParms[3 + MAX_DLIGHTS * 6 + 3 + MAX_DRAWN_PSHADOWS];
+	viewParms_t				cachedViewParms[4 + MAX_DLIGHTS * 6 + 3 + MAX_DRAWN_PSHADOWS];
 	int						numCachedViewParms;
 
 	viewParms_t				skyPortalParms;

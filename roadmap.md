@@ -318,3 +318,7 @@ Research references for further investigation:
 A focused 3-6 month phase could improve controls, movement, and selected encounters.
 Treat the renderer port as a separate effort. Dropping compatibility removes some
 constraints, but it does not remove the need to test campaign progression.
+
+---
+
+- autosaves every few minutes with i guess grandfather-father-son

@@ -1674,7 +1674,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				tess.shader->skinBounds[2] > tess.shader->skinBounds[0] ? tess.shader->skinBounds : full);
 		}
 		if (pStage->glslShaderGroup == tr.lightallShader && !forceRefraction)
+		{
+			uniformDataWriter.SetUniformInt(UNIFORM_TORCHENABLED, !backEnd.viewParms.isSkyPortal);
 			samplerBindingsWriter.AddStaticImage(backEnd.sssFill ? tr.renderDepthImage : tr.whiteImage, TB_SKINDEPTHMAP);
+			samplerBindingsWriter.AddStaticImage(backEnd.refdef.torchParams[2] > 0 && !backEnd.depthFill ?
+				tr.torchShadowImage : tr.whiteImage, TB_TORCHSHADOWMAP);
+		}
 		vec4_t softParams = {};
 		const int srcBlend = stateBits & GLS_SRCBLEND_BITS;
 		const int dstBlend = stateBits & GLS_DSTBLEND_BITS;

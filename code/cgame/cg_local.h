@@ -614,6 +614,7 @@ extern	vmCvar_t		cg_errorDecay;
 extern	vmCvar_t		cg_footsteps;
 extern	vmCvar_t		cg_addMarks;
 extern	vmCvar_t		cg_drawGun;
+extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 extern	vmCvar_t		cg_autoswitch;
 extern	vmCvar_t		cg_simpleItems;
 extern	vmCvar_t		cg_fov;
@@ -692,6 +693,8 @@ void CG_LoadMenus(const char *menuFile);
 //
 void CG_TestModel_f (void);
 void CG_TestParticle_f();
+void CG_Torch_f();
+void CG_TorchStatus_f();
 void CG_TestModelNextFrame_f (void);
 void CG_TestModelPrevFrame_f (void);
 void CG_TestModelNextSkin_f (void);

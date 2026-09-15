@@ -138,6 +138,7 @@ cvar_t *r_softParticles, *r_softParticleDistance;
 cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 cvar_t *r_capsuleShadowDebug;
+cvar_t *r_torchShadows, *r_torchShadowMapSize;
 cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 cvar_t *r_sssDebugGain;
 cvar_t  *r_ssaoAmbientOnly;
@@ -1547,6 +1548,10 @@ void R_Register( void )
 	r_capsuleShadowRange = ri.Cvar_Get("r_capsuleShadowRange", "64", CVAR_ARCHIVE, "Maximum capsule occlusion distance in world units.");
 	r_capsuleShadowWalls = ri.Cvar_Get("r_capsuleShadowWalls", "1", CVAR_ARCHIVE, "Orient capsule proximity occlusion to receiver normals, including walls.");
 	r_capsuleShadowDebug = ri.Cvar_Get("r_capsuleShadowDebug", "0", 0, "Report capsule model, root surface, and count for one frame.");
+	r_torchShadows = ri.Cvar_Get("r_torchShadows", "1", CVAR_ARCHIVE, "Cast scene shadows from the player torch.");
+	r_torchShadowMapSize = ri.Cvar_Get("r_torchShadowMapSize", "1024", CVAR_ARCHIVE | CVAR_LATCH, "Torch shadow-map resolution.");
+	ri.Cvar_CheckRange(r_torchShadows, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_torchShadowMapSize, 256, 2048, qtrue);
 	for (cvar_t *v : {r_smaa, r_capsuleShadows, r_capsuleShadowWalls}) ri.Cvar_CheckRange(v, 0, 1, qtrue);
 	ri.Cvar_CheckRange(r_smaaDebug, 0, 2, qtrue);
 	ri.Cvar_CheckRange(r_sss, 0, 4, qfalse);

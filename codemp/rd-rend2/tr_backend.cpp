@@ -2576,6 +2576,10 @@ static void RB_UpdateSceneConstants(gpuFrame_t *frame, const trRefdef_t *refdef)
 static void RB_UpdateLightsConstants(gpuFrame_t *frame, const trRefdef_t *refdef)
 {
 	LightsBlock lightsBlock = {};
+	Matrix16Copy(refdef->torchVP, lightsBlock.torchVP);
+	VectorCopy4(refdef->torchOrigin, lightsBlock.torchOrigin);
+	VectorCopy4(refdef->torchDirection, lightsBlock.torchDirection);
+	VectorCopy4(refdef->torchParams, lightsBlock.torchParams);
 
 	memcpy(lightsBlock.shadowVP1, refdef->sunShadowMvp[0], sizeof(matrix_t));
 	memcpy(lightsBlock.shadowVP2, refdef->sunShadowMvp[1], sizeof(matrix_t));

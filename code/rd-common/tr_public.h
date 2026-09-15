@@ -30,7 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../ghoul2/G2.h"
 #include "../ghoul2/ghoul2_gore.h"
 
-#define	REF_API_VERSION		21
+#define	REF_API_VERSION		22
 
 #define REF_UI_MAX_VERTICES 512
 #define REF_UI_MAX_INDICES 1536

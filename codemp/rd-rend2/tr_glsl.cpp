@@ -125,6 +125,8 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_SoftParticleParams", GLSL_VEC4, 1 },
 	{ "u_SSSParams", GLSL_VEC4, 1 },
 	{ "u_SkinBounds", GLSL_VEC4, 1 },
+	{ "u_TorchShadowMap", GLSL_INT, 1 },
+	{ "u_TorchEnabled", GLSL_INT, 1 },
 	{ "u_CapsuleA", GLSL_VEC4, 12 },
 	{ "u_CapsuleB", GLSL_VEC4, 12 },
 	{ "u_ParallaxBias",  GLSL_FLOAT, 1 },
@@ -1916,6 +1918,7 @@ static int GLSL_LoadGPUProgramLightAll(
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SHADOWMAP2,  TB_SHADOWMAPARRAY);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SSAOMAP,     TB_SSAOMAP);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SCREENDEPTHMAP, TB_SKINDEPTHMAP);
+		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_TORCHSHADOWMAP, TB_TORCHSHADOWMAP);
 		qglUseProgram(0);
 
 		GLSL_FinishGPUShader(&tr.lightallShader[i]);

@@ -7,6 +7,13 @@ Software-renderer tests already cover map loading, characters, sabers, 4K output
 renderer restarts, save migration, and selected shadow modes. They do not prove
 visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
+## Weapon Torch
+
+- [ ] Toggle the torch with L in dark JA and JO interiors. Check brightness, beam width, and readability.
+- [ ] Check the muzzle attachment while walking, firing, crouching, leaning, and changing weapons. Check the hidden-weapon and scoped views.
+- [ ] Check character, door, and prop shadows. Move close to walls and check for light leakage or detached shadows.
+- [ ] Compare shadow-map sizes `512` and `1024` on the GTX 1080 Ti. Use `vid_restart` after each resolution change.
+
 ## Prepare
 
 - [ ] Use the separate development profile. Do not overwrite original saves or settings.

@@ -2662,9 +2662,51 @@ static float CalcSplit(float n, float f, float i, float m)
 	return (n * pow(f / n, i / m) + (f - n) * i / m) / 2.0f;
 }
 
+static void R_GatherTorchShadow(trRefdef_t *refdef)
+{
+	if (refdef->torchOrigin[3] <= 0 || !r_torchShadows->integer) return;
+	if (!tr.torchShadowFbo)
+	{
+		R_IssuePendingRenderCommands();
+		FBO_t *old = glState.currentFBO;
+		const int size = r_torchShadowMapSize->integer;
+		tr.torchShadowImage = R_CreateImage("*torchShadow", nullptr, size, size, IMGTYPE_COLORALPHA,
+			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
+		tr.torchShadowFbo = FBO_Create("_torchShadow", size, size);
+		FBO_Bind(tr.torchShadowFbo);
+		qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tr.torchShadowImage->texnum, 0);
+		qglDrawBuffer(GL_NONE);
+		qglReadBuffer(GL_NONE);
+		R_CheckFBO(tr.torchShadowFbo);
+		FBO_Bind(old);
+	}
+	viewParms_t shadow = {};
+	shadow.viewportWidth = shadow.viewportHeight = tr.torchShadowFbo->width;
+	shadow.fovX = shadow.fovY = RAD2DEG(acosf(refdef->torchDirection[3])) * 2.0f;
+	shadow.flags = VPF_DEPTHSHADOW | VPF_NOVIEWMODEL | VPF_POINTSHADOW;
+	shadow.zNear = 1.0f;
+	shadow.zFar = refdef->torchParams[0];
+	shadow.targetFbo = tr.torchShadowFbo;
+	shadow.viewParmType = VPT_POINT_SHADOWS;
+	shadow.currentViewParm = tr.numCachedViewParms;
+	VectorCopy(refdef->torchOrigin, shadow.ori.origin);
+	VectorCopy(refdef->torchOrigin, shadow.pvsOrigin);
+	VectorCopy(refdef->torchDirection, shadow.ori.axis[0]);
+	PerpendicularVector(shadow.ori.axis[1], shadow.ori.axis[0]);
+	CrossProduct(shadow.ori.axis[0], shadow.ori.axis[1], shadow.ori.axis[2]);
+	R_RotateForViewer(&shadow.world, &shadow);
+	R_SetupProjection(&shadow, shadow.zNear, shadow.zFar, qtrue);
+	R_SetupProjectionZ(&shadow);
+	Matrix16Multiply(shadow.projectionMatrix, shadow.world.modelViewMatrix, refdef->torchVP);
+	refdef->torchParams[2] = 1;
+	refdef->torchParams[3] = 1.0f / shadow.viewportWidth;
+	tr.cachedViewParms[tr.numCachedViewParms++] = shadow;
+}
+
 void R_GatherFrameViews(trRefdef_t *refdef)
 {
 	int mainFlags = 0;
+	if (!(refdef->rdflags & RDF_NOWORLDMODEL)) R_GatherTorchShadow(refdef);
 	// skyportal view
 	if (tr.world && tr.world->skyboxportal)
 	{
