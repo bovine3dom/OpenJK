@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--msaa", type=int, choices=(0, 4))
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--reference", type=Path, help="Compare portrait proportions with a previous results.json")
     parser.add_argument("--display-ready", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not (640 <= args.width <= 3840 and 480 <= args.height <= 2160):
@@ -45,6 +46,7 @@ def main():
     suite = Path(tempfile.mkdtemp(prefix="debrief.", dir=output))
     print(f"Debrief results: {suite}", flush=True)
     results = []
+    reference = json.loads(args.reference.read_text()) if args.reference else []
     cases = [(args.renderer, args.msaa or 0)] if args.renderer else [
         ("rdsp-vanilla", 0), ("rdsp-rend2", 0), ("rdsp-rend2", 4)]
     for renderer, msaa in cases:
@@ -161,16 +163,27 @@ def main():
                     capture_output=True, check=True).stdout
                 if len(rgb) != 640 * 480 * 3:
                     raise RuntimeError("Invalid screenshot")
-                skin = 0
+                points = []
                 for y in range(315, 434):
                     for x in range(415, 565):
                         r, g, b = rgb[(y * 640 + x) * 3:(y * 640 + x) * 3 + 3]
-                        skin += r > 70 and r > b + 25 and g > b + 10
+                        if r > 70 and r > b + 25 and g > b + 10:
+                            points.append((x, y))
                 white = sum(min(rgb[(y * 640 + x) * 3:(y * 640 + x) * 3 + 3]) > 140
                             for y in range(313, 435) for x in range(44, 348))
-                counts[image] = dict(portrait_pixels=skin, text_pixels=white)
-                if skin < 200 or white < 150:
+                counts[image] = dict(portrait_pixels=len(points), text_pixels=white)
+                if len(points) < 200 or white < 150:
                     raise RuntimeError(f"Missing portrait or briefing text: {image}: {counts[image]}")
+                mx, my = (sum(p[i] for p in points) / len(points) for i in (0, 1))
+                aspect = (sum((x - mx) ** 2 for x, y in points) / sum((y - my) ** 2 for x, y in points)) ** 0.5
+                # Undo the UI-coordinate resize to compare physical face proportions.
+                aspect *= (args.width / 640) / (args.height / 480)
+                counts[image]["portrait_aspect"] = aspect
+                if reference:
+                    prior = next(r for r in reference if r["renderer"] == renderer and r["msaa"] == msaa)
+                    ratio = aspect / prior["captures"][image]["portrait_aspect"]
+                    if not 0.85 < ratio < 1.15:
+                        raise RuntimeError(f"Portrait proportions changed: {image}: ratio={ratio:.3f}")
             results.append(dict(renderer=renderer, msaa=msaa, clicked=clicked, captures=counts))
             print(f"PASS: {renderer}, MSAA {msaa}: portraits, text, Continue, Okay, mission selection", flush=True)
         finally:

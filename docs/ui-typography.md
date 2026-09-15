@@ -40,9 +40,9 @@ HUD fields. Transparent console notifications also use Plex and wrap to the
 screen width. Color codes and alpha fades remain available.
 
 The gameplay font route is scoped to gameplay. The datapad now has a separate
-Sans route, described below. Other menu text, mission-analysis screens, credits,
-and the open console retain their existing fonts. Loading
-screens also retain their existing path. Asian-language text keeps the legacy
+Sans route, described below. Mission-complete screens use this route also.
+Other menu text, credits, and the open console retain their existing fonts.
+Loading screens also retain their existing path. Asian-language text keeps the legacy
 font fallback because this bundled font does not supply those character sets.
 Lettering painted into world textures is artwork, not a runtime text draw.
 
@@ -58,7 +58,8 @@ row height. The row height itself does not change.
 The visible capital height is aligned to the original font's visual center,
 so titles, bullets, and selection highlights keep their original alignment.
 Objective paragraphs use measured wrapping and the remaining panel height instead of estimated character
-widths. Other menus use their existing font callbacks.
+widths. Mission-complete headings, statistics, dialogue, and buttons use the
+same font and alignment. Other menus use their existing font callbacks.
 
 No separate UI or text scale setting is added.
 

@@ -79,17 +79,23 @@ static void Item_TextScroll_BuildLines ( itemDef_t* item );
 
 #ifdef USE_RMLUI
 static const menuDef_t* textMenu = nullptr;
-class DatapadTextScope {
+class MenuTextScope {
 	const menuDef_t* previous;
 public:
-	explicit DatapadTextScope(const menuDef_t* menu) : previous(textMenu) { textMenu = menu; }
-	~DatapadTextScope() { textMenu = previous; }
+	explicit MenuTextScope(const menuDef_t* menu) : previous(textMenu) { textMenu = menu; }
+	~MenuTextScope() { textMenu = previous; }
 };
 
 bool UI_UseDatapadFont() {
 	const menuDef_t* menu = textMenu ? textMenu : Menu_GetFocused();
 	return menu && (textMenu || (menu->window.flags & WINDOW_VISIBLE)) &&
 		menu->window.name && !Q_stricmpn(menu->window.name, "datapad", 7);
+}
+
+bool UI_UsePlexMenuFont() {
+	const menuDef_t* menu = textMenu ? textMenu : Menu_GetFocused();
+	return UI_UseDatapadFont() || (menu && (textMenu || (menu->window.flags & WINDOW_VISIBLE)) &&
+		menu->window.name && !Q_stricmp(menu->window.name, "ingameMissionSelect"));
 }
 #endif
 
@@ -5103,7 +5109,7 @@ qboolean Item_Parse(itemDef_t *item)
 static void Item_TextScroll_BuildLines ( itemDef_t* item )
 {
 #ifdef USE_RMLUI
-	DatapadTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
+	MenuTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
 #endif
 	// new asian-aware line breaker...  (pasted from elsewhere late @ night, hence aliasing-vars ;-)
 	//
@@ -5753,7 +5759,7 @@ Menu_PostParse
 void Menu_PostParse(menuDef_t *menu)
 {
 #ifdef USE_RMLUI
-	DatapadTextScope textScope(menu);
+	MenuTextScope textScope(menu);
 #endif
 	if (menu == NULL)
 	{
@@ -6071,7 +6077,7 @@ Menu_Paint
 void Menu_Paint(menuDef_t *menu, qboolean forcePaint)
 {
 #ifdef USE_RMLUI
-	DatapadTextScope textScope(menu);
+	MenuTextScope textScope(menu);
 #endif
 	int i;
 
@@ -6279,7 +6285,7 @@ Item_SetTextExtents
 void Item_SetTextExtents(itemDef_t *item, int *width, int *height, const char *text)
 {
 #ifdef USE_RMLUI
-	DatapadTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
+	MenuTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
 #endif
 	const char *textPtr = (text) ? text : item->text;
 
@@ -7392,6 +7398,12 @@ void Item_Model_Paint(itemDef_t *item)
 
 	refdef.fov_x = (modelPtr->fov_x) ? modelPtr->fov_x : (int)((float)refdef.width / 640.0f * 90.0f);
 	refdef.fov_y = (modelPtr->fov_y) ? modelPtr->fov_y : atan2( refdef.height, refdef.width / tan( refdef.fov_x / 360 * M_PI ) ) * ( 360 / M_PI );
+	const menuDef_t* menu = (const menuDef_t*)item->parent;
+	if (menu && menu->window.name && !Q_stricmp(menu->window.name, "ingameMissionSelect") &&
+		refdef.width > 0 && refdef.height > 0) {
+		// Keep portrait height and use the pixel viewport's aspect ratio.
+		refdef.fov_x = atan2(refdef.width * tan(refdef.fov_y * M_PI / 360), refdef.height) * (360 / M_PI);
+	}
 
 //	refdef.fov_x = (modelPtr->fov_x) ? modelPtr->fov_x : refdef.width;
 //	refdef.fov_y = (modelPtr->fov_y) ? modelPtr->fov_y : refdef.height;

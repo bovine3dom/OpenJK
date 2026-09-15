@@ -17,6 +17,16 @@ constants correctly.
 cursor coordinates. This helps distinguish a drawing failure from an input or
 menu-state failure.
 
+## Text and Portrait Proportions
+
+Mission-complete headings, statistics, dialogue, and buttons use IBM Plex Sans
+SemiBold. Text keeps its original colors and row heights. Proportional text
+measurements control wrapping and button hit areas.
+
+Speaker portraits keep their vertical field of view. The horizontal field of
+view uses the pixel viewport's aspect ratio. This keeps faces in proportion
+on both 4:3 and widescreen displays.
+
 ## Automated Test
 
 Build a package, then run:
@@ -39,6 +49,18 @@ It captures Luke's portrait, injects mouse input to click Continue, captures
 Kyle's portrait, then clicks Okay. The UI report must confirm arrival at
 `ingameMissionSelect1`. Image checks require speaker pixels and briefing text.
 The test saves two Luke frames for motion inspection.
+
+To check portrait proportions across display sizes, use the first run's
+`results.json` file as a reference:
+
+```sh
+python3 scripts/test-debrief-sp.py --package build/ready --width 1280 --height 720 --reference build/smoke/debrief.00yu3fuo/results.json
+```
+
+The image check compares the horizontal and vertical spread of skin pixels.
+It permits small changes from speaker animation. All three renderer settings
+passed at 960 x 720 and 1280 x 720 in `debrief.00yu3fuo` and
+`debrief.zbntbldp`.
 
 Mouse coordinates in the UI are relative virtual coordinates, not display
 pixels. The test resets the virtual cursor and waits for engine frames after

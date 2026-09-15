@@ -48,6 +48,7 @@ default when free. Middle mouse can be assigned in the menu. See
 - [x] Refine wheel typography with a stronger font weight, a thin outline, and consistent spacing.
 - [x] Start the gameplay text migration: objectives, captions, notifications, HUD labels, and numbers use Plex. Keep menus on their existing path.
 - [x] Migrate datapad text to IBM Plex Sans SemiBold. Preserve colors and row heights, and measure proportional wrapping.
+- [x] Use Plex Sans for mission-complete text and correct speaker portrait proportions.
 - [ ] Check datapad content and navigation during campaign play, including long localized objectives and move descriptions.
 - [ ] Review gameplay text sizes and line breaks during human play, including localized content.
 

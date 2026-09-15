@@ -195,7 +195,7 @@ void CL_DrawDatapad(int HUDType)
 }
 
 #ifdef USE_RMLUI
-static UiText::Style DatapadFontStyle(int font, float scale) {
+static UiText::Style MenuFontStyle(int font, float scale) {
 	UiText::Style style;
 	style.datapad = true;
 	style.outline = false;
@@ -208,14 +208,14 @@ static UiText::Style DatapadFontStyle(int font, float scale) {
 
 static int CL_UiFontWidth(const char* text, int font, float scale) {
 	UiText::Metrics metrics;
-	if (UI_UseDatapadFont() && CL_RmlUiText(text, DatapadFontStyle(font, scale), &metrics, false))
+	if (UI_UsePlexMenuFont() && CL_RmlUiText(text, MenuFontStyle(font, scale), &metrics, false))
 		return (int)ceilf(metrics.width);
 	return re.Font_StrLenPixels(text, font, scale);
 }
 
 static void CL_UiFontDraw(int x, int y, const char* text, const float* color, int font, int maxWidth, float scale) {
-	if (UI_UseDatapadFont()) {
-		UiText::Style style = DatapadFontStyle(font, scale);
+	if (UI_UsePlexMenuFont()) {
+		UiText::Style style = MenuFontStyle(font, scale);
 		style.x = x; style.y = y; style.maxWidth = maxWidth;
 		if (color) memcpy(style.color, color, sizeof(style.color));
 		if (CL_RmlUiText(text, style, nullptr, true)) return;
