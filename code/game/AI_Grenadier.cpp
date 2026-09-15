@@ -430,29 +430,19 @@ static void Grenadier_CheckFireState( void )
 		return;
 	}
 
-	//continue to fire on their last position
-	/*
-	if ( !Q_irand( 0, 1 ) && NPCInfo->enemyLastSeenTime && level.time - NPCInfo->enemyLastSeenTime < 4000 )
+	vec3_t target;
+	if ( NPC->client->ps.weapon == WP_THERMAL && NPC_GrenadeTarget( NPC, target ) )
 	{
-		//Fire on the last known position
 		vec3_t	muzzle, dir, angles;
-
 		CalcEntitySpot( NPC, SPOT_WEAPON, muzzle );
-		VectorSubtract( NPCInfo->enemyLastSeenLocation, muzzle, dir );
-
-		VectorNormalize( dir );
-
+		VectorSubtract( target, muzzle, dir );
 		vectoangles( dir, angles );
-
 		NPCInfo->desiredYaw		= angles[YAW];
 		NPCInfo->desiredPitch	= angles[PITCH];
-		//FIXME: they always throw toward enemy, so this will be very odd...
 		shoot = qtrue;
 		faceEnemy = qfalse;
-
-		return;
+		doMove = qfalse;
 	}
-	*/
 }
 
 qboolean Grenadier_EvaluateShot( int hit )
@@ -541,13 +531,13 @@ void NPC_BSGrenadier_Attack( void )
 	if ( NPC_ClearLOS( NPC->enemy ) )
 	{
 		NPCInfo->enemyLastSeenTime = level.time;
+		VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 		enemyLOS = qtrue;
 
 		if ( NPC->client->ps.weapon == WP_MELEE )
 		{
 			if ( enemyDist <= 4096 && InFOV( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 90, 45 ) )//within 64 & infront
 			{
-				VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 				enemyCS = qtrue;
 			}
 		}
@@ -560,7 +550,6 @@ void NPC_BSGrenadier_Attack( void )
 			if ( hit == NPC->enemy->s.number
 				|| ( hitEnt && hitEnt->client && hitEnt->client->playerTeam == NPC->client->enemyTeam ) )
 			{
-				VectorCopy( NPC->enemy->currentOrigin, NPCInfo->enemyLastSeenLocation );
 				float enemyHorzDist = DistanceHorizontalSquared( NPC->enemy->currentOrigin, NPC->currentOrigin );
 				if ( enemyHorzDist < 1048576 )
 				{//within 1024
@@ -658,6 +647,9 @@ void NPC_BSGrenadier_Attack( void )
 	//FIXME: don't shoot right away!
 	if ( shoot )
 	{//try to shoot if it's time
+		vec3_t grenadeTarget;
+		if ( NPC->client->ps.weapon == WP_THERMAL && !NPC_GrenadeTarget( NPC, grenadeTarget ) )
+			return;
 		if ( TIMER_Done( NPC, "attackDelay" ) )
 		{
 			if( !(NPCInfo->scriptFlags & SCF_FIRE_WEAPON) ) // we've already fired, no need to do it again here

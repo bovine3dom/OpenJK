@@ -36,6 +36,9 @@ def main():
              **{name: (name, 1) for name in ("held-shot", "held-damage", "held-saber", "held-noflee", "held-cinematic", "held-save")},
              "sour-merc": ("sour-probe", 1),
              "merge-plan": ("merge-plan", 1), "route-recovery": ("route-recovery", 1),
+             "grenade": ("grenade", 1),
+             "grenade-ally": ("grenade-ally", 1),
+             "grenade-auto": ("grenade-auto", 1),
              **{name: (name, 1) for name in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid")},
              **{name: (name, 1) for name in ("sour-rodian", "sour-trandoshan", "sour-weequay", "sour-sniper", "sour-shot", "sour-saber")},
              "pressure-cooldown-async": ("pressure-cooldown", 1), "pressure-cooldown-sync": ("pressure-cooldown", 0),
@@ -120,6 +123,24 @@ def main():
                 check(any(e["event"] == source_event and e["ent"] == before["ent"] for e in events), "Native pressure source missing")
             else:
                 check(states and 0 < int(states[0]["health"]) < int(before["health"]), "Native damage did not reach the pain handler")
+        elif case == "grenade-auto":
+            throws = [e for e in events if e["event"] == "grenade_throw"]
+            check(throws, "Grenadier did not throw through its combat controller")
+            check(all(int(b["time"])-int(a["time"]) >= 6500 for a, b in zip(throws, throws[1:])),
+                  "Grenadier bypassed its cooldown")
+        elif case == "grenade-ally":
+            a, c = (samples["GRENADE_ALLY"][name] for name in ("_memory_a", "_memory_c"))
+            check(math.dist(point(c), point(a, "seen")) < 64, "Ally was not beside the grenade target")
+            check(not any(e["event"] == "grenade_throw" for e in events), "Grenade thrown beside ally")
+            check(any(e["event"] == "grenade_denied" for e in events), "No grenade permission check")
+        elif case == "grenade":
+            before = samples["GRENADE_READY"]["_memory_a"]
+            throws = [e for e in events if e["event"] == "grenade_throw"]
+            check(len(throws) == 1, "Squad did not limit grenade release")
+            check(point(throws[0], "known") == point(before, "seen"), "Grenade used hidden live coordinates")
+            for phase in ("GRENADE_THROW", "GRENADE_STALE"):
+                check(any(e["event"] == "grenade_denied" and e["phase"] == phase for e in events), "Missing grenade rejection")
+                check(samples[phase]["_memory_a"]["seen_time"] == before["seen_time"], "Grenade refreshed sight")
         elif case == "merge-plan":
             before, after = samples["SPLIT"], samples["MERGED"]
             check(before["_memory_a"]["group"] == before["_memory_b"]["group"] != before["_memory_c"]["group"], "Groups were not separate")

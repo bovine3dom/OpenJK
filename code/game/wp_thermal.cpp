@@ -295,6 +295,52 @@ void WP_ThermalThink( gentity_t *ent )
 	}
 }
 
+qboolean NPC_GrenadeTarget( gentity_t *self, vec3_t target )
+{
+	if ( !self->NPC || !self->client || !self->enemy || !self->enemy->inuse || self->enemy->health <= 0
+		|| (self->enemy->flags & FL_NOTARGET) || (self->NPC->scriptFlags & SCF_DONT_FIRE)
+		|| !TIMER_Done( self, "grenadeCooldown" ) )
+		return qfalse;
+	int observed = self->NPC->enemyLastSeenTime;
+	VectorCopy( self->NPC->enemyLastSeenLocation, target );
+	AIGroupInfo_t *group = self->NPC->group;
+	if ( group && group->enemy == self->enemy && AI_ValidateGroupMember( group, self, qtrue )
+		&& group->lastSeenEnemyTime > observed )
+	{
+		observed = group->lastSeenEnemyTime;
+		VectorCopy( group->enemyLastSeenPos, target );
+	}
+	if ( observed <= 0 || observed > level.time || level.time-observed > 3000 )
+		return qfalse;
+	float radius = weaponData[WP_THERMAL].splashRadius+64;
+	if ( DistanceSquared( self->currentOrigin, target ) < radius*radius )
+		return qfalse;
+	for ( int i = 0; group && i < group->numGroup; ++i )
+	{
+		gentity_t *member = &g_entities[group->member[i].number];
+		if ( !member->inuse || !member->NPC || member->health <= 0 || !OnSameTeam( self, member ) )
+			continue;
+		if ( !TIMER_Done( member, "grenadeCooldown" )
+			|| ((member->NPC->tacticRole == 1 || member->NPC->tacticRole == 3)
+				&& DistanceSquared( member->NPC->tacticGoal, target ) < radius*radius) )
+			return qfalse;
+	}
+	vec3_t mins, maxs;
+	for ( int axis = 0; axis < 3; ++axis )
+	{
+		mins[axis] = target[axis]-radius;
+		maxs[axis] = target[axis]+radius;
+	}
+	gentity_t *nearby[128];
+	int count = gi.EntitiesInBox( mins, maxs, nearby, 128 );
+	if ( count == 128 )
+		return qfalse;
+	for ( int i = 0; i < count; ++i )
+		if ( nearby[i]->client && nearby[i]->health > 0 && OnSameTeam( self, nearby[i] ) )
+			return qfalse;
+	return qtrue;
+}
+
 //---------------------------------------------------------
 gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 //---------------------------------------------------------
@@ -302,6 +348,13 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 	gentity_t	*bolt;
 	vec3_t		dir, start;
 	float		damageScale = 1.0f;
+	vec3_t known;
+	bool coordinated = ent->NPC && ent->health > 0 && !(ent->NPC->scriptFlags & SCF_FIRE_WEAPON);
+	if ( coordinated && !NPC_GrenadeTarget( ent, known ) )
+	{
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=grenade_denied ent=%d reason=permission\n", ent->s.number );
+		return NULL;
+	}
 
 	VectorCopy( forwardVec, dir );
 	VectorCopy( muzzle, start );
@@ -388,7 +441,7 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 			//FIXME: we're assuming he's actually facing this direction...
 			vec3_t	target;
 
-			VectorCopy( ent->enemy->currentOrigin, target );
+			VectorCopy( coordinated ? known : ent->enemy->currentOrigin, target );
 			if ( target[2] <= start[2] )
 			{
 				vec3_t	vec;
@@ -397,18 +450,38 @@ gentity_t *WP_FireThermalDetonator( gentity_t *ent, qboolean alt_fire )
 				VectorMA( target, Q_flrand( 0, -32 ), vec, target );//throw a little short
 			}
 
-			target[0] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-ent->NPC->currentAim)*2);
-			target[1] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-ent->NPC->currentAim)*2);
-			target[2] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-ent->NPC->currentAim)*2);
+			int aim = ent->NPC ? ent->NPC->currentAim : 6;
+			target[0] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-aim)*2);
+			target[1] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-aim)*2);
+			target[2] += Q_flrand( -5, 5 )+(Q_flrand(-1.0f, 1.0f)*(6-aim)*2);
 
-			WP_LobFire( ent, start, target, bolt->mins, bolt->maxs, bolt->clipmask, bolt->s.pos.trDelta, qtrue, ent->s.number, ent->enemy->s.number );
+			qboolean clear = WP_LobFire( ent, start, target, bolt->mins, bolt->maxs, bolt->clipmask, bolt->s.pos.trDelta, qtrue, ent->s.number, ent->enemy->s.number );
+			if ( coordinated && !clear )
+			{
+				G_FreeEntity( bolt );
+				Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=grenade_denied ent=%d reason=arc\n", ent->s.number );
+				return NULL;
+			}
 		}
 		else if ( thisIsAShooter && ent->target && !VectorCompare( ent->pos1, vec3_origin ) )
 		{//misc_weapon_shooter firing at a position
-			WP_LobFire( ent, start, ent->pos1, bolt->mins, bolt->maxs, bolt->clipmask, bolt->s.pos.trDelta, qtrue, ent->s.number, ent->enemy->s.number );
+			WP_LobFire( ent, start, ent->pos1, bolt->mins, bolt->maxs, bolt->clipmask, bolt->s.pos.trDelta, qtrue, ent->s.number, ENTITYNUM_NONE );
 		}
 	}
 
+	if ( coordinated )
+	{
+		TIMER_Set( ent, "grenadeCooldown", 6500 );
+		AIGroupInfo_t *group = ent->NPC->group;
+		for ( int i = 0; group && i < group->numGroup; ++i )
+		{
+			gentity_t *member = &g_entities[group->member[i].number];
+			if ( member->inuse && member->NPC && member->health > 0 && member->enemy == ent->enemy )
+				TIMER_Set( member, "grenadeCooldown", 6500 );
+		}
+		Debug_Printf( debugNPCAI, DEBUG_LEVEL_INFO, "squad event=grenade_throw ent=%d time=%d known=%.3f,%.3f,%.3f\n",
+			ent->s.number, level.time, known[0], known[1], known[2] );
+	}
 	if ( alt_fire )
 	{
 		bolt->alt_fire = qtrue;

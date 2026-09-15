@@ -620,9 +620,18 @@ static void MemoryCommand( void )
 			else
 				actor->enemy->client->ps.SaberDeactivate();
 		}
-		else if ( !Q_stricmp(action, "melee") || !Q_stricmp(action, "ranged") )
+		else if ( !Q_stricmp(action, "throw") )
 		{
-			int weapon = !Q_stricmp(action, "melee") ? WP_STUN_BATON : WP_BLASTER;
+			if ( actor->client->ps.weapon != WP_THERMAL || actor->s.weapon != WP_THERMAL )
+			{
+				gi.Printf("aimemory event=rejected reason=grenade_weapon\n");
+				return;
+			}
+			FireWeapon( actor, qfalse );
+		}
+		else if ( !Q_stricmp(action, "melee") || !Q_stricmp(action, "ranged") || !Q_stricmp(action, "thermal") )
+		{
+			int weapon = !Q_stricmp(action, "melee") ? WP_STUN_BATON : !Q_stricmp(action, "thermal") ? WP_THERMAL : WP_BLASTER;
 			actor->client->ps.stats[STAT_WEAPONS] = 1 << weapon;
 			SaveNPCGlobals();
 			SetNPCGlobals(actor);

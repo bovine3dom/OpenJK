@@ -636,7 +636,6 @@ void G_InitCvars( void ) {
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_SAVEGAME|CVAR_NORESTART);
 	g_knockback = gi.cvar( "g_knockback", "1000", CVAR_CHEAT );
 	g_dismemberment = gi.cvar ( "g_dismemberment", "3", CVAR_ARCHIVE );//0 = none, 1 = arms and hands, 2 = legs, 3 = waist and head
-	// for now I'm making default 10 seconds
 	g_corpseRemovalTime = gi.cvar ( "g_corpseRemovalTime", "0", CVAR_ARCHIVE );//number of seconds bodies stick around for, at least... 0 = never go away
 	g_synchSplitAnims = gi.cvar ( "g_synchSplitAnims", "1", 0 );
 #ifndef FINAL_BUILD

@@ -215,6 +215,26 @@ positions within 64 units of the failed destination. The NPC can hold if it is
 already concealed or cannot find a suitable point. The traces are `route_failed`
 and `route_blocked` on `tactic_finish`.
 
+## Grenade Coordination
+
+Autonomous thermal throws use a personal or shared sight record no older than
+three seconds. The release code checks permission again and uses that recorded
+position. It does not retarget a hidden enemy at release. Grenadiers can attempt
+a throw after loss of direct sight while the record is still recent.
+
+A successful throw starts a 6500 ms cooldown for the local group. The timers
+survive save/load. Permission checks include current teammates and their active
+movement destinations near the blast area. A failed arc check cancels release.
+These intervals and margins are game settings, not real-world weapon data.
+Script-forced throws and dropped grenades retain their original behaviour.
+The original fuse, warning sound, explosion, and Force interactions remain in use.
+
+Three headless cases passed: `grenade` checks shared cooldown, fixed recorded aim,
+stale-record rejection, and save/load; `grenade-ally` checks a teammate beside the
+target; `grenade-auto` checks throws through the normal combat controller.
+The suite now contains 62 cases. Larger encounters and moving blast-area
+conflicts need further tests.
+
 ## Barks
 
 Successful recruitment attempts a detected/contact call. The recipient queues a
@@ -245,7 +265,7 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 59 cases. `contact-async` and
+The suite has 62 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
 reservation release. `contact-hold` checks the no-chase opt-out with overrides
