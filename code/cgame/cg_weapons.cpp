@@ -1747,6 +1747,8 @@ SetWeaponSelectTime
 */
 static WeaponWheel::Frame weaponWheelFrame;
 static bool weaponWheelOwnsSelection = false;
+static void SetWeaponSelectTimeInternal(bool showWheel);
+qboolean CG_WeaponSelectable(int weapon, int original, qboolean dpMode);
 
 // Keep the concussion rifle between the flechette and rocket launcher, as in cycling.
 static const int weaponWheelOrder[] = {
@@ -1768,9 +1770,17 @@ void CG_UpdateWeaponWheel(qboolean allowed)
 		if (weapon == cg.weaponSelect) weaponWheelFrame.view.current = slot;
 	}
 	cgi_WeaponWheelUpdate(&weaponWheelFrame);
+	if (weaponWheelFrame.visible) weaponWheelOwnsSelection = true;
+	if (allowed && weaponWheelFrame.selected >= 0 && weaponWheelFrame.selected < int(ARRAY_LEN(weaponWheelOrder))) {
+		const int weapon = weaponWheelOrder[weaponWheelFrame.selected];
+		if (weapon != cg.weaponSelect && CG_WeaponSelectable(weapon, cg.weaponSelect, qfalse)) {
+			cg.weaponSelect = weapon;
+			SetWeaponSelectTimeInternal(false);
+		}
+	}
 }
 
-void SetWeaponSelectTime(void)
+static void SetWeaponSelectTimeInternal(bool showWheel)
 {
 
 	if (((cg.inventorySelectTime + WEAPON_SELECT_TIME) > cg.time) ||	// The Inventory HUD was currently active to just swap it out with Force HUD
@@ -1784,8 +1794,10 @@ void SetWeaponSelectTime(void)
 	{
 		cg.weaponSelectTime = cg.time;
 	}
-	weaponWheelOwnsSelection = cgi_WeaponWheelPreview() != qfalse;
+	weaponWheelOwnsSelection = !showWheel || cgi_WeaponWheelPreview() != qfalse;
 }
+
+void SetWeaponSelectTime(void) { SetWeaponSelectTimeInternal(true); }
 
 /*
 ===================
@@ -1797,8 +1809,10 @@ extern bool G_IsRidingTurboVehicle( gentity_t *ent );
 
 static void CG_DrawWeaponWheel()
 {
-	CG_RegisterWeapon(cg.weaponSelect);
-	const gitem_t* item = cg_weapons[cg.weaponSelect].item;
+	const int highlighted = RadialWheel::Highlighted(weaponWheelFrame.view);
+	const int highlightedWeapon = highlighted >= 0 ? weaponWheelOrder[highlighted] : cg.weaponSelect;
+	CG_RegisterWeapon(highlightedWeapon);
+	const gitem_t* item = cg_weapons[highlightedWeapon].item;
 	char text[1024] = {};
 	if (item && item->classname && item->classname[0])
 		cgi_SP_GetStringTextString(va("SP_INGAME_%s", item->classname), text, sizeof(text));
@@ -1811,7 +1825,7 @@ static void CG_DrawWeaponWheel()
 		const int weapon = weaponWheelOrder[slot];
 		if (!weaponData[weapon].weaponIcon[0]) continue;
 		CG_RegisterWeapon(weapon);
-		const bool selected = slot == view.current;
+		const bool selected = slot == highlighted;
 		const float size = selected ? 30.0f : 24.0f;
 		const float angle = sector * 2 * RadialWheel::Pi / count - RadialWheel::Pi / 2;
 		const vec4_t color = {1, 1, 1, (selected ? 1.0f : 0.65f) * opacity};

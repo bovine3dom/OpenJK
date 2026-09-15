@@ -223,12 +223,17 @@ static void CG_TestUiText_f() {
 	cg.captionLetterTime = 100;
 	cg.captionNextTextTime = cg.time + 5000;
 	const int legacy = cgi_R_Font_StrLenPixels("iii WWW", cgs.media.qhFontMedium, 1);
-	int gameplay;
+	const int legacyHeight = cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1);
+	int gameplay, height, narrow, wide;
 	{
 		CG_GameTextScope textScope;
 		gameplay = cgi_R_Font_StrLenPixels("iii WWW", cgs.media.qhFontMedium, 1);
+		height = cgi_R_Font_HeightPixels(cgs.media.qhFontMedium, 1);
+		narrow = cgi_R_Font_StrLenPixels("iii", cgs.media.qhFontMedium, 1);
+		wide = cgi_R_Font_StrLenPixels("WWW", cgs.media.qhFontMedium, 1);
 	}
 	Com_Printf("uitext gameplay_width=%d legacy_width=%d scope=%d captions=%d\n", gameplay, legacy, cg_gameplayText, cg.captionTextTime != 0);
+	Com_Printf("uitext_metrics height=%d legacy_height=%d narrow=%d wide=%d\n", height, legacyHeight, narrow, wide);
 }
 
 int cmdcmp( const void *a, const void *b ) {

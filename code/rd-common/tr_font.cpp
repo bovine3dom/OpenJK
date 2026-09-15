@@ -1755,6 +1755,18 @@ int RE_Font_HeightPixels(const int iFontHandle, const float fScaleIn)
 	return(0);
 }
 
+float RE_Font_VisualCenter(int font, float scale)
+{
+	CFontInfo* info = GetFont(font);
+	if (!info) return 0;
+	info = RE_Font_GetVariant(info, &scale);
+	const glyphInfo_t* glyph = info->GetLetter('H');
+	const float baseline = (info->GetHeight() - (info->GetDescender() >> 1)) * scale;
+	const float bearing = glyph->baseline * scale;
+	const float height = glyph->height * scale;
+	return info->mbRoundCalcs ? Round(baseline) - Round(bearing) + Round(height) * 0.5f : baseline - bearing + height * 0.5f;
+}
+
 // iMaxPixelWidth is -1 for "all of string", else pixel display count...
 //
 void RE_Font_DrawString(int ox, int oy, const char *psText, const float *rgba, const int iFontHandleIn, int iMaxPixelWidth, const float fScaleIn)

@@ -22,5 +22,12 @@ int main() {
 	assert(RadialWheel::Count(0xffffffffu, 0) == 0);
 	assert(ForceWheel::Count(0xffff) == ForceWheel::MaxPowers);
 	assert(ForceWheel::AllowsCommand("weapnext") && ForceWheel::AllowsCommand("weapprev"));
+	RadialWheel::Selection weapon;
+	assert(weapon.Press(10, 0x1ffff, 17));
+	const float angle = 16 * 2 * RadialWheel::Pi / 17 - RadialWheel::Pi / 2;
+	weapon.Move(std::cos(angle) * 80, std::sin(angle) * 80);
+	assert(weapon.Hovered() == 16);
+	assert(weapon.Release(10) && weapon.TakeSelection() == 16);
+	assert(ForceWheel::AllowsCommand("+weaponwheel"));
 	std::puts("PASS: radial wheel slot limits, sparse inventories, and cycling commands");
 }

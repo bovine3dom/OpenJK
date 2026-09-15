@@ -20,12 +20,14 @@ def main():
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--weapons", action="store_true", help="Test weapon scrolling and wheel ownership")
     parser.add_argument("--typography", action="store_true", help="Test gameplay text and menu isolation")
+    parser.add_argument("--datapad", action="store_true", help="Test datapad Sans text and layout")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 1280x720x24",
                                 sys.executable, __file__, str(args.package), "--renderer", args.renderer, "--inside"] +
-                               (["--weapons"] if args.weapons else []) + (["--typography"] if args.typography else []))
+                               (["--weapons"] if args.weapons else []) + (["--typography"] if args.typography else []) +
+                               (["--datapad"] if args.datapad else []))
 
     output = ROOT / "build/force-wheel-tests"
     output.mkdir(parents=True, exist_ok=True)
@@ -123,6 +125,36 @@ def main():
             initial = status()
             assert initial["mask"] == 4095 and initial["open"] == 0, initial
 
+            if args.datapad:
+                assert "RmlUi: IBM Plex Sans loaded" in log.read_text(errors="replace")
+                cmd("set developer 1; give weapons; give ammo -1; wait 20; datapad")
+                pages = ("datapadMissionMenu", "datapadWeaponsMenu", "datapadInventoryMenu", "datapadForcePowersMenu", "datapadMovesMenu")
+                for page in pages:
+                    cmd(f"uimenu {page}; wait 10")
+                    text = cmd("testuitext")
+                    m = re.findall(r"uitext_metrics height=(\d+) legacy_height=(\d+) narrow=(\d+) wide=(\d+)", text)[-1]
+                    assert m[0] == m[1] and int(m[2]) < int(m[3]), (page, m)
+                    cmd("clear")
+                    capture(page)
+                cmd("uimenu ingameControlsMenu")
+                text = cmd("testuitext")
+                m = re.findall(r"uitext gameplay_width=(\d+) legacy_width=(\d+) scope=(\d+)", text)[-1]
+                assert m[0] == m[1] and m[2] == "0", m
+                capture("datapad_other_menu")
+                for _ in range(4):
+                    xdo("key", "Escape")
+                    if status()["catcher"] == 0: break
+                text = cmd("testuitext")
+                m = re.findall(r"uitext_metrics height=(\d+) legacy_height=(\d+) narrow=(\d+) wide=(\d+)", text)[-1]
+                assert m[2] == m[3], m  # Closing the datapad restores gameplay Mono.
+                cmd("set r_customwidth 960; vid_restart; wait 30; datapad")
+                focus_game()
+                cmd("uimenu datapadMissionMenu; clear")
+                capture("datapad_4by3")
+                finish()
+                print(f"PASS: {args.renderer} datapad Sans, row metrics, five pages, menu isolation, and restart. {run}")
+                return 0
+
             if args.typography:
                 text = cmd('set developer 1; wait 10; clear; testuitext "^3New objective:^7 Reach the landing platform."')
                 values = re.findall(r"uitext gameplay_width=(\d+) legacy_width=(\d+) scope=(\d+)", text)[-1]
@@ -155,6 +187,25 @@ def main():
                 start = weapon_status()
                 assert start["weapon"] == 3 and start["count"] == 13, start
                 cmd("set timescale 0.5")
+                assert re.search(r'\bH\s*=\s*"\+weaponwheel"', cmd("bind h"), re.I)
+                xdo("keydown", "h")
+                held = weapon_status()
+                assert held["open"] == 1 and held["forceopen"] == 0 and held["hovered"] == -1, held
+                xdo("mousemove_relative", "--", 80, 0)
+                xdo("mousedown", 1)
+                held = weapon_status()
+                assert held["hovered"] == 3 and held["weapon"] == 3, held
+                assert status()["buttons"] == 0
+                capture("weapon_held")
+                time.sleep(0.4)
+                later = weapon_status()
+                ratio = (later["game"] - held["game"]) / (later["real"] - held["real"])
+                assert 0.04 < ratio < 0.25, ratio
+                xdo("mouseup", 1)
+                xdo("keyup", "h")
+                selected = weapon_status()
+                assert selected["open"] == 0 and selected["weapon"] == 4 and selected["timescale"] == 0.5, selected
+                cmd("wait 40; weapon 3; wait 40")
                 xdo("click", 5)  # Scroll down is weapnext.
                 cycled = weapon_status()
                 assert cycled["weapon"] == 4 and cycled["visible"] == 1 and cycled["forceopen"] == 0, cycled
@@ -210,10 +261,46 @@ def main():
                 assert force["open"] == 0 and force["visible"] == 1, force
                 assert weapon_status()["visible"] == 0
 
+                xdo("keydown", "h")
+                assert weapon_status()["open"] == 1
+                xdo("keydown", "g")
+                assert status()["open"] == 1 and weapon_status()["open"] == 0
+                xdo("keyup", "h")
+                xdo("keyup", "g")
+                xdo("keydown", "h")
+                assert weapon_status()["open"] == 1
+                xdo("key", "Escape")
+                assert weapon_status()["open"] == 0
+                xdo("keyup", "h")
+
+                cmd("uimenu ingameControlsMenu; set in_nograb 1")
+                move_ui(170, 243)
+                xdo("click", 1)
+                cmd("wait 10")
+                capture("weapon_binding_menu")
+                move_ui(470, 377)
+                xdo("click", 1)
+                xdo("key", "j")
+                for _ in range(3):
+                    xdo("key", "Escape")
+                    if status()["catcher"] == 0: break
+                cmd("set in_nograb 0")
+                binding = cmd("bind j; writeconfig weapon-bindings.cfg")
+                assert re.search(r'\bJ\s*=\s*"\+weaponwheel"', binding, re.I), binding
+                saved = (profile / "OpenJK/weapon-bindings.cfg").read_text()
+                assert re.search(r'bind "J" "\+weaponwheel"', saved, re.I)
+                xdo("keydown", "j")
+                assert weapon_status()["open"] == 1
+                xdo("keyup", "j")
+                assert weapon_status()["open"] == 0
+
                 cmd("wait 30; weapnext")
                 assert weapon_status()["visible"] == 1
+                cmd("+weaponwheel")
+                assert weapon_status()["open"] == 1
                 cmd("vid_restart; wait 30")
                 focus_game()
+                cmd("-weaponwheel")
                 assert weapon_status()["visible"] == 0
                 cmd("wait 30; weapnext")
                 assert weapon_status()["visible"] == 1

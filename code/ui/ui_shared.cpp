@@ -77,6 +77,22 @@ static qboolean	Item_Paint(itemDef_t *item, qboolean bDraw);
 int Item_TextScroll_ThumbDrawPosition ( itemDef_t *item );
 static void Item_TextScroll_BuildLines ( itemDef_t* item );
 
+#ifdef USE_RMLUI
+static const menuDef_t* textMenu = nullptr;
+class DatapadTextScope {
+	const menuDef_t* previous;
+public:
+	explicit DatapadTextScope(const menuDef_t* menu) : previous(textMenu) { textMenu = menu; }
+	~DatapadTextScope() { textMenu = previous; }
+};
+
+bool UI_UseDatapadFont() {
+	const menuDef_t* menu = textMenu ? textMenu : Menu_GetFocused();
+	return menu && (textMenu || (menu->window.flags & WINDOW_VISIBLE)) &&
+		menu->window.name && !Q_stricmpn(menu->window.name, "datapad", 7);
+}
+#endif
+
 //static qboolean debugMode = qfalse;
 static qboolean g_waitingForKey = qfalse;
 static qboolean g_editingField = qfalse;
@@ -5086,6 +5102,9 @@ qboolean Item_Parse(itemDef_t *item)
 
 static void Item_TextScroll_BuildLines ( itemDef_t* item )
 {
+#ifdef USE_RMLUI
+	DatapadTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
+#endif
 	// new asian-aware line breaker...  (pasted from elsewhere late @ night, hence aliasing-vars ;-)
 	//
 	textScrollDef_t* scrollPtr = (textScrollDef_t*) item->typeData;
@@ -5507,6 +5526,9 @@ static const char *g_bindCommands[] = {
 	"+strafe",
 	"+use",
 	"+useforce",
+#ifdef USE_RMLUI
+	"+weaponwheel",
+#endif
 	"centerview",
 	"cg_thirdperson !",
 	"datapad",
@@ -5730,39 +5752,46 @@ Menu_PostParse
 */
 void Menu_PostParse(menuDef_t *menu)
 {
+#ifdef USE_RMLUI
+	DatapadTextScope textScope(menu);
+#endif
 	if (menu == NULL)
 	{
 		return;
 	}
 
 #ifdef USE_RMLUI
-	if ((!Q_stricmp(menu->window.name, "controlsMenu") || !Q_stricmp(menu->window.name, "ingameControlsMenu")) &&
-		menu->itemCount < MAX_MENUITEMS && !Menu_FindItemByName(menu, "forcewheel")) {
-		// Add a bind row without replacing the game's menu assets.
-		for (int i = 0; i < menu->itemCount; ++i) {
-			const itemDef_t* source = menu->items[i];
-			if (!source->cvar || Q_stricmp(source->cvar, "forceprev")) continue;
-			itemDef_t* item = (itemDef_t*)UI_Alloc(sizeof(itemDef_t));
-			if (!item) break;
-			Item_Init(item);
-			item->parent = menu;
-			item->window = source->window;
-			item->window.name = (char*)String_Alloc("forcewheel");
-			item->window.rectClient.y += item->window.rectClient.h;
-			item->type = ITEM_TYPE_BIND;
-			item->text = (char*)String_Alloc("Force power wheel");
-			item->descText = String_Alloc("Hold to open. Move the mouse. Release to select a power.");
-			item->cvar = String_Alloc("+forcewheel");
-			item->font = source->font;
-			item->textscale = source->textscale;
-			item->textalignment = source->textalignment;
-			item->textalignx = source->textalignx;
-			item->textaligny = source->textaligny;
-			item->mouseEnter = String_Alloc("show keybindstatus;");
-			item->mouseExit = String_Alloc("hide keybindstatus;");
-			Item_ValidateTypeData(item);
-			menu->items[menu->itemCount++] = item;
-			break;
+	if (!Q_stricmp(menu->window.name, "controlsMenu") || !Q_stricmp(menu->window.name, "ingameControlsMenu")) {
+		const char* rows[][4] = {{"forceprev", "forcewheel", "Force power wheel", "+forcewheel"},
+			{"weapprev", "weaponwheel", "Weapon wheel", "+weaponwheel"}};
+		for (const auto& row : rows) {
+			if (menu->itemCount >= MAX_MENUITEMS || Menu_FindItemByName(menu, row[1])) continue;
+			// Add a bind row without replacing the game's menu assets.
+			for (int i = 0; i < menu->itemCount; ++i) {
+				const itemDef_t* source = menu->items[i];
+				if (!source->cvar || Q_stricmp(source->cvar, row[0])) continue;
+				itemDef_t* item = (itemDef_t*)UI_Alloc(sizeof(itemDef_t));
+				if (!item) break;
+				Item_Init(item);
+				item->parent = menu;
+				item->window = source->window;
+				item->window.name = (char*)String_Alloc(row[1]);
+				item->window.rectClient.y += item->window.rectClient.h;
+				item->type = ITEM_TYPE_BIND;
+				item->text = (char*)String_Alloc(row[2]);
+				item->descText = String_Alloc("Hold to open. Move the mouse. Release to select.");
+				item->cvar = String_Alloc(row[3]);
+				item->font = source->font;
+				item->textscale = source->textscale;
+				item->textalignment = source->textalignment;
+				item->textalignx = source->textalignx;
+				item->textaligny = source->textaligny;
+				item->mouseEnter = String_Alloc("show keybindstatus;");
+				item->mouseExit = String_Alloc("hide keybindstatus;");
+				Item_ValidateTypeData(item);
+				menu->items[menu->itemCount++] = item;
+				break;
+			}
 		}
 	}
 #endif
@@ -6041,6 +6070,9 @@ Menu_Paint
 */
 void Menu_Paint(menuDef_t *menu, qboolean forcePaint)
 {
+#ifdef USE_RMLUI
+	DatapadTextScope textScope(menu);
+#endif
 	int i;
 
 	if (menu == NULL)
@@ -6246,6 +6278,9 @@ Item_SetTextExtents
 */
 void Item_SetTextExtents(itemDef_t *item, int *width, int *height, const char *text)
 {
+#ifdef USE_RMLUI
+	DatapadTextScope textScope(item ? (const menuDef_t*)item->parent : nullptr);
+#endif
 	const char *textPtr = (text) ? text : item->text;
 
 	if (textPtr == NULL )

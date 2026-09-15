@@ -1076,7 +1076,11 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #endif
 	case CG_R_PLEXTEXT:
 #ifdef USE_RMLUI
-		return CL_RmlUiText((const char*)VMA(1), *(const UiText::Style*)VMA(2), (UiText::Metrics*)VMA(3), args[4] != 0);
+	{
+		UiText::Style style = *(const UiText::Style*)VMA(2);
+		style.datapad = UI_UseDatapadFont();
+		return CL_RmlUiText((const char*)VMA(1), style, (UiText::Metrics*)VMA(3), args[4] != 0);
+	}
 #else
 		return qfalse;
 #endif

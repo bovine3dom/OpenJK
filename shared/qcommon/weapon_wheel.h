@@ -6,6 +6,7 @@ namespace WeaponWheel {
 struct Frame {
 	RadialWheel::View view;
 	int weapon = 0;
+	int selected = -1;
 	bool allowed = false, supported = false, visible = false;
 };
 } // namespace WeaponWheel

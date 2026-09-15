@@ -190,6 +190,7 @@ extern "C" Q_EXPORT refexport_t *QDECL GetRefAPI(int apiVersion, refimport_t *im
 	re.SVModelInit = RE_SP_SVModelInit;
 	REX(RegisterFont);
 	REX(Font_HeightPixels);
+	REX(Font_VisualCenter);
 	REX(Font_StrLenPixels);
 	REX(Font_StrLenChars);
 	REX(Font_DrawString);

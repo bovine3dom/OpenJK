@@ -456,7 +456,7 @@ CL_MouseEvent
 */
 void CL_MouseEvent( int dx, int dy, int time ) {
 #ifdef USE_RMLUI
-	if (CL_ForceWheelMouse(dx, dy)) return;
+	if (CL_SelectionWheelMouse(dx, dy)) return;
 #endif
 	if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
 		_UI_MouseEvent( dx, dy );
@@ -691,7 +691,7 @@ usercmd_t CL_CreateCmd( void ) {
 	vec3_t		oldAngles;
 
 #ifdef USE_RMLUI
-	if (CL_ForceWheelCapturesInput()) {
+	if (CL_SelectionWheelCapturesInput()) {
 		CL_ClearWheelActions();
 		memset(&cmd, 0, sizeof(cmd));
 		CL_KeyMove(&cmd);

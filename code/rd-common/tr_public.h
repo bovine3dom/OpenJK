@@ -30,7 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../ghoul2/G2.h"
 #include "../ghoul2/ghoul2_gore.h"
 
-#define	REF_API_VERSION		20
+#define	REF_API_VERSION		21
 
 #define REF_UI_MAX_VERTICES 512
 #define REF_UI_MAX_INDICES 1536
@@ -257,6 +257,8 @@ typedef struct {
 	int		(*RegisterFont)(const char *name);
 
 	int		(*Font_HeightPixels)(const int index, const float scale);
+	// Vertical center of a reference capital, relative to Font_DrawString's y origin.
+	float (*Font_VisualCenter)(int index, float scale);
 	int		(*Font_StrLenPixels)(const char *s, const int index, const float scale);
 	void	(*Font_DrawString)(int x, int y, const char *s, const float *rgba, const int iFontHandle, int iMaxPixelWidth, const float scale);
 	int		(*Font_StrLenChars) (const char *s);

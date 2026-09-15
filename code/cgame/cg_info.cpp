@@ -93,7 +93,7 @@ static void ObjectivePrint_Line(const int color, const int objectIndex, int &mis
 
 	str = finalText;
 
-	if (cgi_Language_IsAsian())
+	if (cg_gameplayText || cgi_Language_IsAsian())
 	{
 		// this is execrable, and should NOT have had to've been done now, but...
 		//
@@ -103,7 +103,8 @@ static void ObjectivePrint_Line(const int color, const int objectIndex, int &mis
 		extern int giLinesOutput;
 		extern float gfAdvanceHack;
 
-		gfAdvanceHack = 1.0f;	// override internal vertical advance
+		const float oldAdvance = gfAdvanceHack;
+		gfAdvanceHack = 1.0f;	// preserve the datapad's row grid
 		y = objectiveStartingYpos + (iYPixelsPerLine * missionYcnt);
 
 		// Advance line if a graphic has printed
@@ -119,14 +120,14 @@ static void ObjectivePrint_Line(const int color, const int objectIndex, int &mis
 			objectiveStartingXpos,
 			y,
 			objectiveTextBoxWidth,
-			objectiveTextBoxHeight,
+			std::max(0, objectiveTextBoxHeight - (y - objectiveStartingYpos)),
 			finalText,	// int iBoxX, int iBoxY, int iBoxWidth, int iBoxHeight, const char *psText
 			cgs.media.qhFontMedium,		// int iFontHandle,
 			1.0f,						// float fScale,
 			colorTable[color]			// const vec4_t v4Color
 			);
 
-		gfAdvanceHack = 0.0f;	// restore
+		gfAdvanceHack = oldAdvance;
 		missionYcnt += giLinesOutput;
 	}
 	else
@@ -283,6 +284,7 @@ void CG_DrawDataPadObjectives(const centity_t *cent )
 		{
 			// Calculate the Y position
 			totalY = objectiveStartingYpos + (iYPixelsPerLine * (missionYcnt))+(iYPixelsPerLine/2);
+			if (totalY + graphic_size / 2 > objectiveStartingYpos + objectiveTextBoxHeight) break;
 
 			//	Draw graphics that show if mission has been accomplished or not
 			cgi_R_SetColor(colorTable[CT_BLUE3]);

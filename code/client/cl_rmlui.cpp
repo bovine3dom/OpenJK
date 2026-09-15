@@ -197,10 +197,13 @@ Rml::Element* wheelLabel = nullptr;
 Rml::ElementText* wheelLabelText = nullptr;
 void* fontData = nullptr;
 void* labelFontData = nullptr;
+void* datapadFontData = nullptr;
+bool datapadFontReady = false;
 int wheelOutlineWidth = -1;
 bool fontReady = false;
 bool initialized = false;
 std::map<int, Rml::FontEffectList> textOutlines;
+std::map<Rml::FontFaceHandle, float> fontInkCenters;
 cvar_t* enabled = nullptr;
 cvar_t* scale = nullptr;
 cvar_t* hudEnabled = nullptr;
@@ -210,11 +213,15 @@ cvar_t* hudEnabled = nullptr;
 void CL_RmlUiShutdown() {
 	CL_SelectionWheelsCancel();
 	textOutlines.clear();
+	fontInkCenters.clear();
 	if (initialized) Rml::Shutdown();
 	if (fontData) FS_FreeFile(fontData);
 	if (labelFontData) FS_FreeFile(labelFontData);
+	if (datapadFontData) FS_FreeFile(datapadFontData);
 	fontData = nullptr;
 	labelFontData = nullptr;
+	datapadFontData = nullptr;
+	datapadFontReady = false;
 	wheelOutlineWidth = -1;
 	fontReady = false;
 	context = nullptr;
@@ -245,6 +252,10 @@ void CL_RmlUiInit() {
 		const int labelFontSize = FS_ReadFile("ui/fonts/plex/IBMPlexMono-SemiBold.ttf", &labelFontData);
 		fontReady = fontReady && labelFontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(labelFontData), size_t(labelFontSize)},
 			"IBM Plex Mono", Rml::Style::FontStyle::Normal, static_cast<Rml::Style::FontWeight>(600));
+		const int datapadFontSize = FS_ReadFile("ui/fonts/plex/IBMPlexSans-SemiBold.ttf", &datapadFontData);
+		datapadFontReady = datapadFontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(datapadFontData), size_t(datapadFontSize)},
+			"IBM Plex Sans", Rml::Style::FontStyle::Normal, static_cast<Rml::Style::FontWeight>(600));
+		Com_Printf(datapadFontReady ? "RmlUi: IBM Plex Sans loaded\n" : "RmlUi: IBM Plex Sans missing; using legacy datapad text\n");
 		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; selection wheels unavailable\n");
 		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
 		Rml::Factory::RegisterElementInstancer("selection-wheel", &wheelInstancer);
@@ -283,7 +294,7 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 	if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(size) || size <= 0) return qfalse;
 	const int width = cls.glconfig.vidWidth, height = cls.glconfig.vidHeight;
 	if (width <= 0 || height <= 0) return qfalse;
-	if (CL_ForceWheelActive()) return ReticleHud::DotDrawn | (state && hudEnabled->integer ? ReticleHud::ResourcesDrawn : 0);
+	if (CL_SelectionWheelActive()) return ReticleHud::DotDrawn | (state && hudEnabled->integer ? ReticleHud::ResourcesDrawn : 0);
 	const float uiScale = std::isfinite(scale->value) ? std::max(0.25f, std::min(4.0f, scale->value)) : 0.75f;
 	const float pixels = size * height / 480.0f * uiScale;
 	context->SetDimensions({width, height});
@@ -335,24 +346,46 @@ void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label
 }
 
 bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, bool draw) {
-	if (!fontReady || !context || re.Language_IsAsian() || (Key_GetCatcher() & KEYCATCH_UI) || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0 ||
+	if (!(style.datapad ? datapadFontReady : fontReady) || !context || re.Language_IsAsian() ||
+		((Key_GetCatcher() & KEYCATCH_UI) && !style.datapad) || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0 ||
 		!std::isfinite(style.size) || style.size <= 0) return false;
 	const float sx = style.pixels ? 1 : cls.glconfig.vidWidth / 640.0f;
 	const float sy = style.pixels ? 1 : cls.glconfig.vidHeight / 480.0f;
-	const int size = std::max(1, int(std::round(style.size * sy)));
+	int size = std::max(1, int(std::round(style.size * sy)));
 	auto* fonts = Rml::GetFontEngineInterface();
-	const auto weight = style.semibold ? static_cast<Rml::Style::FontWeight>(600) : Rml::Style::FontWeight::Normal;
-	const auto face = fonts->GetFontFaceHandle("ibm plex mono", Rml::Style::FontStyle::Normal, weight, size);
+	const auto weight = style.semibold || style.datapad ? static_cast<Rml::Style::FontWeight>(600) : Rml::Style::FontWeight::Normal;
+	const char* family = style.datapad ? "ibm plex sans" : "ibm plex mono";
+	auto face = fonts->GetFontFaceHandle(family, Rml::Style::FontStyle::Normal, weight, size);
 	if (!face) return false;
+	if (style.datapad) {
+		// Fit the complete font metrics inside the existing menu row height.
+		const float rowHeight = style.size * sy;
+		while (size > 1) {
+			const auto& m = fonts->GetFontMetrics(face);
+			if (std::max(m.line_spacing, m.ascent + m.descent) <= rowHeight) break;
+			--size;
+			face = fonts->GetFontFaceHandle(family, Rml::Style::FontStyle::Normal, weight, size);
+			if (!face) return false;
+		}
+	}
 	const Rml::String language;
 	const Rml::TextShapingContext shaping{language};
 	const auto& fontMetrics = fonts->GetFontMetrics(face);
-	const float lineHeight = std::ceil(fontMetrics.line_spacing);
+	const float lineHeight = style.datapad ? style.size * sy : std::ceil(fontMetrics.line_spacing);
 	const float advance = float(fonts->GetStringWidth(face, "M", shaping));
-	const auto layout = UiText::Arrange(text, advance, lineHeight, style.maxWidth < 0 ? -1 : style.maxWidth * sx, style.wrap, style.forceColor);
+	const float maxWidth = style.maxWidth < 0 ? -1 : style.maxWidth * sx;
+	auto measure = [&](unsigned char prior, unsigned char c) {
+		const auto glyph = Rml::StringUtilities::ToUTF8(Rml::Character(UiText::Codepoint(c)));
+		const float natural = float(fonts->GetStringWidth(face, glyph, shaping));
+		const float width = prior ? float(fonts->GetStringWidth(face, glyph, shaping, Rml::Character(UiText::Codepoint(prior)))) : natural;
+		return UiText::Advance{width, natural};
+	};
+	const auto layout = style.datapad ? UiText::ArrangeMeasured(text, measure, lineHeight, maxWidth, style.wrap, style.forceColor) :
+		UiText::Arrange(text, advance, lineHeight, maxWidth, style.wrap, style.forceColor);
 	if (metrics) {
 		metrics->width = layout.metrics.width / sx;
-		metrics->height = std::max(lineHeight, layout.metrics.height) / sy;
+		metrics->height = style.datapad ? style.size * std::max(1, int(std::round(layout.metrics.height / lineHeight))) :
+			std::max(lineHeight, layout.metrics.height) / sy;
 	}
 	if (!draw || style.color[3] <= 0 || (style.blink && ((Sys_Milliseconds() >> 7) & 1))) return true;
 	std::vector<Rml::String> strings;
@@ -364,7 +397,7 @@ bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics*
 		strings.push_back(std::move(utf8));
 	}
 	Rml::FontEffectsHandle effects = 0;
-	if (style.outline) {
+	if (style.outline && !style.datapad) {
 		const int width = std::max(1, int(std::round(cls.glconfig.vidHeight / 480.0f * 0.55f)));
 		auto& list = textOutlines[width];
 		if (list.empty()) {
@@ -378,6 +411,25 @@ bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics*
 	}
 	auto& manager = context->GetRenderManager();
 	manager.PrepareRender({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+	float baseline = fontMetrics.ascent;
+	if (style.datapad) {
+		auto found = fontInkCenters.find(face);
+		if (found == fontInkCenters.end()) {
+			fonts->GetStringWidth(face, "H", shaping);
+			Rml::TexturedMeshList reference;
+			fonts->GenerateString(manager, face, 0, "H", {}, Rml::Colourb(255, 255, 255).ToPremultiplied(), 1, shaping, reference);
+			float top = 0, bottom = 0;
+			bool first = true;
+			for (const auto& mesh : reference) for (const auto& vertex : mesh.mesh.vertices) {
+				if (first) { top = bottom = vertex.position.y; first = false; }
+				top = std::min(top, vertex.position.y);
+				bottom = std::max(bottom, vertex.position.y);
+			}
+			found = fontInkCenters.emplace(face, (top + bottom) / 2).first;
+		}
+		const float targetCenter = style.legacyFont ? re.Font_VisualCenter(style.legacyFont, style.legacyScale) * sy : lineHeight / 2;
+		baseline = targetCenter - found->second;
+	}
 	for (size_t i = 0; i < layout.runs.size(); ++i) {
 		const auto& run = layout.runs[i];
 		const float* rgb = run.color < 0 ? style.color : g_color_table[run.color];
@@ -386,7 +438,7 @@ bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics*
 		color.alpha = byte(std::max(0.0f, std::min(1.0f, style.color[3])) * 255);
 		Rml::TexturedMeshList meshes;
 		fonts->GenerateString(manager, face, effects, strings[i],
-			{std::round(style.x * sx + run.x), std::round(style.y * sy + run.y + fontMetrics.ascent)},
+			{std::round(style.x * sx + run.x), std::round(style.y * sy + run.y + baseline)},
 			color.ToPremultiplied(), color.alpha / 255.0f, shaping, meshes);
 		for (auto& mesh : meshes) {
 			auto geometry = manager.MakeGeometry(std::move(mesh.mesh));

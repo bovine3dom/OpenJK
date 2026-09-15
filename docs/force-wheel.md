@@ -41,6 +41,8 @@ cycled selection.
 Weapon scrolling uses a separate radial display with the same input-free,
 normal-time behavior. The latest Force or weapon selection replaces the other
 display. See [Weapon Wheel](weapon-wheel.md).
+The weapon wheel can also be held open with H. Either held wheel slows time;
+Q/E and scroll cycling do not add slow time.
 
 ## Display And Input
 

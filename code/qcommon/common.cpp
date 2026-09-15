@@ -1299,7 +1299,7 @@ Com_ModifyMsec
 
 
 #ifdef USE_RMLUI
-extern bool CL_ForceWheelActive();
+extern bool CL_SelectionWheelActive();
 #endif
 
 int Com_ModifyMsec( int msec, float &fraction )
@@ -1325,7 +1325,7 @@ int Com_ModifyMsec( int msec, float &fraction )
 
 #ifdef USE_RMLUI
 	// Keep the wheel's slow time separate from gameplay's timescale ownership.
-	if (CL_ForceWheelActive()) {
+	if (CL_SelectionWheelActive()) {
 		const float slowed = (msec + fraction) * 0.2f;
 		msec = (int)floor(slowed);
 		fraction = slowed - msec;

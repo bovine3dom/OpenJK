@@ -147,6 +147,7 @@ Ghoul2 Insert End
 	case CG_DRAW_DATAPAD_HUD:
 		if (cg.snap)
 		{
+			CG_GameTextScope datapadText;
 			cent = &cg_entities[cg.snap->ps.clientNum];
 			CG_DrawDataPadHUD(cent);
 		}
@@ -155,6 +156,7 @@ Ghoul2 Insert End
 	case CG_DRAW_DATAPAD_OBJECTIVES:
 		if (cg.snap)
 		{
+			CG_GameTextScope datapadText;
 			cent = &cg_entities[cg.snap->ps.clientNum];
 			CG_DrawDataPadObjectives(cent);
 		}
@@ -163,6 +165,7 @@ Ghoul2 Insert End
 	case CG_DRAW_DATAPAD_WEAPONS:
 		if (cg.snap)
 		{
+			CG_GameTextScope datapadText;
 			CG_DrawDataPadIconBackground(ICON_WEAPONS);
 			CG_DrawDataPadWeaponSelect();
 		}
@@ -170,6 +173,7 @@ Ghoul2 Insert End
 	case CG_DRAW_DATAPAD_INVENTORY:
 		if (cg.snap)
 		{
+			CG_GameTextScope datapadText;
 			CG_DrawDataPadIconBackground(ICON_INVENTORY);
 			CG_DrawDataPadInventorySelect();
 		}
@@ -177,6 +181,7 @@ Ghoul2 Insert End
 	case CG_DRAW_DATAPAD_FORCEPOWERS:
 		if (cg.snap)
 		{
+			CG_GameTextScope datapadText;
 			CG_DrawDataPadIconBackground(ICON_FORCE);
 			CG_DrawDataPadForceSelect();
 		}

@@ -194,6 +194,36 @@ void CL_DrawDatapad(int HUDType)
 
 }
 
+#ifdef USE_RMLUI
+static UiText::Style DatapadFontStyle(int font, float scale) {
+	UiText::Style style;
+	style.datapad = true;
+	style.outline = false;
+	style.size = re.Font_HeightPixels(font, scale);
+	style.legacyFont = font;
+	style.legacyScale = scale;
+	style.blink = (font & 0x40000000) != 0;
+	return style;
+}
+
+static int CL_UiFontWidth(const char* text, int font, float scale) {
+	UiText::Metrics metrics;
+	if (UI_UseDatapadFont() && CL_RmlUiText(text, DatapadFontStyle(font, scale), &metrics, false))
+		return (int)ceilf(metrics.width);
+	return re.Font_StrLenPixels(text, font, scale);
+}
+
+static void CL_UiFontDraw(int x, int y, const char* text, const float* color, int font, int maxWidth, float scale) {
+	if (UI_UseDatapadFont()) {
+		UiText::Style style = DatapadFontStyle(font, scale);
+		style.x = x; style.y = y; style.maxWidth = maxWidth;
+		if (color) memcpy(style.color, color, sizeof(style.color));
+		if (CL_RmlUiText(text, style, nullptr, true)) return;
+	}
+	re.Font_DrawString(x, y, text, color, font, maxWidth, scale);
+}
+#endif
+
 void UI_Init( int apiVersion, uiimport_t *uiimport, qboolean inGameLoad );
 
 /*
@@ -245,6 +275,10 @@ void CL_InitUI( void ) {
 	uii.R_Font_StrLenPixels		= re.Font_StrLenPixels;
 	uii.R_Font_HeightPixels		= re.Font_HeightPixels;
 	uii.R_Font_DrawString		= re.Font_DrawString;
+#ifdef USE_RMLUI
+	uii.R_Font_StrLenPixels = CL_UiFontWidth;
+	uii.R_Font_DrawString = CL_UiFontDraw;
+#endif
 	uii.R_Font_StrLenChars		= re.Font_StrLenChars;
 	uii.Language_IsAsian		= re.Language_IsAsian;
 	uii.Language_UsesSpaces		= re.Language_UsesSpaces;
@@ -505,4 +539,3 @@ intptr_t CL_UISystemCalls( intptr_t *args )
 
 	return 0;
 }
-

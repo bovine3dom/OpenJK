@@ -1188,7 +1188,7 @@ void CL_ParseBinding( int key, qboolean down, unsigned time )
 			*end = '\0';
 		qboolean runCommand = allCommands;
 #ifdef USE_RMLUI
-		if (down && CL_ForceWheelCapturesInput() && !ForceWheel::AllowsCommand(p)) runCommand = qfalse;
+		if (down && CL_SelectionWheelCapturesInput() && !ForceWheel::AllowsCommand(p)) runCommand = qfalse;
 #endif
 		if( *p == '+' )
 		{
@@ -1247,9 +1247,9 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 	// keys can still be used for bound actions
 #ifdef USE_RMLUI
-	if (CL_ForceWheelKey(keynames[key].upper) && kg.keys[keynames[key].upper].repeats > 1) return;
-	if (CL_ForceWheelCapturesInput() && !Key_GetCatcher()) {
-		if (key == A_ESCAPE) { CL_ForceWheelCancel(); return; }
+	if (CL_SelectionWheelKey(keynames[key].upper) && kg.keys[keynames[key].upper].repeats > 1) return;
+	if (CL_SelectionWheelCapturesInput() && !Key_GetCatcher()) {
+		if (key == A_ESCAPE) { CL_SelectionWheelsCancel(); return; }
 	}
 #endif
 	if ( ( cls.state == CA_CINEMATIC || CL_IsRunningInGameCinematic()) && !Key_GetCatcher() )

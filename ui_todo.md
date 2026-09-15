@@ -5,6 +5,7 @@
 - Use a minimal visual style that retains the Jedi Academy theme.
 - Use crisp text, geometric panels, thin borders, restrained highlights, and consistent spacing.
 - Support independent UI scale and aspect-correct layouts. A larger framebuffer alone does not make the UI sharp.
+- Keep the existing scale controls. Do not add separate UI and text scale settings.
 - Replace low-resolution artwork where needed. A UI library cannot recover missing image detail.
 - The Force wheel slows game time while held. Release selects a power. The normal activation button uses it.
 - Keep direct Force bindings. Cancel the wheel on focus loss, death, or a cinematic transition.
@@ -43,8 +44,11 @@ default when free. Middle mouse can be assigned in the menu. See
 - [x] Render the wheel label with bundled IBM Plex Mono through FreeType at native pixel size.
 - [x] Highlight the current Force power in the dead zone and use the radial display for Q/E cycling without slow time.
 - [x] Use a separate radial weapon display for scroll cycling without slow time.
+- [x] Add an H-held weapon wheel with slow time and a controls-menu binding. Keep scroll cycling at normal time.
 - [x] Refine wheel typography with a stronger font weight, a thin outline, and consistent spacing.
 - [x] Start the gameplay text migration: objectives, captions, notifications, HUD labels, and numbers use Plex. Keep menus on their existing path.
+- [x] Migrate datapad text to IBM Plex Sans SemiBold. Preserve colors and row heights, and measure proportional wrapping.
+- [ ] Check datapad content and navigation during campaign play, including long localized objectives and move descriptions.
 - [ ] Review gameplay text sizes and line breaks during human play, including localized content.
 
 RmlUi is the leading candidate. Prove its integration before replacing many screens.

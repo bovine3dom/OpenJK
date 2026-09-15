@@ -39,11 +39,28 @@ and pickup notifications, subtitles, scrolling text, HUD labels, and numeric
 HUD fields. Transparent console notifications also use Plex and wrap to the
 screen width. Color codes and alpha fades remain available.
 
-The font route is scoped to gameplay. Menu text, datapad pages, mission-analysis
-screens, credits, and the open console retain their existing fonts. Loading
+The gameplay font route is scoped to gameplay. The datapad now has a separate
+Sans route, described below. Other menu text, mission-analysis screens, credits,
+and the open console retain their existing fonts. Loading
 screens also retain their existing path. Asian-language text keeps the legacy
 font fallback because this bundled font does not supply those character sets.
 Lettering painted into world textures is artwork, not a runtime text draw.
+
+## Datapad
+
+Datapad titles, tabs, lists, descriptions, objectives, and numeric fields use
+IBM Plex Sans SemiBold. Original text colors are retained. The datapad has a
+background, so this route does not add an outline or shadow.
+
+Drawing, hit areas, and wrapping use the same proportional font metrics,
+including kerning across color changes. The font is fitted inside the existing
+row height. The row height itself does not change.
+The visible capital height is aligned to the original font's visual center,
+so titles, bullets, and selection highlights keep their original alignment.
+Objective paragraphs use measured wrapping and the remaining panel height instead of estimated character
+widths. Other menus use their existing font callbacks.
+
+No separate UI or text scale setting is added.
 
 Large text meshes are split into complete triangle batches within renderer
 limits. Font textures and effects are released before renderer shutdown.
@@ -55,6 +72,8 @@ c++ -std=c++11 -I shared tests/ui_text.cpp -o build/ui-text-test
 build/ui-text-test
 python3 scripts/test-force-wheel.py build/ready --renderer rdsp-vanilla --typography
 python3 scripts/test-force-wheel.py build/ready --renderer rdsp-rend2 --typography
+python3 scripts/test-force-wheel.py build/ready --renderer rdsp-vanilla --datapad
+python3 scripts/test-force-wheel.py build/ready --renderer rdsp-rend2 --datapad
 ```
 
 The headless checks exercise gameplay text, measurement, numeric fields, long

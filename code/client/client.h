@@ -33,10 +33,19 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #ifdef USE_RMLUI
 bool CL_WheelGameplayAllowed();
+void CL_DefaultWheelBinding(const char* command, char keyName);
 void CL_SelectionWheelsCancel();
+bool CL_SelectionWheelActive();
+bool CL_SelectionWheelCapturesInput();
+bool CL_SelectionWheelMouse(int dx, int dy);
+bool CL_SelectionWheelKey(int key);
 void CL_InitWeaponWheel();
 void CL_WeaponWheelCancel();
 bool CL_WeaponWheelVisible();
+bool CL_WeaponWheelActive();
+bool CL_WeaponWheelCapturesInput();
+bool CL_WeaponWheelMouse(int dx, int dy);
+bool CL_WeaponWheelKey(int key);
 qboolean CL_WeaponWheelPreview();
 void CL_WeaponWheelUpdate(WeaponWheel::Frame* frame);
 int CL_WeaponWheelDraw(const char* label);
@@ -52,6 +61,7 @@ void CL_ForceWheelUpdate(ForceWheel::Frame* frame);
 int CL_ForceWheelDraw(const char* label);
 void CL_ClearWheelActions();
 bool CL_RmlUiAvailable();
+bool UI_UseDatapadFont();
 bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, bool draw);
 void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label, float opacity);
 void CL_RmlUiInit();

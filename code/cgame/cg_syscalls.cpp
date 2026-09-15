@@ -275,6 +275,8 @@ static UiText::Style FontStyle(int font, float scale) {
 	style.size = Q_syscall(CG_R_FONTHEIGHTPIXELS, font & ~UiText::LabelFontFlag, PASSFLOAT(scale));
 	style.blink = (font & 0x40000000) != 0;
 	style.semibold = (font & UiText::LabelFontFlag) != 0;
+	style.legacyFont = font & ~UiText::LabelFontFlag;
+	style.legacyScale = scale;
 	return style;
 }
 

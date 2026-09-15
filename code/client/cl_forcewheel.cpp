@@ -10,6 +10,14 @@ bool CL_WheelGameplayAllowed() {
 		CL_RmlUiAvailable();
 }
 
+void CL_DefaultWheelBinding(const char* command, char keyName) {
+	for (int key = 0; key < MAX_KEYS; ++key)
+		if (Key_GetBinding(key) && !Q_stricmp(Key_GetBinding(key), command)) return;
+	char name[] = {keyName, 0};
+	const int key = Key_StringToKeynum(name);
+	if (!Key_GetBinding(key) || !*Key_GetBinding(key)) Key_SetBinding(key, command);
+}
+
 namespace {
 ForceWheel::Selection selection;
 ForceWheel::Preview preview;
@@ -18,7 +26,7 @@ ForceWheel::Frame available;
 bool Allowed() { return available.allowed && CL_WheelGameplayAllowed(); }
 
 void Down() {
-	if (Allowed() && selection.Press(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1, available.available)) {
+	if (Allowed() && selection.Press(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1, available.available, ForceWheel::MaxPowers)) {
 		CL_WeaponWheelCancel();
 		preview.Cancel();
 		CL_ClearWheelActions();
@@ -30,11 +38,7 @@ void Up() {
 }
 
 void DefaultBinding() {
-	for (int key = 0; key < MAX_KEYS; ++key)
-		if (Key_GetBinding(key) && !Q_stricmp(Key_GetBinding(key), "+forcewheel")) return;
-	char keyName[] = "g";
-	const int key = Key_StringToKeynum(keyName);
-	if (!Key_GetBinding(key) || !*Key_GetBinding(key)) Key_SetBinding(key, "+forcewheel");
+	CL_DefaultWheelBinding("+forcewheel", 'g');
 }
 
 void Status() {
@@ -70,6 +74,16 @@ void CL_SelectionWheelsCancel() {
 	CL_ForceWheelCancel();
 	CL_WeaponWheelCancel();
 }
+
+bool CL_SelectionWheelActive() {
+	const bool force = CL_ForceWheelActive();
+	const bool weapon = CL_WeaponWheelActive();
+	return force || weapon;
+}
+
+bool CL_SelectionWheelCapturesInput() { return CL_ForceWheelCapturesInput() || CL_WeaponWheelCapturesInput(); }
+bool CL_SelectionWheelMouse(int dx, int dy) { return CL_ForceWheelMouse(dx, dy) || CL_WeaponWheelMouse(dx, dy); }
+bool CL_SelectionWheelKey(int key) { return CL_ForceWheelKey(key) || CL_WeaponWheelKey(key); }
 
 bool CL_ForceWheelActive() {
 	if (!Allowed()) CL_ForceWheelCancel();

@@ -2063,6 +2063,7 @@ extern "C" Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *
 
 	REX(RegisterFont);
 	REX(Font_HeightPixels);
+	REX(Font_VisualCenter);
 	REX(Font_StrLenPixels);
 	REX(Font_DrawString);
 	REX(Font_StrLenChars);
