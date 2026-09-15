@@ -44,7 +44,17 @@ class ImportTests(unittest.TestCase):
             entities = ('{\n"classname" "NPC_Kyle"\n"NPC_targetname" "cinematic1_kyle"\n}\n').encode()
             bsp = b"RBSP" + struct.pack("<iii", 1, 16, len(entities) + 1) + entities + b"\0"
             text = b'INDEX 0\n{\n REFERENCE KEJIM_POST_OBJ1\n TEXT_LANGUAGE1 "Investigate."\n}\n'
+            presentation = {
+                "ext_data/dms.dat": b"levelmusic { kejim_post { explore ImpBaseB_Explore } }",
+                "music/kejim_post/impbaseb_explore.mp3": b"music samples",
+                "levelshots/kejim_post.jpg": b"level preview",
+                "levelshots/kejim_base.jpg": b"base preview",
+                "menu/new/title.tga": b"console title",
+                "menu/art/unknownmap.jpg": b"loading artwork",
+            }
             with zipfile.ZipFile(source / "base/assets0.pk3", "w") as archive:
+                for name, data in presentation.items():
+                    archive.writestr(name, data)
                 for mapname in ("kejim_post", "kejim_base"):
                     archive.writestr(f"maps/{mapname}.bsp", bsp)
                 archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\n}\nJan\n{\nplayerModel jan\n}\n")
@@ -71,6 +81,8 @@ class ImportTests(unittest.TestCase):
                 self.assertNotIn("ui/main.menu", names)
                 self.assertNotIn("ext_data/weapons.dat", names)
                 self.assertNotIn("models/weapons2/blaster/model.glm", names)
+                for name, data in presentation.items():
+                    self.assertEqual(archive.read(name), data)
                 self.assertEqual(archive.read("textures/kejim/wall.tga"), b"patched")
                 self.assertEqual(archive.read(human + "animation.cfg"), b"BOTH_STAND1 10 2 0 20\n")
                 self.assertNotIn(human + "_humanoid.gla", names)

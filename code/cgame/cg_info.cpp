@@ -822,7 +822,13 @@ void CG_DrawInformation( void ) {
 		}
 	}
 
-	if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"yavin1") )//special case for first map!
+	if (G_IsOutcast())
+	{
+		// JO's retail levelshots include empty placeholders; use its loading artwork.
+		cgi_R_SetColor(NULL);
+		CG_DrawPic(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgi_R_RegisterShaderNoMip("menu/art/unknownmap"));
+	}
+	else if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"yavin1") )//special case for first map!
 	{
 		char	text[1024]={0};
 

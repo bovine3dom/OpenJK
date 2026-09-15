@@ -95,8 +95,9 @@ it also checks JO map loading and runs the vanilla JO integration test before
 publication. Set `OJK_JO_ASSETS` to select a different JO installation.
 The desktop updater requires the JO check results when you select JO.
 
-The integration test uses Xvfb and software rendering with audio disabled. It
-records logs and screenshots under `build/jo-tests/`. It uses the real opening
+The integration test uses Xvfb, software rendering, and SDL's dummy audio output.
+It checks active level music and captures the loading screen and console.
+It records logs and screenshots under `build/jo-tests/`. It uses the real opening
 scripts and the shared game module. The transition check calls `maptransition`;
 it does not complete the mission's final puzzle. Audio and hardware rendering
 still need a manual test.
@@ -107,6 +108,10 @@ still need a manual test.
   remains the common implementation.
 - The importer retains JA weapon definitions and humanoid gameplay animations.
   The renderer converts JO humanoid meshes to the JA skeleton where required.
+- JO's dynamic music table, menu images, and level previews are imported with
+  the music tracks. An updater launch rebuilds an older import automatically.
+- The JO loading screen uses the supplied title artwork and the shared progress
+  bar. Some retail level previews are empty placeholders.
 - The two cockpit actors use a separate JO skeleton. Their script animation
   names map to JA's existing cinematic animation slots. Other JO-specific
   cinematic animations still need review.

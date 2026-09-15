@@ -90,7 +90,7 @@ def build_overlay(ja, jo, output):
             # Keep JA UI, weapon definitions, and humanoid gameplay animations.
             # JO supplies world content, dialogue, and its character appearances.
             roots = ("maps/", "scripts/", "textures/", "shaders/", "sound/", "music/",
-                     "video/", "effects/", "models/", "gfx/")
+                     "video/", "effects/", "models/", "gfx/", "menu/", "levelshots/")
             for name in sorted(outcast):
                 if not name.startswith(roots) or name.startswith((humanoid, "models/weapons2/")):
                     continue
@@ -98,6 +98,8 @@ def build_overlay(ja, jo, output):
                 if name.endswith(".ibi"):
                     data = convert_script(data, aliases)
                 dest.writestr(name, data)
+
+            dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
             npcs = read(outcast, "ext_data/npcs.cfg").decode("cp1252")
             for actor in ("kyle", "jan"):
