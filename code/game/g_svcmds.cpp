@@ -833,10 +833,79 @@ static void Svcmd_CampaignStatus_f(void)
 		ps.inventory[INV_LIGHTAMP_GOGGLES], cg.inventorySelect, cg.zoomMode, ps.batteryCharge,
 		(ps.eFlags & EF_LOCKED_TO_WEAPON) != 0, pl->owner ? pl->owner->health : 0,
 		pl->owner ? pl->owner->max_health : 0);
+	gi.Printf("forcelevels push=%d pull=%d jump=%d speed=%d heal=%d grip=%d mindtrick=%d lightning=%d saber=%d defense=%d throw=%d\n",
+		ps.forcePowerLevel[FP_PUSH], ps.forcePowerLevel[FP_PULL], ps.forcePowerLevel[FP_LEVITATION],
+		ps.forcePowerLevel[FP_SPEED], ps.forcePowerLevel[FP_HEAL], ps.forcePowerLevel[FP_GRIP],
+		ps.forcePowerLevel[FP_TELEPATHY], ps.forcePowerLevel[FP_LIGHTNING], ps.forcePowerLevel[FP_SABER_OFFENSE],
+		ps.forcePowerLevel[FP_SABER_DEFENSE], ps.forcePowerLevel[FP_SABERTHROW]);
+	gi.Printf("world contents=%d\n", gi.pointcontents(ps.origin, pl->s.number));
 	for (int i = 0; i < objectiveCount; ++i)
-		if (pl->client->sess.mission_objectives[i].display)
+		if (pl->client->sess.mission_objectives[i].display || (gi.argc() == 2 && !Q_stricmp(gi.argv(1), "all")))
 			gi.Printf("objective=%s status=%d\n", objectiveTable[i].name,
 				pl->client->sess.mission_objectives[i].status);
+}
+
+static void Svcmd_MoverStatus_f(void)
+{
+	gentity_t *ent = G_Find(NULL, FOFS(targetname), gi.argv(1));
+	if (!ent || !ent->bmodel)
+	{
+		gi.Printf("mover name=%s absent=1\n", gi.argv(1));
+		return;
+	}
+	gi.Printf("mover name=%s origin=%.2f,%.2f,%.2f angles=%.2f,%.2f,%.2f\n", gi.argv(1),
+		ent->currentOrigin[0], ent->currentOrigin[1], ent->currentOrigin[2],
+		ent->currentAngles[0], ent->currentAngles[1], ent->currentAngles[2]);
+}
+
+static void Svcmd_GalakTest_f(void)
+{
+	if (gi.argc() < 2 || gi.argc() > 4)
+	{
+		gi.Printf("Usage: galak_test <targetname> [damage [generator]]\n");
+		return;
+	}
+	gentity_t *ent = NULL;
+	while ((ent = G_Find(ent, FOFS(targetname), gi.argv(1))) != NULL)
+	{
+		if (!ent->client || !ent->NPC || ent->client->NPC_class != CLASS_GALAKMECH) continue;
+		if (gi.argc() >= 3)
+		{
+			const int damage = atoi(gi.argv(2));
+			if (damage < 1 || damage > 10000) return;
+			G_Damage(ent, &g_entities[0], &g_entities[0], NULL, ent->currentOrigin,
+				damage, 0, MOD_BLASTER,
+				!Q_stricmp(gi.argv(3), "generator") ? HL_GENERIC1 : HL_CHEST);
+		}
+		int missiles = 0;
+		for (int i = 0; i < globals.num_entities; ++i)
+			if (g_entities[i].inuse && g_entities[i].s.eType == ET_MISSILE && g_entities[i].owner == ent) ++missiles;
+		gi.Printf("galak name=%s health=%d armor=%d generator=%d recharge=%d enemy=%d missiles=%d\n",
+			ent->targetname, ent->health, ent->client->ps.stats[STAT_ARMOR], ent->locationDamage[HL_GENERIC1],
+			ent->NPC->investigateDebounceTime, ent->enemy ? ent->enemy->s.number : -1, missiles);
+		return;
+	}
+	gi.Printf("galak name=%s absent=1\n", gi.argv(1));
+}
+
+static void Svcmd_SurfaceStatus_f(void)
+{
+	if (gi.argc() < 3)
+	{
+		gi.Printf("Usage: surface_status <targetname> <surface> [...]\n");
+		return;
+	}
+	gentity_t *ent = NULL;
+	while ((ent = G_Find(ent, FOFS(targetname), gi.argv(1))) != NULL)
+	{
+		if (ent->playerModel < 0 || ent->playerModel >= ent->ghoul2.size()) continue;
+		for (int i = 2; i < gi.argc(); ++i)
+			gi.Printf("surface name=%s surface=%s index=%d flags=%d\n", ent->targetname, gi.argv(i),
+				gi.G2API_GetSurfaceIndex(&ent->ghoul2[ent->playerModel], gi.argv(i)),
+				gi.G2API_GetSurfaceRenderStatus(&ent->ghoul2[ent->playerModel], gi.argv(i)));
+		return;
+	}
+	gi.Printf("surface name=%s absent=1\n", gi.argv(1));
 }
 
 static void Svcmd_CinematicStatus_f(void)
@@ -942,6 +1011,9 @@ static int svcmdcmp( const void *a, const void *b ) {
 static svcmd_t svcmds[] = {
 	{ "campaign_status", Svcmd_CampaignStatus_f, CMD_NONE },
 	{ "cinematic_status", Svcmd_CinematicStatus_f, CMD_NONE },
+	{ "surface_status", Svcmd_SurfaceStatus_f, CMD_NONE },
+	{ "galak_test", Svcmd_GalakTest_f, CMD_CHEAT },
+	{ "mover_status", Svcmd_MoverStatus_f, CMD_NONE },
 	{ "entitylist",					Svcmd_EntityList_f,							CMD_NONE },
 	{ "game_memory",				Svcmd_GameMem_f,							CMD_NONE },
 

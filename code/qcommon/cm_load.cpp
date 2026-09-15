@@ -269,13 +269,15 @@ void CMod_LoadBrushes( lump_t *l, clipMap_t &cm ) {
 			Com_Error( ERR_DROP, "CMod_LoadBrushes: bad shaderNum: %i", out->shaderNum );
 		}
 		out->contents = cm.shaders[out->shaderNum].contentFlags;
-#ifdef JK2_MODE
 		//JK2 HACK: for water that cuts vis but is not solid!!! (used on yavin swamp)
-		if ( cm.shaders[out->shaderNum].surfaceFlags & SURF_SLICK )
+		if ( (cm.shaders[out->shaderNum].surfaceFlags & SURF_SLICK)
+#ifndef JK2_MODE
+			&& Cvar_VariableIntegerValue("com_outcast")
+#endif
+			)
 		{
 			out->contents &= ~CONTENTS_SOLID;
 		}
-#endif
 		CM_OrOfAllContentsFlagsInMap |= out->contents;
 		out->checkcount=0;
 

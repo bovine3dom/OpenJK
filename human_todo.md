@@ -122,8 +122,10 @@ enablement, diffuse compensation, and parallax enablement require a restart.
 ## Jedi Outcast Campaign
 
 The JO prototype loads on the desktop. Full mission completion is not yet
-verified. The automated checks cover the opening, equipment, save/load, and an
-explicit map transition. They do not complete the final Kejim puzzle.
+verified. Automated checks also cover prisoner heads, the Artus Topside handoff,
+Yavin Force controls and saber acquisition, Galak's damage states and completion
+target, and a Yavin Swamp water boundary. See `docs/jo-compatibility.md` for limits.
+They do not complete the final Kejim puzzle or the full training route.
 
 Start a new JO test with:
 
@@ -146,6 +148,8 @@ See `docs/jo-campaign.md` for setup and renderer options.
 - [ ] Check dialogue, subtitles, music changes between exploration and combat, and cinematic transitions. Test cinematic skipping in a separate session.
 - [ ] Replay the Kejim Base CCTV cinematic from an earlier save. Check that Galak appears, the bridge dialogue completes, and the following cinematic starts without a skip.
 - [ ] Watch the Artus Mine opening (`artus_mine`). Kyle must walk across the terrain, complete the conversation, and return player control.
+- [ ] Load an earlier Artus save and check both prisoner head variants from the back and sides.
+- [ ] Replay the Artus Topside handoff. Desann must enter after Tavion's line, answer her, and start the fight. Check a save from the reported hang if one is available. Test skipping separately.
 - [ ] Supply a save or screenshot of the passage with missing flames, before turning the pipes off. The generator pipe material and sampled walkway flame effects render in the diagnostic checks; the exact reported failure remains unconfirmed.
 - [ ] Save during combat and during a scripted task. Load each save and check that the encounter or task continues.
 - [ ] Die and reload. Check that objectives, equipment, and required NPCs remain correct.

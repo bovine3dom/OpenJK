@@ -1236,7 +1236,7 @@ void DoImpact( gentity_t *self, gentity_t *other, qboolean damageSelf, trace_t *
 			if( ( magnitude >= 100 + self->health
 					&& self->s.number >= MAX_CLIENTS
 					&& self->s.weapon != WP_SABER )
-				|| self->client->NPC_class == CLASS_VEHICLE
+				|| (self->client && self->client->NPC_class == CLASS_VEHICLE)
 				|| ( magnitude >= 700 ) )//health here is used to simulate structural integrity
 			{
 				if ( (self->s.weapon == WP_SABER || self->s.number<MAX_CLIENTS || (self->client&&(self->client->NPC_class==CLASS_BOBAFETT||self->client->NPC_class==CLASS_ROCKETTROOPER))) && self->client && self->client->ps.groundEntityNum < ENTITYNUM_NONE && magnitude < 1000 )
@@ -5224,7 +5224,12 @@ extern cvar_t	*g_skippingcin;
 		}
 	}
 
-	if (!USENEWNAVSYSTEM || ent->s.number==0)
+	if (ent->NPC && client->noclip)
+	{
+		// Scripted noclip uses command movement instead of the navigator's speed.
+		client->ps.speed = (ucmd->buttons & BUTTON_WALKING) ? NPC_GetWalkSpeed(ent) : NPC_GetRunSpeed(ent);
+	}
+	else if (!USENEWNAVSYSTEM || ent->s.number==0)
 	{
 		ClientAlterSpeed(ent, ucmd, controlledByPlayer, 0);
 	}

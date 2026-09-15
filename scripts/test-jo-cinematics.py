@@ -25,7 +25,7 @@ def run_case(package, case, renderer, saved):
         saves.mkdir(parents=True)
         shutil.copyfile(saved, saves / "cinematic_test.sav")
     log = run / "console.log"
-    mapname = "kejim_base" if case == "cctv" else "artus_mine"
+    mapname = {"cctv": "kejim_base", "artus": "artus_mine", "topside": "artus_topside"}[case]
     env = dict(os.environ, OJK_PROFILE=str(profile), LIBGL_ALWAYS_SOFTWARE="1", LP_NUM_THREADS="1",
                SDL_AUDIODRIVER="dummy", OJK_JO_ASSETS=os.environ.get("OJK_JO_ASSETS", str(ROOT / "GameData_JO")))
     command = ["bash", str(package / "launch-sp.sh"), os.environ.get("OJK_ASSETS", str(ROOT / "GameData")),
@@ -82,15 +82,24 @@ def run_case(package, case, renderer, saved):
             wait_for("CINEMATIC_READY")
             if case == "cctv":
                 cmd("helpusobi 1; use cinematic2_spawner")
+            elif case == "topside":
+                if not saved:
+                    cmd("helpusobi 1; wait 300; use tom_spawn; wait 20; save before_topside")
+                if "camera=0" in cmd("campaign_status"):
+                    cmd("helpusobi 1; use cinematic9_spawner")
             history = []
             captured = False
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
                 if case == "cctv":
                     current = samples(cmd("wait 10; cinematic_status cinematic2_kyle; cinematic_status cinematic_galak"))
+                elif case == "topside":
+                    current = samples(cmd("wait 10; cinematic_status cinematic9_tavion; cinematic_status cinematic9_desann; cinematic_status cinematic9_kyle"))
                 else:
                     current = samples(cmd("wait 1; cinematic_status cinematic4_kyle"))
                 history.extend(current)
+                if case == "topside" and any(s.get("camera") == "0" and s.get("behavior") == "0" for s in current):
+                    break
                 if not captured and any(s.get("legs", "").startswith("BOTH_CIN_") if case == "cctv"
                                         else s.get("nav") == "1" for s in current):
                     capture("galak" if case == "cctv" else "walking")
@@ -105,12 +114,16 @@ def run_case(package, case, renderer, saved):
                 assert captured, "Missing JO gesture animation"
                 following = samples(cmd("wait 10; cinematic_status cinematic3_mon_mothma"))
                 assert following and "absent" not in following[0] and following[0]["camera"] == "1", following
-            else:
+            elif case == "artus":
                 moving = [s for s in history if s.get("nav") == "1"
                           and math.hypot(*map(float, s["velocity"].split(",")[:2])) > 10]
                 assert moving and all(s["noclip"] == "0" and s["legs"] == "BOTH_WALK1" for s in moving), moving
                 assert any(s["ground"] != "1023" for s in moving), "Kyle never touched the ground"
                 assert history[-1]["camera"] == "0", history[-1]
+            else:
+                desann = [s for s in history if s["name"] == "cinematic9_desann"]
+                assert any(s.get("voice") == "1" for s in desann), "Desann never spoke after Tavion's handoff"
+                assert any(s.get("camera") == "0" and s.get("behavior") == "0" for s in desann), "Desann fight did not start"
             capture("completed")
             stdin.write("quit\n")
             stdin.flush()
@@ -130,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
-    parser.add_argument("--case", choices=("cctv", "artus"))
+    parser.add_argument("--case", choices=("cctv", "artus", "topside"))
     parser.add_argument("--save", type=Path, help="Load a save from before the selected cinematic")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -139,7 +152,7 @@ def main():
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
                                 __file__, *sys.argv[1:], "--inside"])
-    for case in ([args.case] if args.case else ("cctv", "artus")):
+    for case in ([args.case] if args.case else ("cctv", "artus", "topside")):
         run_case(args.package.resolve(), case, args.renderer, args.save)
     return 0
 

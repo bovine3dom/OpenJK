@@ -98,6 +98,11 @@ void CorpsePhysics( gentity_t *self )
 	memset( &ucmd, 0, sizeof( ucmd ) );
 	ClientThink( self->s.number, &ucmd );
 	VectorCopy( self->s.origin, self->s.origin2 );
+	if (self->client->NPC_class == CLASS_GALAKMECH)
+	{
+		extern void GM_Dying(gentity_t *self);
+		GM_Dying(self);
+	}
 
 	//FIXME: match my pitch and roll for the slope of my groundPlane
 	if ( self->client->ps.groundEntityNum != ENTITYNUM_NONE && !(self->flags&FL_DISINTEGRATED) )
@@ -2034,6 +2039,12 @@ void NPC_RunBehavior( int team, int bState )
 			case CLASS_MARK2:
 				NPC_BehaviorSet_Mark2( bState );
 				return;
+			case CLASS_GALAKMECH:
+			{
+				extern void NPC_BSGM_Default(void);
+				NPC_BSGM_Default();
+				return;
+			}
 			default:
 				break;
 			}

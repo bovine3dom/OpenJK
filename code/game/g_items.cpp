@@ -1389,6 +1389,8 @@ void G_SpawnItem (gentity_t *ent, gitem_t *item) {
 		&& ent->item->giType == IT_WEAPON
 		&& ent->item->giTag == WP_SABER )
 	{//weapon_saber item
+		if (G_IsOutcast() && !ent->NPC_type)
+			ent->NPC_type = G_NewString("player");
 		if ( !ent->count )
 		{//can only pick up once
 			ent->count = 1;

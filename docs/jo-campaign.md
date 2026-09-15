@@ -152,8 +152,9 @@ generated asset archive after the game exits. The launcher can regenerate it.
 - JO's small script navgoals retain their sizes. Blocked points are omitted
   from JA's generated route graph and reported in the log. Jan's routes and
   squad behavior need a full mission test.
-- Later maps are available for investigation. Their bosses, progression,
-  cinematics, and map-specific rules are not validated by this MVP.
+- Focused checks now cover Artus Topside, Yavin training controls and progression,
+  armoured Galak, and Yavin Swamp collision. See `jo-compatibility.md` for results
+  and limits. These checks do not establish full mission completion.
 
 ## Manual Acceptance Checks
 
@@ -179,8 +180,8 @@ during investigation; this does not establish that the reported scene is fixed.
 The Kejim Base CCTV sequence needs Galak on the bridge. JA's `NPC_Galak`
 spawner was empty, so the actor never appeared and the sequence could not
 complete. The unarmoured spawner now creates the actor. Three JO gesture
-animations are included for his dialogue. The armoured Galak boss still needs
-its separate JO controller.
+animations are included for his dialogue. The armoured boss now uses JO's
+controller with the shared game systems; see `jo-compatibility.md`.
 
 The Artus opening gives Kyle the `DROPTOFLOOR` spawn flag. JA interpreted the
 same bit as a Jedi ceiling ambush and enabled noclip. JO Kyle now retains ground

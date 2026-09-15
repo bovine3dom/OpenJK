@@ -419,8 +419,7 @@ int G2_IsSurfaceRendered(CGhoul2Info *ghlInfo, const char *surfaceName, surfaceI
 			// now we have the parent flags, lets see if any have the 'no descendants' flag set
 			if (parentFlags & G2SURFACEFLAG_NODESCENDANTS)
 			{
-				flags |= G2SURFACEFLAG_OFF;
-				break;
+				return flags | G2SURFACEFLAG_OFF;
 			}
 			// set up scan of next parent
 			surfNum = parentSurfInfo->parentIndex;
@@ -430,8 +429,7 @@ int G2_IsSurfaceRendered(CGhoul2Info *ghlInfo, const char *surfaceName, surfaceI
 	{
 		return -1;
 	}
-	if ( flags == 0 )
-	{//it's not being overridden by a parent
+	{// A surface that is off by default can have an explicit on override.
 		// now see if we already have overriden this surface in the slist
 		const mdxmSurface_t *surf = G2_FindSurface(ghlInfo, slist, surfaceName, &surfIndex);
 		if (surf)

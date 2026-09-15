@@ -364,6 +364,7 @@ void GEntity_PainFunc(gentity_t *self, gentity_t *inflictor, gentity_t *attacker
 	PAINCASE( NPC_Remote_Pain )
 	PAINCASE( emplaced_gun_pain )
 	PAINCASE( NPC_Mark1_Pain )
+	PAINCASE( NPC_GM_Pain )
 	PAINCASE( NPC_Sentry_Pain )
 	PAINCASE( NPC_Mark2_Pain )
 	PAINCASE( PlayerPain )

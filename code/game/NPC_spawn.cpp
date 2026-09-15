@@ -636,6 +636,13 @@ void NPC_SetMiscDefaultData( gentity_t *ent )
 	}
 
 
+	if (ent->client->NPC_class == CLASS_GALAKMECH)
+	{
+		extern void NPC_GalakMech_Precache(void);
+		extern void NPC_GalakMech_Init(gentity_t *ent);
+		NPC_GalakMech_Precache();
+		NPC_GalakMech_Init(ent);
+	}
 	if ( ent->client->NPC_class == CLASS_ATST || ent->client->NPC_class == CLASS_MARK1 ) // chris/steve/kevin requested that the mark1 be shielded also
 	{
 		ent->flags |= (FL_SHIELDED|FL_NO_KNOCKBACK);
@@ -2356,17 +2363,28 @@ SHY - Spawner is shy
 */
 void SP_NPC_Galak( gentity_t *self)
 {
-	// The armored variant still requires JO's separate boss controller.
-	if (self->spawnflags & 1) return;
 	self->NPC_type = "Galak";
-	if (G_IsOutcast() && (self->spawnflags & SFB_CINEMATIC))
+	if (self->spawnflags & 1) self->NPC_type = "Galak_Mech";
+	if (G_IsOutcast() && !(self->spawnflags & 1) && (self->spawnflags & SFB_CINEMATIC))
 		self->NPC_type = "jo_cinematic_galak";
 	SP_NPC_spawner(self);
 }
 
-void NPC_RestoreOutcastCinematics(gentity_t *self)
+void NPC_RestoreOutcastEntities(gentity_t *self)
 {
-	if (!G_IsOutcast() || !self->targetname) return;
+	if (!G_IsOutcast()) return;
+	if (self->item && self->item->giType == IT_WEAPON && self->item->giTag == WP_SABER && !self->NPC_type)
+		self->NPC_type = G_NewString("player");
+	if (self->NPC_type && !Q_stricmp(self->NPC_type, "Prisoner2") && self->health > 0
+		&& self->playerModel >= 0 && self->playerModel < self->ghoul2.size())
+	{
+		// Older imports merged the two heads and could not enable the alternate head.
+		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head", 2);
+		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head_face", 2);
+		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head_alt", 0);
+		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head_face_alt", 0);
+	}
+	if (!self->targetname) return;
 	if (!Q_stricmp(level.mapname, "artus_mine") && !Q_stricmp(self->targetname, "cinematic4_kyle")
 		&& self->NPC && self->client && self->NPC->behaviorState == BS_CINEMATIC)
 		self->client->noclip = qfalse;

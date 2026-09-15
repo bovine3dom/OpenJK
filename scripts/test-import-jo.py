@@ -19,6 +19,24 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_prisoner_alternate_head_surfaces_remain_distinct(self):
+        names = (b"head", b"head_off", b"head_face", b"head_face_off", b"head_cap_torso_off")
+        model = bytearray(164)
+        struct.pack_into("<ii", model, 152, len(names), 164)
+        for name in names:
+            model.extend(name.ljust(64, b"\0") + struct.pack("<I", 2 if name.endswith(b"_off") else 0)
+                         + bytes(76))
+        converted = jo.convert_model(model)
+        actual = [converted[164 + i * 144:228 + i * 144].rstrip(b"\0") for i in range(len(names))]
+        self.assertEqual(actual, [b"head", b"head_alt", b"head_face", b"head_face_alt", b"head_cap_torso_off"])
+        for i in range(len(names)):
+            self.assertEqual(converted[228 + i * 144:308 + i * 144], model[228 + i * 144:308 + i * 144])
+        skin = b"head,head_01\nhead_off,head_02\nhead_cap_torso_off,caps\n"
+        self.assertEqual(jo.convert_skin(skin), b"head,head_01\nhead_alt,head_02\nhead_cap_torso_off,caps\n")
+        npc = 'Prisoner2\n{\nsurfOff "head head_face"\nsurfOn "head_off head_face_off"\n}\n'
+        self.assertIn('surfOn "head_alt head_face_alt"', jo.convert_npcs(npc))
+        self.assertIn('surfOff "head head_face"', jo.convert_npcs(npc))
+
     def test_shader_parser_handles_comments_and_nested_stages(self):
         text = b'// ignored {\n"gfx/example" { /* } */ { map "a{b}.tga" } }\nworld/test { { map rock } }'
         shaders = dict(jo.shader_definitions(text))
@@ -30,11 +48,12 @@ class ImportTests(unittest.TestCase):
 
     def test_npc_classes_use_academy_names(self):
         source = ('StormTrooper\n{\n class stormtrooper\n playerTeam enemy\n}\n'
-                  'Galak\n{\n CLASS "galak_mech"\n}\nJan\n{\n class CLASS_JAN\n}\n')
+                  'Galak\n{\n CLASS "galak_mech"\n}\nJan\n{\n class CLASS_JAN\n}\nMorganKatarn\n{\n class morgan\n}\n')
         converted = jo.convert_npcs(source)
         self.assertIn("class CLASS_STORMTROOPER", converted)
         self.assertIn("CLASS CLASS_GALAKMECH", converted)
         self.assertIn("class CLASS_JAN", converted)
+        self.assertIn("class CLASS_MORGANKATARN", converted)
         self.assertIn("playerTeam enemy", converted)
         self.assertEqual(jo.convert_npcs(converted), converted)
 
@@ -87,6 +106,8 @@ class ImportTests(unittest.TestCase):
                     archive.writestr(f"models/players/{actor}/model_default.skin", b"torso,texture")
                 archive.writestr("scripts/cinematics/cinematic1.ibi", script(b"BOTH_COCKPIT_SIT\0"))
                 archive.writestr("scripts/cinematics/cinematic2.ibi", script(b"BOTH_TALKGESTURE2\0"))
+                archive.writestr("models/players/galak_mech/animation.cfg",
+                                  b"BOTH_ALERT1 10 20 -1 20\nBOTH_TRIUMPHANT1STOP 30 10 -1 20\n")
                 archive.writestr("strip/objectives.sp", text)
                 archive.writestr("strip/sp_ingame.sp", text)
                 archive.writestr("ui/main.menu", b"DO NOT IMPORT")
@@ -123,6 +144,8 @@ class ImportTests(unittest.TestCase):
                 self.assertIn(b"playerModel jo_cinematic_galak", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertEqual(archive.read("scripts/cinematics/cinematic1.ibi"), script(b"BOTH_CIN_1\0"))
                 self.assertEqual(archive.read("scripts/cinematics/cinematic2.ibi"), script(b"BOTH_CIN_4\0"))
+                self.assertEqual(archive.read("models/players/galak_mech/animation.cfg"),
+                                 b"BOTH_CIN_45 10 20 -1 20\nBOTH_CIN_50 30 10 -1 20\n")
                 self.assertIn(b"Keep this JA label", archive.read("strings/english/sp_ingame.str"))
                 self.assertEqual(archive.read("ext_data/jo/objectives.dat"), b"KEJIM_POST_OBJ1\n")
                 self.assertEqual(archive.read("ui/newgame.menu"), b"uiScript startgame ;")

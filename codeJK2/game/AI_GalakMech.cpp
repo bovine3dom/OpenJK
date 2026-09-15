@@ -19,14 +19,42 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, see <http://www.gnu.org/licenses/>.
 ===========================================================================
 */
+#ifdef JK2_MODE
 #include "g_headers.h"
 
 #include "b_local.h"
 #include "g_nav.h"
 #include "anims.h"
 #include "wp_saber.h"
+typedef vec3_t GM_PainPoint;
+#else
+#include "../../code/game/b_local.h"
+#include "../../code/game/g_nav.h"
+#include "../../code/game/anims.h"
+#include "../../code/game/wp_saber.h"
+#include "../../code/game/g_functions.h"
+#include "../../code/cgame/cg_local.h"
+typedef const vec3_t GM_PainPoint;
+extern void NAV_GetLastMove( navInfo_t &info );
+extern qboolean NAV_HitNavGoal( vec3_t point, vec3_t mins, vec3_t maxs, vec3_t dest, int radius, qboolean flying );
+#define BOTH_ALERT1 BOTH_CIN_45
+#define TORSO_RAISEWEAP2 BOTH_CIN_46
+#define TORSO_DROPWEAP2 BOTH_CIN_47
+#define BOTH_TRIUMPHANT1START BOTH_CIN_48
+#define BOTH_TRIUMPHANT1STARTGESTURE BOTH_CIN_49
+#define BOTH_TRIUMPHANT1STOP BOTH_CIN_50
+#endif
 
-extern qboolean G_StandardHumanoid( const char *modelName );
+static qboolean GM_IsHumanoid(gentity_t *ent)
+{
+#ifdef JK2_MODE
+	extern qboolean G_StandardHumanoid(const char *modelName);
+	return G_StandardHumanoid(ent->NPC_type);
+#else
+	extern qboolean G_StandardHumanoid(gentity_t *ent);
+	return G_StandardHumanoid(ent);
+#endif
+}
 extern void G_AddVoiceEvent( gentity_t *self, int event, int speakDebounceTime );
 extern qboolean Q3_TaskIDPending( gentity_t *ent, taskID_t taskType );
 extern void NPC_AimAdjust( int change );
@@ -34,7 +62,12 @@ extern qboolean WP_LobFire( gentity_t *self, vec3_t start, vec3_t target, vec3_t
 				vec3_t velocity, qboolean tracePath, int ignoreEntNum, int enemyNum,
 				float minSpeed, float maxSpeed, float idealSpeed, qboolean mustHit );
 extern qboolean InFront( vec3_t spot, vec3_t from, vec3_t fromAngles, float threshHold = 0.0f );
+#ifdef JK2_MODE
 extern void G_SoundAtSpot( vec3_t org, int soundIndex );
+#else
+extern void G_SoundAtSpot( vec3_t org, int soundIndex, qboolean broadcast );
+#define G_SoundAtSpot(org, index) G_SoundAtSpot(org, index, qfalse)
+#endif
 extern void G_SoundOnEnt (gentity_t *ent, soundChannel_t channel, const char *soundPath);
 extern qboolean PM_CrouchAnim( int anim );
 //extern void NPC_Mark1_Part_Explode(gentity_t *self,int bolt);
@@ -45,11 +78,27 @@ extern qboolean PM_CrouchAnim( int anim );
 #define REPEATER_ALT_SIZE				3	// half of bbox size
 #define	GENERATOR_HEALTH	25
 #define TURN_ON				0x00000000
+#ifdef JK2_MODE
 #define TURN_OFF			0x00000100
+#else
+#define TURN_OFF G2SURFACEFLAG_OFF
+#endif
 #define GALAK_SHIELD_HEALTH	500
 
 static vec3_t shieldMins = {-60, -60, -24 };
 static vec3_t shieldMaxs = {60, 60, 80};
+
+static void GM_Surface(CGhoul2Info *model, const char *name, int flags)
+{
+#ifndef JK2_MODE
+	char surface[MAX_QPATH];
+	Q_strncpyz(surface, name, sizeof(surface));
+	const size_t length = strlen(surface);
+	if (length >= 4 && !strcmp(surface + length - 4, "_off")) surface[length - 4] = 0;
+	name = surface;
+#endif
+	gi.G2API_SetSurfaceOnOff(model, name, flags);
+}
 
 extern qboolean NPC_CheckPlayerTeamStealth( void );
 
@@ -98,22 +147,22 @@ void NPC_GalakMech_Init( gentity_t *ent )
 		TIMER_Set( ent, "noLob", 0 );
 		TIMER_Set( ent, "noRapid", 0 );
 		TIMER_Set( ent, "talkDebounce", 0 );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_ON );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_collar_off", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galaktorso_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_collar_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galaktorso_off", TURN_OFF );
 	}
 	else
 	{
 //		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "helmet", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_OFF );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_ON );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_ON );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_ON );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_collar_off", TURN_ON );
-		gi.G2API_SetSurfaceOnOff( &ent->ghoul2[ent->playerModel], "torso_galaktorso_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_shield_off", TURN_OFF );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galakface_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galakhead_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_eyes_mouth_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_collar_off", TURN_ON );
+		GM_Surface( &ent->ghoul2[ent->playerModel], "torso_galaktorso_off", TURN_ON );
 	}
 
 }
@@ -167,12 +216,12 @@ void GM_Dying( gentity_t *self )
 				if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "r_hand" ))
 				{//r_hand still there
 					GM_CreateExplosion( self, self->handRBolt, qtrue );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "r_hand", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "r_hand", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "r_arm_middle" ))
 				{//r_arm_middle still there
 					newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*r_arm_elbow" );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "r_arm_middle", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "r_arm_middle", TURN_OFF );
 				}
 				break;
 			case 2:
@@ -180,22 +229,22 @@ void GM_Dying( gentity_t *self )
 				if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_hand" ))
 				{//l_hand still there
 					GM_CreateExplosion( self, self->handLBolt );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_hand", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "l_hand", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_arm_wrist" ))
 				{//l_arm_wrist still there
 					newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*l_arm_cap_l_hand" );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_arm_wrist", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "l_arm_wrist", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_arm_middle" ))
 				{//l_arm_middle still there
 					newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*l_arm_cap_l_hand" );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_arm_middle", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "l_arm_middle", TURN_OFF );
 				}
 				else if (!gi.G2API_GetSurfaceRenderStatus( &self->ghoul2[self->playerModel], "l_arm_augment" ))
 				{//l_arm_augment still there
 					newBolt = gi.G2API_AddBolt( &self->ghoul2[self->playerModel], "*l_arm_elbow" );
-					gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "l_arm_augment", TURN_OFF );
+					GM_Surface( &self->ghoul2[self->playerModel], "l_arm_augment", TURN_OFF );
 				}
 				break;
 			case 3:
@@ -255,7 +304,7 @@ NPC_GM_Pain
 */
 
 extern void NPC_SetPainEvent( gentity_t *self );
-void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, vec3_t point, int damage, int mod,int hitLoc )
+void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, GM_PainPoint point, int damage, int mod,int hitLoc )
 {
 	if ( self->client->ps.powerups[PW_GALAK_SHIELD] == 0 )
 	{//shield is currently down
@@ -268,9 +317,9 @@ void NPC_GM_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, ve
 				GM_CreateExplosion( self, newBolt );
 			}
 
-			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_shield_off", TURN_OFF );
-			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_antenna", TURN_OFF );
-			gi.G2API_SetSurfaceOnOff( &self->ghoul2[self->playerModel], "torso_antenna_base_cap_off", TURN_ON );
+			GM_Surface( &self->ghoul2[self->playerModel], "torso_shield_off", TURN_OFF );
+			GM_Surface( &self->ghoul2[self->playerModel], "torso_antenna", TURN_OFF );
+			GM_Surface( &self->ghoul2[self->playerModel], "torso_antenna_cap_off", TURN_ON );
 			self->client->ps.powerups[PW_GALAK_SHIELD] = 0;//temp, for effect
 			self->client->ps.stats[STAT_ARMOR] = 0;//no more armor
 			self->NPC->investigateDebounceTime = 0;//stop recharging
@@ -577,11 +626,11 @@ void NPC_GM_StartLaser( void )
 void GM_StartGloat( void )
 {
 	NPC->wait = 0;
-	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galakface_off", TURN_ON );
-	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galakhead_off", TURN_ON );
-	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_eyes_mouth_off", TURN_ON );
-	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_collar_off", TURN_ON );
-	gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_galaktorso_off", TURN_ON );
+	GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_galakface_off", TURN_ON );
+	GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_galakhead_off", TURN_ON );
+	GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_eyes_mouth_off", TURN_ON );
+	GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_collar_off", TURN_ON );
+	GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_galaktorso_off", TURN_ON );
 	NPC_SetAnim( NPC, SETANIM_BOTH, BOTH_STAND2TO1, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 	NPC->client->ps.legsAnimTimer += 500;
 	NPC->client->ps.torsoAnimTimer += 500;
@@ -821,7 +870,7 @@ void NPC_BSGM_Attack( void )
 		if ( !NPC->client->ps.powerups[PW_GALAK_SHIELD]
 			&& enemyDist < MELEE_DIST_SQUARED
 			&& InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f )
-			&& G_StandardHumanoid( NPC->enemy->NPC_type ) )//within 80 and in front
+			&& GM_IsHumanoid( NPC->enemy ) )//within 80 and in front
 		{//our shield is down, and enemy within 80, if very close, use melee attack to slap away
 			if ( TIMER_Done( NPC, "attackDelay" ) )
 			{
@@ -1217,7 +1266,7 @@ void NPC_BSGM_Default( void )
 	{//armor gone
 		if ( !NPCInfo->investigateDebounceTime )
 		{//start regenerating the armor
-			gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
+			GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
 			NPC->flags &= ~FL_SHIELDED;//no more reflections
 			VectorSet( NPC->mins, -20, -20, -24 );
 			VectorSet( NPC->maxs, 20, 20, 64 );
@@ -1245,18 +1294,18 @@ void NPC_BSGM_Default( void )
 				NPCInfo->investigateDebounceTime = 0;
 				NPC->flags |= FL_SHIELDED;//reflect normal shots
 				NPC->fx_time = level.time;
-				gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
+				GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
 			}
 		}
 	}
 	if ( NPC->client->ps.stats[STAT_ARMOR] > 0 )
 	{//armor present
 		NPC->client->ps.powerups[PW_GALAK_SHIELD] = Q3_INFINITE;//temp, for effect
-		gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
+		GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_ON );
 	}
 	else
 	{
-		gi.G2API_SetSurfaceOnOff( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
+		GM_Surface( &NPC->ghoul2[NPC->playerModel], "torso_shield_off", TURN_OFF );
 	}
 
 	if( !NPC->enemy )

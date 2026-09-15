@@ -12,6 +12,12 @@ import tempfile
 import zipfile
 
 UI_PREFIXES = ("gfx/menus/", "gfx/hud/", "gfx/2d/")
+NPC_CLASSES = {"GALAK_MECH": "GALAKMECH", "MORGAN": "MORGANKATARN"}
+CINEMATIC_ACTORS = ("kyle", "jan", "galak")
+CINEMATIC_GESTURES = (b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2")
+# Slots 45-50 are shared with the Galak controller in codeJK2/game/AI_GalakMech.cpp.
+GALAK_ANIMATIONS = (b"BOTH_ALERT1", b"TORSO_RAISEWEAP2", b"TORSO_DROPWEAP2",
+                    b"BOTH_TRIUMPHANT1START", b"BOTH_TRIUMPHANT1STARTGESTURE", b"BOTH_TRIUMPHANT1STOP")
 
 
 def index_assets(root, stack):
@@ -45,10 +51,31 @@ def stringed(entries):
 def convert_npcs(text):
     def npc_class(match):
         name = match[2].upper().removeprefix("CLASS_")
-        if name == "GALAK_MECH":
-            name = "GALAKMECH"
-        return match[1] + "CLASS_" + name
-    return re.sub(r'(?im)^([ \t]*class[ \t]+)"?(\w+)"?', npc_class, text)
+        return match[1] + "CLASS_" + NPC_CLASSES.get(name, name)
+    text = re.sub(r'(?im)^([ \t]*class[ \t]+)"?(\w+)"?', npc_class, text)
+    return re.sub(r'(?im)^(\s*surf(?:On|Off)\s+)([^\r\n]+)',
+                  lambda m: m[1] + surface_names(m[2]), text)
+
+
+def surface_names(text):
+    # JA strips _off from mesh and skin names. JO uses it for distinct surfaces.
+    return re.sub(r'\b(head(?:_face|_eyes_mouth)?)_off\b', r'\1_alt', text)
+
+
+def convert_model(data):
+    model = bytearray(data)
+    count, pos = struct.unpack_from("<ii", model, 152)
+    for _ in range(count):
+        name = model[pos:pos + 64].split(b"\0", 1)[0].decode("ascii")
+        model[pos:pos + 64] = surface_names(name).encode().ljust(64, b"\0")
+        children, = struct.unpack_from("<i", model, pos + 140)
+        pos += 144 + children * 4
+    return model
+
+
+def convert_skin(data):
+    return re.sub(rb'(?m)^([^,\r\n]+),',
+                  lambda m: surface_names(m[1].decode("ascii")).encode() + b",", data)
 
 
 def shader_definitions(data):
@@ -131,11 +158,13 @@ def build_overlay(ja, jo, output):
         # skeleton and the renderer's existing JO mesh conversion.
         cockpit = sorted(set(re.findall(rb"BOTH_COCKPIT_\w+", jo_anims)))
         # Append aliases so existing cockpit slot numbers remain stable.
-        cinematic_anims = cockpit + [b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2"]
-        if len(cinematic_anims) > 50:
+        cinematic_anims = cockpit + list(CINEMATIC_GESTURES)
+        if len(cinematic_anims) > 44:
             raise ValueError("Too many cinematic animations")
         aliases = {name + b"\0": f"BOTH_CIN_{i + 1}".encode() + b"\0"
                    for i, name in enumerate(cinematic_anims)}
+        aliases.update({name + b"\0": f"BOTH_CIN_{i + 45}".encode() + b"\0"
+                        for i, name in enumerate(GALAK_ANIMATIONS)})
         cinematic_cfg = jo_anims
         for old, new in aliases.items():
             cinematic_cfg = re.sub(rb"\b" + old[:-1] + rb"\b", new[:-1], cinematic_cfg)
@@ -153,19 +182,26 @@ def build_overlay(ja, jo, output):
                 data = read(outcast, name)
                 if name.endswith(".ibi"):
                     data = convert_script(data, aliases)
+                elif name.endswith(".glm"):
+                    data = convert_model(data)
+                elif name.endswith(".skin"):
+                    data = convert_skin(data)
+                elif name.endswith("/animation.cfg"):
+                    for old, new in aliases.items():
+                        data = re.sub(rb"\b" + old[:-1] + rb"\b", new[:-1], data)
                 dest.writestr(name, data)
 
             write_shaders(dest, academy, outcast)
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
             npcs = convert_npcs(read(outcast, "ext_data/npcs.cfg").decode("cp1252"))
-            for actor in ("kyle", "jan", "galak"):
-                model = bytearray(read(outcast, f"models/players/{actor}/model.glm"))
+            for actor in CINEMATIC_ACTORS:
+                model = convert_model(read(outcast, f"models/players/{actor}/model.glm"))
                 animation = b"models/players/jo_cinematic/jo_cinematic"
                 model[72:136] = animation.ljust(64, b"\0")
                 dest.writestr(f"models/players/jo_cinematic_{actor}/model.glm", model)
                 dest.writestr(f"models/players/jo_cinematic_{actor}/model_default.skin",
-                              read(outcast, f"models/players/{actor}/model_default.skin"))
+                              convert_skin(read(outcast, f"models/players/{actor}/model_default.skin")))
                 definition = re.search(r"(?im)^\s*" + actor + r"\s*\{[^}]*\}", npcs)
                 if not definition:
                     raise ValueError(f"Missing NPC definition: {actor}")

@@ -36,7 +36,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 bool G_IsOutcast();
 void NPC_RestoreOutcastClass(gentity_t *ent);
-void NPC_RestoreOutcastCinematics(gentity_t *ent);
+void NPC_RestoreOutcastEntities(gentity_t *ent);
 
 //==================================================================
 

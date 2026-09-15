@@ -39,6 +39,7 @@ cp docs/ssao-sp.md "$package/"
 cp docs/materials-sp.md "$package/"
 cp docs/debrief-sp.md "$package/"
 cp docs/jo-campaign.md "$package/"
+cp docs/jo-compatibility.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp docs/torch-sp.md "$package/"
 cp docs/hud-reveal-sp.md "$package/"
@@ -85,6 +86,8 @@ OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$pack
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
     bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
 if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
+    python3 scripts/audit-jo.py --academy "${OJK_ASSETS:-$root/GameData}" \
+        --outcast "${OJK_JO_ASSETS:-$root/GameData_JO}" | tee "$package/jo-audit-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} OJK_SMOKE_CAMPAIGN=jo \
         bash scripts/smoke-sp.sh "$package" kejim_post | tee "$package/smoke-jo-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
@@ -95,6 +98,14 @@ if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         python3 scripts/test-jo-sp.py --package "$package" --content | tee "$package/jo-content-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-cinematics.py --package "$package" | tee "$package/jo-cinematics-result.txt"
+    for renderer in rdsp-vanilla rdsp-rend2; do
+        OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
+            python3 scripts/test-jo-sp.py --package "$package" --prisoners --renderer "$renderer" \
+            | tee "$package/jo-prisoners-$renderer-result.txt"
+    done
+    python3 scripts/test-jo-sp.py --package "$package" --progression | tee "$package/jo-progression-result.txt"
+    python3 scripts/test-jo-sp.py --package "$package" --galak | tee "$package/jo-galak-result.txt"
+    python3 scripts/test-jo-sp.py --package "$package" --world | tee "$package/jo-world-result.txt"
 fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"

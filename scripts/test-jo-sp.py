@@ -22,15 +22,17 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
     mode.add_argument("--content", action="store_true", help="Test Kejim equipment, materials, and datapad")
+    mode.add_argument("--prisoners", action="store_true", help="Test both prisoner heads and save/load")
+    mode.add_argument("--progression", action="store_true", help="Test Yavin Force pickups, saber, and transition")
+    mode.add_argument("--galak", action="store_true", help="Test the native armoured Galak spawn and damage phases")
+    mode.add_argument("--world", action="store_true", help="Test JO's nonsolid opaque water boundary")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sss and args.renderer != "rdsp-rend2":
         parser.error("--sss requires --renderer rdsp-rend2")
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
-                                __file__, "--inside", "--package", str(args.package), "--renderer", args.renderer]
-                               + (["--sss"] if args.sss else [])
-                               + (["--ai"] if args.ai else ["--content"] if args.content else []))
+                                __file__, *sys.argv[1:], "--inside"])
     output = ROOT / "build/jo-tests"
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=args.renderer + ".", dir=output))
@@ -56,6 +58,8 @@ def main():
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
                 text = log.read_text(errors="replace")[start:]
+                if "ERROR: Failed to load jagame" in text:
+                    raise RuntimeError(f"Game module did not load: {log}")
                 if marker in text:
                     return text
                 if process.poll() is not None:
@@ -214,6 +218,165 @@ def main():
             assert not re.search(r"ERROR:|Error:|Unknown command|Duplicate shader entry|Couldn't find image for shader gfx/(?:menus|hud)", text), log
             print(f"PASS: JO weapon cycle, datapad, turret health, goggles, panels, and generator pipe material ({args.renderer})")
 
+        def check_world():
+            cmd("helpusobi 1; map yavin_swamp; wait 150; exitview; wait 100; noclip; setviewpos -365.5 3921 2192.5 0; wait 20")
+            text = cmd("campaign_status")
+            contents = re.search(r"world contents=(-?\d+)", text)
+            assert contents and int(contents[1]) & 32768 and not int(contents[1]) & 1, text
+            capture("swamp_water_boundary")
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|trying to load fallback renderer", log.read_text(errors="replace")), log
+            print(f"PASS: JO opaque water boundary is nonsolid ({args.renderer})")
+
+        def check_galak():
+            cmd("helpusobi 1; map doom_shields; wait 100; exitview; wait 50; god; setviewpos 3300 2400 728 0; use spawngalak; wait 20")
+
+            def boss(command=""):
+                text = cmd((command + "; " if command else "") + "galak_test galak_mech")
+                rows = re.findall(r"galak name=galak_mech ([^\n]+)", text)
+                assert rows and "absent" not in rows[-1], text
+                return {key: int(value) for key, value in re.findall(r"(\w+)=(-?\d+)", rows[-1])}
+
+            initial = boss()
+            assert initial["armor"] == 500 and initial["generator"] == 0, initial
+            for _ in range(80):
+                active = boss("wait 3")
+                if active["enemy"] == 0 and active["missiles"] > 0:
+                    break
+            else:
+                raise AssertionError("Galak did not acquire Kyle and fire a missile")
+            capture("galak_shield")
+            # Direct diagnostic hits exercise shared damage and pain dispatch; they do not test aiming.
+            down = boss("galak_test galak_mech 500; wait 10")
+            assert down["armor"] == 0 and down["health"] == initial["health"], down
+            cmd("save jo_galak_shield; load jo_galak_shield; wait 20")
+            assert boss()["armor"] == 0
+            broken = boss("galak_test galak_mech 50 generator; wait 10")
+            assert broken["generator"] > 25 and broken["armor"] == 0, broken
+            surface = cmd("surface_status galak_mech torso_antenna torso_antenna_cap")
+            assert re.search(r"surface=torso_antenna index=\d+ flags=2", surface), surface
+            assert re.search(r"surface=torso_antenna_cap index=\d+ flags=0", surface), surface
+            cmd("save jo_galak_generator; load jo_galak_generator; wait 350")
+            assert boss()["armor"] == 0
+            capture("galak_generator")
+            cmd("galak_test galak_mech 10000; wait 350")
+            assert "absent=1" in cmd("galak_test galak_mech")
+            assert "objective=DOOM_SHIELDS_OBJ1 status=1" in cmd("campaign_status")
+            capture("galak_completed")
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|case \d+ not handled|trying to load fallback renderer", log.read_text(errors="replace")), log
+            print(f"PASS: Native JO Galak spawn, firing, shield, generator, save/load, death, and completion target ({args.renderer})")
+
+        def check_progression():
+            def force_button(command, x, y, z):
+                # Hold a stable camera position while aiming at the small retail buttons.
+                view = cmd(f"noclip; setviewpos {x} {y} {z} 0; wait 10; viewpos")
+                eye_z = int(re.search(r"\(-?\d+ -?\d+ (-?\d+)\) :", view)[1])
+                cmd(f"setviewpos {x} {y} {2 * z - eye_z} 0; wait 10; {command}; wait 100; noclip")
+
+            cmd("helpusobi 1; map yavin_temple; wait 150; exitview; wait 100")
+            temple = cmd("campaign_status")
+            assert "map=yavin_temple" in temple and "force=0 " in temple, temple
+            cmd("maptransition yavin_trial; wait 150; exitview; wait 100")
+            trial = cmd("campaign_status")
+            assert "map=yavin_trial" in trial and "force=0 " in trial, trial
+            assert "weapon=0 weapons=1 " in trial, trial
+            force_button("force_throw", -900, 743, 160)
+            assert "spinner1button" in cmd("use list"), "Force push worked before its holocron"
+            # Touch the retail holocrons. Teleportation isolates pickup behavior from puzzle traversal.
+            mask = 0
+            for power, bit, origin in (("push", 8, "-1072 80 56"), ("pull", 16, "-576 1936 56"),
+                                       ("jump", 2, "1920 240 64"), ("speed", 4, "-224 496 320")):
+                text = cmd(f"setviewpos {origin} 0; wait 50; campaign_status")
+                mask |= bit
+                assert f"force={mask} " in text and f"{power}=1" in text, text
+                if power == "push":
+                    force_button("force_throw", -900, 743, 160)
+                    assert "spinner1button" not in cmd("use list"), "Force push did not activate the retail training button"
+                elif power == "pull":
+                    before = cmd("mover_status step1")
+                    assert "absent" not in before, before
+                    force_button("force_pull", 400, 1440, 56)
+                    after = cmd("mover_status step1")
+                    assert re.search(r"origin=\S+", before)[0] != re.search(r"origin=\S+", after)[0], (before, after)
+                elif power == "jump":
+                    grounded = cmd("setviewpos 1920 240 160 0; wait 60; campaign_status")
+                    start_z = float(re.search(r"origin=[-\d.]+,[-\d.]+,([-\d.]+)", grounded)[1])
+                    heights = []
+                    cmd("+moveup")
+                    for _ in range(12):
+                        sample = cmd("wait 2; campaign_status")
+                        heights.append(float(re.search(r"origin=[-\d.]+,[-\d.]+,([-\d.]+)", sample)[1]))
+                    cmd("-moveup; wait 20")
+                    assert max(heights) - start_z > 64, heights
+                elif power == "speed":
+                    speed = cmd("force_speed; wait 5; forcewheel_status")
+                    assert int(re.search(r"active=(\d+)", speed)[1]) & 4, speed
+                    cmd("wait 400")
+            wheel = cmd("+forcewheel; wait 5; forcewheel_status; -forcewheel")
+            assert "open=1" in wheel and bin(int(re.search(r"mask=(\d+)", wheel)[1])).count("1") == 3, wheel
+            cmd("setviewpos 1792 -1184 904 0; wait 60; weapon 1; wait 30")
+            saber = ""
+            for _ in range(60):
+                saber = cmd("wait 10; campaign_status all")
+                if "objective=YAVIN_TRIAL_OBJ2 status=1" in saber:
+                    break
+            assert "weapon=1 " in saber and "objective=YAVIN_TRIAL_OBJ2 status=1" in saber, saber
+            assert "saber=1 defense=1 throw=1" in saber, saber
+            saber_force = re.search(r"force=(\d+)", saber)[1]
+            capture("trial_saber")
+            cmd("save jo_training; load jo_training; wait 100")
+            restored = cmd("campaign_status")
+            assert f"force={saber_force} " in restored and "weapon=1 " in restored, restored
+            # Activate the retail exit target after the pickup checks.
+            cmd("use end_level; wait 100")
+            street = ""
+            for _ in range(60):
+                street = cmd("wait 10; campaign_status")
+                if "campaign=jo map=ns_streets" in street:
+                    break
+            assert "campaign=jo map=ns_streets" in street, log
+            assert all(f"{power}=1" in street for power in ("push", "pull", "jump", "speed")), street
+            assert int(re.search(r"weapons=(\d+)", street)[1]) & 2, street
+            capture("nar_shaddaa")
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|trying to load fallback renderer", log.read_text(errors="replace")), log
+            print(f"PASS: JO Yavin pickups, saber, Force wheel, save/load, and retail Nar Shaddaa transition ({args.renderer})")
+
+        def check_prisoners():
+            cmd("helpusobi 1; map kejim_base; wait 100; set d_npcfreeze 1; set cg_draw2D 0; set con_notifytime -1")
+            for i, kind in enumerate(("prisoner", "prisoner2")):
+                cmd(f"setviewpos {416 - i * 160} 792 24 180; npc spawn {kind} head_test{i}; wait 30")
+                pose = cmd(f"cinematic_status head_test{i}")
+                origin = re.search(r"origin=([-\d.]+),([-\d.]+),([-\d.]+)", pose)
+                assert origin, pose
+                x, y, z = map(float, origin.groups())
+                cmd(f"setviewpos {x + 64} {y} {z} 180; wait 10")
+                capture(kind + "_back")
+            cmd("save prisoner_heads; wait 10")
+            for loaded in (False, True):
+                if loaded:
+                    cmd("load prisoner_heads; wait 50")
+                for i in range(2):
+                    text = cmd(f"surface_status head_test{i} head head_alt head_face head_face_alt")
+                    surfaces = {name: (int(index), int(flags)) for name, index, flags in
+                                re.findall(r"surface=(\w+) index=(-?\d+) flags=(-?\d+)", text)}
+                    assert len(surfaces) == 4 and len({v[0] for v in surfaces.values()}) == 4, text
+                    assert all(index >= 0 and flags >= 0 for index, flags in surfaces.values()), text
+                    for name, (_, flags) in surfaces.items():
+                        assert bool(flags & 2) == (name.endswith("_alt") != bool(i)), text
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|trying to load fallback renderer", log.read_text(errors="replace")), log
+            print(f"PASS: Both JO prisoner head variants and save/load ({args.renderer})")
+
         try:
             wait_for("CM_LoadMap( maps/kejim_post.bsp, 1 )")
             subprocess.run(["ffmpeg", "-v", "error", "-f", "x11grab", "-video_size", "640x480",
@@ -234,6 +397,18 @@ def main():
                 return 0
             if args.content:
                 check_content()
+                return 0
+            if args.prisoners:
+                check_prisoners()
+                return 0
+            if args.progression:
+                check_progression()
+                return 0
+            if args.galak:
+                check_galak()
+                return 0
+            if args.world:
+                check_world()
                 return 0
             cmd("toggleconsole; wait 20")
             if args.renderer == "rdsp-rend2":

@@ -7,6 +7,51 @@ Independent worktrees may build concurrently. Do not use automatic job counts.
 Apply the per-build limit to container and dependency builds too. Keep local
 build and package locks; do not add global build or benchmark locks.
 
+## JA/JO Campaign Integration
+
+Use one gameplay implementation for both campaigns. Campaign data controls
+characters, equipment, objectives, progression, and content compatibility.
+The next milestone is JO progression through Artus and Yavin training, followed
+by the known armoured Galak and world-collision gaps. Manual campaign results
+remain in `human_todo.md`.
+
+### 1. Whole-Campaign Compatibility Report
+
+- [x] Audit all 26 JO single-player maps for missing entity handlers and empty stubs.
+- [x] Compare documented spawn flags and report differences with map and entity references. Review the remaining `valley` mission-screen flag separately from gameplay flags.
+- [x] Check NPC classes, animation references, script dependencies, and required assets.
+- [x] Record objectives, inventory grants, Force and saber commands, and map transitions.
+- [x] Generate a repeatable report with explicit limits: `python3 scripts/audit-jo.py`. See `docs/jo-compatibility.md`.
+
+Acceptance: identify likely campaign blockers before a human reaches each map.
+A successful static lookup does not establish correct runtime behavior.
+
+### 2. Artus and Yavin Progression
+
+- [x] Fix missing prisoner head surfaces and check both prisoner variants in both renderers, including save/load.
+- [x] Fix the Artus Topside cinematic hang after Tavion presents Jan to Desann. Verify the handoff and the start of the following fight without skipping in both renderers.
+- [x] Fix confirmed Artus and Yavin Trial gaps. Give legacy saber pickups a valid shared saber definition.
+- [x] Verify the initial Yavin Force reset, holocron levels, a push button, a pull step, jump height, and active speed. Check that push is unavailable before its pickup.
+- [x] Verify saber acquisition, its scripted level-one skills, selection, and the Force wheel's available powers.
+- [x] Verify save/load and progression into `ns_streets` through the retail exit target.
+
+Acceptance: complete the training sequence, acquire the saber, save and reload,
+and continue with the correct abilities. Keep normal mission playthroughs as
+separate manual checks; record any diagnostic trigger activation in automated tests.
+
+### 3. Known Later Blockers
+
+- [x] Compile JO's armoured Galak controller with the shared NPC, weapon, damage, animation, and save systems.
+- [x] Verify missile firing, shield and generator damage, save/load, death, and the encounter's completion target in both renderers. Fix the exposed null-client collision crash in the following debris sequence.
+- [x] Check the `cm_*` collision loaders for `JK2_MODE` rules. Enable the JO water rule and verify a nonsolid opaque boundary in Yavin Swamp.
+
+### 4. Campaign Configuration and Regression Checks
+
+- [x] Use named importer tables for NPC class translations, cinematic actors, and animation aliases. Keep entity repairs in one campaign load hook.
+- [x] Keep common AI, combat, movement, and rendering shared. Translate legacy data at import or load time where possible.
+- [ ] Consolidate the remaining startup character and equipment overrides when further campaign profiles are needed.
+- [x] Run focused JA and JO regression checks, document limits, and publish a tested desktop package. The package `20260915T225923812721918-783a0e8f` passed all publication checks.
+
 ## Verified Prerequisites
 
 - [x] Confirm that this server runs x86-64 Arch Linux.
