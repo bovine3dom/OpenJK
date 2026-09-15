@@ -2354,12 +2354,23 @@ void			NAV::SpawnedPoint(gentity_t* ent, NAV::EPointType type)
 	Start.ToStr(mLocStringA);
 	const char* pointName = (ent->targetname && ent->targetname[0])?(ent->targetname):"?";
 
-	if (CHECK_START_SOLID)
+	if (G_IsOutcast())
+	{
+		Mins = CVec3(-16.0f, -16.0f, -24.0f);
+		Maxs = CVec3(16.0f, 16.0f, 32.0f);
+	}
+	if (CHECK_START_SOLID && !(G_IsOutcast() && (ent->spawnflags & 1)))
 	{
 		// Try It
 		//--------
 		if (!MoveTrace(Start, Stop, Mins, Maxs, 0, true, false))
 		{
+			if (G_IsOutcast())
+			{
+				// Do not add a blocked JO point to JA's generated route graph.
+				gi.Printf("JO navigation: omitted blocked graph node %s@%s\n", pointName, mLocStringA);
+				return;
+			}
 			assert("ERROR: Nav in solid!"==0);
 			gi.Printf( S_COLOR_RED"ERROR: Nav(%d) in solid: %s@%s\n", type, pointName, mLocStringA);
 			delayedShutDown = level.time + 100;

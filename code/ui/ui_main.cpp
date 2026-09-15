@@ -1063,7 +1063,7 @@ static qboolean UI_RunMenuScript ( const char **args )
 #ifdef JK2_MODE
 			ui.Cmd_ExecuteText( EXEC_APPEND, "map kejim_post\n" );
 #else
-			ui.Cmd_ExecuteText( EXEC_APPEND, "map yavin1\n");
+			ui.Cmd_ExecuteText( EXEC_APPEND, Cvar_VariableIntegerValue("com_outcast") ? "map kejim_post\n" : "map yavin1\n");
 #endif
 		}
 		else if (Q_stricmp(name, "startmap") == 0)

@@ -69,6 +69,10 @@ void CG_ParseServerinfo( void ) {
 	{
 		Q_strncpyz( cgs.stripLevelName[1], "YAVIN1", sizeof(cgs.stripLevelName[1]));
 	}
+	if (G_IsOutcast() && (!Q_stricmp(mapname, "kejim_post") || !Q_stricmp(mapname, "kejim_base")))
+	{
+		Q_strncpyz(cgs.stripLevelName[1], "ARTUS_MINE", sizeof(cgs.stripLevelName[1]));
+	}
 
 /*	// JK2...
 	if (!stricmp(cgs.stripLevelName[0],"KEJIM_BASE") ||

@@ -72,6 +72,10 @@ class DesktopUpdateTests(unittest.TestCase):
         (self.assets / "base").mkdir(parents=True)
         for index in range(4):
             (self.assets / "base" / f"assets{index}.pk3").touch()
+        self.jo_assets = self.root / "Outcast Game Data"
+        (self.jo_assets / "base").mkdir(parents=True)
+        for index in (0, 1, 2, 5):
+            (self.jo_assets / "base" / f"assets{index}.pk3").touch()
         self.destination = self.root / "desktop/build"
         self.launch = self.root / "launch.json"
         self.bin = self.root / "bin"
@@ -91,6 +95,9 @@ class DesktopUpdateTests(unittest.TestCase):
         package = (server / "build/packages" if server else self.packages) / name
         (package / "OpenJK").mkdir(parents=True)
         (package / "launch-sp.sh").write_bytes((ROOT / "scripts/launch-sp.sh").read_bytes())
+        (package / "import-jo.py").write_text(
+            'import json, os, sys\nfrom pathlib import Path\n'
+            'Path(os.environ["OJK_TEST_LAUNCH"] + ".import").write_text(json.dumps(sys.argv[1:]))\n')
         (package / "openjk_sp.x86_64").write_text(GAME)
         (package / "openjk_sp.x86_64").chmod(0o755)
         (package / "rdsp-vanilla_x86_64.so").write_bytes(bytes(range(256)) * 8192)
@@ -99,6 +106,8 @@ class DesktopUpdateTests(unittest.TestCase):
         (package / "build-id.txt").write_text(name + "\n")
         (package / "smoke-result.txt").write_text("PASS: t1_sour\n")
         (package / "smoke-rend2-result.txt").write_text("PASS: t1_sour\n")
+        (package / "smoke-jo-result.txt").write_text("PASS: kejim_post\n")
+        (package / "jo-mvp-result.txt").write_text("PASS: JO opening, wheels, weapon switching, save/load, and Kejim transition (rdsp-vanilla)\n")
         return package
 
     def worktree(self, name):
@@ -219,6 +228,45 @@ class DesktopUpdateTests(unittest.TestCase):
         self.env.pop("OJK_ASSETS")
         self.run_play()
         self.assertTrue(self.launch.exists())
+
+    def test_jo_configuration_worktree_and_profile_isolation(self):
+        self.run_play("--configure", "fixture", str(self.assets))
+        self.run_play("--configure-jo", str(self.jo_assets))
+        self.worktree("jo-mvp")
+        self.run_play("--campaign", "jo", "--worktree", "jo-mvp", "--new-game",
+                      "--resolution", "1920x1080", "+set", "g_spskill", "2")
+        args = json.loads(self.launch.read_text())
+        profile = self.root / "profile/worktrees/openjk-jo-mvp/campaigns/jo"
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(profile))
+        self.assertEqual(args[args.index("com_outcast") + 1], "1")
+        self.assertEqual(args[args.index("+map") + 1], "kejim_post")
+        self.assertEqual(args[-3:], ["+set", "g_spskill", "2"])
+        self.assertEqual(json.loads(Path(str(self.launch) + ".import").read_text()),
+                         [str(self.assets), str(self.jo_assets), str(profile)])
+        (profile / "keep.cfg").write_text("JO save and settings")
+        self.run_play("--worktree", "jo-mvp", "--campaign", "ja")
+        args = json.loads(self.launch.read_text())
+        self.assertEqual(args[args.index("com_outcast") + 1], "0")
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(profile.parent.parent))
+        self.assertEqual((profile / "keep.cfg").read_text(), "JO save and settings")
+
+    def test_jo_requires_assets_and_verified_package(self):
+        self.run_play("--campaign", "jo", success=False)
+        self.run_play("--configure", "fixture", str(self.assets), str(self.jo_assets))
+        (self.first / "smoke-jo-result.txt").unlink()
+        self.run_play("--campaign", "jo", success=False)
+        self.assertFalse(self.launch.exists())
+        self.run_play()
+        self.launch.unlink()
+        (self.first / "smoke-jo-result.txt").write_text("PASS: kejim_post\n")
+        (self.jo_assets / "base/assets5.pk3").unlink()
+        self.run_play("--campaign", "jo", success=False)
+        self.assertFalse(self.launch.exists())
+
+    def test_invalid_campaign_does_not_launch(self):
+        for args in (("--campaign",), ("--campaign", "jk2")):
+            self.run_play(*args, success=False)
+        self.assertFalse(self.launch.exists())
 
     def test_worktree_configuration_isolation_and_arguments(self):
         self.run_play("--configure", "fixture", str(self.assets))

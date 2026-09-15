@@ -34,6 +34,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "anims.h"
 #include "dmstates.h"
 
+bool G_IsOutcast();
+
 //==================================================================
 
 #define BODY_QUEUE_SIZE		8

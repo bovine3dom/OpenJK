@@ -200,17 +200,19 @@ extern int statusTextIndex;
 
 void OBJ_SaveObjectiveData(void);
 void OBJ_LoadObjectiveData(void);
+void OBJ_InitCampaign(void);
+extern int objectiveCount;
 extern void OBJ_SetPendingObjectives(gentity_t *ent);
 
 #ifndef G_OBJECTIVES_CPP
 
-extern stringID_table_t objectiveTable [];
+extern stringID_table_t *objectiveTable;
 extern stringID_table_t statusTextTable [];
 extern stringID_table_t missionFailedTable [];
 
 #else
 
-stringID_table_t objectiveTable [] =
+stringID_table_t academyObjectiveTable [] =
 {
 	//=================================================
 	//
@@ -360,4 +362,3 @@ stringID_table_t statusTextTable [] =
 
 
 #endif// #ifndef __OBJECTIVES_H__
-

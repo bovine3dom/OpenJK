@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_local.h"
 #include "wp_saber.h"
 #include "g_functions.h"
+#include "objectives.h"
 
 extern void G_NextTestAxes( void );
 extern void G_ChangePlayerModel( gentity_t *ent, const char *newModel );
@@ -819,6 +820,21 @@ static void Svcmd_IKnowKungfu_f(void)
 	}
 }
 
+static void Svcmd_CampaignStatus_f(void)
+{
+	const gentity_t *pl = &g_entities[0];
+	if (!pl->client) return;
+	const playerState_t &ps = pl->client->ps;
+	gi.Printf("campaign=%s map=%s camera=%d health=%d weapon=%d weapons=%d force=%d ammo=%d origin=%.1f,%.1f,%.1f\n",
+		G_IsOutcast() ? "jo" : "ja", level.mapname, in_camera, ps.stats[STAT_HEALTH],
+		ps.weapon, ps.stats[STAT_WEAPONS], ps.forcePowersKnown, ps.ammo[AMMO_BLASTER],
+		ps.origin[0], ps.origin[1], ps.origin[2]);
+	for (int i = 0; i < objectiveCount; ++i)
+		if (pl->client->sess.mission_objectives[i].display)
+			gi.Printf("objective=%s status=%d\n", objectiveTable[i].name,
+				pl->client->sess.mission_objectives[i].status);
+}
+
 static void Svcmd_Secrets_f(void)
 {
 	const gentity_t *pl = &g_entities[0];
@@ -896,6 +912,7 @@ static int svcmdcmp( const void *a, const void *b ) {
 
 // FIXME some of these should be made CMD_ALIVE too!
 static svcmd_t svcmds[] = {
+	{ "campaign_status", Svcmd_CampaignStatus_f, CMD_NONE },
 	{ "entitylist",					Svcmd_EntityList_f,							CMD_NONE },
 	{ "game_memory",				Svcmd_GameMem_f,							CMD_NONE },
 
@@ -983,4 +1000,3 @@ qboolean	ConsoleCommand( void ) {
 		command->func();
 	return qtrue;
 }
-

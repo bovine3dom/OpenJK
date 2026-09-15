@@ -283,9 +283,12 @@ radius - how far from the navgoal an ent can be before it thinks it reached it -
 void SP_waypoint_navgoal( gentity_t *ent )
 {
 	int radius = ( ent->radius ) ? (ent->radius) : 12;
+	const bool smallGoal = !Q_strncmp(ent->classname, "waypoint_navgoal_", 17);
+	const int halfWidth = smallGoal ? atoi(ent->classname + 17) : 16;
+	if (smallGoal) radius = halfWidth;
 
-	VectorSet( ent->mins, -16, -16, -24 );
-	VectorSet( ent->maxs, 16, 16, 32 );
+	VectorSet( ent->mins, -halfWidth, -halfWidth, -24 );
+	VectorSet( ent->maxs, halfWidth, halfWidth, 32 );
 	ent->s.origin[2] += 0.125;
 	if ( !(ent->spawnflags&1) && G_CheckInSolid( ent, qfalse ) )
 	{
@@ -301,7 +304,7 @@ void SP_waypoint_navgoal( gentity_t *ent )
 
 	ent->classname = "navgoal";
 
-	NAV::SpawnedPoint(ent, NAV::PT_GOALNODE);
+	if (!G_IsOutcast()) NAV::SpawnedPoint(ent, NAV::PT_GOALNODE);
 
 	G_FreeEntity( ent );//can't do this, they need to be found later by some functions, though those could be fixed, maybe?
 }

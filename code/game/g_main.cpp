@@ -611,6 +611,11 @@ G_InitCvars
 
 ============
 */
+bool G_IsOutcast()
+{
+	return gi.Cvar_VariableIntegerValue("com_outcast") != 0;
+}
+
 void G_InitCvars( void ) {
 	// don't override the cheat state set by the system
 	g_cheats = gi.cvar ("helpUsObi", "", 0);
@@ -741,6 +746,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	srand( randomSeed );
 
 	G_InitCvars();
+	OBJ_InitCampaign();
 
 	G_InitMemory();
 

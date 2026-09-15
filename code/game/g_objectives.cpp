@@ -33,6 +33,42 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 qboolean	missionInfo_Updated;
 
+stringID_table_t *objectiveTable = academyObjectiveTable;
+int objectiveCount = MAX_OBJECTIVES;
+
+void OBJ_InitCampaign(void)
+{
+	objectiveTable = academyObjectiveTable;
+	objectiveCount = MAX_OBJECTIVES;
+	if (!G_IsOutcast()) return;
+
+	// Slot zero remains reserved for JA's light-side state. Keep the save layout.
+	static stringID_table_t outcastObjectives[MAX_MISSION_OBJ + 1];
+	static char names[MAX_MISSION_OBJ][MAX_QPATH];
+	memset(outcastObjectives, 0, sizeof(outcastObjectives));
+	outcastObjectives[0].name = "LIGHTSIDE_OBJ";
+	objectiveCount = 1;
+	char *buffer = nullptr;
+	if (gi.FS_ReadFile("ext_data/jo/objectives.dat", (void **)&buffer) <= 0)
+		gi.Error(ERR_DROP, "Missing JO objective data; run import-jo.py");
+	const char *cursor = buffer;
+	COM_BeginParseSession();
+	while (const char *token = COM_ParseExt(&cursor, qtrue))
+	{
+		if (!token[0]) break;
+		if (objectiveCount >= MAX_MISSION_OBJ || strlen(token) >= MAX_QPATH)
+			gi.Error(ERR_DROP, "Invalid JO objective data");
+		Q_strncpyz(names[objectiveCount], token, MAX_QPATH);
+		outcastObjectives[objectiveCount].name = names[objectiveCount];
+		outcastObjectives[objectiveCount].id = objectiveCount;
+		++objectiveCount;
+	}
+	COM_EndParseSession();
+	gi.FS_FreeFile(buffer);
+	outcastObjectives[objectiveCount].name = "";
+	objectiveTable = outcastObjectives;
+}
+
 
 /*
 ============
@@ -43,7 +79,7 @@ void OBJ_SetPendingObjectives(gentity_t *ent)
 {
 	int i;
 
-	for (i=0;i<MAX_OBJECTIVES;++i)
+	for (i=0;i<objectiveCount;++i)
 	{
 		if ((ent->client->sess.mission_objectives[i].status == OBJECTIVE_STAT_PENDING) &&
 			(ent->client->sess.mission_objectives[i].display))

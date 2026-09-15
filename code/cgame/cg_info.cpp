@@ -76,7 +76,7 @@ static void ObjectivePrint_Line(const int color, const int objectIndex, int &mis
 	cgi_SP_GetStringTextString( va("OBJECTIVES_%s",objectiveTable[objectIndex].name) , finalText, sizeof(finalText) );
 
 	// A hack to be able to count prisoners
-	if (objectIndex==T2_RANCOR_OBJ5)
+	if (!G_IsOutcast() && objectIndex==T2_RANCOR_OBJ5)
 	{
 		char value[64];
 		int	currTotal, minTotal;
@@ -224,7 +224,7 @@ static void ObjectivePrint_Line(const int color, const int objectIndex, int &mis
 		}
 	}
 
-	if (objectIndex == T3_BOUNTY_OBJ1)
+	if (!G_IsOutcast() && objectIndex == T3_BOUNTY_OBJ1)
 	{
 		y =objectiveStartingYpos + (iYPixelsPerLine * missionYcnt);
 		if (obj_graphics[1])
@@ -277,7 +277,7 @@ void CG_DrawDataPadObjectives(const centity_t *cent )
 	int missionYcnt = 0;
 
 	// Print all active objectives
-	for (i=0;i<MAX_OBJECTIVES;i++)
+	for (i=0;i<objectiveCount;i++)
 	{
 		// Is there an objective to see?
 		if (cent->gent->client->sess.mission_objectives[i].display)

@@ -16,6 +16,8 @@ timeout_seconds=${OJK_SMOKE_TIMEOUT:-120}
 }
 renderer=${OJK_SMOKE_RENDERER:-}
 renderer_args=()
+campaign=${OJK_SMOKE_CAMPAIGN:-ja}
+[[ $campaign == ja || $campaign == jo ]] || { printf 'Invalid smoke campaign\n' >&2; exit 1; }
 case "$renderer" in
     '') ;;
     rdsp-rend2|rdsp-vanilla)
@@ -33,6 +35,7 @@ printf 'Smoke-test output: %s\n' "$run"
 command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run -a -s "-screen 0 ${display}x24" \
     env LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS="${LP_NUM_THREADS:-1}" SDL_AUDIODRIVER=dummy \
     OJK_PROFILE="$run/profile" bash "$package/launch-sp.sh" "$assets" \
+    --campaign "$campaign" \
     +safe +set r_fullscreen 0 +set r_mode 3 +set r_swapInterval 0 \
     +set com_maxfps 60 +set s_initsound 0 +set developer 1 \
     +set logfile 2 +devmap "$map" "$@" "${renderer_args[@]}" \
@@ -52,6 +55,7 @@ if grep -Fq 'failed: trying to load fallback renderer' "$run/console.log" ||
 fi
 
 image="$run/profile/OpenJK/screenshots/smoke.png"
+if [[ $campaign == jo ]]; then image="$run/profile/campaigns/jo/OpenJK/screenshots/smoke.png"; fi
 if grep -Eq "Can't find map |ERROR:|Error:|Failed to load|Couldn't load|couldn't exec|Unknown command" "$run/console.log" ||
     ! grep -Fq "CM_LoadMap( maps/$map.bsp, 1 )" "$run/console.log" ||
     ! test -s "$image"; then

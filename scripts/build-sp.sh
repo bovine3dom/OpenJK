@@ -23,6 +23,7 @@ stage=$(mktemp -d "$root/build/packages/.candidate.XXXXXXXX")
 cmake --install build/sp --prefix "$stage" > "$stage/install.log"
 package="$stage/JediAcademy"
 cp scripts/launch-sp.sh "$package/launch-sp.sh"
+cp scripts/import-jo.py "$package/import-jo.py"
 cp docs/development.md "$package/README.md"
 cp docs/squad-ai.md "$package/squad-ai.md"
 cp docs/squad-tactics.md "$package/squad-tactics.md"
@@ -33,6 +34,7 @@ cp docs/rend2-sp.md "$package/"
 cp docs/ssao-sp.md "$package/"
 cp docs/materials-sp.md "$package/"
 cp docs/debrief-sp.md "$package/"
+cp docs/jo-campaign.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp animation_todo.md "$package/"
 cp docs/benchmark-sp.md "$package/"
@@ -74,6 +76,12 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
     bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
+if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
+    OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} OJK_SMOKE_CAMPAIGN=jo \
+        bash scripts/smoke-sp.sh "$package" kejim_post | tee "$package/smoke-jo-result.txt"
+    OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
+        python3 scripts/test-jo-sp.py --package "$package" | tee "$package/jo-mvp-result.txt"
+fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"
 mv -Tf "$stage/ready" build/ready

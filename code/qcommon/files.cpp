@@ -2874,6 +2874,7 @@ FS_Startup
 ================
 */
 void FS_Startup( const char *gameName ) {
+	Cvar_Get("com_outcast", "0", CVAR_INIT | CVAR_PROTECTED);
 	const char *homePath;
 
 	Com_Printf( "----- FS_Startup -----\n" );

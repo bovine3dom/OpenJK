@@ -840,6 +840,10 @@ spawn_t	spawns[] = {
 	{"waypoint", SP_waypoint},
 	{"waypoint_small", SP_waypoint_small},
 	{"waypoint_navgoal", SP_waypoint_navgoal},
+	{"waypoint_navgoal_8", SP_waypoint_navgoal},
+	{"waypoint_navgoal_4", SP_waypoint_navgoal},
+	{"waypoint_navgoal_2", SP_waypoint_navgoal},
+	{"waypoint_navgoal_1", SP_waypoint_navgoal},
 
 	{"fx_runner", SP_fx_runner},
 	{"fx_explosion_trail", SP_fx_explosion_trail},
@@ -1687,4 +1691,3 @@ void G_SpawnEntitiesFromString( const char *entityString ) {
 		G_Error( "Errors loading map, check the console for them." );
 	}
 }
-

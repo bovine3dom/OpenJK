@@ -906,6 +906,7 @@ qboolean G_StandardHumanoid( gentity_t *self )
 	assert(GLAName);
 	if (GLAName)
 	{
+		if (!Q_stricmp(GLAName, "models/players/jo_cinematic/jo_cinematic.gla")) return qtrue;
 		if ( !Q_stricmpn( "models/players/_humanoid", GLAName, 24 ) )///_humanoid", GLAName, 36) )
 		{//only _humanoid skeleton is expected to have these
 			return qtrue;
@@ -1933,6 +1934,15 @@ void G_SetSabersFromCVars( gentity_t *ent )
 
 void G_InitPlayerFromCvars( gentity_t *ent )
 {
+	if (G_IsOutcast())
+	{
+		gi.cvar_set("g_char_model", "kyle");
+		gi.cvar_set("g_char_skin_head", "model_default");
+		gi.cvar_set("g_char_skin_torso", "model_default");
+		gi.cvar_set("g_char_skin_legs", "model_default");
+		gi.cvar_set("snd", "kyle");
+		gi.cvar_set("sex", "m");
+	}
 	//set model based on cvars
 	if(Q_stricmp(g_char_skin_head->string, "model_default") == 0 && Q_stricmp(g_char_skin_torso->string, "model_default") == 0 && Q_stricmp(g_char_skin_legs->string, "model_default") == 0)
 		G_ChangePlayerModel( ent, va("%s|model_default", g_char_model->string) );
@@ -2233,6 +2243,7 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 		}
 		ent->classname = "player";
 		ent->targetname = ent->script_targetname = "player";
+		if (G_IsOutcast()) ent->targetname = ent->script_targetname = "kyle";
 		if ( ent->client->NPC_class == CLASS_NONE )
 		{
 			ent->client->NPC_class = CLASS_PLAYER;
@@ -2276,6 +2287,13 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 			client->ps.weapon = WP_SABER;
 		}
 		// force the base weapon up
+		if (G_IsOutcast())
+		{
+			client->ps.stats[STAT_WEAPONS] |= (1 << WP_BRYAR_PISTOL);
+			client->ps.weapon = WP_BRYAR_PISTOL;
+			client->ps.inventory[INV_ELECTROBINOCULARS] = 1;
+			client->ps.ammo[AMMO_BLASTER] = ammoData[AMMO_BLASTER].max;
+		}
 		client->ps.weaponstate = WEAPON_READY;
 
 		for ( i = FIRST_WEAPON; i < MAX_PLAYER_WEAPONS; i++ ) // don't give ammo for explosives
@@ -2506,6 +2524,3 @@ void ClientDisconnect( int clientNum ) {
 	IIcarusInterface::GetIcarus()->DeleteIcarusID(ent->m_iIcarusID);
 
 }
-
-
-

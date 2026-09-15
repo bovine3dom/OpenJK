@@ -133,6 +133,9 @@ updates do not replace the separately installed `openjk-play` script.
 
 ## Desktop Package
 
+For the JO campaign prototype and its desktop launch options, see
+`docs/jo-campaign.md` in the repository or `jo-campaign.md` in the package.
+
 Install the pull-and-launch command on the desktop once. Replace `BUILD_SERVER`
 with the SSH alias or `user@hostname` used to connect to this build machine:
 

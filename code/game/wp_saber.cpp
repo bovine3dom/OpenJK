@@ -14408,6 +14408,7 @@ void WP_InitForcePowers( gentity_t *ent )
 
 	if ( ent->s.number < MAX_CLIENTS )
 	{//player
+		if (G_IsOutcast()) return; // JO scripts grant Force powers during the campaign.
 		if ( !g_cheats->integer )//devmaps give you all the FP
 		{
 			ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE] = FORCE_LEVEL_1;

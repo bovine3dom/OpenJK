@@ -4079,6 +4079,16 @@ Ghoul2 Insert End
 
 void NPC_LoadParms( void )
 {
+	if (G_IsOutcast())
+	{
+		char *buffer = nullptr;
+		const int length = gi.FS_ReadFile("ext_data/jo/npcs.cfg", (void **)&buffer);
+		if (length <= 0 || length >= MAX_NPC_DATA_SIZE)
+			gi.Error(ERR_DROP, "Missing or oversized JO NPC data; run import-jo.py");
+		Q_strncpyz(NPCParms, buffer, MAX_NPC_DATA_SIZE);
+		gi.FS_FreeFile(buffer);
+		return;
+	}
 	int			len, totallen, npcExtFNLen, fileCnt, i;
 	char		*buffer, *holdChar, *marker;
 	char		npcExtensionListBuf[2048];			//	The list of file names read in
