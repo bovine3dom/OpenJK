@@ -19,6 +19,15 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_shader_parser_handles_comments_and_nested_stages(self):
+        text = b'// ignored {\n"gfx/example" { /* } */ { map "a{b}.tga" } }\nworld/test { { map rock } }'
+        shaders = dict(jo.shader_definitions(text))
+        self.assertEqual(set(shaders), {"gfx/example", "world/test"})
+        self.assertIn(b'"a{b}.tga"', shaders["gfx/example"])
+        for invalid in (b"missing_body", b"unclosed { { map rock }"):
+            with self.assertRaises(ValueError):
+                list(jo.shader_definitions(invalid))
+
     def test_npc_classes_use_academy_names(self):
         source = ('StormTrooper\n{\n class stormtrooper\n playerTeam enemy\n}\n'
                   'Galak\n{\n CLASS "galak_mech"\n}\nJan\n{\n class CLASS_JAN\n}\n')
@@ -51,6 +60,9 @@ class ImportTests(unittest.TestCase):
                 archive.writestr(human + "animation.cfg", b"BOTH_STAND1 10 2 0 20\n")
                 archive.writestr("strings/english/sp_ingame.str", base_strings)
                 archive.writestr("ui/newgame.menu", b"open characterMenu ;")
+                archive.writestr("shaders/ui.shader", b"gfx/menus/scanlines { { map scan blendFunc add } }\ngfx/hud/vehicle_frame { { map frame blendFunc blend } }")
+                archive.writestr("shaders/desert.shader", b"textures/kejim/panel { { map wrong } }")
+                archive.writestr("gfx/menus/scanlines.tga", b"JA image")
             entities = ('{\n"classname" "NPC_Kyle"\n"NPC_targetname" "cinematic1_kyle"\n}\n').encode()
             bsp = b"RBSP" + struct.pack("<iii", 1, 16, len(entities) + 1) + entities + b"\0"
             text = b'INDEX 0\n{\n REFERENCE KEJIM_POST_OBJ1\n TEXT_LANGUAGE1 "Investigate."\n}\n'
@@ -80,6 +92,9 @@ class ImportTests(unittest.TestCase):
                 archive.writestr("ext_data/weapons.dat", b"DO NOT IMPORT")
                 archive.writestr("models/weapons2/blaster/model.glm", b"DO NOT IMPORT")
                 archive.writestr("textures/kejim/wall.tga", b"original")
+                archive.writestr("shaders/ui.shader", b"console { { map menu/new/title } }")
+                archive.writestr("shaders/imperial.shader", b"textures/kejim/panel { { map correct } }")
+                archive.writestr("gfx/menus/scanlines.tga", b"JO image")
             with zipfile.ZipFile(source / "base/assets2.pk3", "w") as archive:
                 archive.writestr("textures/kejim/wall.tga", b"patched")
             original = {p: p.read_bytes() for p in root.glob("*/base/*.pk3")}
@@ -107,6 +122,14 @@ class ImportTests(unittest.TestCase):
                 self.assertIn(b"Keep this JA label", archive.read("strings/english/sp_ingame.str"))
                 self.assertEqual(archive.read("ext_data/jo/objectives.dat"), b"KEJIM_POST_OBJ1\n")
                 self.assertEqual(archive.read("ui/newgame.menu"), b"uiScript startgame ;")
+                shaders = dict(jo.shader_definitions(archive.read("shaders/jo_campaign.shader")))
+                self.assertIn(b"blendFunc add", shaders["gfx/menus/scanlines"])
+                self.assertIn(b"blendFunc blend", shaders["gfx/hud/vehicle_frame"])
+                self.assertIn(b"map correct", shaders["textures/kejim/panel"])
+                self.assertIn(b"menu/new/title", shaders["console"])
+                self.assertNotIn("gfx/menus/scanlines.tga", names)
+                for path in ("shaders/ui.shader", "shaders/desert.shader", "shaders/imperial.shader"):
+                    self.assertEqual(list(jo.shader_definitions(archive.read(path))), [])
             for path, data in original.items():
                 self.assertEqual(path.read_bytes(), data)
 

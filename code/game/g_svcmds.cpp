@@ -829,6 +829,10 @@ static void Svcmd_CampaignStatus_f(void)
 		G_IsOutcast() ? "jo" : "ja", level.mapname, in_camera, ps.stats[STAT_HEALTH],
 		ps.weapon, ps.stats[STAT_WEAPONS], ps.forcePowersKnown, ps.ammo[AMMO_BLASTER],
 		ps.origin[0], ps.origin[1], ps.origin[2]);
+	gi.Printf("equipment goggles=%d selected=%d zoom=%d battery=%d mounted=%d gun_health=%d gun_max=%d\n",
+		ps.inventory[INV_LIGHTAMP_GOGGLES], cg.inventorySelect, cg.zoomMode, ps.batteryCharge,
+		(ps.eFlags & EF_LOCKED_TO_WEAPON) != 0, pl->owner ? pl->owner->health : 0,
+		pl->owner ? pl->owner->max_health : 0);
 	for (int i = 0; i < objectiveCount; ++i)
 		if (pl->client->sess.mission_objectives[i].display)
 			gi.Printf("objective=%s status=%d\n", objectiveTable[i].name,

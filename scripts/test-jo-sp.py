@@ -18,8 +18,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
-    parser.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
     parser.add_argument("--sss", action="store_true", help="Also check imported JO skin masks with Rend2")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
+    mode.add_argument("--content", action="store_true", help="Test Kejim equipment, materials, and datapad")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sss and args.renderer != "rdsp-rend2":
@@ -27,8 +29,8 @@ def main():
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
                                 __file__, "--inside", "--package", str(args.package), "--renderer", args.renderer]
-                               + (["--ai"] if args.ai else [])
-                               + (["--sss"] if args.sss else []))
+                               + (["--sss"] if args.sss else [])
+                               + (["--ai"] if args.ai else ["--content"] if args.content else []))
     output = ROOT / "build/jo-tests"
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=args.renderer + ".", dir=output))
@@ -70,7 +72,7 @@ def main():
             stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(marker, start))
 
-        def capture(name, contrast=True):
+        def capture(name, region=None, contrast=True):
             cmd(f"screenshot_png {name}")
             image = profile / "campaigns/jo/OpenJK/screenshots" / f"{name}.png"
             deadline = time.monotonic() + 30
@@ -78,9 +80,10 @@ def main():
                 if time.monotonic() > deadline:
                     raise TimeoutError(f"Incomplete screenshot: {image}")
                 time.sleep(0.05)
-            width, height = (64, 48) if contrast else (640, 480)
+            width, height = region[:2] if region else (64, 48) if contrast else (640, 480)
+            image_filter = "crop=" + ":".join(map(str, region)) if region else f"scale={width}:{height}"
             pixels = subprocess.check_output(["ffmpeg", "-v", "error", "-xerror", "-i", str(image),
-                                              "-vf", f"scale={width}:{height}", "-frames:v", "1", "-pix_fmt", "gray",
+                                              "-vf", image_filter, "-frames:v", "1", "-pix_fmt", "gray",
                                               "-f", "rawvideo", "-"])
             assert len(pixels) == width * height, image
             if contrast:
@@ -145,12 +148,71 @@ def main():
                 damaged.append(npc())
                 cmd("wait 5")
             assert all(s["health"] == "25" for s in damaged), "Native damage handler did not receive the hit"
-            assert any(s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"]) for s in damaged), "Native guard did not retreat after damage"
+            running = any(s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"]) for s in damaged)
+            # A sample can land in the deceleration at each short waypoint. Also measure travel between samples.
+            for a, b in zip(damaged, damaged[1:]):
+                elapsed = int(b["time"]) - int(a["time"])
+                distance = math.dist(tuple(map(float, a["pos"].split(","))), tuple(map(float, b["pos"].split(","))))
+                running |= (a["role"] == b["role"] == "1" and b["walking"] == "0" and elapsed > 0
+                            and distance * 1000 / elapsed > float(b["walkSpeed"]))
+            assert running, ("Native guard did not retreat after damage", damaged)
             stdin.write("quit\n")
             stdin.flush()
             assert process.wait(timeout=30) == 0
             assert not re.search(r"ERROR:|Error:|Unknown command|aimemory event=rejected", log.read_text(errors="replace")), log
             print("PASS: JO native NPC classes, sight acquisition, near-miss retreat, damage, and save/load")
+
+        def key(name):
+            window = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--pid", str(process.pid)], text=True).splitlines()[-1]
+            subprocess.run(["xdotool", "windowfocus", window, "key", name], check=True, timeout=10)
+            cmd("wait 10")
+
+        def check_content():
+            cmd("helpusobi 1; god; set d_npcfreeze 1; set com_maxfps 20")
+            cmd("give weaponnum 3; give weaponnum 10; give ammo; wait 30; weapon 3; wait 40")
+            for command, expected in (("weapnext", (10, 17, 18, 3)), ("weapprev", (18, 17, 10, 3))):
+                for weapon in expected:
+                    text = cmd(f"{command}; wait 30; campaign_status")
+                    assert f"weapon={weapon} " in text, text
+            cmd("datapad; wait 10; uimenu datapadMissionMenu; wait 10; clear")
+            datapad = capture("datapad")
+            text_area = [datapad[y * 64 + x] for y in range(8, 13) for x in range(5, 60)]
+            assert sum(p > 60 for p in text_area) > 15, "Datapad objectives obscured"
+            key("Escape")
+            cmd("use act_perimeter_guns; setviewpos -492 -368 64 180; wait 20; use perimeter_gun1; wait 30")
+            assert "mounted=1" in cmd("campaign_status")
+            full = capture("turret_full", (224, 16, 208, 432))
+            cmd("give health 50; wait 10")
+            half = capture("turret_half", (224, 16, 208, 432))
+            assert sum(abs(a - b) > 16 for a, b in zip(full, half)) >= 50, "Turret health bar did not change"
+            cmd("exitview; wait 20; give health 100; setviewpos 2718 -758 -544 135; wait 50")
+            before = cmd("campaign_status; bind KP_LEFTARROW; bind i")
+            assert "goggles=1" in before and "use_lightamp_goggles" in before and "invuse" in before, before
+            capture("goggles_off")
+            # The stock inventory opens on the first press and advances on the next.
+            cmd("invnext; wait 2; invnext; wait 10")
+            key("i")
+            active = cmd("wait 20; campaign_status")
+            assert "zoom=3" in active, active
+            assert int(re.search(r"battery=(\d+)", active)[1]) < int(re.search(r"battery=(\d+)", before)[1]), active
+            capture("goggles_on")
+            key("i")
+            assert "zoom=0" in cmd("campaign_status")
+            cmd("setviewpos 1120 -400 -560 90; wait 20; clear")
+            panels = capture("panels")
+            panel_area = [panels[y * 64 + x] for y in range(14, 27) for x in range(30, 59)]
+            assert sum(p > 190 for p in panel_area) < len(panel_area) // 8, "Missing-texture grid on panels"
+            cmd("noclip; setviewpos 992 -400 -736 0; set cg_draw2D 0; wait 20; clear")
+            powered = capture("pipes_powered")
+            cmd("use t312; wait 30; clear")
+            disabled = capture("pipes_disabled")
+            assert sum(a - b > 60 for a, b in zip(powered, disabled)) > 150, "Generator pipe material did not switch off"
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            text = log.read_text(errors="replace")
+            assert not re.search(r"ERROR:|Error:|Unknown command|Duplicate shader entry|Couldn't find image for shader gfx/(?:menus|hud)", text), log
+            print(f"PASS: JO weapon cycle, datapad, turret health, goggles, panels, and generator pipe material ({args.renderer})")
 
         try:
             wait_for("CM_LoadMap( maps/kejim_post.bsp, 1 )")
@@ -169,6 +231,9 @@ def main():
             capture("gameplay")
             if args.ai:
                 check_ai()
+                return 0
+            if args.content:
+                check_content()
                 return 0
             cmd("toggleconsole; wait 20")
             if args.renderer == "rdsp-rend2":

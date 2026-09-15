@@ -78,6 +78,12 @@ profile. Do not use original JO saves or copy JA saves into it.
 - Enter `campaign_status` in the console to print the campaign, map, camera
   state, equipment, ammunition, position, and active objectives.
 - Set `g_subtitles 2` to show subtitles for all voiceovers.
+- Press **Keypad 4** to toggle acquired light-amplification goggles. **U/O** select
+  inventory items and **I** uses the selected item. The first selection press
+  opens the stock inventory display; the next advances the selection. These
+  defaults are assigned only to unused keys and preserve existing command bindings.
+- The mounted-gun bar shows health. An invulnerable gun shows the player's
+  health; a vulnerable gun shows its own health. Firing does not consume health.
 
 Rend2 skin diffusion uses the shared defaults: `r_sss 1` and `r_sssRadius 0.5`.
 The importer preserves JO material paths, including those in the cinematic
@@ -94,6 +100,7 @@ bash scripts/build-sp.sh
 python3 scripts/test-import-jo.py
 python3 scripts/test-play-sp.py
 python3 scripts/test-jo-sp.py --package build/ready --renderer rdsp-rend2 --sss
+python3 scripts/test-jo-sp.py --package build/ready --content --renderer rdsp-rend2
 ```
 
 The build script checks JA with both renderers. If `GameData_JO/base` is present,
@@ -119,6 +126,11 @@ checks that stormtrooper armour has no eligible skin pixels.
   The renderer converts JO humanoid meshes to the JA skeleton where required.
 - JO's dynamic music table, menu images, and level previews are imported with
   the music tracks. An updater launch rebuilds an older import automatically.
+- Shader definitions merge by material name. Shared HUD, datapad, and 2D images
+  use JA definitions; JO world materials take precedence. Source shader files
+  are shadowed in the import so duplicate names cannot depend on file order.
+- Weapon cycling and the weapon wheel share one order. Both cycling directions
+  include the Bryar pistol and stun baton when owned and usable.
 - The JO loading screen uses the supplied title artwork and the shared progress
   bar. Some retail level previews are empty placeholders.
 - The two cockpit actors use a separate JO skeleton. Their script animation
@@ -146,3 +158,11 @@ checks that stormtrooper armour has no eligible skin pixels.
 6. Complete Kejim Post through normal play and enter Kejim Base.
 7. Save during play, quit, restart the updater, and load the save.
 8. Repeat the scene checks with Rend2 on the test machine.
+
+The content test checks weapon cycling, datapad text, mounted health changes,
+goggle pickup and activation, panel textures, and the generator pipe material's
+on/off states. It uses original entities with diagnostic activation and camera
+positions. It does not complete the route to those entities through normal play.
+The reported missing flame jets still need an exact save or screenshot. The
+generator's glowing pipe material and sampled walkway flame effects rendered
+during investigation; this does not establish that the reported scene is fixed.

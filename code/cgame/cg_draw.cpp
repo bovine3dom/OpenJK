@@ -1186,32 +1186,18 @@ static void CG_DrawTauntaunHud( const centity_t *cent, const Vehicle_t *pVeh )
 
 static void CG_DrawEmplacedGunHealth( const centity_t *cent )
 {
-	int xPos,yPos,width,height,i, health=0;
+	int xPos,yPos,width,height,i;
 	vec4_t	color,calcColor;
 	qhandle_t	background;
 	char itemName[64];
 	float inc, currValue,maxHealth;
 
-	if ( cent->gent && cent->gent->owner )
-	{
-		if (( cent->gent->owner->flags & FL_GODMODE ))
-		{
-			// chair is in godmode, so render the health of the player instead
-			health = cent->gent->health;
-		}
-		else
-		{
-			// render the chair health
-			health = cent->gent->owner->health;
-		}
-	}
-	else
-	{
-		return;
-	}
-	//riding some kind of living creature
-	maxHealth = (float)cent->gent->max_health;
-	currValue = health;
+	if (!cent->gent || !cent->gent->owner) return;
+	// Invulnerable guns show rider health; vulnerable guns show their own health.
+	const gentity_t *healthOwner = (cent->gent->owner->flags & FL_GODMODE) ? cent->gent : cent->gent->owner;
+	maxHealth = healthOwner->max_health;
+	if (maxHealth <= 0) return;
+	currValue = Com_Clamp(0, maxHealth, healthOwner->health);
 
 	if (cgi_UI_GetMenuItemInfo(
 		"swoopvehiclehud",

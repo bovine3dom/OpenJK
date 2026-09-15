@@ -73,8 +73,9 @@ def main():
             line = re.findall(r"forcewheel open=[^\r\n]+", text)[-1]
             return {key: float(value) for key, value in (word.split("=") for word in line.split()[1:])}
 
-        def weapon_status():
-            text = cmd("wait 4; weaponwheel_status")
+        def weapon_status(action=""):
+            # Query an action's preview before slow frames can consume its real-time lifetime.
+            text = cmd((action + "; " if action else "wait 4; ") + "weaponwheel_status")
             line = re.findall(r"weaponwheel visible=[^\r\n]+", text)[-1]
             return {key: float(value) for key, value in (word.split("=") for word in line.split()[1:])}
 
@@ -294,20 +295,17 @@ def main():
                 xdo("keyup", "j")
                 assert weapon_status()["open"] == 0
 
-                cmd("wait 30; weapnext")
-                assert weapon_status()["visible"] == 1
+                assert weapon_status("wait 30; weapnext")["visible"] == 1
                 cmd("+weaponwheel")
                 assert weapon_status()["open"] == 1
                 cmd("vid_restart; wait 30")
                 focus_game()
                 cmd("-weaponwheel")
                 assert weapon_status()["visible"] == 0
-                cmd("wait 30; weapnext")
-                assert weapon_status()["visible"] == 1
+                assert weapon_status("wait 30; weapnext")["visible"] == 1
                 cmd("cam_enable")
                 assert weapon_status()["visible"] == 0
-                cmd("cam_disable; wait 30; weapnext")
-                assert weapon_status()["visible"] == 1
+                assert weapon_status("cam_disable; wait 30; weapnext")["visible"] == 1
                 cmd("kill; wait 10")
                 assert weapon_status()["visible"] == 0
                 finish()

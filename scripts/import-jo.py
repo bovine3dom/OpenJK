@@ -11,6 +11,8 @@ import struct
 import tempfile
 import zipfile
 
+UI_PREFIXES = ("gfx/menus/", "gfx/hud/", "gfx/2d/")
+
 
 def index_assets(root, stack):
     index = {}
@@ -47,6 +49,47 @@ def convert_npcs(text):
             name = "GALAKMECH"
         return match[1] + "CLASS_" + name
     return re.sub(r'(?im)^([ \t]*class[ \t]+)"?(\w+)"?', npc_class, text)
+
+
+def shader_definitions(data):
+    text = data.decode("latin1")
+    tokens = [m for m in re.finditer(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|[{}]|[^\s{}"]+', text, re.S)
+              if not m[0].startswith(("//", "/*"))]
+    i = 0
+    while i < len(tokens):
+        name = tokens[i]
+        i += 1
+        if i == len(tokens) or tokens[i][0] != "{":
+            raise ValueError(f"Missing shader body: {name[0]}")
+        depth = 0
+        while i < len(tokens):
+            token = tokens[i]
+            i += 1
+            if token[0] == "{": depth += 1
+            if token[0] == "}": depth -= 1
+            if depth == 0: break
+        if depth:
+            raise ValueError(f"Unclosed shader: {name[0]}")
+        yield name[0].strip('"').lower(), text[name.start():tokens[i - 1].end()].encode("latin1")
+
+
+def write_shaders(dest, academy, outcast):
+    definitions = {}
+    paths = set()
+    for assets in (academy, outcast):
+        for path in sorted(assets):
+            if not path.startswith("shaders/") or not path.endswith(".shader"):
+                continue
+            paths.add(path)
+            for name, body in shader_definitions(read(assets, path)):
+                # Shared UI keeps JA blending; JO world materials take precedence.
+                if assets is outcast and name.startswith(UI_PREFIXES) and name in definitions:
+                    continue
+                definitions[name] = body
+    # Shadow the source files so duplicate names in other files cannot win by load order.
+    for path in sorted(paths):
+        dest.writestr(path, b"// Definitions merged into jo_campaign.shader\n")
+    dest.writestr("shaders/jo_campaign.shader", b"\n\n".join(definitions.values()) + b"\n")
 
 
 def convert_script(data, aliases):
@@ -98,16 +141,19 @@ def build_overlay(ja, jo, output):
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as dest:
             # Keep JA UI, weapon definitions, and humanoid gameplay animations.
             # JO supplies world content, dialogue, and its character appearances.
-            roots = ("maps/", "scripts/", "textures/", "shaders/", "sound/", "music/",
+            roots = ("maps/", "scripts/", "textures/", "sound/", "music/",
                      "video/", "effects/", "models/", "gfx/", "menu/", "levelshots/")
             for name in sorted(outcast):
                 if not name.startswith(roots) or name.startswith((humanoid, "models/weapons2/")):
+                    continue
+                if name in academy and name.startswith(UI_PREFIXES):
                     continue
                 data = read(outcast, name)
                 if name.endswith(".ibi"):
                     data = convert_script(data, aliases)
                 dest.writestr(name, data)
 
+            write_shaders(dest, academy, outcast)
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
             npcs = convert_npcs(read(outcast, "ext_data/npcs.cfg").decode("cp1252"))

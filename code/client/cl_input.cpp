@@ -963,6 +963,19 @@ CL_InitInput
 ============
 */
 void CL_InitInput( void ) {
+	if (Cvar_VariableIntegerValue("com_outcast") &&
+		!Cvar_Get("cg_joInventoryBindInitialized", "0", CVAR_ARCHIVE)->integer) {
+		char bindings[][2][32] = {
+			{"u", "invprev"}, {"o", "invnext"}, {"i", "invuse"},
+			{"KP_LEFTARROW", "use_lightamp_goggles"}
+		};
+		for (auto &binding : bindings) {
+			const int key = Key_StringToKeynum(binding[0]);
+			if (Key_GetKey(binding[1]) < 0 && (!Key_GetBinding(key) || !*Key_GetBinding(key)))
+				Key_SetBinding(key, binding[1]);
+		}
+		Cvar_Set("cg_joInventoryBindInitialized", "1");
+	}
 #ifdef USE_RMLUI
 	CL_InitForceWheel();
 	CL_InitWeaponWheel();

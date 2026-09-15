@@ -1758,6 +1758,18 @@ static const int weaponWheelOrder[] = {
 	WP_BRYAR_PISTOL
 };
 
+static int CG_WeaponCycleStep(int weapon, int direction, bool includeNone = false)
+{
+	const int count = ARRAY_LEN(weaponWheelOrder);
+	for (int i = 0; i < count; ++i) {
+		if (weaponWheelOrder[i] != weapon) continue;
+		const int next = i + direction;
+		if (includeNone && (next < 0 || next == count)) return WP_NONE;
+		return weaponWheelOrder[(next + count) % count];
+	}
+	return weaponWheelOrder[direction > 0 ? 0 : count - 1];
+}
+
 void CG_UpdateWeaponWheel(qboolean allowed)
 {
 	weaponWheelFrame = {};
@@ -2297,27 +2309,7 @@ void CG_NextWeapon_f( void ) {
 	for ( i = 0 ; i <= MAX_PLAYER_WEAPONS ; i++ )
 	{
 
-		//*SIGH*... Hack to put concussion rifle before rocketlauncher
-		if ( cg.weaponSelect == WP_FLECHETTE )
-		{
-			cg.weaponSelect = WP_CONCUSSION;
-		}
-		else if ( cg.weaponSelect == WP_CONCUSSION )
-		{
-			cg.weaponSelect = WP_ROCKET_LAUNCHER;
-		}
-		else if ( cg.weaponSelect == WP_DET_PACK )
-		{
-			cg.weaponSelect = firstWeapon;
-		}
-		else
-		{
-			cg.weaponSelect++;
-		}
-
-		if ( cg.weaponSelect < firstWeapon || cg.weaponSelect > MAX_PLAYER_WEAPONS) {
-			cg.weaponSelect = firstWeapon;
-		}
+		cg.weaponSelect = CG_WeaponCycleStep(cg.weaponSelect, 1, firstWeapon == WP_NONE);
 
 		if ( CG_WeaponSelectable( cg.weaponSelect, original, qfalse ) )
 		{
@@ -2353,27 +2345,7 @@ void CG_DPNextWeapon_f( void ) {
 	for ( i = 0 ; i <= MAX_PLAYER_WEAPONS ; i++ )
 	{
 
-		//*SIGH*... Hack to put concussion rifle before rocketlauncher
-		if ( cg.DataPadWeaponSelect == WP_FLECHETTE )
-		{
-			cg.DataPadWeaponSelect = WP_CONCUSSION;
-		}
-		else if ( cg.DataPadWeaponSelect == WP_CONCUSSION )
-		{
-			cg.DataPadWeaponSelect = WP_ROCKET_LAUNCHER;
-		}
-		else if ( cg.DataPadWeaponSelect == WP_DET_PACK )
-		{
-			cg.DataPadWeaponSelect = FIRST_WEAPON;
-		}
-		else
-		{
-			cg.DataPadWeaponSelect++;
-		}
-
-		if ( cg.DataPadWeaponSelect < FIRST_WEAPON || cg.DataPadWeaponSelect > MAX_PLAYER_WEAPONS) {
-			cg.DataPadWeaponSelect = FIRST_WEAPON;
-		}
+		cg.DataPadWeaponSelect = CG_WeaponCycleStep(cg.DataPadWeaponSelect, 1);
 
 		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original, qtrue ) )
 		{
@@ -2411,28 +2383,7 @@ void CG_DPPrevWeapon_f( void )
 	for ( i = 0 ; i <= MAX_PLAYER_WEAPONS ; i++ )
 	{
 
-		//*SIGH*... Hack to put concussion rifle before rocketlauncher
-		if ( cg.DataPadWeaponSelect == WP_ROCKET_LAUNCHER )
-		{
-			cg.DataPadWeaponSelect = WP_CONCUSSION;
-		}
-		else if ( cg.DataPadWeaponSelect == WP_CONCUSSION )
-		{
-			cg.DataPadWeaponSelect = WP_FLECHETTE;
-		}
-		else if ( cg.DataPadWeaponSelect == WP_MELEE )
-		{
-			cg.DataPadWeaponSelect = WP_DET_PACK;
-		}
-		else
-		{
-			cg.DataPadWeaponSelect--;
-		}
-
-		if ( cg.DataPadWeaponSelect < FIRST_WEAPON || cg.DataPadWeaponSelect > MAX_PLAYER_WEAPONS)
-		{
-			cg.DataPadWeaponSelect = MAX_PLAYER_WEAPONS;
-		}
+		cg.DataPadWeaponSelect = CG_WeaponCycleStep(cg.DataPadWeaponSelect, -1);
 
 		if ( CG_WeaponSelectable( cg.DataPadWeaponSelect, original, qtrue ) )
 		{
@@ -2501,28 +2452,7 @@ void CG_PrevWeapon_f( void ) {
 
 	for ( i = 0 ; i <= MAX_PLAYER_WEAPONS ; i++ ) {
 
-		//*SIGH*... Hack to put concussion rifle before rocketlauncher
-		if ( cg.weaponSelect == WP_ROCKET_LAUNCHER )
-		{
-			cg.weaponSelect = WP_CONCUSSION;
-		}
-		else if ( cg.weaponSelect == WP_CONCUSSION )
-		{
-			cg.weaponSelect = WP_FLECHETTE;
-		}
-		else if ( cg.weaponSelect == WP_MELEE )
-		{
-			cg.weaponSelect = WP_DET_PACK;
-		}
-		else
-		{
-			cg.weaponSelect--;
-		}
-
-
-		if ( cg.weaponSelect < firstWeapon || cg.weaponSelect > MAX_PLAYER_WEAPONS) {
-			cg.weaponSelect = MAX_PLAYER_WEAPONS;
-		}
+		cg.weaponSelect = CG_WeaponCycleStep(cg.weaponSelect, -1, firstWeapon == WP_NONE);
 
 		if ( CG_WeaponSelectable( cg.weaponSelect, original, qfalse ) )
 		{

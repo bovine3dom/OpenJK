@@ -130,6 +130,7 @@ See `docs/jo-campaign.md` for setup and renderer options.
 - [ ] Check doors, lifts, switches, code notifications, and datapad objectives. Record a sequence that stops or an objective that does not update.
 - [ ] Check weapon pickups, ammunition, enemy reactions, and friendly fire. Compare a nearby missed shot with a direct hit when investigating an unresponsive enemy.
 - [ ] Check dialogue, subtitles, music changes between exploration and combat, and cinematic transitions. Test cinematic skipping in a separate session.
+- [ ] Supply a save or screenshot of the passage with missing flames, before turning the pipes off. The generator pipe material and sampled walkway flame effects render in the diagnostic checks; the exact reported failure remains unconfirmed.
 - [ ] Save during combat and during a scripted task. Load each save and check that the encounter or task continues.
 - [ ] Die and reload. Check that objectives, equipment, and required NPCs remain correct.
 - [ ] After a mission transition, check carried weapons, ammunition, health, and Force powers. Quit, restart, load a save, and continue.
