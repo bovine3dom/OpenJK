@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "client_ui.h"
+#include "../game/bg_public.h"
 
 #ifndef _WIN32
 #include <cmath>
@@ -64,6 +65,28 @@ kbutton_t	in_strafe, in_speed;
 kbutton_t	in_up, in_down;
 
 kbutton_t	in_buttons[32];
+
+static kbutton_t in_showHud;
+static cvar_t *hudReveal;
+
+void CL_CancelHudReveal() {
+	in_showHud = {};
+	if (hudReveal) Cvar_Set("cg_hudReveal", "0");
+}
+
+bool CL_HudRevealActive() { return hudReveal && hudReveal->integer; }
+
+void CL_UpdateHudReveal() {
+	if (!hudReveal) return;
+	if (cls.state != CA_ACTIVE || !cls.cgameStarted || !cl.frame.valid || Key_GetCatcher() ||
+		cl.frame.ps.stats[STAT_HEALTH] <= 0 || cl.frame.ps.pm_type == PM_INTERMISSION || cl.frame.ps.viewEntity ||
+		Cvar_VariableIntegerValue("cl_paused") || Cvar_VariableIntegerValue("com_unfocused") ||
+		Cvar_VariableIntegerValue("com_minimized") || CL_IsRunningInGameCinematic()) {
+		CL_CancelHudReveal();
+		return;
+	}
+	if (hudReveal->integer != !!in_showHud.active) Cvar_SetValue("cg_hudReveal", !!in_showHud.active);
+}
 
 
 qboolean	in_mlooking;
@@ -279,6 +302,9 @@ float CL_KeyState( kbutton_t *key ) {
 }
 
 
+
+static void IN_ShowHudDown() { IN_KeyDown(&in_showHud); }
+static void IN_ShowHudUp() { IN_KeyUp(&in_showHud); }
 
 void IN_UpDown(void) {IN_KeyDown(&in_up);}
 void IN_UpUp(void) {IN_KeyUp(&in_up);}
@@ -979,14 +1005,24 @@ void CL_InitInput( void ) {
 #ifdef USE_RMLUI
 	CL_InitForceWheel();
 	CL_InitWeaponWheel();
+#endif
 #ifndef JK2_MODE
+	hudReveal = Cvar_Get("cg_hudReveal", "0", CVAR_ROM);
+	CL_CancelHudReveal();
+	Cmd_AddCommand("+showhud", IN_ShowHudDown);
+	Cmd_AddCommand("-showhud", IN_ShowHudUp);
+	if (!Cvar_Get("cg_hudRevealBindInitialized", "0", CVAR_ARCHIVE)->integer) {
+		const char *binding = Key_GetBinding('v');
+		if (Key_GetKey("+showhud") < 0 && (!binding || !*binding || !Q_stricmp(binding, "+strafe")))
+			Key_SetBinding('v', "+showhud");
+		Cvar_Set("cg_hudRevealBindInitialized", "1");
+	}
 	if (!Cvar_Get("cg_torchBindInitialized", "0", CVAR_ARCHIVE)->integer)
 	{
 		if (Key_GetKey("torch") < 0 && (!Key_GetBinding('l') || !*Key_GetBinding('l')))
 			Key_SetBinding('l', "torch");
 		Cvar_Set("cg_torchBindInitialized", "1");
 	}
-#endif
 #endif
 	Cmd_AddCommand ("centerview",IN_CenterView);
 

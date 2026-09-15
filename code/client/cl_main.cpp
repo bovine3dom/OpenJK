@@ -217,6 +217,7 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
+	CL_CancelHudReveal();
 #ifdef USE_RMLUI
 	CL_SelectionWheelsCancel();
 #endif
@@ -845,6 +846,7 @@ void CL_Frame ( int msec,float fractionMsec ) {
 	CL_CheckTimeout();
 
 	// send intentions now
+	CL_UpdateHudReveal();
 	CL_SendCmd();
 
 	// resend a connection request if necessary

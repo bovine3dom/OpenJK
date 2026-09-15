@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "qcommon/reticle_hud.h"
+#include "qcommon/hud_compass.h"
 #include <cassert>
 #include <cstdio>
 
@@ -126,5 +127,28 @@ int main() {
 	state.health = state.armor = 200;
 	view = tick();
 	assert(view.health == 1 && view.armor == 1);
-	std::puts("PASS: reticle HUD activity, fades, limits, weapon changes, and reset");
+	state.health = state.armor = state.healthMax = 100;
+	state.force = state.forceMax = 100;
+	state.ammo = state.ammoMax = 100;
+	idle();
+	idle();
+	view = activity.Update(state, now, true);
+	assert(view.healthAlpha == 1 && view.armorAlpha == 1 && view.forceAlpha == 1 && view.ammoAlpha == 1);
+	view = tick();
+	assert(view.healthAlpha == 0 && view.armorAlpha == 0 && view.forceAlpha == 0 && view.ammoAlpha == 0);
+	state.forceMax = state.ammoMax = 0;
+	state.stance = 2;
+	view = activity.Update(state, now, true);
+	assert(view.forceAlpha == 0 && view.ammoAlpha == 0 && view.stanceAlpha == 1);
+
+	using HudCompass::Project;
+	assert(Project(90, 0, 10, 0).position == 0); // North is ahead.
+	assert(Project(90, 10, 0, 0).position == 1); // East is right when facing north.
+	assert(Project(90, -10, 0, 0).position == -1);
+	assert(Project(0, -10, -1, 0).edge == 1 && Project(0, -10, 1, 0).edge == -1);
+	assert(std::abs(HudCompass::Offset(359, 1) + 2) < 0.001f);
+	assert(std::abs(HudCompass::Offset(1, 359) - 2) < 0.001f);
+	assert(Project(0, 0, 0, 100).position == 0 && Project(0, 0, 0, 100).elevation == 1);
+	assert(Project(0, 10, 0, -100).elevation == -1 && Project(0, 10, 0, 20).elevation == 0);
+	std::puts("PASS: HUD activity, temporary reveal, and compass bearings");
 }

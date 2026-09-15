@@ -41,7 +41,7 @@ class Activity {
 	}
 public:
 	void Reset() { *this = Activity(); }
-	Display Update(const reticleHudState_t& state, double now) {
+	Display Update(const reticleHudState_t& state, double now, bool reveal = false) {
 		if (valid && (state.time < previous.time || now - lastUpdate > 5.0)) Reset();
 		const bool weaponChanged = !valid || state.weapon != previous.weapon;
 		if (state.forceMax > 0 && (state.force < state.forceMax || state.forceActive || state.forceWarning ||
@@ -69,6 +69,12 @@ public:
 			if (result.health <= 0.25f) result.healthAlpha = std::max(result.healthAlpha, 0.45f);
 		}
 		previous = state;
+		if (reveal) {
+			result.forceAlpha = state.forceMax > 0 ? 1 : 0;
+			result.ammoAlpha = state.ammoMax > 0 && state.stance < 0 ? 1 : 0;
+			result.stanceAlpha = state.stance >= 0 ? 1 : 0;
+			result.healthAlpha = result.armorAlpha = state.healthMax > 0 && state.health > 0 ? 1 : 0;
+		}
 		lastUpdate = now;
 		valid = true;
 		return result;

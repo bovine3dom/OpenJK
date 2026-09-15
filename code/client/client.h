@@ -70,6 +70,10 @@ void CL_RmlUiShutdown();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
 #endif
 
+void CL_UpdateHudReveal();
+void CL_CancelHudReveal();
+bool CL_HudRevealActive();
+
 // snapshots are a view of the server at a given time
 typedef struct {
 	qboolean		valid;			// cleared if delta parsing was invalid

@@ -30,6 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "cg_media.h"
 #include "../game/objectives.h"
 #include "../game/g_vehicles.h"
+#include "qcommon/hud_compass.h"
 
 extern vmCvar_t	cg_debugHealthBars;
 
@@ -1808,9 +1809,102 @@ CG_DrawHUD
 */
 static bool reticleHudDrawn = false;
 
+static bool CG_FullHudVisible()
+{
+	return cg_hudReveal.integer && cg.snap && !cg.levelShot && !in_camera && !cg_endcredits.integer &&
+		cg.snap->ps.stats[STAT_HEALTH] > 0 && cg.snap->ps.pm_type != PM_INTERMISSION && !cg.snap->ps.viewEntity;
+}
+
+struct CompassAlly {
+	const gentity_t *entity;
+	float distance;
+	HudCompass::Marker marker;
+};
+
+static std::vector<CompassAlly> CG_CompassAllies()
+{
+	std::vector<CompassAlly> allies;
+	if (!cg.snap) return allies;
+	const gentity_t &player = g_entities[cg.snap->ps.clientNum];
+	if (!player.client) return allies;
+	for (int i = 0; i < ENTITYNUM_WORLD; ++i) {
+		const gentity_t &ent = g_entities[i];
+		if (&ent == &player || !ent.inuse || !ent.NPC || !ent.client || ent.health <= 0 ||
+			(ent.svFlags & SVF_NOCLIENT) || (ent.s.eFlags & EF_NODRAW) || ent.enemy == &player ||
+			ent.client->playerTeam != player.client->playerTeam) continue;
+		vec3_t delta;
+		VectorSubtract(ent.currentOrigin, cg.refdef.vieworg, delta);
+		allies.push_back({&ent, DistanceSquared(ent.currentOrigin, player.currentOrigin),
+			HudCompass::Project(cg.refdefViewAngles[YAW], delta[0], delta[1], ent.currentOrigin[2] - player.currentOrigin[2])});
+	}
+	std::sort(allies.begin(), allies.end(), [](const CompassAlly &a, const CompassAlly &b) {
+		return a.distance != b.distance ? a.distance < b.distance : a.entity->s.number < b.entity->s.number;
+	});
+	if (allies.size() > 8) allies.resize(8);
+	return allies;
+}
+
+void CG_HudStatus_f()
+{
+	cgi_Cvar_Update(&cg_hudReveal);
+	const bool active = CG_FullHudVisible();
+	const auto allies = active ? CG_CompassAllies() : std::vector<CompassAlly>();
+	CG_Printf("hud reveal=%d compass=%d heading=%.1f allies=%d\n", active, active, cg.refdefViewAngles[YAW], int(allies.size()));
+	for (const auto &ally : allies)
+		CG_Printf("hud ally=%d name=%s type=%s offset=%.1f position=%.3f edge=%d elevation=%d\n", ally.entity->s.number,
+			ally.entity->targetname ? ally.entity->targetname : "-", ally.entity->NPC_type ? ally.entity->NPC_type : "-",
+			ally.marker.offset, ally.marker.position, ally.marker.edge, ally.marker.elevation);
+}
+
+static void CG_CompassText(float x, float y, const char *text, const vec4_t color, float aspect)
+{
+	UiText::Style style;
+	style.x = x; style.y = y; style.size = 9;
+	memcpy(style.color, color, sizeof(style.color));
+	UiText::Metrics metrics;
+	if (cgi_R_PlexText(text, style, &metrics, qfalse)) {
+		style.x -= metrics.width * 0.5f;
+		cgi_R_PlexText(text, style, nullptr, qtrue);
+	} else {
+		CG_DrawStringExt(int(x - strlen(text) * 3 * aspect), int(y), text, color, qtrue, qtrue,
+			Q_max(1, int(6 * aspect)), 9);
+	}
+}
+
+static void CG_DrawCompass()
+{
+	const float aspect = 640.0f * cgs.glconfig.vidHeight / (480.0f * cgs.glconfig.vidWidth);
+	const float halfWidth = 120 * aspect;
+	const vec4_t background = {0, 0, 0, 0.2f}, line = {0.85f, 0.9f, 0.92f, 0.5f};
+	const vec4_t text = {0.9f, 0.94f, 0.95f, 0.85f}, friendly = {0.35f, 0.9f, 1, 0.9f};
+	CG_FillRect(320 - halfWidth, 14, halfWidth * 2, 28, background);
+	CG_FillRect(320 - halfWidth, 29, halfWidth * 2, 0.5f, line);
+	for (int bearing = 0; bearing < 360; bearing += 15) {
+		const float offset = HudCompass::Offset(cg.refdefViewAngles[YAW], float(bearing));
+		if (fabsf(offset) > 88) continue;
+		const float x = 320 + offset / 90 * halfWidth;
+		CG_FillRect(x, 26, 0.7f * aspect, bearing % 30 ? 3 : 5, line);
+		if (!(bearing % 90)) {
+			const char *directions[] = {"E", "N", "W", "S"};
+			CG_CompassText(x, 15, directions[bearing / 90], text, aspect);
+		}
+	}
+	CG_FillRect(320 - 0.5f * aspect, 27, aspect, 7, text);
+	for (const auto &ally : CG_CompassAllies()) {
+		const float x = 320 + ally.marker.position * (halfWidth - 5 * aspect);
+		if (ally.marker.edge) CG_CompassText(x, 30, ally.marker.edge < 0 ? "<" : ">", friendly, aspect);
+		else for (int row = -2; row <= 2; ++row) {
+			const float radius = float(2 - abs(row));
+			CG_FillRect(x - radius * aspect, 35 + row, (radius * 2 + 1) * aspect, 1, friendly);
+		}
+		if (ally.marker.elevation) CG_CompassText(x, ally.marker.elevation > 0 ? 24 : 39,
+			ally.marker.elevation > 0 ? "^" : "v", friendly, aspect);
+	}
+}
+
 static void CG_DrawHUD( centity_t *cent )
 {
-	if (reticleHudDrawn) return;
+	if (reticleHudDrawn && !CG_FullHudVisible()) return;
 	int value;
 	int	sectionXPos,sectionYPos,sectionWidth,sectionHeight;
 
@@ -2336,7 +2430,7 @@ static void CG_DrawStats( void )
 {
 	centity_t		*cent;
 
-	if ( cg_drawStatus.integer == 0 ) {
+	if ( cg_drawStatus.integer == 0 && !CG_FullHudVisible() ) {
 		return;
 	}
 
@@ -2358,7 +2452,7 @@ static void CG_DrawStats( void )
 		drawHud = CG_DrawCustomHealthHud( cent );
 	}
 
-	if (( drawHud ) && ( cg_drawHUD.integer ))
+	if (( drawHud ) && ( cg_drawHUD.integer || CG_FullHudVisible() ))
 	{
 		CG_DrawHUD( cent );
 	}
@@ -2792,7 +2886,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 		hShader = cgs.media.crosshairShader[ cg_drawCrosshair.integer % NUM_CROSSHAIRS ];
 
 		const centity_t& player = cg_entities[cg.snap->ps.clientNum];
-		const bool normalHud = cg_drawHUD.integer && cg_drawStatus.integer && !cg.zoomMode &&
+		const bool normalHud = ((cg_drawHUD.integer && cg_drawStatus.integer) || CG_FullHudVisible()) && !cg.zoomMode &&
 			player.gent && player.gent->client && !G_IsRidingVehicle(player.gent) &&
 			!(player.currentState.eFlags & EF_IN_ATST) && !(player.gent->s.eFlags & EF_LOCKED_TO_WEAPON);
 		reticleHudState_t hudState;
@@ -3951,7 +4045,8 @@ static void CG_Draw2D( void )
 	char	text[1024]={0};
 	int		w,y_pos;
 	centity_t *cent = &cg_entities[cg.snap->ps.clientNum];
-	const bool wheelAllowed = !cg.levelShot && cg_draw2D.integer && !in_camera &&
+	const bool fullHud = CG_FullHudVisible();
+	const bool wheelAllowed = !cg.levelShot && (cg_draw2D.integer || fullHud) && !in_camera &&
 		cg.snap->ps.pm_type != PM_INTERMISSION && cg.snap->ps.stats[STAT_HEALTH] > 0 &&
 		!cg.snap->ps.viewEntity && cent->gent && cent->gent->client && !G_IsRidingVehicle(cent->gent) &&
 		!(cent->currentState.eFlags & (EF_IN_ATST | EF_LOCKED_TO_WEAPON));
@@ -3964,7 +4059,7 @@ static void CG_Draw2D( void )
 		return;
 	}
 
-	if ( cg_draw2D.integer == 0 )
+	if ( cg_draw2D.integer == 0 && !fullHud )
 	{
 		return;
 	}
@@ -4044,11 +4139,12 @@ static void CG_Draw2D( void )
 		// Resolve the reticle first so the legacy HUD has a same-frame fallback.
 		CG_DrawCrosshairNames();
 
-		if ( cg.zoomMode == 0 )
+		if ( cg.zoomMode == 0 || fullHud )
 		{
 			CG_DrawStats();
 		}
 		CG_DrawAmmoWarning();
+		if (fullHud) CG_DrawCompass();
 
 		//CROSSHAIR is now done from the crosshair ent trace
 		//if ( !cg.renderingThirdPerson && !cg_dynamicCrosshair.integer ) // disruptor draws it's own crosshair artwork; binocs draw nothing; third person draws its own crosshair

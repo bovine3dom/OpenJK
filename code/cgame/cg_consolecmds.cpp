@@ -272,6 +272,7 @@ static consoleCommand_t	commands[] = {
 	{ "testparticle", CG_TestParticle_f },
 	{ "torch", CG_Torch_f },
 	{ "torch_status", CG_TorchStatus_f },
+	{ "hud_status", CG_HudStatus_f },
 	{ "testsurface",		CG_TestModelSurfaceOnOff_f },
 	{ "testuitext",          CG_TestUiText_f },
 	{ "viewpos",			CG_Viewpos_f },

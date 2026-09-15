@@ -16,6 +16,9 @@ visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
 ## Prepare
 
+- [ ] Hold V during normal JA and JO play. Check the status panels, resource rings, and compass. Release V and check that the normal HUD returns.
+- [ ] Follow allies around corners and between floors. Check the cyan bearings, behind-camera arrows, and height cues. Check readability at desktop resolution.
+
 - [ ] Use the separate development profile. Do not overwrite original saves or settings.
 - [ ] Record the package build ID, GPU, driver version, resolution, display refresh rate, and graphics settings.
 - [ ] Keep one package fixed during comparisons. The update command can fetch a newer package.

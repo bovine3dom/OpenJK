@@ -211,6 +211,7 @@ cvar_t* hudEnabled = nullptr;
 } // namespace
 
 void CL_RmlUiShutdown() {
+	CL_CancelHudReveal();
 	CL_SelectionWheelsCancel();
 	textOutlines.clear();
 	fontInkCenters.clear();
@@ -307,9 +308,9 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 		tint[c] = byte(255 * (std::isfinite(color[c]) ? std::max(0.0f, std::min(1.0f, color[c])) : 1.0f));
 	tint.alpha = byte(tint.alpha * 0.65f);
 	dot->SetProperty(Rml::PropertyId::BackgroundColor, Rml::Property(tint, Rml::Unit::COLOUR));
-	const bool drawHud = state && hudEnabled->integer;
+	const bool drawHud = state && (hudEnabled->integer || CL_HudRevealActive());
 	if (!drawHud) activity.Reset();
-	resources->SetDisplay(drawHud ? activity.Update(*state, systemInterface.GetElapsedTime()) : ReticleHud::Display(),
+	resources->SetDisplay(drawHud ? activity.Update(*state, systemInterface.GetElapsedTime(), CL_HudRevealActive()) : ReticleHud::Display(),
 		height / 480.0f * uiScale);
 	context->Update();
 	context->Render();

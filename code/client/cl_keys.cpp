@@ -1366,6 +1366,7 @@ Key_ClearStates
 ===================
 */
 void Key_ClearStates( void ) {
+	CL_CancelHudReveal();
 #ifdef USE_RMLUI
 	CL_SelectionWheelsCancel();
 #endif
