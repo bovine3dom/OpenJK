@@ -3465,6 +3465,10 @@ void R_CreateBuiltinImages( void ) {
 			GL_RGBA8);
 	}
 
+	if (r_softParticles->integer)
+		tr.softDepthImage = R_CreateImage("*softDepth", NULL, width, height, IMGTYPE_COLORALPHA,
+			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
+
 	if (r_ssao->integer)
 	{
 		const bool halfRes = !r_ssaoMethod->integer || r_gtaoHalfRes->integer;

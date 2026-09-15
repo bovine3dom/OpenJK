@@ -271,6 +271,25 @@ void CG_TestModelPrevSkin_f (void) {
 	CG_Printf( "skin %i\n", cg.testModelEntity.skinNum );
 }
 
+void CG_TestParticle_f()
+{
+	if (!cg_developer.integer || !cg.snap) return;
+	cg.testParticleEntity = {};
+	if (cgi_Argc() < 2) return;
+	refEntity_t &particle = cg.testParticleEntity;
+	particle.reType = RT_SPRITE;
+	particle.customShader = cgi_R_RegisterShader(CG_Argv(1));
+	particle.radius = Com_Clamp(1, 128, cgi_Argc() > 2 ? atof(CG_Argv(2)) : 24);
+	float offset = Com_Clamp(-64, 64, cgi_Argc() > 3 ? atof(CG_Argv(3)) : 4);
+	vec3_t end;
+	VectorMA(cg.refdef.vieworg, 512, cg.refdef.viewaxis[0], end);
+	trace_t trace;
+	CG_Trace(&trace, cg.refdef.vieworg, nullptr, nullptr, end, cg.snap->ps.clientNum, MASK_SOLID);
+	VectorMA(trace.endpos, offset, trace.plane.normal, particle.origin);
+	memset(particle.shaderRGBA, 255, sizeof(particle.shaderRGBA));
+	CG_Printf("Test particle: %.1f %.1f %.1f\n", particle.origin[0], particle.origin[1], particle.origin[2]);
+}
+
 static void CG_AddTestModel (void) {
 	// re-register the model, because the level may have changed
 /*	cg.testModelEntity.hModel = cgi_R_RegisterModel( cg.testModelName );
@@ -2209,6 +2228,8 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	if ( cg.testModelEntity.hModel ) {
 		CG_AddTestModel();
 	}
+	if (cg.testParticleEntity.radius > 0 && cg_developer.integer)
+		cgi_R_AddRefEntityToScene(&cg.testParticleEntity);
 
 	if ( !cg.hyperspace ) {
 		CG_AddLocalEntities();
@@ -2263,4 +2284,3 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	}
 	*/
 }
-

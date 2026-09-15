@@ -134,6 +134,9 @@ cvar_t  *r_forceAutoExposureMax;
 
 cvar_t  *r_depthPrepass;
 cvar_t  *r_ssao;
+cvar_t *r_softParticles, *r_softParticleDistance;
+cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
+cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
@@ -1524,6 +1527,22 @@ void R_Register( void )
 	r_cameraExposure = ri.Cvar_Get( "r_cameraExposure", "0", CVAR_CHEAT, "" );
 
 	r_depthPrepass = ri.Cvar_Get( "r_depthPrepass", "1", CVAR_ARCHIVE, "" );
+	r_softParticles = ri.Cvar_Get("r_softParticles", "1", CVAR_ARCHIVE | CVAR_LATCH, "Depth fade for blended sprite particles; requires the depth prepass.");
+	r_softParticleDistance = ri.Cvar_Get("r_softParticleDistance", "8", CVAR_ARCHIVE, "Particle intersection fade distance in world units; zero disables fading.");
+	ri.Cvar_CheckRange(r_softParticles, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_softParticleDistance, 0, 64, qfalse);
+	r_smaa = ri.Cvar_Get("r_smaa", "0", CVAR_ARCHIVE, "Enable SMAA 1x before UI rendering.");
+	r_smaaDebug = ri.Cvar_Get("r_smaaDebug", "0", 0, "SMAA debug: 0 scene, 1 edges, 2 weights.");
+	r_sss = ri.Cvar_Get("r_sss", "0", CVAR_ARCHIVE, "Skin diffusion strength for eligible stock Twilek face/skin materials.");
+	r_sssRadius = ri.Cvar_Get("r_sssRadius", "0.3", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
+	r_sssDebug = ri.Cvar_Get("r_sssDebug", "0", 0, "Show eligible skin mask instead of the scene.");
+	r_capsuleShadows = ri.Cvar_Get("r_capsuleShadows", "0", CVAR_ARCHIVE, "Skeletal capsule ground occlusion; requires screen AO and depth prepass.");
+	r_capsuleShadowStrength = ri.Cvar_Get("r_capsuleShadowStrength", "0.25", CVAR_ARCHIVE, "Capsule ground-shadow strength.");
+	for (cvar_t *v : {r_smaa, r_sssDebug, r_capsuleShadows}) ri.Cvar_CheckRange(v, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_smaaDebug, 0, 2, qtrue);
+	ri.Cvar_CheckRange(r_sss, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_sssRadius, 0.01f, 2, qfalse);
+	ri.Cvar_CheckRange(r_capsuleShadowStrength, 0, 1, qfalse);
 	r_ssao = ri.Cvar_Get( "r_ssao", "0", CVAR_LATCH | CVAR_ARCHIVE, "" );
 	r_sampleShading = ri.Cvar_Get("r_sampleShading", "0", CVAR_ARCHIVE, "Minimum shaded sample fraction for multisample scene rendering.");
 	ri.Cvar_CheckRange(r_sampleShading, 0, 1, qfalse);

@@ -154,6 +154,9 @@ extern cvar_t  *r_forceAutoExposureMax;
 
 extern cvar_t  *r_depthPrepass;
 extern cvar_t  *r_ssao;
+extern cvar_t *r_softParticles, *r_softParticleDistance;
+extern cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
+extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
 extern cvar_t  *r_ssaoStrength;
@@ -873,7 +876,8 @@ enum
 	TB_ENVBRDFMAP  = 7,
 	TB_SHADOWMAPARRAY  = 8,
 	TB_SSAOMAP     = 9,
-	NUM_TEXTURE_BUNDLES = 10
+	TB_SKINDEPTHMAP = 10,
+	NUM_TEXTURE_BUNDLES = 11
 };
 
 typedef enum
@@ -1428,6 +1432,10 @@ typedef enum
 	UNIFORM_NORMALSCALE,
 	UNIFORM_SPECULARSCALE,
 	UNIFORM_MATERIALPARAMS,
+	UNIFORM_SOFTPARTICLEPARAMS,
+	UNIFORM_SSSPARAMS,
+	UNIFORM_CAPSULEA,
+	UNIFORM_CAPSULEB,
 	UNIFORM_PARALLAXBIAS,
 
 	UNIFORM_VIEWINFO, // znear, zfar, width/2, height/2
@@ -2414,6 +2422,8 @@ typedef struct {
 	qboolean    colorMask[4];
 	qboolean    framePostProcessed;
 	int         ssaoViewParm;
+	int         softDepthViewParm;
+	bool        sssFill;
 	int         ssaoWeaponViewParm;
 	enum { DEPTH_ALL, DEPTH_WORLD, DEPTH_WEAPON_AO, DEPTH_WEAPON_NATIVE } ssaoDepthLayer;
 	bool        ssaoWeaponReady;
@@ -2488,6 +2498,9 @@ typedef struct trGlobals_s {
 	image_t					*hdrDepthImage;
 	image_t *ssaoRawImage, *weaponDepthImage, *weaponDepthFloatImage, *weaponSsaoImage;
 	image_t *aoScratchImage[2];
+	image_t *softDepthImage;
+	image_t *smaaImage[3], *smaaAreaImage, *smaaSearchImage;
+	image_t *sssImage, *sssAlbedoImage, *sssBlurImage[2], *sssCompositeImage;
 	int normalCacheHits, normalMapsGenerated, normalGenerationMsec;
 	image_t                 *renderCubeImage;
 	image_t                 *renderCubeDepthImage;
@@ -2512,6 +2525,8 @@ typedef struct trGlobals_s {
 	FBO_t					*hdrDepthFbo;
 	FBO_t *ssaoRawFbo, *weaponDepthFbo, *weaponDepthFloatFbo, *weaponSsaoFbo;
 	FBO_t *aoScratchFbo[2];
+	FBO_t *softDepthFbo;
+	FBO_t *smaaFbo[3], *sssFbo, *sssBlurFbo[2], *sssCompositeFbo;
 	FBO_t                   *renderCubeFbo[6];
 	FBO_t                   *filterCubeFbo;
 	FBO_t					*weatherDepthFbo;
@@ -2563,6 +2578,7 @@ typedef struct trGlobals_s {
 	shaderProgram_t tonemapShader[2];
 	shaderProgram_t calclevels4xShader[2];
 	shaderProgram_t ssaoShader;
+	shaderProgram_t smaaShader[3], sssShader, capsuleShader;
 	shaderProgram_t depthBlurShader[2];
 	shaderProgram_t testcubeShader;
 	shaderProgram_t prefilterEnvMapShader;
@@ -4086,6 +4102,32 @@ DepthRange RB_GetDepthRange( const trRefEntity_t *re, const shader_t *shader );
 inline bool R_IsViewModel(const refEntity_t &entity)
 {
 	return (entity.renderfx & (RF_FIRST_PERSON | RF_DEPTHHACK)) == (RF_FIRST_PERSON | RF_DEPTHHACK);
+}
+
+inline bool R_IsSoftParticle(const refEntity_t &entity)
+{
+	return !(entity.renderfx & (RF_DEPTHHACK
+#ifdef REND2_SP
+		| RF_NODEPTH
+#endif
+		)) && (entity.reType == RT_SPRITE
+#ifdef REND2_SP
+		|| entity.reType == RT_ORIENTED_QUAD
+#endif
+		);
+}
+
+inline bool R_IsSkinShader(const shader_t *shader)
+{
+	char name[MAX_QPATH];
+	COM_StripExtension(shader->name, name, sizeof(name));
+	static const char *materials[] = {"face", "face_01", "face_02", "face_03",
+		"torso_01_skin", "torso_02_skin", "torso_03_skin"};
+	const char *prefix = "models/players/jedi_tf/";
+	if (Q_stricmpn(name, prefix, strlen(prefix))) return false;
+	for (const char *material : materials)
+		if (!Q_stricmp(name + strlen(prefix), material)) return true;
+	return false;
 }
 
 #endif //TR_LOCAL_H

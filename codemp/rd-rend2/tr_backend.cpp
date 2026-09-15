@@ -20,6 +20,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 #include "tr_local.h"
+#include "Textures/AreaTex.h"
+#include "Textures/SearchTex.h"
 #include "tr_allocator.h"
 #include "glext.h"
 #include <algorithm>
@@ -1307,6 +1309,7 @@ static void RB_SubmitDrawSurfs(
 	int oldDlighted = 0;
 	int oldPostRender = 0;
 	int oldCubemapIndex = -1;
+	bool oldSoftParticle = false;
 #ifndef REND2_SP
 	CBoneCache *oldBoneCache = nullptr;
 #endif
@@ -1323,9 +1326,14 @@ static void RB_SubmitDrawSurfs(
 
 		R_DecomposeSort(drawSurf->sort, &entityNum, &shader, &cubemapIndex, &postRender);
 		assert(shader != nullptr);
+		const bool softParticle = r_softParticles->integer && entityNum != REFENTITYNUM_WORLD &&
+			R_IsSoftParticle(backEnd.refdef.entities[entityNum].e);
 		fogNum = drawSurf->fogIndex;
 		dlighted = drawSurf->dlightBits;
+		if (backEnd.sssFill && (fogNum || !R_IsSkinShader(shader))) continue;
 #ifdef REND2_SP
+		if (backEnd.sssFill && entityNum != REFENTITYNUM_WORLD &&
+			(backEnd.refdef.entities[entityNum].e.renderfx & (RF_FORCE_ENT_ALPHA | RF_ALPHA_FADE | RF_DISINTEGRATE1 | RF_DISINTEGRATE2))) continue;
 		const bool refractive = shader->useDistortion || (entityNum != REFENTITYNUM_WORLD &&
 			(backEnd.refdef.entities[entityNum].e.renderfx & RF_DISTORTION));
 		if ((backEnd.refractionFill != qfalse) != refractive)
@@ -1364,7 +1372,7 @@ static void RB_SubmitDrawSurfs(
 		// change the tess parameters if needed
 		// a "entityMergable" shader is a shader that can have surfaces from seperate
 		// entities merged into a single batch, like smoke and blood puff sprites
-		if ( (shader != oldShader ||
+		if ( (shader != oldShader || softParticle != oldSoftParticle ||
 				fogNum != oldFogNum ||
 				dlighted != oldDlighted ||
 				postRender != oldPostRender ||
@@ -1383,6 +1391,7 @@ static void RB_SubmitDrawSurfs(
 			oldDlighted = dlighted;
 			oldPostRender = postRender;
 			oldCubemapIndex = cubemapIndex;
+			oldSoftParticle = softParticle;
 		}
 
 		if ( entityNum != oldEntityNum )
@@ -2102,6 +2111,121 @@ static bool RB_SSAOEnabledForView()
 		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo);
 }
 
+static bool RB_FullMainView()
+{
+	return !backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
+		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo) &&
+		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+		backEnd.viewParms.viewportX == 0 && backEnd.viewParms.viewportY == 0 &&
+		backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
+}
+
+static void RB_RenderCapsules()
+{
+#ifdef REND2_SP
+	if (!r_capsuleShadows->integer || r_capsuleShadowStrength->value <= 0 || !RB_FullMainView()) return;
+	static const char *bones[] = {"pelvis", "thoracic", "cranium", "lfemurYZ", "ltibia", "ltalus",
+		"rfemurYZ", "rtibia", "rtalus", "lhumerus", "lradius", "lhand", "rhumerus", "rradius", "rhand"};
+	static const int links[][2] = {{0,1},{1,2},{3,4},{4,5},{6,7},{7,8},{9,10},{10,11},{12,13},{13,14}};
+	static const float radii[] = {7,5,4,3,4,3,3,2.5f,3,2.5f};
+	const auto &view = backEnd.viewParms;
+	FBO_Bind(tr.screenSsaoFbo);
+	qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
+	GL_State(GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO);
+	GL_Cull(CT_TWO_SIDED);
+	GLSL_BindProgram(&tr.capsuleShader);
+	GL_BindToTMU(tr.hdrDepthImage, 0);
+	const vec4_t info = {view.zFar / r_znear->value, view.zFar, tanf(DEG2RAD(view.fovX * 0.5f)), tanf(DEG2RAD(view.fovY * 0.5f))};
+	GLSL_SetUniformVec4(&tr.capsuleShader, UNIFORM_VIEWINFO, info);
+	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWORIGIN, view.ori.origin);
+	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWFORWARD, view.ori.axis[0]);
+	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWLEFT, view.ori.axis[1]);
+	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWUP, view.ori.axis[2]);
+	const vec4_t strength = {r_capsuleShadowStrength->value, 0, 0, 0};
+	GLSL_SetUniformVec4(&tr.capsuleShader, UNIFORM_SSSPARAMS, strength);
+	std::vector<const refEntity_t *> candidates;
+	for (int i = 0; i < backEnd.refdef.num_entities; ++i)
+	{
+		const refEntity_t &e = backEnd.refdef.entities[i].e;
+		if (e.reType == RT_MODEL && e.ghoul2 && e.ghoul2->size() && (*e.ghoul2)[0].mModelindex >= 0 &&
+			!(e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK | RF_FORCE_ENT_ALPHA | RF_ALPHA_FADE | RF_DISTORTION | RF_DISINTEGRATE1 | RF_DISINTEGRATE2)) &&
+			!Q_strncmp((*e.ghoul2)[0].mFileName, "models/players/", 15) && Distance(e.origin, view.ori.origin) <= 1024)
+			candidates.push_back(&e);
+	}
+	std::sort(candidates.begin(), candidates.end(), [&view](const refEntity_t *a, const refEntity_t *b) {
+		return Distance(a->origin, view.ori.origin) < Distance(b->origin, view.ori.origin);
+	});
+	int actors = 0;
+	for (const refEntity_t *candidate : candidates)
+	{
+		if (actors >= 8) break;
+		const refEntity_t &e = *candidate;
+		CGhoul2Info_v &g2 = *e.ghoul2;
+		const char *gla = G2API_GetGLAName(&g2[0]);
+		if (!gla || !strstr(gla, "_humanoid")) continue;
+		vec3_t points[15], mins, maxs;
+		bool valid[15] = {};
+		ClearBounds(mins, maxs);
+		for (int b = 0; b < 15; ++b)
+		{
+			const int bolt = G2API_AddBolt(&g2[0], bones[b]);
+			if (bolt < 0) continue;
+			mdxaBone_t matrix;
+			valid[b] = G2API_GetBoltMatrix(g2, 0, bolt, &matrix, e.angles, e.origin,
+				backEnd.refdef.time, nullptr, e.modelScale) != qfalse;
+			G2API_RemoveBolt(&g2[0], bolt);
+			if (valid[b])
+			{
+				for (int axis = 0; axis < 3; ++axis) points[b][axis] = matrix.matrix[axis][3];
+				AddPointToBounds(points[b], mins, maxs);
+			}
+		}
+		vec4_t a[12] = {}, b[12] = {};
+		int count = 0;
+		float scale = MAX(fabsf(e.modelScale[0]), MAX(fabsf(e.modelScale[1]), fabsf(e.modelScale[2])));
+		if (!scale) scale = 1;
+		for (int link = 0; link < 10; ++link)
+			if (valid[links[link][0]] && valid[links[link][1]])
+			{
+				VectorCopy(points[links[link][0]], a[count]); a[count][3] = radii[link] * scale;
+				VectorCopy(points[links[link][1]], b[count]); ++count;
+			}
+		if (!count) continue;
+		// Bound the screen work to the actor and its short-range ground shadow.
+		for (int axis = 0; axis < 3; ++axis) { mins[axis] -= 48; maxs[axis] += 48; }
+		matrix_t vp;
+		Matrix16Multiply(view.projectionMatrix, view.world.modelViewMatrix, vp);
+		float left = 1, right = -1, bottom = 1, top = -1;
+		bool crossesNear = false, inFront = false;
+		for (int corner = 0; corner < 8; ++corner)
+		{
+			vec3_t p;
+			for (int axis = 0; axis < 3; ++axis) p[axis] = (corner & (1 << axis)) ? maxs[axis] : mins[axis];
+			float w = vp[3]*p[0] + vp[7]*p[1] + vp[11]*p[2] + vp[15];
+			if (w <= 0.01f) { crossesNear = true; continue; }
+			inFront = true;
+			float x = (vp[0]*p[0] + vp[4]*p[1] + vp[8]*p[2] + vp[12]) / w;
+			float y = (vp[1]*p[0] + vp[5]*p[1] + vp[9]*p[2] + vp[13]) / w;
+			left = MIN(left, x); right = MAX(right, x); bottom = MIN(bottom, y); top = MAX(top, y);
+		}
+		if (!inFront) continue;
+		if (crossesNear) { left = bottom = -1; right = top = 1; }
+		int x = int((Com_Clamp(-1,1,left)*0.5f+0.5f)*tr.screenSsaoFbo->width);
+		int y = int((Com_Clamp(-1,1,bottom)*0.5f+0.5f)*tr.screenSsaoFbo->height);
+		int x2 = int(ceilf((Com_Clamp(-1,1,right)*0.5f+0.5f)*tr.screenSsaoFbo->width));
+		int y2 = int(ceilf((Com_Clamp(-1,1,top)*0.5f+0.5f)*tr.screenSsaoFbo->height));
+		if (x2 <= x || y2 <= y) continue;
+		qglScissor(x, y, x2-x, y2-y);
+		qglUniform4fv(tr.capsuleShader.uniforms[UNIFORM_CAPSULEA], 12, a[0]);
+		qglUniform4fv(tr.capsuleShader.uniforms[UNIFORM_CAPSULEB], 12, b[0]);
+		memcpy(tr.capsuleShader.uniformBuffer + tr.capsuleShader.uniformBufferOffsets[UNIFORM_CAPSULEA], a, sizeof(a));
+		memcpy(tr.capsuleShader.uniformBuffer + tr.capsuleShader.uniformBufferOffsets[UNIFORM_CAPSULEB], b, sizeof(b));
+		RB_InstantTriangle();
+		++actors;
+	}
+#endif
+}
+
 static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float radius)
 {
 	gpuFrame_t *frame = &backEndData->frames[backEndData->realFrameNumber % MAX_FRAMES];
@@ -2238,6 +2362,12 @@ static void RB_RenderDepthOnly( drawSurf_t *drawSurfs, int numDrawSurfs )
 			nullptr,
 			nullptr, 0);
 	}
+	if (r_softParticles->integer)
+	{
+		vec4i_t box = {0, tr.renderDepthImage->height, tr.renderDepthImage->width, -tr.renderDepthImage->height};
+		FBO_BlitFromTexture(tr.renderDepthImage, box, nullptr, tr.softDepthFbo, nullptr, nullptr, nullptr, 0);
+		backEnd.softDepthViewParm = backEnd.viewParms.currentViewParm;
+	}
 }
 
 static void RB_RenderMainPass( drawSurf_t *drawSurfs, int numDrawSurfs )
@@ -2304,6 +2434,7 @@ static void RB_RenderAllDepthRelatedPasses( drawSurf_t *drawSurfs, int numDrawSu
 	if (ssao)
 	{
 		RB_RenderSSAO(tr.hdrDepthImage, tr.ssaoRawFbo, tr.screenSsaoFbo, r_ssaoRadius->value);
+		RB_RenderCapsules();
 		backEnd.ssaoViewParm = backEnd.viewParms.currentViewParm;
 		bool hasWeapon = false;
 		for (int i = 0; i < numDrawSurfs && !hasWeapon; ++i)
@@ -2734,6 +2865,8 @@ static void RB_UpdateGhoul2Constants(gpuFrame_t *frame, const trRefdef_t *refdef
 
 void RB_UpdateConstants(const trRefdef_t *refdef)
 {
+	backEnd.sssFill = false;
+	backEnd.softDepthViewParm = -1;
 	// Cached view indices are reused for each scene, including empty scenes.
 	backEnd.ssaoViewParm = -1;
 	backEnd.ssaoWeaponViewParm = -1;
@@ -2999,6 +3132,116 @@ RB_PostProcess
 
 =============
 */
+static void RB_CreatePostTarget(image_t **image, FBO_t **fbo, const char *name, int format)
+{
+	*image = R_CreateImage(name, nullptr, glConfig.vidWidth, glConfig.vidHeight, IMGTYPE_COLORALPHA,
+		IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NOLIGHTSCALE, format);
+	*fbo = FBO_Create((*image)->imgName, glConfig.vidWidth, glConfig.vidHeight);
+	FBO_Bind(*fbo);
+	FBO_AttachTextureImage(*image, 0);
+	FBO_SetupDrawBuffers();
+	R_CheckFBO(*fbo);
+}
+
+static FBO_t *RB_SkinDiffusion(FBO_t *scene)
+{
+	if ((!r_sss->value && !r_sssDebug->integer) || !RB_FullMainView()) return scene;
+	bool eligible = false;
+	for (int i = backEnd.refdef.fistDrawSurf; i < backEnd.refdef.numDrawSurfs && !eligible; ++i)
+	{
+		int entity, cube, post;
+		shader_t *shader;
+		R_DecomposeSort(backEnd.refdef.drawSurfs[i].sort, &entity, &shader, &cube, &post);
+		eligible = R_IsSkinShader(shader);
+	}
+	if (!eligible && !r_sssDebug->integer) return scene;
+	if (!tr.sssFbo)
+	{
+		RB_CreatePostTarget(&tr.sssImage, &tr.sssFbo, "*skinIrradiance", GL_RGBA16F);
+		tr.sssAlbedoImage = R_CreateImage("*skinAlbedo", nullptr, glConfig.vidWidth, glConfig.vidHeight,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NOLIGHTSCALE, GL_RGBA16F);
+		FBO_AttachTextureImage(tr.sssAlbedoImage, 1);
+		FBO_SetupDrawBuffers();
+		R_CheckFBO(tr.sssFbo);
+		for (int i = 0; i < 2; ++i)
+			RB_CreatePostTarget(&tr.sssBlurImage[i], &tr.sssBlurFbo[i], va("*skinBlur%d", i), GL_RGBA16F);
+		RB_CreatePostTarget(&tr.sssCompositeImage, &tr.sssCompositeFbo, "*skinComposite", GL_RGBA16F);
+	}
+	FBO_Bind(tr.sssFbo);
+	qglViewport(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+	qglScissor(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+	const vec4_t zero = {};
+	qglClearBufferfv(GL_COLOR, 0, zero);
+	qglClearBufferfv(GL_COLOR, 1, zero);
+	backEnd.sssFill = true;
+	RB_RenderDrawSurfList(backEnd.refdef.drawSurfs + backEnd.refdef.fistDrawSurf,
+		backEnd.refdef.numDrawSurfs - backEnd.refdef.fistDrawSurf);
+	backEnd.sssFill = false;
+	GL_State(GLS_DEPTHTEST_DISABLE);
+	GL_Cull(CT_TWO_SIDED);
+	GLSL_BindProgram(&tr.sssShader);
+	const vec4_t info = {backEnd.viewParms.zFar / r_znear->value, backEnd.viewParms.zFar,
+		tanf(DEG2RAD(backEnd.viewParms.fovX * 0.5f)), tanf(DEG2RAD(backEnd.viewParms.fovY * 0.5f))};
+	GLSL_SetUniformVec4(&tr.sssShader, UNIFORM_VIEWINFO, info);
+	GL_BindToTMU(tr.renderDepthImage, 1);
+	GL_BindToTMU(tr.sssAlbedoImage, 2);
+	GL_BindToTMU(tr.sssImage, 3);
+	for (int i = 0; i < 2; ++i)
+	{
+		FBO_Bind(tr.sssBlurFbo[i]);
+		GL_BindToTMU(i ? tr.sssBlurImage[0] : tr.sssImage, 0);
+		const vec4_t params = {i ? 0.0f : 1.0f, i ? 1.0f : 0.0f, r_sssRadius->value, 0};
+		GLSL_SetUniformVec4(&tr.sssShader, UNIFORM_SSSPARAMS, params);
+		RB_InstantTriangle();
+	}
+	FBO_Bind(tr.sssCompositeFbo);
+	GL_BindToTMU(tr.sssBlurImage[1], 0);
+	GL_BindToTMU(scene->colorImage[0], 1);
+	const vec4_t params = {0, 0, r_sss->value, r_sssDebug->integer ? 2.0f : 1.0f};
+	GLSL_SetUniformVec4(&tr.sssShader, UNIFORM_SSSPARAMS, params);
+	RB_InstantTriangle();
+	return tr.sssCompositeFbo;
+}
+
+static void RB_SMAA()
+{
+	if (!r_smaa->integer || !RB_FullMainView() || r_ssaoDebug->integer || r_sssDebug->integer) return;
+	if (!tr.smaaFbo[0])
+	{
+		for (int i = 0; i < 3; ++i)
+			RB_CreatePostTarget(&tr.smaaImage[i], &tr.smaaFbo[i], va("*smaa%d", i), GL_RGBA8);
+		std::vector<byte> area(AREATEX_WIDTH * AREATEX_HEIGHT * 4, 255);
+		for (int i = 0; i < AREATEX_WIDTH * AREATEX_HEIGHT; ++i)
+		{ area[4*i] = areaTexBytes[2*i]; area[4*i+1] = areaTexBytes[2*i+1]; }
+		tr.smaaAreaImage = R_CreateImage("*smaaArea", area.data(), AREATEX_WIDTH, AREATEX_HEIGHT,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NOLIGHTSCALE, GL_RGBA8);
+		std::vector<byte> search(SEARCHTEX_WIDTH * SEARCHTEX_HEIGHT * 4, 255);
+		for (int i = 0; i < SEARCHTEX_WIDTH * SEARCHTEX_HEIGHT; ++i) search[4*i] = searchTexBytes[i];
+		tr.smaaSearchImage = R_CreateImage("*smaaSearch", search.data(), SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT,
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NOLIGHTSCALE, GL_RGBA8);
+	}
+	FBO_FastBlit(nullptr, nullptr, tr.smaaFbo[0], nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	GL_State(GLS_DEPTHTEST_DISABLE);
+	GL_Cull(CT_TWO_SIDED);
+	qglViewport(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+	qglScissor(0, 0, glConfig.vidWidth, glConfig.vidHeight);
+	const vec2_t invSize = {1.0f / glConfig.vidWidth, 1.0f / glConfig.vidHeight};
+	const vec4_t zero = {};
+	for (int i = 0; i < 3; ++i)
+	{
+		FBO_Bind(i == 2 ? nullptr : tr.smaaFbo[i+1]);
+		if (i != 2) qglClearBufferfv(GL_COLOR, 0, zero);
+		GLSL_BindProgram(&tr.smaaShader[i]);
+		GLSL_SetUniformVec2(&tr.smaaShader[i], UNIFORM_INVTEXRES, invSize);
+		GL_BindToTMU(i == 1 ? tr.smaaImage[1] : tr.smaaImage[0], 0);
+		GL_BindToTMU(i == 1 ? tr.smaaAreaImage : tr.smaaImage[2], 1);
+		GL_BindToTMU(tr.smaaSearchImage, 2);
+		RB_InstantTriangle();
+	}
+	if (r_smaaDebug->integer)
+		FBO_FastBlit(tr.smaaFbo[r_smaaDebug->integer], nullptr, nullptr, nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+}
+
 const void *RB_PostProcess(const void *data)
 {
 	const postProcessCommand_t *cmd = (const postProcessCommand_t *)data;
@@ -3030,6 +3273,7 @@ const void *RB_PostProcess(const void *data)
 		}
 	}
 
+	srcFbo = RB_SkinDiffusion(srcFbo);
 	dstBox[0] = backEnd.viewParms.viewportX;
 	dstBox[1] = backEnd.viewParms.viewportY;
 	dstBox[2] = backEnd.viewParms.viewportWidth;
@@ -3166,6 +3410,7 @@ const void *RB_PostProcess(const void *data)
 		R_SP_DrawGoggles();
 #endif
 
+	RB_SMAA();
 	if (RB_SSAOEnabledForView() &&
 		backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm &&
 		(r_ssaoDebug->integer >= 1 && r_ssaoDebug->integer <= 4))
@@ -3272,6 +3517,7 @@ static const void *RB_DrawSurfs(const void *data) {
 	}
 
 	cmd = (const drawSurfsCommand_t *)data;
+	backEnd.softDepthViewParm = -1;
 
 	backEnd.ssaoViewParm = -1;
 	backEnd.ssaoWeaponViewParm = -1;

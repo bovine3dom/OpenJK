@@ -132,6 +132,7 @@ def main():
     mode.add_argument("--vitals", action="store_true", help="Test contextual health and shield arcs")
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "reticle-tests")
     parser.add_argument("--modern", action="store_true", help="Use GTAO and sample-shaded 4x MSAA in Rend2")
+    parser.add_argument("--raster", action="store_true", help="Also enable capsule shadows, skin diffusion, and SMAA in Rend2")
     parser.add_argument("--hardware", action="store_true", help="Use headless hardware EGL for Rend2")
     args = parser.parse_args()
     package = args.package.resolve()
@@ -145,9 +146,11 @@ def main():
     (overlay / "OpenJK").mkdir()
     if (assets / "OpenJK").is_dir():
         for item in (assets / "OpenJK").iterdir():
-            if item.name != fixture:
+            if item.name not in (fixture, "raster-ui.cfg"):
                 (overlay / "OpenJK" / item.name).symlink_to(item)
     (overlay / "OpenJK" / fixture).symlink_to(ROOT / "scripts" / fixture)
+    if args.raster:
+        (overlay / "OpenJK/raster-ui.cfg").write_text("r_smaa 1\nr_sss 0.5\nr_capsuleShadows 1\n")
     report = {"package": str(package), "runs": [], "failures": []}
     print(f"Reticle-test output: {output}", flush=True)
     for renderer in ("rdsp-vanilla", "rdsp-rend2"):
@@ -171,6 +174,9 @@ def main():
                 for key, value in dict(r_ssao=1, r_ssaoMethod=1, r_sampleShading=1,
                                        r_ext_multisample=4, r_normalMapping=1, r_specularMapping=1).items():
                     command += ["+set", key, str(value)]
+            if args.raster and renderer == "rdsp-rend2":
+                index = command.index("+exec")
+                command[index:index] = ["+exec", "raster-ui.cfg"]
             states = ("default", "normal", "scaled", "hidden", "legacy", "legacy-hidden", "restored", "restarted")
             if args.hud:
                 states = ("hud_idle", "hud_legacy", "hud_resources", "hud_fast", "hud_medium", "hud_strong",

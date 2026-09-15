@@ -57,6 +57,19 @@ They need suitable material or map data. Test them separately if that data exist
 - [ ] Measure AO, glow, shadows, and anti-aliasing separately before combining them.
 - [ ] Select a resolution and frame-rate target from the results. Do not label a preset as verified before these tests pass.
 
+## New Raster Feature Checks
+
+The default Twi'lek player's face and explicit torso-skin materials passed the
+SSS eligibility gate. See `docs/raster-features-sp.md` for controls and limits.
+
+- [ ] Compare capsule shadows with `r_capsuleShadows 0` and `1`. Use `r_ssao 1`, `r_depthPrepass 1`, and `r_ssaoAmbientOnly 0`. Temporarily use `cg_shadows 0` to isolate them.
+- [ ] Check capsule shadows at feet, on stairs and slopes, near walls, and after dismemberment. Record shadow overlap or leakage through nearby walls.
+- [ ] On the default Twi'lek player, inspect `r_sssDebug 1`. Only the supported face and exposed torso regions should be bright. Eyes, teeth, and clothing must remain outside the mask.
+- [ ] Compare `r_sss 0` and `0.5`, starting at `r_sssRadius 0.3`. Check facial texture detail, sharp specular highlights, boundaries, and overlap with smoke or refractive effects.
+- [ ] Compare `r_softParticleDistance 0` and `8` with `r_softParticles 1`. Check smoke, explosions, additive effects, camera intersections, and depth edges. Particle texture animation can obscure a comparison.
+- [ ] Compare `r_smaa 0` and `1` with sample shading disabled. Check diagonals, foliage, small geometry, and motion shimmer. HUD and menu text should retain native-resolution sharpness.
+- [ ] Measure effects separately before enabling them together. Record resolution, MSAA, build ID, and slow frame times. Capsule shadows, SSS, and SMAA currently start disabled.
+
 ## Material Calibration Decisions
 
 The user reports that half-resolution GTAO works well. It is now the default

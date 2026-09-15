@@ -53,6 +53,10 @@ typedef struct FBO_s
 } FBO_t;
 
 void FBO_Bind(FBO_t *fbo);
+FBO_t *FBO_Create(const char *name, int width, int height);
+void FBO_AttachTextureImage(struct image_s *image, int index);
+void FBO_SetupDrawBuffers();
+qboolean R_CheckFBO(const FBO_t *fbo);
 void FBO_Init(void);
 void FBO_Shutdown(void);
 

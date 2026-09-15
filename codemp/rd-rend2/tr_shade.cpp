@@ -1441,6 +1441,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		}
 
 		stateBits = pStage->stateBits;
+		if (backEnd.sssFill && (pStage->glslShaderGroup != tr.lightallShader ||
+			(stateBits & GLS_SRCBLEND_BITS))) continue;
 
 		if (backEnd.currentEntity)
 		{
@@ -1663,6 +1665,28 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		const vec4_t materialParams = {Com_Clamp(0, 4, r_specularStrength->value),
 			Com_Clamp(0, 1, r_roughnessFloor->value), Com_Clamp(0.05f, 4, r_roughnessScale->value), 0};
 		uniformDataWriter.SetUniformVec4(UNIFORM_MATERIALPARAMS, materialParams);
+		const vec4_t sssParams = {backEnd.sssFill ? 1.0f : 0.0f, 0, 0, 0};
+		uniformDataWriter.SetUniformVec4(UNIFORM_SSSPARAMS, sssParams);
+		if (pStage->glslShaderGroup == tr.lightallShader && !forceRefraction)
+			samplerBindingsWriter.AddStaticImage(backEnd.sssFill ? tr.renderDepthImage : tr.whiteImage, TB_SKINDEPTHMAP);
+		vec4_t softParams = {};
+		const int srcBlend = stateBits & GLS_SRCBLEND_BITS;
+		const int dstBlend = stateBits & GLS_DSTBLEND_BITS;
+		if (pStage->glslShaderGroup != tr.lightallShader && r_softParticles->integer && r_softParticleDistance->value > 0 &&
+			!backEnd.projection2D && !backEnd.depthFill && !backEnd.refractionFill &&
+			backEnd.softDepthViewParm == backEnd.viewParms.currentViewParm &&
+			!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && R_IsSoftParticle(backEnd.currentEntity->e) &&
+			!(stateBits & (GLS_DEPTHMASK_TRUE | GLS_DEPTHTEST_DISABLE)) &&
+			pStage->alphaTestType == ALPHA_TEST_NONE &&
+			(srcBlend == GLS_SRCBLEND_SRC_ALPHA || srcBlend == GLS_SRCBLEND_ONE) &&
+			(dstBlend == GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA || dstBlend == GLS_DSTBLEND_ONE))
+		{
+			VectorSet4(softParams, 1.0f / MAX(0.001f, r_softParticleDistance->value),
+				backEnd.viewParms.zFar / r_znear->value, backEnd.viewParms.zFar, srcBlend == GLS_SRCBLEND_ONE ? 1.0f : 0.0f);
+		}
+		if (pStage->glslShaderGroup != tr.lightallShader && !forceRefraction)
+			samplerBindingsWriter.AddStaticImage(softParams[0] > 0 ? tr.softDepthImage : tr.whiteImage, TB_SHADOWMAP);
+		uniformDataWriter.SetUniformVec4(UNIFORM_SOFTPARTICLEPARAMS, softParams);
 
 		const float parallaxBias = r_forceParallaxBias->value > 0.0f ? r_forceParallaxBias->value : pStage->parallaxBias;
 		uniformDataWriter.SetUniformFloat(UNIFORM_PARALLAXBIAS, parallaxBias);
@@ -1883,6 +1907,8 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 		DrawItem item = {};
 		item.renderState.stateBits = stateBits;
+		if (backEnd.sssFill)
+			item.renderState.stateBits = (stateBits & ~(GLS_DEPTHMASK_TRUE | GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS)) | GLS_DEPTHTEST_DISABLE;
 		item.renderState.cullType = forceRefraction ? CT_TWO_SIDED : cullType;
 		item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, input->shader);
 		item.program = sp;
@@ -1994,7 +2020,7 @@ void RB_StageIteratorGeneric( void )
 		//
 		// pshadows!
 		//
-		if (r_shadows->integer == 4 &&
+		if (!backEnd.sssFill && r_shadows->integer == 4 &&
 				tess.pshadowBits &&
 				tess.shader->sort <= SS_OPAQUE &&
 				!(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY)))
@@ -2020,7 +2046,7 @@ void RB_StageIteratorGeneric( void )
 		{
 			fog = tr.world->fogs + input->fogNum;
 		}
-		if (fog && tess.shader->fogPass && r_drawfog->integer)
+		if (fog && tess.shader->fogPass && r_drawfog->integer && !backEnd.sssFill)
 			RB_FogPass(input, &vertexArrays);
 
 		//

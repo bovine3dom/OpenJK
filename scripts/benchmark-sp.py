@@ -49,7 +49,8 @@ def run(args, suite, index, settings):
               "system": platform.platform(),
               "cache_note": CACHE_NOTE,
               "scene": {"map": "t2_wedge", "third_person": settings["cg_thirdPerson"],
-                        "npc_freeze": settings.get("d_npcfreeze", 0), "weapon_command": args.weapon},
+                         "npc_freeze": settings.get("d_npcfreeze", 0), "weapon_command": args.weapon,
+                         "viewpos": args.viewpos, "noclip": args.noclip},
               "environment": {k: env.get(k) for k in ("SDL_VIDEODRIVER", "EGL_PLATFORM",
                   "SDL_AUDIODRIVER", "LIBGL_ALWAYS_SOFTWARE", "XDG_CACHE_HOME", "MESA_SHADER_CACHE_DIR")}}
     lines = []
@@ -112,7 +113,10 @@ def run(args, suite, index, settings):
         result["actual_mode"] = [int(v) for v in modes[-1]]
         result["glsl_summary"] = [dict(zip(("total", "generic", "light", "other", "seconds"),
             [int(v) for v in m[:4]] + [float(m[4])])) for m in SHADERS.findall(text)]
-        send(f"exitview; god; setviewpos 2688 640 -60 315; set cg_thirdPerson {settings['cg_thirdPerson']}; "
+        if args.noclip:
+            send("noclip")
+        position = " ".join(str(value) for value in args.viewpos)
+        send(f"exitview; god; setviewpos {position}; set cg_thirdPerson {settings['cg_thirdPerson']}; "
              f"set cg_draw2D {settings['cg_draw2D']}; set d_npcfreeze {settings.get('d_npcfreeze', 0)}; "
              "com_speeds 0; echo OJK_BENCH_SCENE")
         scene = wait_for("OJK_BENCH_SCENE")
@@ -242,6 +246,8 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--reloads", type=int, default=0, help="Measure same-process map reloads after the frame test")
     parser.add_argument("--weapon", type=int, choices=range(2, 10), help="Equip a weapon for a first-person benchmark")
+    parser.add_argument("--viewpos", nargs=4, type=float, default=(2688, 640, -60, 315), metavar=("X", "Y", "Z", "YAW"))
+    parser.add_argument("--noclip", action="store_true", help="Hold an airborne test position")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--map", choices=("t2_wedge",), default="t2_wedge")
@@ -252,6 +258,8 @@ def main():
     parser.add_argument("--cvar", nargs=2, action="append", default=[], metavar=("NAME", "VALUE"),
                         help="Override a numeric or single-word setting for an A/B test")
     args = parser.parse_args()
+    if any(not math.isfinite(value) or abs(value) > 100000 for value in args.viewpos):
+        parser.error("Invalid view position")
     for name, value in args.cvar:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) or not re.fullmatch(r"[A-Za-z0-9_.+-]+", value):
             parser.error("Cvar overrides require a name and a numeric or single-word value")

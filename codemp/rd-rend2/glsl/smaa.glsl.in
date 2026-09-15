@@ -1,0 +1,50 @@
+/*[Vertex]*/
+uniform vec2 u_InvTexRes;
+#define SMAA_GLSL_3 1
+#define SMAA_PRESET_HIGH 1
+#define SMAA_RT_METRICS vec4(u_InvTexRes, 1.0 / u_InvTexRes)
+#define SMAA_INCLUDE_PS 0
+@SMAA_HEADER@
+out vec2 var_Texcoord;
+out vec2 var_Pixcoord;
+out vec4 var_Offset[3];
+void main()
+{
+    vec2 position = vec2((gl_VertexID == 2) ? 3.0 : -1.0, (gl_VertexID == 1) ? 3.0 : -1.0);
+    gl_Position = vec4(position, 0.0, 1.0);
+    var_Texcoord = position * 0.5 + 0.5;
+    var_Pixcoord = vec2(0.0);
+    for (int i = 0; i < 3; ++i) var_Offset[i] = vec4(0.0);
+#if SMAA_PASS == 0
+    SMAAEdgeDetectionVS(var_Texcoord, var_Offset);
+#elif SMAA_PASS == 1
+    SMAABlendingWeightCalculationVS(var_Texcoord, var_Pixcoord, var_Offset);
+#else
+    SMAANeighborhoodBlendingVS(var_Texcoord, var_Offset[0]);
+#endif
+}
+/*[Fragment]*/
+uniform vec2 u_InvTexRes;
+#define SMAA_GLSL_3 1
+#define SMAA_PRESET_HIGH 1
+#define SMAA_RT_METRICS vec4(u_InvTexRes, 1.0 / u_InvTexRes)
+#define SMAA_INCLUDE_VS 0
+@SMAA_HEADER@
+uniform sampler2D u_ScreenImageMap;
+uniform sampler2D u_DiffuseMap;
+uniform sampler2D u_NormalMap;
+in vec2 var_Texcoord;
+in vec2 var_Pixcoord;
+in vec4 var_Offset[3];
+out vec4 out_Color;
+void main()
+{
+#if SMAA_PASS == 0
+    out_Color = vec4(SMAALumaEdgeDetectionPS(var_Texcoord, var_Offset, u_ScreenImageMap), 0.0, 1.0);
+#elif SMAA_PASS == 1
+    out_Color = SMAABlendingWeightCalculationPS(var_Texcoord, var_Pixcoord, var_Offset,
+        u_ScreenImageMap, u_DiffuseMap, u_NormalMap, vec4(0.0));
+#else
+    out_Color = SMAANeighborhoodBlendingPS(var_Texcoord, var_Offset[0], u_ScreenImageMap, u_DiffuseMap);
+#endif
+}

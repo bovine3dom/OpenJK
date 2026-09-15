@@ -122,6 +122,23 @@ Acceptance: the representative scene works without missing models, effects, or
 UI; the agreed performance target is met on the minimum GPU. Follow with campaign
 sampling before declaring the port complete. Track asset upgrades separately.
 
+## Deferred Rendering Work
+
+The following work is deferred. Reuse stock art where possible, but allow
+generated caches and explicit material or map configuration.
+
+- [ ] Volumetric fog: derive initial media from existing fog volumes; provide
+  conservative density controls and preserve authored scene visibility.
+- [ ] Light shafts: use known light sources and shadow information. Do not infer
+  every baked light from texture brightness or force outdoor sunlight indoors.
+- [ ] Indirect lighting: prototype screen-space colour bounce, including
+  visibility-bitmask methods, with controls for existing baked illumination.
+  Measure filtering cost and artifacts from missing off-screen geometry.
+
+References: [Wronski's volumetric rendering work](https://bartwronski.com/publications/)
+and [visibility-bitmask indirect lighting](https://arxiv.org/abs/2301.11376).
+Physics-driven animation is tracked separately in `animation_todo.md`.
+
 ## Squad Behaviour
 
 ### Existing Systems

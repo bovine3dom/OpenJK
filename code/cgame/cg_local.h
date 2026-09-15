@@ -521,6 +521,7 @@ Ghoul2 Insert Start
 	// had to be moved so we wouldn't wipe these out with the memset - these have STL in them and shouldn't be cleared that way
 	snapshot_t	activeSnapshots[2];
 	refEntity_t		testModelEntity;
+	refEntity_t testParticleEntity;
 /*
 Ghoul2 Insert End
 */
@@ -690,6 +691,7 @@ void CG_LoadMenus(const char *menuFile);
 // cg_view.c
 //
 void CG_TestModel_f (void);
+void CG_TestParticle_f();
 void CG_TestModelNextFrame_f (void);
 void CG_TestModelPrevFrame_f (void);
 void CG_TestModelNextSkin_f (void);

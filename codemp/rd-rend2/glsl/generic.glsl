@@ -502,6 +502,8 @@ layout(std140) uniform Entity
 };
 
 uniform sampler2D u_DiffuseMap;
+uniform sampler2D u_ScreenDepthMap;
+uniform vec4 u_SoftParticleParams;
 #if defined(USE_ALPHA_TEST)
 uniform int u_AlphaTestType;
 #endif
@@ -582,6 +584,15 @@ void main()
 #endif
 
 	out_Color = vec4(color.rgb * var_Color.rgb, color.a);
+	if (u_SoftParticleParams.x > 0.0)
+	{
+		float depth = texture(u_ScreenDepthMap, gl_FragCoord.xy / r_FBufScale).r;
+		float sceneZ = u_SoftParticleParams.z / mix(u_SoftParticleParams.y, 1.0, depth);
+		float particleZ = u_SoftParticleParams.z / mix(u_SoftParticleParams.y, 1.0, gl_FragCoord.z);
+		float fade = depth >= 1.0 ? 1.0 : clamp((sceneZ - particleZ) * u_SoftParticleParams.x, 0.0, 1.0);
+		out_Color.a *= fade;
+		if (u_SoftParticleParams.w > 0.0) out_Color.rgb *= fade;
+	}
 
 #if defined(USE_GLOW_BUFFER)
 	out_Glow = out_Color;

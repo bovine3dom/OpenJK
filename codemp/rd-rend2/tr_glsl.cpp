@@ -122,6 +122,10 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_NormalScale",   GLSL_VEC4, 1 },
 	{ "u_SpecularScale", GLSL_VEC4, 1 },
 	{ "u_MaterialParams", GLSL_VEC4, 1 },
+	{ "u_SoftParticleParams", GLSL_VEC4, 1 },
+	{ "u_SSSParams", GLSL_VEC4, 1 },
+	{ "u_CapsuleA", GLSL_VEC4, 12 },
+	{ "u_CapsuleB", GLSL_VEC4, 12 },
 	{ "u_ParallaxBias",  GLSL_FLOAT, 1 },
 
 	{ "u_ViewInfo",				GLSL_VEC4, 1 },
@@ -1602,6 +1606,7 @@ static int GLSL_LoadGPUProgramGeneric(
 
 		qglUseProgram(tr.genericShader[i].program);
 		GLSL_SetUniformInt(&tr.genericShader[i], UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
+		GLSL_SetUniformInt(&tr.genericShader[i], UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP);
 		GLSL_SetUniformInt(&tr.genericShader[i], UNIFORM_LIGHTMAP,   TB_LIGHTMAP);
 		qglUseProgram(0);
 
@@ -1906,6 +1911,7 @@ static int GLSL_LoadGPUProgramLightAll(
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_ENVBRDFMAP,  TB_ENVBRDFMAP);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SHADOWMAP2,  TB_SHADOWMAPARRAY);
 		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SSAOMAP,     TB_SSAOMAP);
+		GLSL_SetUniformInt(&tr.lightallShader[i], UNIFORM_SCREENDEPTHMAP, TB_SKINDEPTHMAP);
 		qglUseProgram(0);
 
 		GLSL_FinishGPUShader(&tr.lightallShader[i]);
@@ -2180,6 +2186,39 @@ static int GLSL_LoadGPUProgramSSAO(
 	GLSL_FinishGPUShader(&tr.ssaoShader);
 
 	return 1;
+}
+
+static int GLSL_LoadEnhancementPrograms(ShaderProgramBuilder& builder, Allocator& scratch)
+{
+	Allocator source(scratch.Base(), scratch.GetSize());
+	const GPUProgramDesc *desc = LoadProgramSource("smaa", source, fallback_smaaProgram);
+	for (int i = 0; i < 3; ++i)
+	{
+		shaderProgram_t *program = &tr.smaaShader[i];
+		if (!GLSL_LoadGPUShader(builder, program, "smaa", 0, NO_XFB_VARS, va("#define SMAA_PASS %d\n", i), *desc))
+			ri.Error(ERR_FATAL, "Could not load SMAA shader");
+		GLSL_InitUniforms(program);
+		qglUseProgram(program->program);
+		GLSL_SetUniformInt(program, UNIFORM_SCREENIMAGEMAP, 0);
+		GLSL_SetUniformInt(program, UNIFORM_DIFFUSEMAP, 1);
+		GLSL_SetUniformInt(program, UNIFORM_NORMALMAP, 2);
+		GLSL_FinishGPUShader(program);
+	}
+	GLSL_LoadGPUProgramBasic(builder, scratch, &tr.capsuleShader, "capsule", fallback_capsuleProgram);
+	GLSL_InitUniforms(&tr.capsuleShader);
+	qglUseProgram(tr.capsuleShader.program);
+	GLSL_SetUniformInt(&tr.capsuleShader, UNIFORM_SCREENDEPTHMAP, 0);
+	GLSL_FinishGPUShader(&tr.capsuleShader);
+	GLSL_LoadGPUProgramBasic(builder, scratch, &tr.sssShader, "skin_diffusion", fallback_skin_diffusionProgram);
+	GLSL_InitUniforms(&tr.sssShader);
+	qglUseProgram(tr.sssShader.program);
+	GLSL_SetUniformInt(&tr.sssShader, UNIFORM_SCREENIMAGEMAP, 0);
+	GLSL_SetUniformInt(&tr.sssShader, UNIFORM_SCREENDEPTHMAP, 1);
+	GLSL_SetUniformInt(&tr.sssShader, UNIFORM_DIFFUSEMAP, 2);
+	GLSL_SetUniformInt(&tr.sssShader, UNIFORM_NORMALMAP, 3);
+	GLSL_FinishGPUShader(&tr.sssShader);
+	qglUseProgram(0);
+	return 5;
 }
 
 static int GLSL_LoadGPUProgramPrefilterEnvMap(
@@ -2488,6 +2527,7 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramTonemap(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramCalcLuminanceLevel(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramSSAO(builder, allocator);
+	numEtcShaders += GLSL_LoadEnhancementPrograms(builder, allocator);
 	if (r_cubeMapping->integer)
 		numEtcShaders += GLSL_LoadGPUProgramPrefilterEnvMap(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramDepthBlur(builder, allocator);
@@ -2565,6 +2605,9 @@ void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 		GLSL_DeleteGPUShader(&tr.calclevels4xShader[i]);
 
 	GLSL_DeleteGPUShader(&tr.ssaoShader);
+	for (auto &program : tr.smaaShader) GLSL_DeleteGPUShader(&program);
+	GLSL_DeleteGPUShader(&tr.sssShader);
+	GLSL_DeleteGPUShader(&tr.capsuleShader);
 
 	for ( i = 0; i < 2; i++)
 		GLSL_DeleteGPUShader(&tr.depthBlurShader[i]);

@@ -421,6 +421,8 @@ uniform vec4 u_EnableTextures;
 uniform vec4 u_NormalScale;
 uniform vec4 u_SpecularScale;
 uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale
+uniform vec4 u_SSSParams;
+uniform sampler2D u_ScreenDepthMap;
 uniform float u_ParallaxBias;
 
 #if defined(PER_PIXEL_LIGHTING) && defined(USE_CUBEMAP)
@@ -904,10 +906,12 @@ vec3 CalcDynamicLightContribution(
 	in float NE,
 	in vec3 diffuse,
 	in vec3 specular,
-	in vec3 vertexNormal
+	in vec3 vertexNormal,
+	out vec3 diffuseContribution
 )
 {
 	vec3 outColor = vec3(0.0);
+	diffuseContribution = vec3(0.0);
 	vec3 position = viewOrigin - viewDir;
 
 	for ( int i = 0; i < u_NumLights; i++ )
@@ -941,6 +945,7 @@ vec3 CalcDynamicLightContribution(
 		vec3 reflectance = diffuse + CalcSpecular(specular, NH, NL, NE, LH, VH, roughness);
 
 		outColor += light.color * reflectance * attenuation * NL;
+		diffuseContribution += light.color * diffuse * attenuation * NL;
 	}
 	return outColor;
 }
@@ -994,6 +999,12 @@ vec3 CalcNormal( in vec3 vertexNormal, in vec4 vertexTangent, in vec2 texCoords 
 void main()
 {
 	vec3 viewDir, lightColor, ambientColor;
+	if (u_SSSParams.x > 0.0)
+	{
+		float sceneDepth = texture(u_ScreenDepthMap, gl_FragCoord.xy / r_FBufScale).r;
+		// Allow the subpixel depth displacement introduced by an MSAA resolve.
+		if (abs(sceneDepth - gl_FragCoord.z) > max(fwidth(gl_FragCoord.z), 0.000001)) discard;
+	}
 	vec3 L, N, E;
 
 	vec2 texCoords = var_TexCoords.xy;
@@ -1160,6 +1171,7 @@ void main()
 
 	out_Color.rgb  = lightColor * reflectance * (attenuation * NL);
 	out_Color.rgb += ambientColor * diffuse.rgb;
+	vec3 skinDiffuse = lightColor * Fd * (attenuation * NL) + ambientColor * diffuse.rgb;
 
   #if defined(USE_PRIMARY_LIGHT)
 	vec3  L2   = normalize(u_PrimaryLightOrigin.xyz);
@@ -1177,14 +1189,20 @@ void main()
     #endif
 
 	out_Color.rgb += lightColor * reflectance * NL2;
+	skinDiffuse += lightColor * CalcDiffuse(diffuse.rgb, NE, NL2, L2H2, roughness) * NL2;
   #endif
 
-	out_Color.rgb += CalcDynamicLightContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, diffuse.rgb, specular.rgb, vertexNormal);
+	vec3 dynamicDiffuse;
+	out_Color.rgb += CalcDynamicLightContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, diffuse.rgb, specular.rgb, vertexNormal, dynamicDiffuse);
+	skinDiffuse += dynamicDiffuse;
 	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO) * u_MaterialParams.x;
 	#if defined(USE_SSAO)
 	// Experimental: apply screen AO once to all completed per-pixel lighting.
 	if (u_SSAOAmbientOnly == 0)
+	{
 		out_Color.rgb *= screenAO;
+		skinDiffuse *= screenAO;
+	}
 	#endif
 #else
 	lightColor = var_Color.rgb;
@@ -1201,5 +1219,12 @@ void main()
 	out_Glow = out_Color;
 #else
 	out_Glow = vec4(0.0, 0.0, 0.0, out_Color.a);
+#endif
+#if defined(PER_PIXEL_LIGHTING)
+	if (u_SSSParams.x > 0.0)
+	{
+		out_Color = vec4(skinDiffuse / max(diffuse.rgb, vec3(1.0 / 255.0)), 1.0);
+		out_Glow = vec4(diffuse.rgb, 1.0);
+	}
 #endif
 }

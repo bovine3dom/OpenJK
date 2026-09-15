@@ -70,6 +70,7 @@ add_dependencies(${SPRend2} rend2_glsl)
 target_compile_definitions(${SPRend2} PRIVATE ${SharedDefines} RENDERER _JK2EXE REND2_SP)
 target_compile_options(${SPRend2} PRIVATE ${OPENJK_VISIBILITY_FLAGS})
 target_include_directories(${SPRend2} PRIVATE
+	${SMAAIncludeDir}
 	${SharedDir} ${SPDir} ${MPDir}/rd-rend2 ${SPDir}/rd-rend2
 	${SPDir}/rd-common ${GSLIncludeDirectory} ${OpenJKLibDir}
 	${JPEG_INCLUDE_DIR} ${PNG_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIR}

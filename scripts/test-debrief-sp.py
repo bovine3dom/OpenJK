@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-rend2", "rdsp-vanilla"))
     parser.add_argument("--msaa", type=int, choices=(0, 4))
+    parser.add_argument("--raster", action="store_true", help="Enable the new raster effects in Rend2")
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--reference", type=Path, help="Compare portrait proportions with a previous results.json")
@@ -60,6 +61,8 @@ def main():
                         r_ignoreGLErrors=int(renderer == "rdsp-vanilla"),
                         com_maxfps=30, s_initsound=1, com_timestamps=0,
                         com_ansiColor=0, con_notifytime=-1, developer=0)
+        if args.raster and renderer == "rdsp-rend2":
+            settings.update(r_smaa=1, r_sss=0.5, r_capsuleShadows=1, r_softParticles=1)
         (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
         (profile / "autoexec_sp.cfg").write_text("// Isolated mission-end test.\n")
         env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_VIDEODRIVER="x11",

@@ -303,7 +303,7 @@ void FBO_AttachTextureImage(image_t *img, int index)
 	glState.currentFBO->colorBuffers[index] = img->texnum;
 }
 
-static void FBO_SetupDrawBuffers()
+void FBO_SetupDrawBuffers()
 {
 	if (!glState.currentFBO)
 	{
@@ -603,6 +603,15 @@ void FBO_Init(void)
 		FBO_SetupDrawBuffers();
 
 		R_CheckFBO(tr.quarterFbo[i]);
+	}
+
+	if (r_softParticles->integer)
+	{
+		tr.softDepthFbo = FBO_Create("_softDepth", tr.softDepthImage->width, tr.softDepthImage->height);
+		FBO_Bind(tr.softDepthFbo);
+		FBO_AttachTextureImage(tr.softDepthImage, 0);
+		FBO_SetupDrawBuffers();
+		R_CheckFBO(tr.softDepthFbo);
 	}
 
 	if (r_ssao->integer)
