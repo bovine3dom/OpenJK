@@ -1,6 +1,34 @@
+# bovine3dom's slopped up fork of OpenJK
+
+don't use this. use [upstream instead](https://github.com/JACoders/OpenJK). tested and patched for single player only. only tested on linux.
+
+slopped up features:
+
+rendering:
+- rend2 to singleplayer (so fake hdr, bump mapping)
+- gtao ssao
+- capsule shadows
+- subsurface scattering for skin
+- smaa
+- sgssaa (via msaa, but i can't see a difference, probably needs HD textures)
+
+ai:
+- flanking
+- retreat under pressure from shots or proximity to lightsaber
+
+ui:
+- rmlui minimal in-game ui with weapon, force selection wheels on H/G, health, ammo, saber style, shields in centre
+- slowly porting over other bits of the UI like the datapad, mission success screen. but i care about this less. the minimal hud is already fantastic
+- ibm plex used under licence for in-game fonts and the bits of the menus i have bothered porting
+
+animations:
+- experimental jolt ragdoll stuff
+
+---
+
 # OpenJK
 
-OpenJK is a community effort to maintain and improve the game and engine powering Jedi Academy and Jedi Outcast, while maintaining _full backwards compatibility_ with the existing games and mods.  
+OpenJK is a community effort to maintain and improve the game and engine powering Jedi Academy and Jedi Outcast, while maintaining _full backwards compatibility_ with the existing games and mods.
 This project does not intend to add major features, rebalance, or otherwise modify core gameplay.
 
 Our aims are to:
