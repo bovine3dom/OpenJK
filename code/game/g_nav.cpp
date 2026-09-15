@@ -520,10 +520,20 @@ static void RouteTestCommand( void )
 static void MemoryCommand( void )
 {
 	const char *name = gi.argv(2);
-	gentity_t *actor = G_Find( NULL, FOFS(targetname), name );
+	bool numbered = name[0] == '#';
+	gentity_t *actor = NULL;
+	if ( numbered )
+	{
+		char *end;
+		long number = strtol(name+1, &end, 10);
+		if ( name[1] && !*end && number > 0 && number < ENTITYNUM_WORLD )
+			actor = &g_entities[number];
+	}
+	else
+		actor = G_Find( NULL, FOFS(targetname), name );
 	if ( gi.argc() < 3 || gi.argc() > 5 || (gi.argc() == 5 && Q_stricmp(gi.argv(3), "enemy") && Q_stricmp(gi.argv(3), "cp"))
-		|| !name[0] || !actor || !actor->NPC || !actor->client
-		|| G_Find( actor, FOFS(targetname), name ) )
+		|| !name[0] || !actor || !actor->inuse || !actor->NPC || !actor->client
+		|| (!numbered && G_Find( actor, FOFS(targetname), name )) )
 	{
 		gi.Printf( "aimemory event=rejected reason=unique_npc_required\n" );
 		return;
@@ -531,7 +541,9 @@ static void MemoryCommand( void )
 	if ( gi.argc() >= 4 )
 	{
 		const char *action = gi.argv(3);
-		if ( Q_strncmp(name, "_memory_", 8) || Q3_TaskIDPending(actor, TID_MOVE_NAV) )
+		bool nativeControl = !Q_stricmp(action, "protect") || !Q_stricmp(action, "hit") || !Q_stricmp(action, "shortshot")
+			|| !Q_stricmp(action, "saberon");
+		if ( (Q_strncmp(name, "_memory_", 8) && !nativeControl) || Q3_TaskIDPending(actor, TID_MOVE_NAV) )
 		{
 			gi.Printf( "aimemory event=rejected reason=test_actor_required\n" );
 			return;
@@ -592,6 +604,27 @@ static void MemoryCommand( void )
 			G_Damage( actor, actor->enemy, actor->enemy, NULL, actor->currentOrigin,
 				5, DAMAGE_NO_PROTECTION | DAMAGE_NO_KNOCKBACK, MOD_BLASTER );
 			actor->flags |= protection;
+		}
+		else if ( !Q_stricmp(action, "saberon") || !Q_stricmp(action, "saberoff") )
+		{
+			if ( actor->enemy != &g_entities[0] || actor->enemy->client->ps.weapon != WP_SABER )
+			{
+				gi.Printf( "aimemory event=rejected reason=saber_target\n" );
+				return;
+			}
+			if ( !Q_stricmp(action, "saberon") )
+				actor->enemy->client->ps.SaberActivate();
+			else
+				actor->enemy->client->ps.SaberDeactivate();
+		}
+		else if ( !Q_stricmp(action, "melee") || !Q_stricmp(action, "ranged") )
+		{
+			int weapon = !Q_stricmp(action, "melee") ? WP_STUN_BATON : WP_BLASTER;
+			actor->client->ps.stats[STAT_WEAPONS] = 1 << weapon;
+			SaveNPCGlobals();
+			SetNPCGlobals(actor);
+			NPC_ChangeWeapon( weapon );
+			RestoreNPCGlobals();
 		}
 		else if ( !Q_stricmp(action, "cooldown") )
 		{
@@ -787,7 +820,7 @@ static void MemoryCommand( void )
 		group && group->enemy && group->lastSeenEnemyTime > 0 && group->lastSeenEnemyTime <= level.time ? NAV::GetNearestNode(group->enemyLastSeenPos) : WAYPOINT_NONE,
 		member ? member->waypoint : WAYPOINT_NONE, actor->waypoint, member ? member->pathCostToEnemy : Q3_INFINITE,
 		actor->enemy ? NAV::GetNearestNode(actor->enemy->currentOrigin) : WAYPOINT_NONE, actor->NPC->troop );
-	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f support=%d retry=%d\n",
+	gi.Printf( "aimemory event=lifecycle name=%s combat_cp=%d occupied=%d speech=%d speech_chance=%.2f behavior=%d crouched=%d max_health=%d weapon=%d chase=%d dont_fire=%d walking=%d speed=%.2f walkSpeed=%d runSpeed=%d forward=%d right=%d peek=%d pressure=%d anchor=%.3f,%.3f,%.3f support=%d retry=%d enemy_weapon=%d enemy_saber=%d no_flee=%d pressure_move=%d script_flags=%u sv_flags=%u type=%s class=%d scripted=%d spawn_script=%s native_name=%s\n",
 		name, actor->NPC->combatPoint,
 		actor->NPC->combatPoint >= 0 && actor->NPC->combatPoint < level.numCombatPoints ? level.combatPoints[actor->NPC->combatPoint].occupied : 0,
 		actor->NPC->movementSpeech, actor->NPC->movementSpeechChance, actor->NPC->behaviorState,
@@ -799,7 +832,13 @@ static void MemoryCommand( void )
 		actor->NPC->last_ucmd.forwardmove, actor->NPC->last_ucmd.rightmove,
 		TIMER_Exists( actor, "coverPeek" ), !TIMER_Done( actor, "incomingFire" ),
 		actor->NPC->tacticCover[0], actor->NPC->tacticCover[1], actor->NPC->tacticCover[2],
-		TIMER_Exists( actor, "coverSupport" ), TIMER_Get( actor, "regroupRetry" )-level.time );
+		TIMER_Exists( actor, "coverSupport" ), TIMER_Get( actor, "regroupRetry" )-level.time,
+		actor->enemy && actor->enemy->client ? actor->enemy->client->ps.weapon : WP_NONE,
+		actor->enemy && actor->enemy->client ? actor->enemy->client->ps.SaberActive() : qfalse,
+		(actor->NPC->scriptFlags & SCF_DONT_FLEE) != 0, TIMER_Exists( actor, "pressureMove" ),
+		(unsigned)actor->NPC->scriptFlags, (unsigned)actor->svFlags,
+		actor->NPC_type ? actor->NPC_type : "-", actor->client->NPC_class, Q3_TaskIDPending(actor, TID_MOVE_NAV),
+		actor->behaviorSet[BSET_SPAWN] ? actor->behaviorSet[BSET_SPAWN] : "-", actor->targetname ? actor->targetname : "-" );
 }
 
 void Svcmd_Nav_f( void )
@@ -809,6 +848,47 @@ void Svcmd_Nav_f( void )
 	if ( Q_stricmp( cmd, "memory" ) == 0 )
 	{
 		MemoryCommand();
+	}
+	else if ( Q_stricmp( cmd, "actors" ) == 0 || Q_stricmp( cmd, "select" ) == 0 )
+	{
+		gentity_t *selected = NULL;
+		float nearest = Q3_INFINITE;
+		for ( int i = 1; i < globals.num_entities; ++i )
+		{
+			gentity_t *actor = &g_entities[i];
+			if ( !actor->inuse || !actor->NPC || !actor->client || actor->health <= 0 )
+				continue;
+			if ( !Q_stricmp(cmd, "actors") )
+				gi.Printf( "native_actor ent=%d name=%s type=%s class=%d weapon=%d enemy=%d group=%d troop=%d state=%d flags=%u svflags=%u task=%d pos=%.1f,%.1f,%.1f\n",
+					i, actor->targetname ? actor->targetname : "-", actor->NPC_type ? actor->NPC_type : "-", actor->client->NPC_class,
+					actor->client->ps.weapon, actor->enemy ? actor->enemy->s.number : -1, actor->NPC->group ? (int)(actor->NPC->group-level.groups) : -1,
+					actor->NPC->troop, actor->NPC->behaviorState, (unsigned)actor->NPC->scriptFlags, (unsigned)actor->svFlags,
+					Q3_TaskIDPending(actor, TID_MOVE_NAV), actor->currentOrigin[0], actor->currentOrigin[1], actor->currentOrigin[2] );
+			const char *type = gi.argv(2);
+			int length = strlen(type);
+			if ( actor->NPC_type && length && (type[length-1] == '*'
+				? !Q_stricmpn(actor->NPC_type, type, length-1) : !Q_stricmp(actor->NPC_type, type)) )
+			{
+				float distance = DistanceSquared(actor->currentOrigin, g_entities[0].currentOrigin);
+				if ( distance < nearest )
+				{
+					selected = actor;
+					nearest = distance;
+				}
+			}
+		}
+		if ( !Q_stricmp(cmd, "select") )
+		{
+			if ( !selected )
+			{
+				gi.Printf("aimemory event=rejected reason=native_selection\n");
+				return;
+			}
+			const char *actions[] = {"sample", "protect", "hit", "shortshot", "saberon"};
+			for ( int i = 0; i < 5; ++i )
+				gi.cvar_set( va("nav_native_%s", actions[i]), va("nav memory #%d %s", selected->s.number, i ? actions[i] : "") );
+			gi.Printf("native_selected ent=%d type=%s\n", selected->s.number, selected->NPC_type);
+		}
 	}
 	else if ( Q_stricmp( cmd, "test" ) == 0 )
 	{

@@ -2984,7 +2984,7 @@ bool	NAV::FindPath(gentity_t* actor, NAV::TNodeHandle target, float MaxDangerLev
 	CVec3	At(actor->currentOrigin);
 	float	AtTime	= level.time;
 	float	AtSpeed = actor->NPC->stats.runSpeed;
-	if (!(actor->NPC->scriptFlags&SCF_RUNNING) &&
+	if (!(actor->NPC->scriptFlags&SCF_RUNNING) && !ST_PressureRun(actor) &&
 		((actor->NPC->scriptFlags&SCF_WALKING) ||
 		 (actor->NPC->aiFlags&NPCAI_WALKING) ||
 		 (ucmd.buttons&BUTTON_WALKING)
@@ -4239,7 +4239,7 @@ void			STEER::Activate(gentity_t* actor)
 	suser.mRadius		= RadiusFromBounds(actor->mins, actor->maxs);
 	suser.mMaxForce		= 150.0f;		//STEER_TODO: Get From actor Somehow
 	suser.mMass			= 1.0f;			//STEER_TODO: Get From actor Somehow
-	if (!(actor->NPC->scriptFlags&SCF_RUNNING) &&
+	if (!(actor->NPC->scriptFlags&SCF_RUNNING) && !ST_PressureRun(actor) &&
 		((actor->NPC->scriptFlags&SCF_WALKING) ||
 		 (actor->NPC->aiFlags&NPCAI_WALKING) ||
 		 (ucmd.buttons&BUTTON_WALKING)

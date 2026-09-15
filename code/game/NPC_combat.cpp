@@ -84,8 +84,10 @@ void G_ClearEnemy (gentity_t *self)
 	if ( self->NPC )
 	{
 		TIMER_Remove( self, "reportAck" );
+		TIMER_Remove( self, "squadSight" );
 		TIMER_Remove( self, "coverExposure" );
 		TIMER_Remove( self, "incomingFire" );
+		TIMER_Remove( self, "saberPressure" );
 		TIMER_Remove( self, "coverRelocate" );
 		TIMER_Remove( self, "pressureSearch" );
 		TIMER_Remove( self, "underFire" );

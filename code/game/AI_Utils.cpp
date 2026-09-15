@@ -328,6 +328,21 @@ qboolean AI_ValidateNoEnemyGroupMember( AIGroupInfo_t *group, gentity_t *member 
 	return qtrue;
 }
 
+qboolean AI_CanReport( gentity_t *member )
+{
+	return member && member->inuse && member->NPC && member->client && member->health > 0
+		&& !d_noGroupAI->integer
+		&& !(member->svFlags & (SVF_IGNORE_ENEMIES|SVF_LOCKEDENEMY|SVF_ICARUS_FREEZE))
+		&& (member->NPC->scriptFlags & SCF_LOOK_FOR_ENEMIES)
+		&& !(member->NPC->scriptFlags & (SCF_IGNORE_ALERTS|SCF_FORCED_MARCH|SCF_NO_GROUPS))
+		&& member->NPC->confusionTime <= level.time && member->NPC->charmedTime <= level.time
+		&& member->NPC->controlledTime <= level.time && member->NPC->surrenderTime <= level.time
+		&& member->NPC->behaviorState != BS_CINEMATIC && member->NPC->tempBehavior != BS_CINEMATIC
+		&& member->NPC->defaultBehavior != BS_CINEMATIC && !Q3_TaskIDPending( member, TID_MOVE_NAV )
+		&& member->NPC->behaviorState != BS_FLEE && member->NPC->tempBehavior != BS_FLEE
+		&& !(member->client->ps.eFlags & (EF_FORCE_GRIPPED|EF_FORCE_DRAINED)) ? qtrue : qfalse;
+}
+
 qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboolean report )
 {
 	//Validate ents
@@ -344,33 +359,10 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboole
 
 	if ( report )
 	{
-		if ( d_noGroupAI->integer || !group->enemy || !group->enemy->inuse || group->enemy->health <= 0
+		if ( !AI_CanReport(member) || !group->enemy || !group->enemy->inuse || group->enemy->health <= 0
 			|| (group->enemy->flags & FL_NOTARGET) || !group->enemy->client
-			|| group->enemy->client->playerTeam == group->team
-			|| (member->svFlags & (SVF_IGNORE_ENEMIES|SVF_LOCKEDENEMY|SVF_ICARUS_FREEZE))
-			|| !(member->NPC->scriptFlags & SCF_LOOK_FOR_ENEMIES)
-			|| (member->NPC->scriptFlags & (SCF_IGNORE_ALERTS|SCF_FORCED_MARCH))
-			|| member->NPC->charmedTime > level.time || member->NPC->controlledTime > level.time
-			|| member->NPC->surrenderTime > level.time
-			|| (member->NPC->aiFlags & NPCAI_BOSS_CHARACTER)
-			|| member->NPC->behaviorState == BS_CINEMATIC || member->NPC->tempBehavior == BS_CINEMATIC
-			|| member->NPC->defaultBehavior == BS_CINEMATIC || Q3_TaskIDPending( member, TID_MOVE_NAV )
-			|| member->NPC->behaviorState == BS_FLEE || member->NPC->tempBehavior == BS_FLEE
-			|| member->client->ps.forcePowersKnown
-			|| member->client->ps.weapon == WP_STUN_BATON
-			|| member->client->ps.weapon == WP_TRIP_MINE || member->client->ps.weapon == WP_DET_PACK
-			|| (member->client->ps.weapon == WP_NONE
-				&& !(member->client->ps.stats[STAT_WEAPONS] & ((1<<WP_BLASTER)|(1<<WP_BLASTER_PISTOL))))
-			|| (member->client->ps.eFlags & (EF_FORCE_GRIPPED|EF_FORCE_DRAINED)) )
+			|| group->enemy->client->playerTeam == group->team )
 			return qfalse;
-		switch ( member->client->NPC_class )
-		{
-		case CLASS_STORMTROOPER: case CLASS_SWAMPTROOPER: case CLASS_IMPERIAL:
-		case CLASS_REBEL: case CLASS_COMMANDO: case CLASS_BESPIN_COP:
-			break;
-		default:
-			return qfalse;
-		}
 	}
 
 	//must be aware
@@ -409,35 +401,6 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboole
 	if ( member->client->playerTeam != group->team )
 		return qfalse;
 
-	if ( member->client->ps.weapon == WP_SABER ||//!= self->s.weapon )
-		member->client->ps.weapon == WP_THERMAL ||
-		member->client->ps.weapon == WP_DISRUPTOR ||
-		member->client->ps.weapon == WP_EMPLACED_GUN ||
-		member->client->ps.weapon == WP_BOT_LASER ||		// Probe droid	- Laser blast
-		member->client->ps.weapon == WP_MELEE ||
-		member->client->ps.weapon == WP_TURRET ||			// turret guns
-		member->client->ps.weapon == WP_ATST_MAIN ||
-		member->client->ps.weapon == WP_ATST_SIDE ||
-		member->client->ps.weapon == WP_TIE_FIGHTER )
-	{//not really a squad-type guy
-		return qfalse;
-	}
-
-	if ( member->client->NPC_class == CLASS_ATST ||
-		member->client->NPC_class == CLASS_PROBE ||
-		member->client->NPC_class == CLASS_SEEKER ||
-		member->client->NPC_class == CLASS_REMOTE ||
-		member->client->NPC_class == CLASS_SENTRY ||
-		member->client->NPC_class == CLASS_INTERROGATOR ||
-		member->client->NPC_class == CLASS_MINEMONSTER ||
-		member->client->NPC_class == CLASS_HOWLER ||
-		member->client->NPC_class == CLASS_RANCOR ||
-		member->client->NPC_class == CLASS_MARK1 ||
-		member->client->NPC_class == CLASS_MARK2 )
-	{//these kinds of enemies don't actually use this group AI
-		return qfalse;
-	}
-
 	//should have same enemy
 	if ( member->enemy != group->enemy )
 	{
@@ -467,6 +430,33 @@ qboolean AI_ValidateGroupMember( AIGroupInfo_t *group, gentity_t *member, qboole
 		return qfalse;
 	//FIXME: need to have a route to enemy and/or clear shot?
 	return qtrue;
+}
+
+qboolean AI_ValidateTacticalMember( AIGroupInfo_t *group, gentity_t *member )
+{
+	if ( !AI_ValidateGroupMember( group, member, qtrue ) || member->client->ps.forcePowersKnown
+		|| (member->NPC->aiFlags & NPCAI_BOSS_CHARACTER) )
+		return qfalse;
+	switch ( member->client->NPC_class )
+	{
+	case CLASS_STORMTROOPER: case CLASS_SWAMPTROOPER: case CLASS_IMPERIAL:
+	case CLASS_REBEL: case CLASS_COMMANDO: case CLASS_BESPIN_COP:
+	case CLASS_RODIAN: case CLASS_TRANDOSHAN: case CLASS_WEEQUAY: case CLASS_GRAN:
+		break;
+	default:
+		return qfalse;
+	}
+	switch ( member->client->ps.weapon )
+	{
+	case WP_BLASTER: case WP_BLASTER_PISTOL: case WP_BRYAR_PISTOL: case WP_DISRUPTOR:
+	case WP_BOWCASTER: case WP_REPEATER: case WP_DEMP2: case WP_FLECHETTE:
+	case WP_ROCKET_LAUNCHER: case WP_CONCUSSION:
+		return qtrue;
+	case WP_NONE:
+		return member->client->ps.stats[STAT_WEAPONS] & ((1<<WP_BLASTER)|(1<<WP_BLASTER_PISTOL)) ? qtrue : qfalse;
+	default:
+		return qfalse;
+	}
 }
 
 void AI_DeleteSelfFromGroup( gentity_t *self );
@@ -884,8 +874,9 @@ qboolean AI_RefreshGroup( AIGroupInfo_t *group )
 
 		//Must be alive
 		if ( member->NPC && member->NPC->tacticRole
-			&& (!AI_ValidateGroupMember( group, member, qtrue )
-				|| !(member->NPC->scriptFlags & SCF_CHASE_ENEMIES)
+			&& (!AI_ValidateTacticalMember( group, member )
+				|| (!(member->NPC->scriptFlags & SCF_CHASE_ENEMIES)
+					&& !(g_squadPressureOverrides->integer && TIMER_Exists( member, "pressureMove" )))
 				|| !member->enemy || member->enemy->s.number != member->NPC->tacticEnemy) )
 		{
 			ST_ClearTactic( member );

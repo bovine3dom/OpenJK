@@ -701,6 +701,8 @@ void NPC_BSSniper_Attack( void )
 		return;
 	}
 
+	if ( NPC_ST_PressureThink() )
+		return;
 	if ( TIMER_Done( NPC, "flee" ) && NPC_CheckForDanger( NPC_CheckAlertEvents( qtrue, qtrue, -1, qfalse, AEL_DANGER ) ) )
 	{//going to run
 		NPC_UpdateAngles( qtrue, qtrue );

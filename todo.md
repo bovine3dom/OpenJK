@@ -111,6 +111,10 @@ was needed for the automated checks on the build machine.
 - [x] Add short firing steps beside the same cover anchor, bounded firing intervals, and return movement. React to nearby hostile missile segments without changing enemy memory. Verify repeated peeks, pressure decay and withdrawal, friendly/distant controls, and active-pair save/load.
 - [x] Add an adjustable 112-unit pressure radius and immediate local cover through movement cooldowns. Add retreat support, flank-support replacement, and cancellation without a replacement. Recheck cover against confirmed enemy movement and repeated blocked shots.
 - [x] Add eleven cases for cooldown bypass, radius and wall shielding, support and handoff, competing local destinations, cover reassessment, hidden movement, and saves during both peek movement directions.
+- [x] Add visible close-saber pressure for ranged actors, with a 192-unit default radius and checked direct escape when needed. Add four cases for both commander modes, very close escape, and weapon, visibility, radius, decay, and no-chase controls.
+- [x] Let shot, damage, and saber pressure temporarily override combat no-chase and no-retreat orders. Preserve the original flags and active script control. Add held-actor, opt-out, cinematic, and save/load checks.
+- [x] Check native `t1_sour` spawners and hold scripts. Enable pressure movement for native ranged classes and snipers. Override scripted crouch and walk during the retreat, then resume the original stance.
+- [x] Separate squad membership and reports from ranged movement roles. Include Sith, snipers, and combat droids in local squads while preserving their combat controllers.
 - [ ] Extend contact combat with animated leaning. Test repeated hits, no available cover, pending exposure interruption, larger multi-squad encounters, script-walk orders, and damage during active flank or support roles. Check campaign combat with diagnostics hidden.
 
 Use `roadmap.md` for detailed acceptance checks. Keep the raster-only Rend2 port

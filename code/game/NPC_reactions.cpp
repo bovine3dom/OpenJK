@@ -550,6 +550,9 @@ void NPC_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, const ve
 		}
 	}
 
+	// Record hostile damage after target assignment, which can clear old pressure.
+	if ( damage > 0 )
+		TIMER_Set( self, "underFire", 3000 );
 	//Attempt to run any pain instructions
 	if ( self->client && self->NPC )
 	{

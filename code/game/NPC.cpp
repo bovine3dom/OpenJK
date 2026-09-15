@@ -73,6 +73,8 @@ cvar_t		*d_noGroupAI;
 cvar_t		*d_asynchronousGroupAI;
 cvar_t		*d_squadTactics;
 cvar_t		*g_squadPressureRadius;
+cvar_t		*g_squadSaberPressureRadius;
+cvar_t		*g_squadPressureOverrides;
 cvar_t		*d_slowmodeath;
 
 extern qboolean	stop_icarus;
@@ -976,7 +978,10 @@ void NPC_ShowDebugInfo (void)
 
 void NPC_ApplyScriptFlags (void)
 {
-	if ( NPCInfo->scriptFlags & SCF_CROUCHED )
+	qboolean pressureRun = ST_PressureRun( NPC );
+	if ( pressureRun && ucmd.upmove < 0 )
+		ucmd.upmove = 0;
+	if ( (NPCInfo->scriptFlags & SCF_CROUCHED) && !pressureRun )
 	{
 		if ( NPCInfo->charmedTime > level.time && (ucmd.forwardmove || ucmd.rightmove) )
 		{//ugh, if charmed and moving, ignore the crouched command
@@ -987,7 +992,7 @@ void NPC_ApplyScriptFlags (void)
 		}
 	}
 
-	if(NPCInfo->scriptFlags & SCF_RUNNING)
+	if( (NPCInfo->scriptFlags & SCF_RUNNING) || pressureRun )
 	{
 		ucmd.buttons &= ~BUTTON_WALKING;
 	}
@@ -2182,6 +2187,7 @@ void NPC_ExecuteBState ( gentity_t *self)//, int msec )
 
 	//Pick the proper bstate for us and run it
 	NPC_RunBehavior( self->client->playerTeam, bState );
+	ST_UpdateSquadMembership( self );
 
 
 //	if(bState != BS_POINT_COMBAT && NPCInfo->combatPoint != -1)
@@ -2545,6 +2551,8 @@ void NPC_InitAI ( void )
 	d_asynchronousGroupAI = gi.cvar ( "d_asynchronousGroupAI", "1", CVAR_CHEAT );
 	d_squadTactics = gi.cvar ( "d_squadTactics", "1", CVAR_CHEAT );
 	g_squadPressureRadius = gi.cvar ( "g_squadPressureRadius", "112", CVAR_ARCHIVE );
+	g_squadSaberPressureRadius = gi.cvar ( "g_squadSaberPressureRadius", "192", CVAR_ARCHIVE );
+	g_squadPressureOverrides = gi.cvar ( "g_squadPressureOverrides", "1", CVAR_ARCHIVE );
 
 	//0 = never (BORING)
 	//1 = kyle only

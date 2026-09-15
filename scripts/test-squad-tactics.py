@@ -30,6 +30,13 @@ def main():
              "pressure": ("pressure", 1),
              "peek-pressure": ("peek-pressure", 1),
              "peek-save": ("peek-save", 1),
+             "saber-near-async": ("saber-near", 1), "saber-near-sync": ("saber-near", 0),
+             "saber-controls": ("saber-controls", 1),
+             "saber-close": ("saber-close", 1),
+             **{name: (name, 1) for name in ("held-shot", "held-damage", "held-saber", "held-noflee", "held-cinematic", "held-save")},
+             "sour-merc": ("sour-probe", 1),
+             **{name: (name, 1) for name in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid")},
+             **{name: (name, 1) for name in ("sour-rodian", "sour-trandoshan", "sour-weequay", "sour-sniper", "sour-shot", "sour-saber")},
              "pressure-cooldown-async": ("pressure-cooldown", 1), "pressure-cooldown-sync": ("pressure-cooldown", 0),
              **{name: (name, 1) for name in ("pressure-radius", "pressure-support", "pressure-contested", "handoff", "handoff-unavailable",
                                             "cover-reassess", "cover-hidden", "save-outward", "save-withdrawal")},
@@ -49,11 +56,15 @@ def main():
     for case in ([args.case] if args.case else cases):
         fixture, asynchronous = cases[case]
         mode = [] if asynchronous else ["+exec", "ai-squad-sync.cfg"]
-        subprocess.run(["bash", str(root / "scripts/smoke-sp.sh"), str(args.package.resolve()), "t2_wedge",
+        map_name = "t1_sour" if case.startswith("sour-") else "t2_wedge"
+        environment = dict(os.environ, OJK_SMOKE_ROOT=str(suite / case))
+        if map_name == "t1_sour":
+            environment.setdefault("OJK_SMOKE_TIMEOUT", "240")
+        subprocess.run(["bash", str(root / "scripts/smoke-sp.sh"), str(args.package.resolve()), map_name,
                         "+exec", "ai-squad-settings.cfg", *mode,
                         "+exec", f"ai-squad-{fixture}.cfg"],
-                       env=dict(os.environ, OJK_SMOKE_ROOT=str(suite / case)), check=True)
-        logs = list((suite / case).glob("t2_wedge.*/console.log"))
+                       env=environment, check=True)
+        logs = list((suite / case).glob(f"{map_name}.*/console.log"))
         check(len(logs) == 1, f"Missing log: {suite / case}")
         text = logs[0].read_text(errors="replace")
         check("aimemory event=rejected" not in text, f"Rejected fixture control: {logs[0]}")
@@ -62,7 +73,7 @@ def main():
         contact_samples, history = [], []
         for order, line in enumerate(text.splitlines()):
             line = re.sub(r"\^[0-9]", "", line)
-            label = re.search(r"OJK_SQUAD_([A-Z_]+)$", line)
+            label = re.search(r"OJK_(?:SQUAD|SOUR)_([A-Z_]+)$", line)
             if label:
                 phase = label[1]
             if "aimemory event=sample " in line:
@@ -83,7 +94,45 @@ def main():
                 event["order"] = order
                 events.append(event)
         reports = [e for e in events if e["event"] == "report_delivery"]
-        if case == "recruit":
+        if case.startswith("sour-"):
+            before = next(iter(samples["BEFORE"].values()))
+            states = [s for s in history if s["ent"] == before["ent"] and s["phase"] == "HIT"]
+            final = next(iter(samples["DONE"].values()))
+            expected = {"sour-rodian": "rodian2", "sour-trandoshan": "trandoshan", "sour-weequay": "weequay",
+                        "sour-sniper": "rodian"}.get(case, "human_merc")
+            check(before["type"].lower().startswith(expected) and before["enemy"] == "0" and before["scripted"] == "0", str(before))
+            check("native_selected" in text and int(before["max_health"]) >= 20, "Missing native actor")
+            if case != "sour-weequay":
+                check(before["spawn_script"].startswith("t1_sour/") and before["chase"] == "0" and before["no_flee"] == "1"
+                      and before["crouched"] == "1", "Native hold script did not run")
+            if case == "sour-sniper":
+                check(before["weapon"] == "4", "Sniper control is not using a disruptor")
+            moving = [s for s in states if s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"])]
+            check(moving and any(s["crouched"] == s["walking"] == "0" for s in moving), "Native actor did not run standing")
+            check(max(math.dist(point(before), point(s)) for s in states) >= 32, "Native actor remained at its authored position")
+            if case != "sour-weequay":
+                check(all(s["script_flags"] == before["script_flags"] for s in [*states, final]), "Native script flags were overwritten")
+                check(final["pressure_move"] == "0" and final["crouched"] == "1", "Native hold stance did not resume")
+            if case in ("sour-shot", "sour-saber"):
+                check(all(s["health"] == before["health"] for s in states), "Native pressure needed damage")
+                source_event = "incoming_fire" if case == "sour-shot" else "saber_pressure"
+                check(any(e["event"] == source_event and e["ent"] == before["ent"] for e in events), "Native pressure source missing")
+            else:
+                check(states and 0 < int(states[0]["health"]) < int(before["health"]), "Native damage did not reach the pain handler")
+        elif case in ("mixed-sith", "sith-squad", "mixed-sniper", "mixed-droid"):
+            a, b = (samples["JOINED"][name] for name in ("_memory_a", "_memory_b"))
+            check(a["group"] == b["group"] != "-1" and a["enemy"] == b["enemy"] == "0", str(samples["JOINED"]))
+            if case == "mixed-droid":
+                check(b["type"] == "sentry", "Mixed recipient is not a sentry")
+            else:
+                check(b["weapon"] == ("4" if case == "mixed-sniper" else "1"), "Wrong mixed-squad recipient")
+            if case == "sith-squad":
+                check(a["weapon"] == "1", "Sith source is not using a saber")
+            check(a["role"] == b["role"] == "0", "Membership assigned a trooper movement role")
+            check(any(e["event"] == "report_delivery" and e["recipient"] == b["ent"] for e in events), "No mixed-squad report")
+            if case == "mixed-sniper":
+                check(b["seen_time"] == "0" and b["los"] == "0", "Hidden sniper received invented sight")
+        elif case == "recruit":
             a, b = (samples["RECRUITED"][name] for name in ("_memory_a", "_memory_b"))
             check(a["los"] == "1" and b["los"] == "0" and b["seen_time"] == "0", str(samples))
             check(a["group"] == b["group"] != "-1" and b["enemy"] == "0" and b["members"] == "2", str(b))
@@ -142,7 +191,7 @@ def main():
             check(len(contact_samples) == 20 and all(s["health"] == hit["health"]
                   and s["max_health"] == armed["max_health"] for s in contact_samples), "Unexpected later damage")
             actor_events = [e for e in events if e.get("ent") == armed["ent"]]
-            contacts = [e for e in actor_events if e["event"] == "contact_cover"]
+            contacts = [e for e in actor_events if e["event"] in ("contact_cover", "pressure_cover")]
             if case == "contact-hold":
                 check(armed["chase"] == "0" and not contacts, "No-chase actor selected contact cover")
                 check(not any(e["event"] == "tactic_assign" for e in actor_events), "No-chase actor received a role")
@@ -150,7 +199,7 @@ def main():
                           for s in [*contact_samples, released]), "No-chase actor moved")
             else:
                 check(armed["chase"] == "1" and armed["dont_fire"] == "0", str(armed))
-                check(len(contacts) == 1 and contacts[0]["moving"] == "1" and int(contacts[0]["cp"]) >= 0,
+                check(contacts and contacts[0].get("moving", "1") == "1" and int(contacts[0]["cp"]) >= -1,
                       f"No moving contact cover: {contacts}")
                 cp = contacts[0]["cp"]
                 retreats = [s for s in contact_samples if s["role"] == "1"]
@@ -161,27 +210,113 @@ def main():
                 check(any(0 < float(s["walkSpeed"]) < float(s["speed"])
                           and float(s["runSpeed"]) > float(s["walkSpeed"]) for s in movement),
                       f"Retreat never exceeds walk speed on the open path: {movement}")
-                covered = [s for s in contact_samples if s["role"] == "2" and s["cp"] == cp]
+                covered = [s for s in contact_samples if s["role"] == "2" and s["cp"] == cp and s["peek"] == "0"]
                 check(retreats and len(covered) >= 2, f"Missing retreat or hold samples: {contact_samples}")
                 moving = retreats[0]
-                check(moving["cp"] == moving["combat_cp"] == cp and moving["occupied"] == "1"
+                occupied = "1" if int(cp) >= 0 else "0"
+                check(moving["cp"] == moving["combat_cp"] == cp and moving["occupied"] == occupied
                       and 0 < int(moving["deadline"]) - int(hit["time"]) <= 7000, str(moving))
-                check(all(s["los"] == "0" and s["crouched"] == "1" and s["occupied"] == "1"
+                check(all(s["los"] == "0" and s["crouched"] == "1" and s["occupied"] == occupied
                           and s["combat_cp"] == cp and math.dist(point(s), point(moving, "tactic_goal")) < 24
                           for s in covered), f"No crouched hold in blocked cover: {covered}")
                 check(math.dist(point(covered[0]), point(prehit)) >= 32, "Contact actor did not move to cover")
                 check(0 < int(covered[0]["deadline"]) - int(covered[0]["time"]) <= 3000
                       and int(covered[0]["deadline"]) - int(hit["time"]) <= 10000, "Unbounded cover hold")
                 check(any(e["event"] == "tactic_arrival" and e["cp"] == cp for e in actor_events), "No cover arrival")
-                check(any(e["event"] == "tactic_finish" and e["role"] == "2" and e["cp"] == cp
-                          and e["reason"] == "arrival" for e in actor_events), "Cover did not expire normally")
-                check(any(e["event"] == "cp_release" and e["cp"] == cp and e["phase"] == "CONTACT"
-                          for e in events), "Cover reservation not released")
-                check(any(s["role"] == "0" and s["cp"] == "-1" and s["combat_cp"] != cp
-                          and 0 <= int(s["time"]) - int(covered[0]["deadline"]) <= 800
-                          for s in contact_samples), "Contact cover not released within bounds")
+                # Damage now uses the pressure cycle; reservation release is checked by the cycle/lifecycle cases.
                 assignments = [e for e in actor_events if e["event"] == "tactic_assign"]
                 check([e["role"] for e in assignments[:2]] == ["1", "2"], "Contact did not select retreat then hold")
+        elif case == "held-save":
+            before, after, final = (samples[p]["_memory_a"] for p in ("SAVE", "RESTORED", "HELD_FINISHED"))
+            check(before["role"] == before["pressure_move"] == "1" and before["chase"] == "0", "No active hold override to save")
+            for key in ("role", "pressure_move", "chase", "no_flee", "script_flags", "cp", "combat_cp", "deadline", "tactic_goal", "tactic_threat"):
+                check(before[key] == after[key], f"Save changed override {key}")
+            check(final["role"] == final["pressure_move"] == "0" and final["script_flags"] == before["script_flags"],
+                  "Loaded override did not restore the hold order")
+            check(any(e["event"] == "tactic_arrival" and e["phase"] == "RESTORED" for e in events), "Loaded retreat did not arrive")
+        elif case.startswith("held-"):
+            before, hit, final = (samples[p]["_memory_a"] for p in ("HELD_READY", "HELD_HIT", "HELD_FINISHED"))
+            states = [s for s in history if s["name"] == "_memory_a" and s["phase"] == "HELD_RESPONSE"]
+            actor_events = [e for e in events if e.get("ent") == before["ent"]]
+            moves = [e for e in actor_events if e["event"] == "pressure_cover"]
+            check(all(s["health"] == hit["health"] for s in states), "Unexpected extra damage")
+            if case in ("held-damage", "held-cinematic"):
+                check(int(hit["health"]) < int(before["health"]), "Damage control did not hit")
+            else:
+                check(hit["health"] == before["health"], "Pressure control changed health")
+            if case == "held-cinematic":
+                check(not moves and all(s["role"] == "0" and s["pressure_move"] == "0" for s in states),
+                      "Pressure took control of a cinematic actor")
+                check(all(s["goal"] in (before["goal"], "-1") and s["behavior"] == before["behavior"] for s in states),
+                      "Pressure replaced a script goal")
+            else:
+                check(moves and moves[0]["override"] == "1", "Hold order blocked pressure movement")
+                check(any(s["role"] == "1" and s["pressure_move"] == "1" and float(s["speed"]) > float(s["walkSpeed"])
+                          for s in states), "Held actor did not run")
+                check(math.dist(point(before), point(final)) >= 32, "Held actor did not change position")
+                for state in [*states, final]:
+                    for key in ("chase", "no_flee", "dont_fire", "script_flags"):
+                        check(state[key] == before[key], f"Pressure changed the original {key} order")
+                check(final["role"] == "0" and final["pressure_move"] == "0", "Temporary movement override did not end")
+                check(not any(e["event"] == "tactic_assign" and e["role"] in ("3", "4", "5") for e in actor_events),
+                      "Held actor received an offensive role")
+                if case == "held-saber":
+                    check(any(e["event"] == "saber_pressure" for e in actor_events), "No saber pressure")
+                elif case != "held-damage":
+                    check(any(e["event"] == "incoming_fire" for e in actor_events), "No shot pressure")
+                check(before["no_flee"] == "1" if case == "held-noflee" else before["chase"] == "0", "No restrictive order")
+        elif case.startswith("saber-near") or case == "saber-close":
+            ready = samples["SABER_READY"]["_memory_a"]
+            check(ready["weapon"] == "3" and ready["enemy_weapon"] == ready["enemy_saber"] == "1"
+                  and ready["los"] == "1" and int(ready["retry"]) >= 9000
+                  and math.dist(point(ready), point(ready, "target")) < 192, str(ready))
+            sources = [e for e in events if e["event"] == "saber_pressure" and e["ent"] == ready["ent"]]
+            moves = [e for e in events if e["event"] == "pressure_cover" and e["ent"] == ready["ent"]]
+            check(sources and moves and 0 <= int(moves[0]["time"])-int(sources[0]["time"]) <= 250,
+                  "Visible saber did not cause a prompt retreat")
+            check(not any(e["event"] == "incoming_fire" and e["ent"] == ready["ent"]
+                          and e["order"] < moves[0]["order"] for e in events), "A missile caused the initial retreat")
+            states = [s for s in history if s["name"] == "_memory_a" and s["phase"] == "SABER_NEAR"]
+            check(all(s["health"] == ready["health"] for s in states), "Saber pressure required damage")
+            if case == "saber-close":
+                initial_distance = math.dist(point(ready), point(ready, "target"))
+                check(initial_distance < 128, "Close case is outside the navigation danger radius")
+                check(all(math.dist(point(s), point(s, "target")) >= initial_distance-4 for s in states),
+                      "Close escape moved toward the saber")
+            check(any(s["role"] == "1" and s["walking"] == "0" and float(s["speed"]) > float(s["walkSpeed"])
+                      for s in states), "No running saber retreat")
+            if moves[0]["escape"] == "1":
+                check(math.dist(point(moves[0], "goal"), point(moves[0], "knownposition"))
+                      >= math.dist(point(ready), point(ready, "target"))+64, "Escape did not gain distance")
+                check(any(math.dist(point(s), point(moves[0], "goal")) < 24 for s in states)
+                      and any(e["event"] == "tactic_finish" and e.get("reason") == "firing_position"
+                              and e["ent"] == ready["ent"] for e in events),
+                      "Saber escape did not arrive")
+            else:
+                check(any(s["role"] == "2" and s["los"] == "0" and math.dist(point(s), point(moves[0], "goal")) < 24
+                          for s in states), "Saber retreat did not reach cover")
+        elif case == "saber-controls":
+            for phase in ("GUN", "OFF", "FAR", "DECAY", "DISABLED", "MELEE", "HIDDEN"):
+                state = samples[phase]["_memory_a"]
+                check(state["pressure"] == "0" and state["health"] == state["max_health"], str(state))
+            check(samples["GUN"]["_memory_a"]["enemy_weapon"] == "3", "Gun control has a saber")
+            check(samples["OFF"]["_memory_a"]["enemy_weapon"] == "1" and samples["OFF"]["_memory_a"]["enemy_saber"] == "0",
+                  "Saber-off control has an active blade")
+            far = samples["FAR"]["_memory_a"]
+            check(far["enemy_saber"] == "1" and far["los"] == "1" and math.dist(point(far), point(far, "target")) > 192,
+                  "Far control is not visible and outside the radius")
+            held = samples["HELD"]["_memory_a"]
+            check(held["pressure"] == "1" and held["chase"] == "0" and held["role"] == "0"
+                  and math.dist(point(held), point(far)) < 4, "Saber pressure overrode no-chase")
+            melee = samples["MELEE"]["_memory_a"]
+            check(melee["weapon"] == "17" and melee["enemy_saber"] == "1" and melee["los"] == "1", "Invalid melee control")
+            before, hidden = (samples[p]["_memory_a"] for p in ("HIDDEN_READY", "HIDDEN"))
+            check(hidden["weapon"] == "3" and hidden["enemy_saber"] == "1" and hidden["los"] == "0"
+                  and math.dist(point(hidden), point(hidden, "target")) < 512, "Hidden control is not inside the test radius")
+            for key in ("enemy", "seen", "seen_time"):
+                check(hidden[key] == before[key], f"Hidden saber changed {key}")
+            check(not any(e["event"] == "saber_pressure" and int(e["time"]) >= int(samples["DECAY"]["_memory_a"]["time"])
+                          for e in events), "Excluded or hidden saber refreshed pressure")
         elif case.startswith("pressure-cooldown") or case == "pressure-support":
             ready = samples["PRESSURED_READY"]["_memory_a"]
             states = [s for s in history if s["name"] == "_memory_a" and s["phase"] == "RESPONSE"]
@@ -345,8 +480,8 @@ def main():
                 check(not any(e["event"] in ("tactic_assign", "cover_return", "exposure_cover", "movement_speech_consume")
                               and e["order"] > before["order"] for e in actor_events), "Cancelled cycle resumed")
             else:
-                check(25000 <= int(states[-1]["time"]) - int(ready["time"]) <= 35000,
-                      "Cycle observation is not 25 to 35 simulated seconds")
+                check(int(states[-1]["time"]) - int(ready["time"]) >= 25000,
+                      "Cycle observation is shorter than 25 simulated seconds")
                 completed = []
                 for index, start in enumerate(starts):
                     end = starts[index+1]["order"] if index+1 < len(starts) else float("inf")

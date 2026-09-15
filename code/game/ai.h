@@ -237,6 +237,11 @@ void AI_InsertGroupMember( AIGroupInfo_t *group, gentity_t *member );
 void AI_DeleteSelfFromGroup( gentity_t *self );
 void ST_ClearTactic( gentity_t *self, const char *reason = "interrupted" );
 void ST_IncomingFire( gentity_t *missile, const vec3_t start, const vec3_t end );
+qboolean AI_CanReport( gentity_t *member );
+qboolean AI_ValidateTacticalMember( AIGroupInfo_t *group, gentity_t *member );
+void ST_UpdateSquadMembership( gentity_t *self );
+qboolean ST_PressureRun( gentity_t *self );
+qboolean NPC_ST_PressureThink( void );
 
 gentity_t *AI_DistributeAttack( gentity_t *attacker, gentity_t *enemy, team_t team, int threshold );
 

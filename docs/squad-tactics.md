@@ -2,11 +2,14 @@
 
 ## Scope
 
-This first policy adds local recruitment, supported flanking, and regrouping to
-Jedi Academy single-player. It applies to eligible stormtroopers, swamptroopers,
-imperials, rebels, commandos, and Bespin cops. Bosses, Force users, incompatible
-weapons, and script-controlled actors are excluded. It is not a replacement for
-every NPC behaviour.
+Squad membership and local reports are available across NPC species and weapons
+in Jedi Academy single-player. This includes snipers, Sith, and combat droids.
+Team, target, local contact, and explicit script restrictions still apply.
+
+Membership does not assign a movement controller. Supported gun users can take
+cover, flank, and cover a retreat. Sith and other melee actors keep their own
+combat behaviour while sharing contact reports. Snipers retain their firing
+controller and use the common movement path for pressure retreats.
 
 Jedi Academy saves use format version 3. Supported project v1 and v2 saves migrate
 on load. The original file is not rewritten. See `save-migration.md`.
@@ -17,6 +20,7 @@ Jedi Outcast is unchanged.
 - A group evaluates recruitment at most once per second and makes at most two assignment attempts per pass.
 - A caller must have a confirmed personal sight record that matches the group's latest record, no older than 1500 ms. Eligible observers take turns as callers.
 - The caller searches at most 128 nearby entities, with a strict 512-unit radius.
+- A common observation hook confirms sight for controllers outside trooper AI. A report source must have a matching confirmed-sight stamp; a controller's private sight timer alone is not sufficient.
 - Both NPCs need a usable navigation connection. Beyond 256 units, they also need LOS to each other. Within 256 units, a short neighboring-node connection can substitute for LOS. This is a limited approximation of local hearing.
 - The recipient need not see the Jedi. Delivery assigns awareness and joins the source group without changing the recipient's personal sight time or position.
 - Receiving a report does not refresh its observation time. A recipient without personal sight cannot become a sight-report source.
@@ -68,9 +72,8 @@ found. Without a suitable point, the NPC holds its current position.
 
 At an assigned cover point, role 2 keeps the NPC crouched for the three-second
 hold. The point is then released. The existing movement deadline, retry delay,
-script restrictions, and `SCF_DONT_FLEE` restriction still apply. Damage does not
-supply a new sight position. It does not interrupt an active tactical role or
-bypass its retry delay.
+and script restrictions apply to normal regrouping. Damage does not supply a
+new sight position. The hold-order override below also responds to damage.
 
 Healthy stationary shooters also seek cover without damage. A firing opportunity
 starts a 2.5-to-4-second exposure timer. Normal pauses between shots do not reset
@@ -114,17 +117,54 @@ Pressure lasts 1.5 seconds and requests cover through a two-second under-fire
 timer. Updates are limited to one per NPC per 300 ms. Pressure does not assign
 an enemy or update sight times and positions. Existing grenade avoidance remains
 separate.
+Actual damage also enters the immediate pressure path through the general NPC
+pain handler, including during a support role or movement cooldown.
 
 Fresh pressure is checked on the actor's own combat update. It bypasses the
 general movement and exposure retry delays. Exposed actors search authored
 points, graph positions, and local floor samples for cover. An emergency retreat
-does not require a future firing step. Failed searches wait 750 ms before retry.
+does not require a future firing step. If cover is unavailable, a checked direct
+move can gain distance instead. Failed searches wait 750 ms before retry.
 Actors already retreating keep moving. Concealed actors crouch and delay their
-next peek. Scripted goals and movement restrictions retain control.
+next peek. Active scripted movement retains control.
+
+`g_squadPressureOverrides` defaults to `1`. Pressure from shots, damage, or a
+nearby saber can temporarily override no-chase, no-retreat, crouch, and walk orders. The NPC
+can finish its bounded retreat after the pressure signal expires. It does not
+start an offensive peek cycle while held. On arrival or cancellation, the
+temporary permission is cleared. During movement, steering and command generation
+request a standing run. The original script flags are never changed.
+The NPC remains at its new position until another order or pressure event.
+
+Set `g_squadPressureOverrides 0` to retain the original hold and gait orders.
+Cinematics, pending scripted navigation, forced marches, explicit ICARUS freezes,
+item goals, and incompatible NPC controllers retain their existing protections.
+The override uses saved timers and does not change the save format.
 
 At trace level 3, `pressure_cover` records a new destination. `pressure_response`
 explains a hold, an existing retreat, a restriction, or a failed search. Level 4
 also records `pressure_ignored reason=wall` for a blocked pressure signal.
+
+## Close Saber Pressure
+
+A ranged NPC also receives pressure when its visible enemy approaches with an
+active, held lightsaber. `g_squadSaberPressureRadius` defaults to 192 units. The
+code limits it to 0 through 512 units; zero disables new saber-pressure detection.
+An inactive or thrown saber does not trigger this response. Unarmed actors and
+actors with melee weapons are excluded. The existing squad eligibility and
+script restrictions still apply.
+
+The check runs after confirmed sight on the actor's combat update. It refreshes
+the same short-lived pressure used for incoming shots. It does not obtain a new
+position from a hidden enemy. Trace level 3 records `saber_pressure` events.
+
+Within 128 units, the NPC first tries to gain distance directly. It also tries
+this escape when no cover is available. The destination must gain at least
+64 units of distance. The direct route must move away from the recorded threat,
+fit the standing actor, and have ground support. This avoids a detour toward the
+saber through a nearby navigation node. Movement retains the six-second limit.
+An escape point is not treated as concealed cover; `pressure_cover escape=1`
+identifies this fallback. The NPC can seek cover after gaining distance.
 
 ## Covering a Retreat
 
@@ -182,11 +222,11 @@ does not physically block a route. The cinematic case simulates `BS_CINEMATIC`
 and an external goal, not a full pending ICARUS script. The contested case uses
 the reservation API, not a real encounter with multiple squads.
 
-The suite has 36 cases. `contact-async` and
+The suite has 57 cases. `contact-async` and
 `contact-sync` apply damage through `G_Damage` while health stays above half.
 They check movement into cover, physical arrival, crouched holds, and timed
-reservation release. `contact-hold` checks that damage does not override a
-no-chase order. These cases use normal maximum health and protect the actors
+reservation release. `contact-hold` checks the no-chase opt-out with overrides
+disabled. These cases use normal maximum health and protect the actors
 from other damage. They do not prove firing recovery or campaign combat quality.
 
 `cycle-async` and `cycle-sync` check repeated local peeks without damage, quiet
@@ -206,6 +246,17 @@ The new cases check:
 - Distinct local destinations and arrivals for two pressured actors.
 - Cover replacement after a confirmed approach, with no hidden-position update.
 - Save/load during both the outward peek and the withdrawal. The fixture freezes each actor after the movement starts.
+- Close-saber retreats through a forced cooldown in both commander modes, including a direct escape from inside 128 units.
+- Gun, inactive-saber, distant-saber, disabled-radius, melee-actor, no-chase, and hidden-saber controls. The hidden control uses a 512-unit radius to check LOS independently of distance.
+- Held actors retreat after a shot, damage, or saber pressure. A no-retreat order also yields. Tests check unchanged script flags and cleanup of temporary movement permission.
+- Cinematic control remains protected. An active hold-order override survives save/load and clears after arrival.
+- Native `t1_sour` mercenaries, Rodians, Trandoshans, Weequays, and a sniper move under pressure. These tests use the original spawners and scripts. See `encounter-tatooine.md`.
+- Mixed trooper/Sith, Sith-only, trooper/sniper, and trooper/droid squads share reports. Membership does not assign trooper movement roles to Sith or droids.
+
+General squad fixtures equip the player with a blaster. Saber-specific fixtures
+select and activate the saber explicitly.
+The isolated pressure-detection and saber-exclusion fixtures disable hold overrides
+to keep their actors stationary.
 
 For conflicting claims in older saves, reconstruction keeps the first valid
 living owner in entity order.
