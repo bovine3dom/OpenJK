@@ -159,6 +159,7 @@ extern cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 extern cvar_t *r_capsuleShadowDebug;
 extern cvar_t *r_torchShadows, *r_torchShadowMapSize;
+extern cvar_t *r_compareEnhancements;
 extern cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
@@ -1447,6 +1448,8 @@ typedef enum
 	UNIFORM_TORCHENABLED,
 	UNIFORM_CAPSULEA,
 	UNIFORM_CAPSULEB,
+	UNIFORM_CAPSULEMINS,
+	UNIFORM_CAPSULEMAXS,
 	UNIFORM_PARALLAXBIAS,
 
 	UNIFORM_VIEWINFO, // znear, zfar, width/2, height/2
@@ -2437,6 +2440,7 @@ typedef struct {
 	int         ssaoViewParm;
 	int         softDepthViewParm;
 	bool        sssFill;
+	bool        comparisonBaseline;
 	int         ssaoWeaponViewParm;
 	enum { DEPTH_ALL, DEPTH_WORLD, DEPTH_WEAPON_AO, DEPTH_WEAPON_NATIVE } ssaoDepthLayer;
 	bool        ssaoWeaponReady;
@@ -2535,6 +2539,8 @@ typedef struct trGlobals_s {
 	FBO_t					*targetLevelsFbo;
 	FBO_t					*sunShadowFbo[3];
 	FBO_t *torchShadowFbo;
+	FBO_t *comparisonFbo;
+	image_t *comparisonImage;
 	FBO_t					*screenShadowFbo;
 	FBO_t					*screenSsaoFbo;
 	FBO_t					*hdrDepthFbo;

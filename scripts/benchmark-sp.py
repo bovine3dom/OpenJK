@@ -134,6 +134,7 @@ def run(args, suite, index, settings):
         begin = wait_for("OJK_BENCH_BEGIN")
         samples = []
         gpu_samples = {}
+        capsule_cpu = []
         deadline = begin + args.seconds
         stopping = False
         while True:
@@ -152,6 +153,9 @@ def run(args, suite, index, settings):
                 break
             for label, value in re.findall(r"(AO GPU world|AO GPU weapon|Render Pass \d+|Post processing): ([\d.]+)ms", line):
                 gpu_samples.setdefault(label, []).append(float(value))
+            capsule = re.search(r"Capsule CPU: total=(\d+) prepare=(\d+) actors=(\d+)", line)
+            if capsule:
+                capsule_cpu.append(tuple(map(int, capsule.groups())))
             match = FRAME.match(line)
             if match:
                 samples.append(tuple(map(int, match.groups())))
@@ -164,6 +168,8 @@ def run(args, suite, index, settings):
                       renderer_backend_work_ms=percentiles([s[3] for s in samples]))
         result["gpu_pass_ms"] = {name: dict(samples=len(values), **percentiles(values))
                                  for name, values in gpu_samples.items()}
+        result["capsule_cpu"] = {name: percentiles([row[i] for row in capsule_cpu])
+                                 for i, name in enumerate(("total_ms", "prepare_ms", "actors"))} if capsule_cpu else {}
         send("screenshot_png benchmark_end")
         wait_for("Wrote screenshots/benchmark_end.png")
         check_weapon = args.weapon is not None and args.renderer == "rdsp-rend2" and int(settings["r_ssao"])

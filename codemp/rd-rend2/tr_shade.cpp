@@ -1646,11 +1646,11 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			pStage->normalScale[3]
 		};
 		const image_t *normalImage = pStage->bundle[TB_NORMALMAP].image[0];
-		const float normalStrength = Com_Clamp(0, 4, r_normalStrength->value) *
+		const float normalStrength = (backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0, 4, r_normalStrength->value)) *
 			(normalImage && normalImage->generatedNormal ? Com_Clamp(0, 4, r_generatedNormalStrength->value) : 1.0f);
 		normalScale[0] *= normalStrength;
 		normalScale[1] *= normalStrength;
-		normalScale[3] *= Com_Clamp(0, 4, r_parallaxScale->value);
+		normalScale[3] *= backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0, 4, r_parallaxScale->value);
 
 		uniformDataWriter.SetUniformVec4(UNIFORM_NORMALSCALE, normalScale);
 #ifdef REND2_SP
@@ -1662,7 +1662,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		}
 #endif
 		uniformDataWriter.SetUniformVec4(UNIFORM_SPECULARSCALE, pStage->specularScale);
-		const vec4_t materialParams = {Com_Clamp(0, 4, r_specularStrength->value),
+		const vec4_t materialParams = {backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0, 4, r_specularStrength->value),
 			Com_Clamp(0, 1, r_roughnessFloor->value), Com_Clamp(0.05f, 4, r_roughnessScale->value), 0};
 		uniformDataWriter.SetUniformVec4(UNIFORM_MATERIALPARAMS, materialParams);
 		const vec4_t sssParams = {backEnd.sssFill ? 1.0f : 0.0f, 0, 0, 0};
@@ -1675,7 +1675,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		}
 		if (pStage->glslShaderGroup == tr.lightallShader && !forceRefraction)
 		{
-			uniformDataWriter.SetUniformInt(UNIFORM_TORCHENABLED, !backEnd.viewParms.isSkyPortal);
+			uniformDataWriter.SetUniformInt(UNIFORM_TORCHENABLED, !backEnd.comparisonBaseline && !backEnd.viewParms.isSkyPortal);
 			samplerBindingsWriter.AddStaticImage(backEnd.sssFill ? tr.renderDepthImage : tr.whiteImage, TB_SKINDEPTHMAP);
 			samplerBindingsWriter.AddStaticImage(backEnd.refdef.torchParams[2] > 0 && !backEnd.depthFill ?
 				tr.torchShadowImage : tr.whiteImage, TB_TORCHSHADOWMAP);
@@ -1683,7 +1683,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		vec4_t softParams = {};
 		const int srcBlend = stateBits & GLS_SRCBLEND_BITS;
 		const int dstBlend = stateBits & GLS_DSTBLEND_BITS;
-		if (pStage->glslShaderGroup != tr.lightallShader && r_softParticles->integer && r_softParticleDistance->value > 0 &&
+		if (!backEnd.comparisonBaseline && pStage->glslShaderGroup != tr.lightallShader && r_softParticles->integer && r_softParticleDistance->value > 0 &&
 			!backEnd.projection2D && !backEnd.depthFill && !backEnd.refractionFill &&
 			backEnd.softDepthViewParm == backEnd.viewParms.currentViewParm &&
 			!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) && R_IsSoftParticle(backEnd.currentEntity->e) &&
@@ -1709,7 +1709,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		//
 		// do multitexture
 		//
-		bool enableCubeMaps = (	r_cubeMapping->integer
+		bool enableCubeMaps = (	!backEnd.comparisonBaseline && r_cubeMapping->integer
 								&& !(tr.viewParms.flags & VPF_NOCUBEMAPS)
 								&& input->cubemapIndex > 0
 								&& pStage->rgbGen != CGEN_LIGHTMAPSTYLE );
@@ -1751,9 +1751,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			const bool viewModel = R_IsViewModel(backEnd.currentEntity->e);
 			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, viewModel ? 0 : r_ssaoAmbientOnly->integer);
 			uniformDataWriter.SetUniformVec4(UNIFORM_SSAOPARAMS,
-				Com_Clamp(0.0f, 4.0f, viewModel ? r_ssaoViewModelStrength->value : r_ssaoStrength->value), 0, 0, 0);
+				backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0.0f, 4.0f, viewModel ? r_ssaoViewModelStrength->value : r_ssaoStrength->value), 0, 0, 0);
 
-			if (r_sunlightMode->integer &&
+			if (!backEnd.comparisonBaseline && r_sunlightMode->integer &&
 					(backEnd.viewParms.flags & VPF_USESUNLIGHT) &&
 					(pStage->glslShaderIndex & LIGHTDEF_LIGHTTYPE_MASK))
 			{

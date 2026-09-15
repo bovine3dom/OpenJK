@@ -129,6 +129,8 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_TorchEnabled", GLSL_INT, 1 },
 	{ "u_CapsuleA", GLSL_VEC4, 12 },
 	{ "u_CapsuleB", GLSL_VEC4, 12 },
+	{ "u_CapsuleMins", GLSL_VEC3, 1 },
+	{ "u_CapsuleMaxs", GLSL_VEC3, 1 },
 	{ "u_ParallaxBias",  GLSL_FLOAT, 1 },
 
 	{ "u_ViewInfo",				GLSL_VEC4, 1 },

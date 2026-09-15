@@ -172,6 +172,10 @@ and test commands.
 
 ## Rend2 Performance
 
+- [x] Reduce capsule shader work with conservative receiver rejection and precomputed segment reciprocals. Measure the default-feature scene on the P630 at 720p and 1080p. See `docs/benchmark-sp.md`.
+- [x] Add instant enhancement toggles and a same-frame 50/50 comparison. Check split halves, custom settings, humanoids, save/load, and renderer restart. See `docs/graphics-comparison.md`.
+- [ ] Repeat performance measurements on the GTX 1080 Ti. Profile CPU skinning, submission, and remaining GPU passes before choosing a Vulkan port.
+
 - [x] Add live world and weapon SSAO strength/radius controls. Preserve the old world sampling footprint at the reference FOV and aspect.
 - [x] Add native-resolution spatial GTAO and independent weapon GTAO. Add live quality presets; use the original 8-sample Low as the new default Medium and add a 4-sample Low.
 - [x] Add optional full sample shading for main-scene MSAA and alpha-tested depth. Keep it off by default. Check image changes, state restoration, and native-resolution UI.

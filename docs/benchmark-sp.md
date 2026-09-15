@@ -260,3 +260,55 @@ tenfold load improvement or predict NVIDIA performance.
 Offscreen tests cannot measure mouse-to-photon latency, desktop compositor
 behavior, monitor scanout, or GTX 1080 Ti performance. Software-renderer results
 must remain separate from hardware results.
+
+## Default-Feature Performance Pass: September 15, 2026
+
+The test used hardware Intel HD Graphics P630, Mesa 26.2.1, and the fixed Kril'dor
+first-person blaster view. GTAO Medium, half-resolution AO, denoising, weapon AO,
+capsules, SMAA, skin diffusion, generated normals, and soft particles stayed on.
+MSAA was off. `cg_shadows` was `1`. The approved preset's `r_ssaoAmbientOnly 0`
+was set explicitly. NPC AI was frozen to reduce scene changes.
+
+The capsule shader now rejects receivers outside its conservative world bounds.
+It also rejects zero-contribution samples before square roots and attenuation
+work. Segment reciprocals are calculated once on the CPU instead of once per
+fragment. Shadow strength, radius, softness, range, and resolution are unchanged.
+
+| Resolution | Baseline FPS | Final enhanced FPS | Change |
+| --- | ---: | ---: | ---: |
+| 1280 x 720 | 28.55 | 38.69 | +35.5% |
+| 1920 x 1080 | 15.63 | 19.42 | +24.2% |
+
+These are median approximate throughput values. The 720p cases used three
+10-second runs; the 1080p cases used two. Each run had a five-second warmup.
+Other work was active on the server. These are local measurements, not desktop
+frame-time or GTX 1080 Ti predictions. An earlier optimized 1080p pair measured
+20.63 FPS; retain that variation when interpreting the table.
+
+Baseline package: `20260915T204549240885605-2eb67225`. Results under
+`build/benchmark-sp/` are:
+
+- 720p baseline: `rdsp-rend2.cs2m4se6`; final: `rdsp-rend2.am7m2fp3`.
+- 1080p baseline: `rdsp-rend2.wtlsax_p`; final: `rdsp-rend2.417jmh00`.
+- GPU-timed baseline: `rdsp-rend2.6zu687uz`; optimized: `rdsp-rend2.2byst3s4`.
+
+In the separate GPU-timed runs, median main-pass time fell from 21.74 to 15.23 ms.
+World AO stayed near 3.1 ms. Instrumentation changes overhead; these runs are not
+used for the throughput table. `r_speeds 100` now also reports coarse capsule CPU
+times. The benchmark records them separately in `capsule_cpu`.
+
+Raster feature tests passed with MSAA off and at 4x. They include capsule
+parameters, wall occlusion, detached limbs, skin profiles, SMAA, particles, and
+restoration. Live comparison checks are described in `graphics-comparison.md`.
+
+### Vulkan Assessment
+
+The measured capsule cost was shader work. An API change alone would retain that
+work. This pass therefore improves the existing renderer first. A Vulkan port
+would also require resource management, synchronization, shader integration,
+presentation, and validation of the SP rendering contract.
+
+The [Khronos profiling guide](https://github.khronos.org/Vulkan-Site/guide/latest/profiling.html)
+distinguishes CPU command work, GPU work, and synchronization delays. Use a
+desktop GPU trace to identify the next limit before choosing a Vulkan port.
+CPU skinning and draw submission remain useful follow-up measurements.

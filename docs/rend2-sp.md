@@ -90,6 +90,15 @@ This does not verify all cinematic scenes.
 
 ## Performance Changes
 
+The September 15 default-feature pass reduces capsule shader work without
+changing shadow settings. P630 measurements improved by about 24–36% at the
+tested resolutions. See `benchmark-sp.md` for settings, raw result paths, and
+measurement limits.
+
+Use `r_compareEnhancements 2` for a live 50/50 graphics comparison, `1` for base
+lighting, or `0` for normal rendering. No renderer restart is required. See
+`graphics-comparison.md` for scope, bindings, and tests.
+
 SP skips MikkTSpace tangent generation for passes that do not need tangents.
 It also skips this work for built-in Lightall when the effective normal-scale
 X and Y values are both zero and parallax is disabled. External GLSL and

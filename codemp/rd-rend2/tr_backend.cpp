@@ -2104,7 +2104,7 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 
 static bool RB_SSAOEnabledForView()
 {
-	return r_ssao->integer && r_depthPrepass->integer && tr.world &&
+	return !backEnd.comparisonBaseline && r_ssao->integer && r_depthPrepass->integer && tr.world &&
 		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
 		!(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_ORTHOGRAPHIC)) &&
 		!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
@@ -2120,10 +2120,19 @@ static bool RB_FullMainView()
 		backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
 }
 
+static bool RB_CompareView()
+{
+	return r_compareEnhancements->integer && !r_ssaoDebug->integer && !r_sssDebug->integer &&
+		!r_smaaDebug->integer && RB_FullMainView();
+}
+
 static void RB_RenderCapsules()
 {
 #ifdef REND2_SP
 	if (!r_capsuleShadows->integer || r_capsuleShadowStrength->value <= 0 || !RB_FullMainView()) return;
+	const bool timed = r_speeds->integer == 100;
+	const int startTime = timed ? ri.Milliseconds() : 0;
+	int prepareMsec = 0;
 	const bool report = r_capsuleShadowDebug->integer != 0;
 	if (report) ri.Cvar_Set("r_capsuleShadowDebug", "0");
 	static const char *bones[] = {"pelvis", "thoracic", "cranium", "lfemurYZ", "ltibia", "ltalus",
@@ -2164,6 +2173,7 @@ static void RB_RenderCapsules()
 	for (const refEntity_t *candidate : candidates)
 	{
 		if (actors >= 8) break;
+		const int prepareStart = timed ? ri.Milliseconds() : 0;
 		const refEntity_t &e = *candidate;
 		CGhoul2Info_v &g2 = *e.ghoul2;
 		const char *gla = G2API_GetGLAName(&g2[0]);
@@ -2211,6 +2221,7 @@ static void RB_RenderCapsules()
 			{
 				VectorCopy(points[link == 1 && !visible[0] ? 2 : links[link][0]], a[count]); a[count][3] = radii[link] * scale;
 				VectorCopy(points[link == 0 && !visible[0] ? 0 : links[link][1]], b[count]);
+				b[count][3] = 1.0f / MAX(DistanceSquared(a[count], b[count]), 0.001f);
 				AddPointToBounds(a[count], mins, maxs);
 				AddPointToBounds(b[count], mins, maxs);
 				++count;
@@ -2250,7 +2261,10 @@ static void RB_RenderCapsules()
 		int x2 = int(ceilf((Com_Clamp(-1,1,right)*0.5f+0.5f)*tr.screenSsaoFbo->width));
 		int y2 = int(ceilf((Com_Clamp(-1,1,top)*0.5f+0.5f)*tr.screenSsaoFbo->height));
 		if (x2 <= x || y2 <= y) continue;
+		if (timed) prepareMsec += ri.Milliseconds() - prepareStart;
 		qglScissor(x, y, x2-x, y2-y);
+		GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_CAPSULEMINS, mins);
+		GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_CAPSULEMAXS, maxs);
 		qglUniform4fv(tr.capsuleShader.uniforms[UNIFORM_CAPSULEA], 12, a[0]);
 		qglUniform4fv(tr.capsuleShader.uniforms[UNIFORM_CAPSULEB], 12, b[0]);
 		memcpy(tr.capsuleShader.uniformBuffer + tr.capsuleShader.uniformBufferOffsets[UNIFORM_CAPSULEA], a, sizeof(a));
@@ -2258,6 +2272,7 @@ static void RB_RenderCapsules()
 		RB_InstantTriangle();
 		++actors;
 	}
+	if (timed) ri.Printf(PRINT_ALL, "Capsule CPU: total=%d prepare=%d actors=%d\n", ri.Milliseconds() - startTime, prepareMsec, actors);
 #endif
 }
 
@@ -2904,6 +2919,7 @@ static void RB_UpdateGhoul2Constants(gpuFrame_t *frame, const trRefdef_t *refdef
 
 void RB_UpdateConstants(const trRefdef_t *refdef)
 {
+	backEnd.comparisonBaseline = false;
 	backEnd.sssFill = false;
 	backEnd.softDepthViewParm = -1;
 	// Cached view indices are reused for each scene, including empty scenes.
@@ -3184,6 +3200,7 @@ static void RB_CreatePostTarget(image_t **image, FBO_t **fbo, const char *name, 
 
 static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 {
+	if (backEnd.comparisonBaseline) return scene;
 	if ((!r_sssDebug->integer && (!r_sss->value || !r_sssRadius->value)) || !RB_FullMainView()) return scene;
 	bool eligible = false;
 	for (int i = backEnd.refdef.fistDrawSurf; i < backEnd.refdef.numDrawSurfs && !eligible; ++i)
@@ -3244,6 +3261,7 @@ static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 
 static void RB_SMAA()
 {
+	if (backEnd.comparisonBaseline) return;
 	if (!r_smaa->integer || !RB_FullMainView() || r_ssaoDebug->integer || r_sssDebug->integer) return;
 	if (!tr.smaaFbo[0])
 	{
@@ -3280,6 +3298,8 @@ static void RB_SMAA()
 	if (r_smaaDebug->integer)
 		FBO_FastBlit(tr.smaaFbo[r_smaaDebug->integer], nullptr, nullptr, nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 }
+
+static const void *RB_DrawSurfs(const void *data);
 
 const void *RB_PostProcess(const void *data)
 {
@@ -3336,12 +3356,12 @@ const void *RB_PostProcess(const void *data)
 
 	if (srcFbo)
 	{
-		if (r_hdr->integer && (r_toneMap->integer || r_forceToneMap->integer))
+		if (!backEnd.comparisonBaseline && r_hdr->integer && (r_toneMap->integer || r_forceToneMap->integer))
 		{
 			autoExposure = (qboolean)(r_autoExposure->integer || r_forceAutoExposure->integer);
 			RB_ToneMap(srcFbo, srcBox, NULL, dstBox, autoExposure);
 		}
-		else if (r_cameraExposure->value == 0.0f)
+		else if (backEnd.comparisonBaseline || r_cameraExposure->value == 0.0f)
 		{
 			FBO_FastBlit(srcFbo, srcBox, NULL, dstBox, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 		}
@@ -3361,7 +3381,7 @@ const void *RB_PostProcess(const void *data)
 		FBO_FastBlit(tr.renderFbo, srcBox, NULL, dstBox, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
 	}
 
-	if (r_drawSunRays->integer)
+	if (!backEnd.comparisonBaseline && r_drawSunRays->integer)
 		RB_SunRays(NULL, srcBox, NULL, dstBox);
 
 #if 0
@@ -3409,7 +3429,7 @@ const void *RB_PostProcess(const void *data)
 	if (tr_distortionPrePost)
 		R_SP_CaptureScreen(qtrue);
 #endif
-	if (r_dynamicGlow->integer != 0)
+	if (!backEnd.comparisonBaseline && r_dynamicGlow->integer != 0)
 	{
 		// Composite the glow/bloom texture
 		int blendFunc = 0;
@@ -3498,6 +3518,28 @@ const void *RB_PostProcess(const void *data)
 		qglScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
 	}
 
+	if (!backEnd.comparisonBaseline && r_compareEnhancements->integer == 2 && RB_CompareView())
+	{
+		// Preserve this frame's completed enhanced image before replaying its draw list.
+		if (!tr.comparisonFbo)
+			RB_CreatePostTarget(&tr.comparisonImage, &tr.comparisonFbo, "*enhancementComparison", GL_RGBA8);
+		FBO_FastBlit(nullptr, nullptr, tr.comparisonFbo, nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		drawSurfsCommand_t draw = {};
+		draw.refdef = backEnd.refdef;
+		draw.viewParms = backEnd.viewParms;
+		draw.drawSurfs = backEnd.refdef.drawSurfs + backEnd.refdef.fistDrawSurf;
+		draw.numDrawSurfs = backEnd.refdef.numDrawSurfs - backEnd.refdef.fistDrawSurf;
+		postProcessCommand_t post = {};
+		post.refdef = backEnd.refdef;
+		post.viewParms = backEnd.viewParms;
+		backEnd.comparisonBaseline = true;
+		RB_DrawSurfs(&draw);
+		RB_PostProcess(&post);
+		const int half = glConfig.vidWidth / 2;
+		vec4i_t right = {half, 0, glConfig.vidWidth - half, glConfig.vidHeight};
+		FBO_FastBlit(tr.comparisonFbo, right, nullptr, right, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+	}
+	backEnd.comparisonBaseline = false;
 	return (const void *)(cmd + 1);
 }
 
@@ -3570,6 +3612,8 @@ static const void *RB_DrawSurfs(const void *data) {
 	backEnd.viewParms = cmd->viewParms;
 
 	// clear the z buffer, set the modelview, etc
+	if (!backEnd.comparisonBaseline)
+		backEnd.comparisonBaseline = r_compareEnhancements->integer == 1 && RB_CompareView();
 	RB_BeginDrawingView();
 
 	if (cmd->numDrawSurfs > 0)

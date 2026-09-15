@@ -139,6 +139,7 @@ cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 cvar_t *r_capsuleShadowDebug;
 cvar_t *r_torchShadows, *r_torchShadowMapSize;
+cvar_t *r_compareEnhancements;
 cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 cvar_t *r_sssDebugGain;
 cvar_t  *r_ssaoAmbientOnly;
@@ -1536,6 +1537,8 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_softParticles, 0, 1, qtrue);
 	ri.Cvar_CheckRange(r_softParticleDistance, 0, 64, qfalse);
 	r_smaa = ri.Cvar_Get("r_smaa", "1", CVAR_ARCHIVE, "Enable SMAA 1x before UI rendering.");
+	r_compareEnhancements = ri.Cvar_Get("r_compareEnhancements", "0", 0, "Live comparison: 0 enhanced, 1 base lighting, 2 base left/enhanced right.");
+	ri.Cvar_CheckRange(r_compareEnhancements, 0, 2, qtrue);
 	r_smaaDebug = ri.Cvar_Get("r_smaaDebug", "0", 0, "SMAA debug: 0 scene, 1 edges, 2 weights.");
 	r_sss = ri.Cvar_Get("r_sss", "1", CVAR_ARCHIVE, "Skin diffusion strength; values above 1 exaggerate the correction.");
 	r_sssRadius = ri.Cvar_Get("r_sssRadius", "0.5", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
