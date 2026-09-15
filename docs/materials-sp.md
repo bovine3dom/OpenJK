@@ -25,8 +25,9 @@ The new generated-map default is one quarter of the old strength. Diffuse
 brightening is now disabled. Parallax height uses half its previous scale.
 Specular and roughness controls start at neutral values.
 
-`r_genNormalMaps` remains the generation switch. Set it to `1`, then use
-`vid_restart`, to generate missing normal maps. Authored `_n` maps take priority.
+`r_genNormalMaps` defaults to `1` and generates missing normal maps. Existing
+profiles retain saved values. Set it to `1`, then use `vid_restart`, to enable
+generation in an existing profile. Authored `_n` maps take priority.
 `r_normalMapping`, `r_specularMapping`, and `r_parallaxMapping` select shader
 features and still require a restart. A live strength of zero is useful for
 comparison but does not unload textures or remove all shader work.
@@ -57,8 +58,10 @@ generator changed diffuse colour as well as normals, which made a normal-strengt
 comparison harder to interpret. Existing profiles keep any values they already
 contain. Use the commands above to apply the starting settings explicitly.
 
-These defaults are a conservative starting point. Final artistic calibration
-still needs desktop checks on the user's maps and texture packs.
+The user approved `r_normalStrength 1` and `r_generatedNormalStrength 0.25` on
+stock assets. Roughness, specular, and parallax changes had no obvious visual
+effect in that test. Desktop loading still felt slow despite the normal cache.
+Further calibration and loading-time investigation remain open.
 
 ## Generated-Normal Cache
 

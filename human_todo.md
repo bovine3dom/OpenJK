@@ -60,10 +60,14 @@ They need suitable material or map data. Test them separately if that data exist
 ## Material Calibration Decisions
 
 The user reports that half-resolution GTAO works well. It is now the default
-when GTAO is selected. Material calibration still needs desktop review.
+when GTAO is selected. The user also approved generated normals with
+`r_normalStrength 1` and `r_generatedNormalStrength 0.25`; generation now defaults
+to enabled. Roughness, specular, and parallax changes had no obvious effect in
+the desktop test. Loading still felt slow. Other calibration checks remain open.
 See `docs/materials-sp.md` for full control descriptions and cache details.
 
 - [ ] Choose a stock wall, a metal surface, a character, and a first-person weapon. Use fixed views and exposure for comparisons.
+- [x] Confirm the generated-normal defaults on the desktop: generation enabled, normal strength `1`, generated strength `0.25`.
 - [ ] Compare `r_normalStrength 0` and `1`. Decide whether relief comes from the normal map or from colour already painted into the texture.
 - [ ] With `r_normalStrength 1`, compare `r_generatedNormalStrength 0.1`, `0.25`, `0.5`, and `1`. The current default is `0.25`. Select the preferred value for generated maps.
 - [ ] Test authored normal maps separately if a texture pack supplies them. Use `r_normalStrength` to adjust them; `r_generatedNormalStrength` does not affect them.

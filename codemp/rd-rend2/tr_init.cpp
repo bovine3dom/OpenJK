@@ -1565,7 +1565,7 @@ void R_Register( void )
 	r_imageUpsample = ri.Cvar_Get( "r_imageUpsample", "0", CVAR_ARCHIVE | CVAR_LATCH, "" );
 	r_imageUpsampleMaxSize = ri.Cvar_Get( "r_imageUpsampleMaxSize", "1024", CVAR_ARCHIVE | CVAR_LATCH, "" );
 	r_imageUpsampleType = ri.Cvar_Get( "r_imageUpsampleType", "1", CVAR_ARCHIVE | CVAR_LATCH, "" );
-	r_genNormalMaps = ri.Cvar_Get( "r_genNormalMaps", "0", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable generating normal maps from diffuse maps" );
+	r_genNormalMaps = ri.Cvar_Get( "r_genNormalMaps", "1", CVAR_ARCHIVE | CVAR_LATCH, "Disable/enable generating normal maps from diffuse maps" );
 	r_normalStrength = ri.Cvar_Get("r_normalStrength", "1", CVAR_ARCHIVE, "Live normal-map strength multiplier.");
 	r_generatedNormalStrength = ri.Cvar_Get("r_generatedNormalStrength", "0.25", CVAR_ARCHIVE, "Additional strength multiplier for generated normal maps.");
 	r_parallaxScale = ri.Cvar_Get("r_parallaxScale", "0.5", CVAR_ARCHIVE, "Live parallax height multiplier.");
