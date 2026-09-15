@@ -1,4 +1,7 @@
 /*[Vertex]*/
+#if !defined(SMAA_PASS) || SMAA_PASS < 0 || SMAA_PASS > 2
+#error Invalid SMAA pass
+#endif
 uniform vec2 u_InvTexRes;
 #define SMAA_GLSL_3 1
 #define SMAA_PRESET_HIGH 1
@@ -24,6 +27,9 @@ void main()
 #endif
 }
 /*[Fragment]*/
+#if !defined(SMAA_PASS) || SMAA_PASS < 0 || SMAA_PASS > 2
+#error Invalid SMAA pass
+#endif
 uniform vec2 u_InvTexRes;
 #define SMAA_GLSL_3 1
 #define SMAA_PRESET_HIGH 1

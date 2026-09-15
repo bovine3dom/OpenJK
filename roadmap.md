@@ -39,6 +39,25 @@ Sources:
 - [IGN PC review](https://www.ign.com/articles/2003/09/16/star-wars-jedi-knight-jedi-academy-review)
 - [Eurogamer Xbox follow-up](https://www.eurogamer.net/r-jediacademy-x)
 
+## Vulkan Investigation
+
+Measure CPU submission time, GPU pass time, and load phases before a renderer
+migration. Vulkan can reduce driver overhead, but texture decoding, CPU skinning,
+and expensive pixel shaders still need separate work. Pipeline creation can
+still cause load delays.
+
+[JKSunny/OpenJK](https://github.com/JKSunny/OpenJK) has a Vulkan renderer under
+`codemp/rd-vulkan`. [TaystJK](https://github.com/taysta/TaystJK) also identifies
+EternalJK-Vulkan as an upstream project. Evaluate this existing work before a
+new backend. Its multiplayer location does not establish SP support or Rend2
+feature parity. Check Ghoul2, campaign effects, RmlUi, save/load, renderer restart,
+MSAA, and the current lighting passes in an isolated SP prototype.
+
+[Mesa Zink](https://docs.mesa3d.org/drivers/zink.html) provides OpenGL over Vulkan.
+Where supported, use it for an initial driver comparison. Its results do not
+predict the performance of a native Vulkan renderer. Approve a migration only
+after a prototype shows a measured benefit on the target hardware.
+
 ## Work Areas
 
 Estimates are approximate full-time effort for one experienced developer. They

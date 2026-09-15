@@ -11,7 +11,7 @@ uniform sampler2D u_ScreenDepthMap;
 uniform vec4 u_ViewInfo;
 uniform vec3 u_ViewOrigin, u_ViewForward, u_ViewLeft, u_ViewUp;
 uniform vec4 u_CapsuleA[12], u_CapsuleB[12];
-uniform vec4 u_SSSParams;
+uniform vec4 u_SSSParams; // strength, softness, range, surface-normal mode
 in vec2 var_Tex;
 out vec4 out_Color;
 vec3 positionAt(vec2 uv)
@@ -26,7 +26,9 @@ void main()
     vec3 crossN = cross(dFdx(p), dFdy(p));
     vec3 n = crossN * inversesqrt(max(dot(crossN, crossN), 1e-12));
     if (dot(n, u_ViewOrigin - p) < 0.0) n = -n;
-    if (texture(u_ScreenDepthMap, var_Tex).r >= 1.0 || n.z < 0.4) { out_Color = vec4(1.0); return; }
+    float receiver = u_SSSParams.w > 0.5 ? 1.0 : smoothstep(0.4, 0.8, n.z);
+    vec3 projection = u_SSSParams.w > 0.5 ? n : vec3(0.0, 0.0, 1.0);
+    if (texture(u_ScreenDepthMap, var_Tex).r >= 1.0 || receiver <= 0.0) { out_Color = vec4(1.0); return; }
     float occlusion = 0.0;
     for (int i = 0; i < 12; ++i)
     {
@@ -35,11 +37,15 @@ void main()
         vec3 axis = u_CapsuleB[i].xyz - u_CapsuleA[i].xyz;
         float t = clamp(dot(p - u_CapsuleA[i].xyz, axis) / max(dot(axis, axis), 0.001), 0.0, 1.0);
         vec3 delta = u_CapsuleA[i].xyz + t * axis - p;
-        if (delta.z < -radius || delta.z > 64.0) continue;
-        float penumbra = radius + max(delta.z, 0.0) * 0.6;
-        float shadow = 1.0 - smoothstep(radius * 0.3, penumbra + radius, length(delta.xy));
-        shadow *= 1.0 - smoothstep(16.0, 64.0, max(delta.z, 0.0));
+        float height = dot(delta, projection);
+        if (u_SSSParams.w > 0.5 && height < 0.0) continue;
+        if (height < -radius || height > u_SSSParams.z) continue;
+        float inner = radius * max(0.0, 1.0 - 0.7 * u_SSSParams.y);
+        float outer = radius * (1.0 + u_SSSParams.y) + max(height, 0.0) * 0.6 * u_SSSParams.y;
+        float distanceToAxis = length(delta - height * projection);
+        float shadow = 1.0 - smoothstep(inner, max(inner + 0.01, outer), distanceToAxis);
+        shadow *= 1.0 - smoothstep(u_SSSParams.z * 0.25, u_SSSParams.z, max(height, 0.0));
         occlusion = max(occlusion, shadow);
     }
-    out_Color = vec4(vec3(1.0 - u_SSSParams.x * occlusion * smoothstep(0.4, 0.8, n.z)), 1.0);
+    out_Color = vec4(vec3(1.0 - u_SSSParams.x * occlusion * receiver), 1.0);
 }

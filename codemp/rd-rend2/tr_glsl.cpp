@@ -890,11 +890,14 @@ static bool GLSL_LoadGPUShader(
 	const GLcharARB *extra,
 	const GPUProgramDesc& programDesc)
 {
+	// Header construction uses va(). Preserve caller-supplied defines across it
+	// and across all shader stages and source-buffer growth attempts.
+	const std::string defines = extra ? extra : "";
 	builder.Start(name, attribs, xfbVariables);
 	for ( int i = 0; i < programDesc.numShaders; ++i )
 	{
 		const GPUShaderDesc& shaderDesc = programDesc.shaders[i];
-		if ( !builder.AddShader(shaderDesc, extra) )
+		if ( !builder.AddShader(shaderDesc, defines.c_str()) )
 		{
 			builder.Reset();
 			GLSL_ClearRetainedPrograms();

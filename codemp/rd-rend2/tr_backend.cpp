@@ -2141,7 +2141,8 @@ static void RB_RenderCapsules()
 	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWFORWARD, view.ori.axis[0]);
 	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWLEFT, view.ori.axis[1]);
 	GLSL_SetUniformVec3(&tr.capsuleShader, UNIFORM_VIEWUP, view.ori.axis[2]);
-	const vec4_t strength = {r_capsuleShadowStrength->value, 0, 0, 0};
+	const vec4_t strength = {r_capsuleShadowStrength->value, r_capsuleShadowSoftness->value,
+		r_capsuleShadowRange->value, float(r_capsuleShadowWalls->integer)};
 	GLSL_SetUniformVec4(&tr.capsuleShader, UNIFORM_SSSPARAMS, strength);
 	std::vector<const refEntity_t *> candidates;
 	for (int i = 0; i < backEnd.refdef.num_entities; ++i)
@@ -2184,6 +2185,7 @@ static void RB_RenderCapsules()
 		int count = 0;
 		float scale = MAX(fabsf(e.modelScale[0]), MAX(fabsf(e.modelScale[1]), fabsf(e.modelScale[2])));
 		if (!scale) scale = 1;
+		scale *= r_capsuleShadowRadius->value;
 		for (int link = 0; link < 10; ++link)
 			if (valid[links[link][0]] && valid[links[link][1]])
 			{
@@ -2192,7 +2194,12 @@ static void RB_RenderCapsules()
 			}
 		if (!count) continue;
 		// Bound the screen work to the actor and its short-range ground shadow.
-		for (int axis = 0; axis < 3; ++axis) { mins[axis] -= 48; maxs[axis] += 48; }
+		const float reach = 7 * scale * (1 + strength[1]) + strength[2] * 0.6f * strength[1];
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			const float extent = reach + ((axis == 2 || r_capsuleShadowWalls->integer) ? strength[2] : 0);
+			mins[axis] -= extent; maxs[axis] += extent;
+		}
 		matrix_t vp;
 		Matrix16Multiply(view.projectionMatrix, view.world.modelViewMatrix, vp);
 		float left = 1, right = -1, bottom = 1, top = -1;
@@ -3145,7 +3152,7 @@ static void RB_CreatePostTarget(image_t **image, FBO_t **fbo, const char *name, 
 
 static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 {
-	if ((!r_sss->value && !r_sssDebug->integer) || !RB_FullMainView()) return scene;
+	if ((!r_sssDebug->integer && (!r_sss->value || !r_sssRadius->value)) || !RB_FullMainView()) return scene;
 	bool eligible = false;
 	for (int i = backEnd.refdef.fistDrawSurf; i < backEnd.refdef.numDrawSurfs && !eligible; ++i)
 	{
@@ -3197,7 +3204,7 @@ static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 	FBO_Bind(tr.sssCompositeFbo);
 	GL_BindToTMU(tr.sssBlurImage[1], 0);
 	GL_BindToTMU(scene->colorImage[0], 1);
-	const vec4_t params = {0, 0, r_sss->value, r_sssDebug->integer ? 2.0f : 1.0f};
+	const vec4_t params = {r_sssDebugGain->value, 0, r_sssRadius->value > 0 ? r_sss->value : 0.0f, 1.0f + r_sssDebug->integer};
 	GLSL_SetUniformVec4(&tr.sssShader, UNIFORM_SSSPARAMS, params);
 	RB_InstantTriangle();
 	return tr.sssCompositeFbo;
@@ -3274,6 +3281,7 @@ const void *RB_PostProcess(const void *data)
 	}
 
 	srcFbo = RB_SkinDiffusion(srcFbo);
+	const bool skinDebug = r_sssDebug->integer > 0 && r_sssDebug->integer < 5 && srcFbo == tr.sssCompositeFbo;
 	dstBox[0] = backEnd.viewParms.viewportX;
 	dstBox[1] = backEnd.viewParms.viewportY;
 	dstBox[2] = backEnd.viewParms.viewportWidth;
@@ -3410,6 +3418,9 @@ const void *RB_PostProcess(const void *data)
 		R_SP_DrawGoggles();
 #endif
 
+	// Diagnostic values must not be tone mapped or covered by scene effects.
+	if (skinDebug)
+		FBO_FastBlit(tr.sssCompositeFbo, nullptr, nullptr, nullptr, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	RB_SMAA();
 	if (RB_SSAOEnabledForView() &&
 		backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm &&

@@ -9,9 +9,14 @@ SMAA start disabled for desktop comparison. Soft particles start enabled.
 | --- | ---: | --- |
 | `r_capsuleShadows` | `0` | Set to `1` for skeletal capsule ground occlusion. Requires `r_ssao 1` and `r_depthPrepass 1`. |
 | `r_capsuleShadowStrength` | `0.25` | Capsule shadow strength, from `0` to `1`. |
-| `r_sss` | `0` | Skin diffusion strength, from `0` to `1`. Try `0.5` first. |
-| `r_sssRadius` | `0.3` | Diffusion radius in world units, from `0.01` to `2`. |
-| `r_sssDebug` | `0` | Set to `1` to show the eligible skin mask. |
+| `r_capsuleShadowSoftness` | `1` | Penumbra multiplier, from `0` to `2`. Try `0.25` for sharper shadows. |
+| `r_capsuleShadowRadius` | `1` | Capsule thickness multiplier, from `0.25` to `2`. |
+| `r_capsuleShadowRange` | `64` | Maximum occlusion distance in world units, from `8` to `128`. |
+| `r_capsuleShadowWalls` | `0` | Set to `1` for surface-normal proximity occlusion, including walls. |
+| `r_sss` | `0` | Skin diffusion strength, from `0` to `4`. Values above `1` exaggerate the correction for testing. |
+| `r_sssRadius` | `0.3` | Diffusion radius in world units, from `0` to `8`. Zero disables diffusion. |
+| `r_sssDebug` | `0` | `1` mask, `2` raw irradiance, `3` filtered irradiance, `4` difference, `5` split scene. |
+| `r_sssDebugGain` | `16` | Difference-view gain, from `1` to `128`. Does not change scene lighting. |
 | `r_softParticles` | `1` | Enable depth fading for blended sprite particles. Requires `vid_restart` after a change. |
 | `r_softParticleDistance` | `8` | Intersection fade distance in world units, from `0` to `64`. Zero disables fading live. |
 | `r_smaa` | `0` | Set to `1` for SMAA 1x High. |
@@ -31,6 +36,13 @@ The first implementation approximates soft overhead ambient occlusion on
 upward-facing receivers. It uses the nearest eight eligible submitted characters
 within 1024 world units. Screen bounds limit pixel work. The effect has a short
 vertical range and uses conservative stock-humanoid radii.
+
+Softness `1` preserves the original penumbra. Lower values sharpen its edge;
+radius changes the geometric thickness. Range controls the distance falloff.
+The optional wall mode projects occlusion along the receiving surface normal.
+It can show contact occlusion on walls and ceilings. This is a proximity
+approximation, not a shadow from a particular lamp. Check wall leakage and cost
+before keeping it enabled.
 
 Capsule visibility multiplies the filtered world AO image. The existing
 `r_ssaoAmbientOnly` and strength controls therefore also affect its application.
@@ -52,11 +64,12 @@ Asset inspection found separate skin materials on the default Twi'lek player:
 - Eyes and teeth use the separate `mouth_eyes` material.
 - The first torso variants have distinct `_skin` and `_clothes` materials.
 
-The exact initial material list under `models/players/jedi_tf/` is:
-`face`, `face_01`, `face_02`, `face_03`, `torso_01_skin`, `torso_02_skin`, and
-`torso_03_skin`. Rendered masks confirmed the face and exposed chest, with eye,
-mouth-interior, and clothing regions excluded. This passed the requested gate
-before broader character support was attempted.
+The material list under `models/players/jedi_tf/` includes the base and `_01`
+through `_03` variants of `face`, `head`, and `tentacles`, plus `torso_01_arms`,
+`torso_02_arms`, `torso_01_hands`, and `torso_01_skin` through `torso_03_skin`.
+Inspection of the head, lekku, arm, and hand textures confirmed exposed skin.
+The leather `torso_06_arms_b` texture remains excluded. Eyes, mouth interiors,
+clothing, and mixed-material textures remain outside the exact-name list.
 
 The renderer captures diffuse irradiance and albedo for eligible opaque
 surfaces. A manual depth comparison accounts for MSAA sample displacement.
@@ -76,9 +89,28 @@ The implementation uses the two-pass diffusion approach discussed in
 small fixed RGB kernel and a separate irradiance/albedo capture.
 
 Use `r_sssDebug 1` to check eligibility before judging the appearance. Bright
-regions qualify; other regions must be black. Use radius `1` or `2` briefly for
-a clear comparison, then return toward `0.3`. Skin diffusion has little effect
-under spatially uniform lighting.
+regions qualify; other regions must be black. The raw and filtered irradiance
+views use `RGB / (1 + RGB)` for display. The difference view shows the absolute
+applied HDR correction multiplied by `r_sssDebugGain`. The split view shows the
+original scene on the left and scattering on the right, in the same frame.
+Diagnostic masks and difference values bypass tone mapping and scene overlays.
+The split view retains normal tone mapping.
+
+For a deliberately exaggerated check:
+
+```text
+r_ssaoDebug 0
+r_sss 4
+r_sssRadius 4
+r_sssDebug 4
+r_sssDebugGain 32
+```
+
+Use debug `5` for the split comparison, or `0` for the complete scene. Then
+return to strength `0.5` to `1` and radius near `0.3` for normal calibration.
+High test values can produce strong colour shifts. Larger radii use 17 taps per
+filter pass instead of 9. Skin diffusion has little effect under uniform
+lighting, and painted texture wrinkles remain because albedo is preserved.
 
 ## Soft Particles
 
@@ -102,6 +134,12 @@ SMAA runs after scene tone mapping, glow, and refraction, and before UI drawing.
 It uses the upstream luma-edge, blend-weight, and neighbourhood passes with the
 High spatial preset. It has no motion-vector or frame-history dependency. It
 can be combined with ordinary MSAA; sample shading is not required.
+
+A pass-definition lifetime bug previously caused all three programs to perform
+edge detection, producing red/green edges over the scene. Shader compilation
+now copies pass definitions before header generation. Missing SMAA pass defines
+produce a compile error. The regression also checks that final SMAA colours stay
+within the nearby input colour range. Use `r_smaaDebug 0` for the normal result.
 
 SMAA source and lookup tables are pinned to
 `iryoku/smaa` commit `71c806a838bdd7d517df19192a20f0c61b3ca29d` through CMake
@@ -142,8 +180,9 @@ enabled in `build/smoke/debrief.jhxyc1x5`. The reticle checks passed for both
 renderers and both aspect ratios in `build/reticle-tests/reticle.1s5hhhlb`.
 
 In two 8-second P630 runs per setting at 1280 x 720 with MSAA off, the normal
-Kril'dor scene measured 42.24 FPS with capsules/SMAA off, 39.13 FPS with capsules,
-and 42.14 FPS with SMAA. A separate front-facing player view measured 62.73 FPS
+Kril'dor scene measured 42.24 FPS with capsules/SMAA off and 39.13 FPS with
+capsules. The original SMAA timing is invalid because of the pass-selection bug.
+A separate front-facing player view measured 62.73 FPS
 with SSS off and 53.66 FPS at strength `0.5`. These are approximate throughput
 measurements, not universal GPU costs or GTX 1080 Ti predictions.
 

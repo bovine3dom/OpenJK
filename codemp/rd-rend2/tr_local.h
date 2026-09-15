@@ -157,6 +157,8 @@ extern cvar_t  *r_ssao;
 extern cvar_t *r_softParticles, *r_softParticleDistance;
 extern cvar_t *r_smaa, *r_smaaDebug, *r_sss, *r_sssRadius, *r_sssDebug;
 extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
+extern cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
+extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
 extern cvar_t  *r_ssaoStrength;
@@ -4122,6 +4124,9 @@ inline bool R_IsSkinShader(const shader_t *shader)
 	char name[MAX_QPATH];
 	COM_StripExtension(shader->name, name, sizeof(name));
 	static const char *materials[] = {"face", "face_01", "face_02", "face_03",
+		"head", "head_01", "head_02", "head_03",
+		"tentacles", "tentacles_01", "tentacles_02", "tentacles_03",
+		"torso_01_arms", "torso_02_arms", "torso_01_hands",
 		"torso_01_skin", "torso_02_skin", "torso_03_skin"};
 	const char *prefix = "models/players/jedi_tf/";
 	if (Q_stricmpn(name, prefix, strlen(prefix))) return false;

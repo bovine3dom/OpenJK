@@ -56,17 +56,32 @@ def main():
             raise RuntimeError("Unexpected capture dimensions")
         return subprocess.run(["ffmpeg", "-v", "error", "-i", str(file), "-frames:v", "1",
                                "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
-    names = ("caps_base", "caps_on", "caps_restored", "smaa_base", "smaa_on", "smaa_restored",
+    names = ("caps_base", "caps_on", "caps_sharp", "caps_thin", "caps_short", "caps_walls", "caps_restored", "smaa_base", "smaa_on", "smaa_restored",
              "smaa_edges", "smaa_weights", "skin_mask", "skin_on", "skin_off", "skin_restored",
              "particle_base", "particle_on", "particle_restored", "additive_base", "additive_on", "additive_restored",
-             "skin_restarted", "skin_loaded", "skin_ineligible", "particle_no_depth_base", "particle_no_depth_on")
+             "skin_restarted", "skin_loaded", "skin_ineligible", "particle_no_depth_base", "particle_no_depth_on",
+             "skin_irradiance", "skin_filtered", "skin_difference", "skin_difference_zero",
+             "skin_zero_reference", "skin_zero_radius", "skin_exaggerated", "skin_split")
     data = {name: image(name) for name in names}
     def delta(a, b):
         return sum(abs(x-y) for x, y in zip(data[a], data[b])) / len(data[a])
     results = {"msaa": args.msaa}
-    for effect in ("caps", "smaa", "particle", "additive"):
+    for effect in ("caps", "smaa"):
         results[effect] = dict(effect_delta=delta(effect + "_base", effect + "_on"),
                                restore_error=delta(effect + "_base", effect + "_restored"))
+    for effect in ("particle", "additive"):
+        # The probe uses a white test material at the view centre. Exclude actors
+        # elsewhere in the scene without selecting pixels by the measured change.
+        base = data[effect + "_base"]
+        probe = [y*960+x for y in range(280, 440) for x in range(400, 560)
+                 if min(base[(y*960+x)*3:(y*960+x)*3+3]) > 100
+                 and max(base[(y*960+x)*3:(y*960+x)*3+3]) - min(base[(y*960+x)*3:(y*960+x)*3+3]) <= 4]
+        if len(probe) < 200:
+            raise RuntimeError(f"White particle probe is not visible: {effect}")
+        def probe_delta(other):
+            return sum(abs(base[i*3+c] - data[other][i*3+c]) for i in probe for c in range(3)) / (len(probe)*3)
+        results[effect] = dict(effect_delta=probe_delta(effect + "_on"),
+                               restore_error=probe_delta(effect + "_restored"), probe_pixels=len(probe))
     mask = {i for i in range(960 * 720) if data["skin_mask"][3*i] > 128}
     interior = {i for i in mask if all(i + dy * 960 + dx in mask
                 for dx in (-2, 0, 2) for dy in (-2, 0, 2))}
@@ -74,8 +89,30 @@ def main():
         return sum(abs(data[a][i*3+c] - data[b][i*3+c]) for i in interior for c in range(3)) / max(1, len(interior)*3)
     results["skin"] = dict(effect_delta=skin_delta("skin_off", "skin_on"), restore_error=skin_delta("skin_on", "skin_restored"),
                            mask_pixels=len(mask))
+    results["caps"]["parameter_deltas"] = {name: delta("caps_on", name)
+                                            for name in ("caps_sharp", "caps_thin", "caps_short", "caps_walls")}
+    results["skin"]["zero_radius_delta"] = skin_delta("skin_zero_reference", "skin_zero_radius")
+    results["skin"]["exaggerated_delta"] = skin_delta("skin_zero_reference", "skin_exaggerated")
+    results["skin"]["difference_pixels"] = sum(max(data["skin_difference"][i:i+3]) > 8
+                                                for i in range(0, len(data["skin_difference"]), 3))
     results["smaa"]["edge_pixels"] = sum(max(data["smaa_edges"][i:i+3]) > 32 for i in range(0, len(data["smaa_edges"]), 3))
     results["smaa"]["weight_pixels"] = sum(max(data["smaa_weights"][i:i+3]) > 8 for i in range(0, len(data["smaa_weights"]), 3))
+    # Neighbourhood blending must not introduce colours absent from nearby input.
+    # Both controls bound small scene-animation changes between captures.
+    outliers = 0
+    before, after, restored = data["smaa_base"], data["smaa_on"], data["smaa_restored"]
+    for y in range(2, 718):
+        for x in range(2, 958):
+            i = (y * 960 + x) * 3
+            if max(abs(after[i+c] - before[i+c]) for c in range(3)) <= 16:
+                continue
+            neighbours = [(yy * 960 + xx) * 3 for yy in range(y-2, y+3) for xx in range(x-2, x+3)]
+            for c in range(3):
+                values = [control[j+c] for control in (before, restored) for j in neighbours]
+                if after[i+c] < min(values)-8 or after[i+c] > max(values)+8:
+                    outliers += 1
+                    break
+    results["smaa"]["colour_outliers"] = outliers
     results["no_depth_fade_delta"] = delta("particle_no_depth_base", "particle_no_depth_on")
     results["lifecycle_masks"] = {name: sum(data[name][i] > 128 for i in range(0, len(data[name]), 3))
                                  for name in ("skin_restarted", "skin_loaded", "skin_ineligible")}
@@ -93,6 +130,14 @@ def main():
         raise RuntimeError("Skin eligibility mask is empty or excessive")
     if min(results["smaa"]["edge_pixels"], results["smaa"]["weight_pixels"]) < 100:
         raise RuntimeError("SMAA edge/weight passes are empty")
+    if results["smaa"]["colour_outliers"] > 70:
+        raise RuntimeError("SMAA introduced colours outside the input neighbourhood")
+    if min(results["caps"]["parameter_deltas"].values()) <= 0.001:
+        raise RuntimeError("A capsule calibration control had no measurable effect")
+    if results["skin"]["zero_radius_delta"] > 0.2 or max(data["skin_difference_zero"]) > 2:
+        raise RuntimeError("Zero radius/strength did not remove the scattering correction")
+    if results["skin"]["difference_pixels"] < 10 or results["skin"]["exaggerated_delta"] <= results["skin"]["effect_delta"]:
+        raise RuntimeError("SSS diagnostics/exaggeration did not show a stronger effect")
     for name in ("skin_restarted", "skin_loaded"):
         if sum(data[name][i] > 128 for i in range(0, len(data[name]), 3)) < 10:
             raise RuntimeError(f"Missing skin after lifecycle transition: {name}")

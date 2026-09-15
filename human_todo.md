@@ -64,10 +64,14 @@ SSS eligibility gate. See `docs/raster-features-sp.md` for controls and limits.
 
 - [ ] Compare capsule shadows with `r_capsuleShadows 0` and `1`. Use `r_ssao 1`, `r_depthPrepass 1`, and `r_ssaoAmbientOnly 0`. Temporarily use `cg_shadows 0` to isolate them.
 - [ ] Check capsule shadows at feet, on stairs and slopes, near walls, and after dismemberment. Record shadow overlap or leakage through nearby walls.
+- [ ] Try capsule softness `0.25`, radius `0.75`, and range `32`. Compare optional `r_capsuleShadowWalls 1` on nearby walls. Record preferred values and performance.
 - [ ] On the default Twi'lek player, inspect `r_sssDebug 1`. Only the supported face and exposed torso regions should be bright. Eyes, teeth, and clothing must remain outside the mask.
 - [ ] Compare `r_sss 0` and `0.5`, starting at `r_sssRadius 0.3`. Check facial texture detail, sharp specular highlights, boundaries, and overlap with smoke or refractive effects.
+- [ ] Verify the expanded SSS mask on the back of the head, lekku, bare arms, and hands. Use debug `2`/`3` for lighting, `4` for a magnified difference, and `5` for a same-frame split comparison. Temporarily try strength `4` and radius `4` to make the change obvious.
 - [ ] Compare `r_softParticleDistance 0` and `8` with `r_softParticles 1`. Check smoke, explosions, additive effects, camera intersections, and depth edges. Particle texture animation can obscure a comparison.
+- [x] User confirmed that soft particles at distance `8` improve grenade-smoke intersections. Enablement `1` and distance `8` are already the defaults.
 - [ ] Compare `r_smaa 0` and `1` with sample shading disabled. Check diagonals, foliage, small geometry, and motion shimmer. HUD and menu text should retain native-resolution sharpness.
+- [ ] Repeat SMAA comparison after the pass-definition fix, with `r_smaaDebug 0`. The normal result must not contain red/green diagnostic edges.
 - [ ] Measure effects separately before enabling them together. Record resolution, MSAA, build ID, and slow frame times. Capsule shadows, SSS, and SMAA currently start disabled.
 
 ## Material Calibration Decisions
