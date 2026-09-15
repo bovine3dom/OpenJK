@@ -217,7 +217,7 @@ NPC_ChoosePainAnimation
 extern int G_PickPainAnim( gentity_t *self, const vec3_t point, int damage, int hitLoc );
 void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, const vec3_t point, int damage, int mod, int hitLoc, int voiceEvent = -1 )
 {
-	if (G_JoltOwns(self)) return;
+	if (G_JoltBlocksAI(self)) return;
 	const bool physicalReaction = G_JoltSuppressPain(self, mod);
 	//If we've already taken pain, then don't take it again
 	if ( level.time < self->painDebounceTime && mod != MOD_ELECTROCUTE && mod != MOD_MELEE )

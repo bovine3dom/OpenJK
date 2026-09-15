@@ -1075,6 +1075,7 @@ static svcmd_t svcmds[] = {
 	{ "jolt_impulse", G_JoltImpulse_f, CMD_CHEAT | CMD_ALIVE },
 	{ "jolt_control", G_JoltControl_f, CMD_CHEAT | CMD_ALIVE },
 	{ "jolt_shoot", G_JoltShoot_f, CMD_CHEAT | CMD_ALIVE },
+	{ "jolt_balance", G_JoltBalance_f, CMD_CHEAT | CMD_ALIVE },
 #endif
 	{ "entitylist",					Svcmd_EntityList_f,							CMD_NONE },
 	{ "game_memory",				Svcmd_GameMem_f,							CMD_NONE },

@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <algorithm>
+#include <initializer_list>
 
 static void Check(bool condition, const char* message) {
 	if (!condition) { std::fprintf(stderr, "FAIL: %s\n", message); std::exit(1); }
@@ -50,14 +52,34 @@ int main() {
 	sim.Advance(0);
 	Check(Magnitude(paused) == Magnitude(sim.Sample()), "pause preserves state");
 	JoltReaction::Part parts[JoltReaction::PartCount] = {};
-	const float starts[][3] = {{0,0,1}, {0,0,1.15f}, {0,0,1.55f}, {0,.23f,1.5f}, {0,.35f,1.2f}, {0,-.23f,1.5f}, {0,-.35f,1.2f}, {0,.15f,1}, {.1f,.15f,.55f}, {0,-.15f,1}, {-.1f,-.15f,.55f}};
-	const float ends[][3] = {{0,0,1.15f}, {0,0,1.55f}, {0,0,1.78f}, {0,.35f,1.2f}, {.2f,.35f,.95f}, {0,-.35f,1.2f}, {-.2f,-.35f,.95f}, {.1f,.15f,.55f}, {0,.15f,.08f}, {-.1f,-.15f,.55f}, {0,-.15f,.08f}};
-	const int parents[] = {-1,0,1,1,3,1,5,0,7,0,9};
+	const float starts[][3] = {{0,0,1}, {0,0,1.15f}, {0,0,1.55f}, {0,.23f,1.5f}, {0,.35f,1.2f}, {0,-.23f,1.5f}, {0,-.35f,1.2f}, {0,.15f,1}, {.1f,.15f,.55f}, {0,-.15f,1}, {.1f,-.15f,.55f}, {0,.15f,.08f}, {0,-.15f,.08f}};
+	const float ends[][3] = {{0,0,1.15f}, {0,0,1.55f}, {0,0,1.78f}, {0,.35f,1.2f}, {.2f,.35f,.95f}, {0,-.35f,1.2f}, {-.2f,-.35f,.95f}, {.1f,.15f,.55f}, {0,.15f,.08f}, {.1f,-.15f,.55f}, {0,-.15f,.08f}, {.14f,.15f,.08f}, {.14f,-.15f,.08f}};
+	const int parents[] = {-1,0,1,1,3,1,5,0,7,0,9,8,10};
 	for (int i = 0; i < JoltReaction::PartCount; ++i) {
 		for (int r = 0; r < 3; ++r) { parts[i].bone.matrix[r][r] = 1; parts[i].bone.matrix[r][3] = starts[i][r]; parts[i].end[r] = ends[i][r]; }
 		parts[i].parent = parents[i]; parts[i].mass = i < 2 ? 15 : 3; parts[i].radius = .06f;
 	}
 	const float velocity[] = {2,0,0};
+	// A 20 Hz server must still supply a distinct, correctly timed pose each display frame.
+	for (int fps : {60, 120, 144}) {
+		JoltReaction::FallSimulation history(parts, velocity, 0);
+		JoltReaction::FallSimulation reference(parts, velocity, 0);
+		JoltReaction::Transform sampled[JoltReaction::PartCount], expected[JoltReaction::PartCount];
+		double server = 0, referenceTime = 0;
+		float previous = 0;
+		for (int frame = 1; frame <= fps; ++frame) {
+			const double display = double(frame) / fps;
+			while (server + .05 <= display + .000001) { Check(history.Advance(.05f), "batched history step"); server += .05; }
+			const double query = std::max(0.0, display - .05);
+			while (referenceTime < query - .000001) { reference.Advance(1.0f / 120); referenceTime += 1.0 / 120; }
+			history.Sample(sampled, float(query - server));
+			reference.Sample(expected, float(query - referenceTime));
+			const float x = sampled[0].matrix[0][3];
+			Check(std::abs(x - expected[0].matrix[0][3]) < .001f, "sample retains intermediate substeps across server interval");
+			if (query > .02) Check(x > previous + .001f, "no held poses between server ticks");
+			previous = x;
+		}
+	}
 	JoltReaction::FallSimulation falling(parts, velocity);
 	const float floor[] = {-10,-10,0, 10,-10,0, 10,10,0, -10,-10,0, 10,10,0, -10,10,0};
 	Check(falling.AddMesh(0, floor, 6), "collision mesh creation");
@@ -87,6 +109,47 @@ int main() {
 	for (int i = 0; i < 120; ++i) rider.Advance(1.0f / 120);
 	rider.Sample(pose, 1);
 	Check(pose[0].matrix[2][3] < -1, "non-solid or removed brush model stops colliding");
+	JoltReaction::FallSimulation controlled(parts, stopped);
+	Check(controlled.AddMesh(0, floor, 6), "controlled rig collision floor");
+	controlled.Follow(parts, 0);
+	controlled.Engage();
+	for (int i = 0; i < 240; ++i) {
+		if (i % 6 == 0) controlled.Drive(parts, stopped, .05f);
+		Check(controlled.Advance(1.0f / 120), "standing controller step");
+	}
+	std::printf("Standing: phase=%d height=%.3f error=%.3f steps=%u\n", int(controlled.Balance().phase), controlled.Balance().pelvisHeight, controlled.Balance().error, controlled.Balance().corrections);
+	Check(controlled.Balance().phase != JoltReaction::ControlPhase::Falling, "controller maintains standing support");
+	controlled.React(1, forward, starts[2], 1.0f, .25f);
+	float visible = 0, peakError = 0;
+	for (int i = 0; i < 240; ++i) {
+		if (i % 6 == 0) controlled.Drive(parts, stopped, .05f);
+		controlled.Advance(1.0f / 120); controlled.Sample(pose);
+		visible = std::max(visible, std::abs(pose[1].matrix[0][2]));
+		peakError = std::max(peakError, controlled.Balance().error);
+	}
+	std::printf("Mild: phase=%d height=%.3f error=%.3f steps=%u visible=%.3f peakerror=%.3f\n", int(controlled.Balance().phase), controlled.Balance().pelvisHeight, controlled.Balance().error, controlled.Balance().corrections, visible, peakError);
+	Check(visible > .07f, "small hit has readable motor-driven recoil");
+	Check(controlled.Balance().phase != JoltReaction::ControlPhase::Falling, "small hit does not force a fall");
+	controlled.React(7, side, starts[7], 1.0f, .82f);
+	for (int i = 0; i < 360; ++i) {
+		if (i % 6 == 0) controlled.Drive(parts, stopped, .05f);
+		controlled.Advance(1.0f / 120);
+	}
+	std::printf("Shove: phase=%d height=%.3f error=%.3f steps=%u\n", int(controlled.Balance().phase), controlled.Balance().pelvisHeight, controlled.Balance().error, controlled.Balance().corrections);
+	Check(controlled.Balance().corrections > 0, "leg disturbance starts a corrective step attempt");
+	const float stormStart[][3] = {{0,0,.81f},{0,-.02f,.95f},{.04f,.02f,1.34f},{-.09f,.11f,1.29f},{0,.20f,1.04f},{.12f,-.11f,1.29f},{.15f,-.23f,1.04f},{-.01f,.09f,.82f},{.07f,.17f,.46f},{.04f,-.08f,.80f},{.12f,-.10f,.43f},{.06f,.23f,.10f},{-.04f,-.10f,.10f}};
+	const float stormEnd[][3] = {{0,-.02f,.95f},{.04f,.02f,1.34f},{.06f,.04f,1.48f},{0,.20f,1.04f},{.22f,.20f,1.01f},{.15f,-.23f,1.04f},{.21f,-.02f,1.01f},{.07f,.17f,.46f},{.06f,.23f,.10f},{.12f,-.10f,.43f},{-.04f,-.10f,.10f},{.16f,.33f,.10f},{.06f,0,.10f}};
+	const float stormMass[] = {12,24,5,3,2,3,2,8,4,8,4,1.5f,1.5f};
+	const float stormRadius[] = {.06f,.14f,.06f,.055f,.045f,.055f,.045f,.085f,.06f,.085f,.06f,.06f,.06f};
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		for (int r = 0; r < 3; ++r) { parts[i].bone.matrix[r][3] = stormStart[i][r]; parts[i].end[r] = stormEnd[i][r]; }
+		parts[i].mass = stormMass[i]; parts[i].radius = stormRadius[i];
+	}
+	JoltReaction::FallSimulation storm(parts, stopped);
+	storm.AddMesh(0, floor, 6); storm.Follow(parts, 0); storm.Engage();
+	for (int i = 0; i < 600; ++i) { if (i % 6 == 0) storm.Drive(parts, stopped, .05f); storm.Advance(1.0f/120); }
+	std::printf("Storm: phase=%d error=%.3f steps=%u height=%.3f\n", int(storm.Balance().phase), storm.Balance().error, storm.Balance().corrections, storm.Balance().pelvisHeight);
+	Check(storm.Balance().phase != JoltReaction::ControlPhase::Falling, "stock-proportioned rig remains balanced without a hit");
 	std::puts("PASS: full-body gravity, momentum, floor contacts, finite poses, and settling");
 	std::puts("PASS: Jolt reaction direction, joint limits, settling, reset, pause, invalid input, and fixed stepping");
 }

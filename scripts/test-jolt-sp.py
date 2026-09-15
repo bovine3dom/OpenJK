@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--projectiles", action="store_true", help="Test automatic reactions through real missile collisions")
+    parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.inside:
@@ -110,12 +111,29 @@ def main():
                 assert not re.search(r"Unknown command|trying to load fallback|GL_INVALID_|GL_OUT_OF_MEMORY", log.read_text(errors="replace"))
                 print(f"PASS: {args.renderer}: primary/alt projectiles, automatic multi-actor reactions, unchanged damage, protected/unsupported targets, disable", flush=True)
                 return 0
-            cmd("give weaponnum 3; weapon 3; set d_npcfreeze 1; setviewpos 5504 -4520 64 45; wait 10; npc spawn stormtrooper jolt_test_actor; wait 30; set g_joltReactions 1; jolt_select jolt_test_actor")
+            cmd("give weaponnum 3; weapon 3; set d_npcfreeze 1; setviewpos 5504 -4520 64 45; wait 10; npc spawn stormtrooper jolt_test_actor; wait 30; set g_joltDebug 1; set g_joltReactions 1; jolt_select jolt_test_actor")
             cmd("set cg_thirdPerson 1; set cg_thirdPersonRange 160; set cg_thirdPersonAngle 30; wait 10")
             initial = status()
             if initial["active"] != 1:
                 cmd("jolt_status jolt_test_actor; ui_report; viewpos; screenshot_png jolt_setup")
             assert initial["actor"] > 0 and initial["active"] == 1, initial
+            if args.control:
+                cmd("set g_joltDebug 1; jolt_balance; wait 1")
+                status()
+                cmd("wait 15; screenshot_png balance_neutral")
+                neutral = status()
+                assert neutral["engaged"] == 1 and neutral["phase"] == 1, neutral
+                cmd("jolt_hit front; wait 2; screenshot_png balance_hit; wait 30")
+                hit = status()
+                assert hit["hits"] == 1 and hit["health"] == initial["health"] - 5, hit
+                assert hit["falling"] == 0 and hit["peak"] > 4, hit
+                cmd("jolt_knockdown; wait 4; screenshot_png balance_fall; wait 100")
+                cmd("set g_joltReactions 0; wait 4")
+                assert status()["tracked"] == 0
+                stdin.write("quit\n"); stdin.flush()
+                assert process.wait(timeout=30) == 0
+                print(f"PASS: {args.renderer}: controlled standing, readable nonfatal recoil, fall, and reset", flush=True)
+                return 0
             cmd("set g_joltReactionPose 0")
             baseline = status()
             cmd("jolt_impulse left; wait 1; screenshot_png jolt_animation_only; wait 50")

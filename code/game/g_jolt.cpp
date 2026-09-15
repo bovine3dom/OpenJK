@@ -30,10 +30,11 @@ cvar_t* enabled = nullptr;
 cvar_t* debug = nullptr;
 cvar_t* reactionPose = nullptr;
 std::map<int, std::vector<float>> collision;
+std::unique_ptr<JoltReaction::CollisionScene> collisionScene;
 bool collisionLoaded = false;
-const char* bones[JoltReaction::PartCount] = {"pelvis", "lower_lumbar", "cervical", "lhumerus", "lradius", "rhumerus", "rradius", "lfemurYZ", "ltibia", "rfemurYZ", "rtibia"};
-const char* ends[JoltReaction::PartCount] = {"lower_lumbar", "cervical", "cranium", "lradius", "lhand", "rradius", "rhand", "ltibia", "ltalus", "rtibia", "rtalus"};
-constexpr int parents[JoltReaction::PartCount] = {-1,0,1,1,3,1,5,0,7,0,9};
+const char* bones[JoltReaction::PartCount] = {"pelvis", "lower_lumbar", "cervical", "lhumerus", "lradius", "rhumerus", "rradius", "lfemurYZ", "ltibia", "rfemurYZ", "rtibia", "ltalus", "rtalus"};
+const char* ends[JoltReaction::PartCount] = {"lower_lumbar", "cervical", "cranium", "lradius", "lhand", "rradius", "rhand", "ltibia", "ltalus", "rtibia", "rtalus", "ltalus", "rtalus"};
+constexpr int parents[JoltReaction::PartCount] = {-1,0,1,1,3,1,5,0,7,0,9,8,10};
 
 void Settings() {
 	if (!enabled) enabled = gi.cvar("g_joltReactions", "1", CVAR_ARCHIVE);
@@ -47,6 +48,11 @@ bool Projectile(int mod) {
 	case MOD_FLECHETTE: case MOD_EMPLACED: case MOD_SEEKER: return true;
 	default: return false;
 	}
+}
+int PresentationTime(int time) {
+	// Keep a complete server interval available for interpolation, even during extrapolated client frames.
+	const int fps = std::max(1, gi.Cvar_VariableIntegerValue("sv_fps"));
+	return time - 1000 / fps;
 }
 bool Eligible(const gentity_t* ent);
 bool ExternalPoseOwner(gentity_t* ent);
@@ -77,6 +83,10 @@ struct Actor {
 	double fallMicroseconds = 0;
 	unsigned fallSteps = 0;
 	vec3_t safeOrigin, savedMins, savedMaxs;
+	vec3_t pelvisOffset = {};
+	vec3_t navigationOrigin = {};
+	JoltReaction::Part reference[JoltReaction::PartCount];
+	bool engaged = false;
 	vec3_t displayedMins, displayedMaxs;
 	explicit Actor(int number) : actor(number) {}
 	~Actor() { Reset(true); }
@@ -86,10 +96,14 @@ struct Actor {
 	void Frame();
 	void Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc);
 	void BoneAngles(gentity_t* ent, int bone, int time, float* angles);
-	bool Render(gentity_t* ent, int time, const float* origin, float* angles);
+	bool Render(gentity_t* ent, int time, const float* origin, float* angles, bool display);
 	void UpdatePhysicalHull(gentity_t* ent);
 	void MoveColliders(float seconds);
 	bool StartFall(gentity_t* ent, const float* direction, const float* point, float strength, int hitPart = 1);
+	bool PrepareRig(gentity_t* ent);
+	bool ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& models);
+	void Engage(gentity_t* ent);
+	void UpdateRig(gentity_t* ent, float seconds);
 	bool Recover(gentity_t* ent);
 	void FinishRecovery(gentity_t* ent);
 	void Status();
@@ -120,13 +134,14 @@ void ClearPhysicalBones(gentity_t* ent) {
 
 struct PoseModel {
 	CGhoul2Info_v models;
-	explicit PoseModel(gentity_t* ent) {
+	explicit PoseModel(gentity_t* ent, bool neutral = true) {
 		gi.G2API_CopyGhoul2Instance(ent->ghoul2, models, -1);
 		if (!models.size()) return;
 		for (size_t i = 0; i < models[0].mBlist.size(); ++i) {
 			if (models[0].mBlist[i].boneNumber < 0) continue;
-			models[0].mBlist[i].flags &= ~BONE_ANIM_TOTAL;
-			gi.G2API_SetBoneAnglesMatrixIndex(&models[0], int(i), identityAngles, BONE_ANGLES_POSTMULT, nullptr, 0, level.time);
+			if (neutral) models[0].mBlist[i].flags &= ~BONE_ANIM_TOTAL;
+			if (neutral || (models[0].mBlist[i].flags & BONE_ANGLES_PHYSICS))
+				gi.G2API_SetBoneAnglesMatrixIndex(&models[0], int(i), identityAngles, BONE_ANGLES_POSTMULT, nullptr, 0, level.time);
 		}
 	}
 	~PoseModel() { gi.G2API_CleanGhoul2Models(models); }
@@ -160,27 +175,65 @@ void Actor::MoveColliders(float seconds) {
 	for (const auto& mesh : collision) if (mesh.first) fall->SetMeshEnabled(mesh.first, present.count(mesh.first) != 0);
 }
 bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point, float strength, int hitPart) {
-	if (fall || fallOwner >= 0) return false;
+	if (!PrepareRig(ent)) return false;
+	Engage(ent);
+	vec3_t hit; VectorScale(point, MetresPerUnit, hit);
+	fall->Impulse(hitPart, direction, hit, strength);
+	fall->ReleaseControl();
+	fallStart = level.time;
+	if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
+	gi.Printf("Jolt: released control actor=%d launch_speed=%.1f\n", actor, launchSpeed);
+	return true;
+}
+bool Actor::PrepareRig(gentity_t* ent) {
+	if (fall) return true;
+	if (fallOwner >= 0) return false;
 	if (!collisionLoaded) {
 		collisionLoaded = true;
 		if (!gi.PhysicsSurfaces(MASK_NPCSOLID, ExportSurface, nullptr)) gi.Printf("Jolt: unsupported collision format; using small reactions\n");
+		if (!collision.empty()) {
+			collisionScene.reset(new JoltReaction::CollisionScene);
+			for (const auto& mesh : collision) if (!collisionScene->AddMesh(mesh.first, mesh.second.data(), int(mesh.second.size()/3))) {
+				collisionScene.reset(); break;
+			}
+		}
 	}
-	if (collision.empty()) return false;
-	JoltReaction::Part parts[JoltReaction::PartCount];
-	const float masses[] = {12, 24, 5, 3, 2, 3, 2, 8, 4, 8, 4};
-	const float radii[] = {.12f, .14f, .075f, .055f, .045f, .055f, .045f, .085f, .06f, .085f, .06f};
-	vec3_t angles = {0, ent->client->renderInfo.legsYaw, 0}, velocity;
+	if (!collisionScene || !ReadParts(ent, reference, ent->ghoul2)) return false;
+	vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
+	fall.reset(new JoltReaction::FallSimulation(reference, velocity, g_gravity->value * MetresPerUnit));
+	if (debug->integer) for (int i = 0; i < JoltReaction::PartCount; ++i) gi.Printf("Jolt rig %s: %.2f %.2f %.2f -> %.2f %.2f %.2f\n", bones[i],
+		reference[i].bone.matrix[0][3],reference[i].bone.matrix[1][3],reference[i].bone.matrix[2][3],reference[i].end[0],reference[i].end[1],reference[i].end[2]);
+	if (!fall->UseScene(*collisionScene)) { fall.reset(); return false; }
+	MoveColliders(0);
+	fallOwner = actor;
+	fall->Follow(reference, 0);
+	VectorCopy(ent->mins, savedMins); VectorCopy(ent->maxs, savedMaxs);
+	vec3_t offset;
+	for (int r = 0; r < 3; ++r) offset[r] = reference[0].bone.matrix[r][3]/MetresPerUnit - ent->currentOrigin[r];
+	LocalVector(ent, offset, pelvisOffset);
+	fallYaw = ent->client->renderInfo.legsYaw;
+	lastTime = level.time;
+	return true;
+}
+bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& models) {
+	const float masses[] = {12, 24, 5, 3, 2, 3, 2, 8, 4, 8, 4, 1.5f, 1.5f};
+	const float radii[] = {.12f, .14f, .075f, .055f, .045f, .055f, .045f, .085f, .06f, .085f, .06f, .06f, .06f};
+	vec3_t angles = {0, engaged ? fallYaw : ent->client->renderInfo.legsYaw, 0}, forward;
+	AngleVectors(angles, forward, nullptr, nullptr);
 	for (int i = 0; i < JoltReaction::PartCount; ++i) {
-		bolts[i] = gi.G2API_AddBolt(&ent->ghoul2[0], bones[i]);
-		endBolts[i] = gi.G2API_AddBolt(&ent->ghoul2[0], ends[i]);
+		if (!fall) {
+			bolts[i] = gi.G2API_AddBolt(&models[0], bones[i]);
+			endBolts[i] = gi.G2API_AddBolt(&models[0], ends[i]);
+		}
 		mdxaBone_t bone, end;
-		if (bolts[i] < 0 || endBolts[i] < 0 || !gi.G2API_GetBoltMatrix(ent->ghoul2, 0, bolts[i], &bone, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale) ||
-			!gi.G2API_GetBoltMatrix(ent->ghoul2, 0, endBolts[i], &end, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale)) {
+		if (bolts[i] < 0 || endBolts[i] < 0 || !gi.G2API_GetBoltMatrix(models, 0, bolts[i], &bone, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale) ||
+			!gi.G2API_GetBoltMatrix(models, 0, endBolts[i], &end, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale)) {
 			gi.Printf("Jolt: missing segment %s -> %s\n", bones[i], ends[i]); return false;
 		}
 		for (int r = 0; r < 3; ++r) {
 			for (int c = 0; c < 4; ++c) parts[i].bone.matrix[r][c] = bone.matrix[r][c] * (c == 3 ? MetresPerUnit : 1);
 			parts[i].end[r] = (i == 2 ? 2 * end.matrix[r][3] - bone.matrix[r][3] : end.matrix[r][3]) * MetresPerUnit;
+			if (i >= 11) parts[i].end[r] = parts[i].bone.matrix[r][3] + forward[r]*.14f;
 		}
 		vec3_t delta;
 		for (int r = 0; r < 3; ++r) delta[r] = parts[i].end[r] - parts[i].bone.matrix[r][3];
@@ -190,28 +243,104 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 		parts[i].mass = masses[i];
 		parts[i].parent = parents[i];
 	}
-	VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
-	launchSpeed = VectorLength(ent->client->ps.velocity);
-	fall.reset(new JoltReaction::FallSimulation(parts, velocity, g_gravity->value * MetresPerUnit));
-	for (const auto& mesh : collision) if (!fall->AddMesh(mesh.first, mesh.second.data(), int(mesh.second.size() / 3))) {
-		gi.Printf("Jolt: collision model %d could not be built\n", mesh.first); fall.reset(); return false;
+	return true;
+}
+void Actor::Engage(gentity_t* ent) {
+	if (engaged) return;
+	if (ReadParts(ent, reference, ent->ghoul2)) {
+		const float elapsed = std::max(0, level.time-lastTime)*.001f;
+		fall->Follow(reference, elapsed); lastTime = level.time;
+		vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
+		fall->Drive(reference, velocity, .05f);
 	}
-	MoveColliders(0);
-	fallOwner = actor;
-	vec3_t hit;
-	VectorScale(point, MetresPerUnit, hit);
-	fall->Impulse(hitPart, direction, hit, strength);
+	engaged = true;
+	fall->Engage();
+	launchSpeed = VectorLength(ent->client->ps.velocity);
 	fall->Sample(fallPose, 1);
 	VectorCopy(ent->currentOrigin, safeOrigin);
+	VectorCopy(ent->currentOrigin, navigationOrigin);
 	VectorCopy(ent->currentOrigin, lastOrigin);
 	VectorCopy(ent->mins, savedMins); VectorCopy(ent->maxs, savedMaxs);
-	fallYaw = angles[YAW]; fallStart = lastTime = level.time;
+	fallYaw = ent->client->renderInfo.legsYaw; fallStart = 0;
 	fallMicroseconds = 0; fallSteps = 0;
 	settledSince = recoverStart = nextRecoverAttempt = 0;
-	VectorClear(ent->client->ps.velocity);
-	if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
-	gi.Printf("Jolt: physical fall actor=%d launch_speed=%.1f\n", actor, launchSpeed);
-	return true;
+	gi.Printf("Jolt: active control actor=%d speed=%.1f\n", actor, launchSpeed);
+}
+
+void Actor::UpdateRig(gentity_t* ent, float seconds) {
+	if (ExternalPoseOwner(ent)) { Reset(false); return; }
+	if (!engaged) {
+		if (!ReadParts(ent, reference, ent->ghoul2)) { Reset(false); return; }
+		MoveColliders(std::max(seconds, .001f));
+		fall->Follow(reference, seconds);
+		return;
+	}
+	if (!recoverStart && DistanceSquared(ent->currentOrigin, lastOrigin) > 128 * 128) { Reset(false); return; }
+	if (recoverStart) {
+		Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
+		UpdatePhysicalHull(ent);
+		if (level.time - recoverStart >= RecoveryBlendTime) FinishRecovery(ent);
+		return;
+	}
+	const auto phase = fall->Balance().phase;
+	MoveColliders(std::max(.001f, seconds));
+	if (phase != JoltReaction::ControlPhase::Falling) {
+		vec3_t desired;
+		VectorSubtract(ent->currentOrigin, lastOrigin, desired);
+		const auto& command = ent->NPC->last_ucmd;
+		const bool moving = phase == JoltReaction::ControlPhase::Tracking &&
+			(command.forwardmove || command.rightmove) && !gi.Cvar_VariableIntegerValue("d_npcfreeze");
+		if (moving && seconds > 0) {
+			VectorAdd(navigationOrigin, desired, navigationOrigin);
+			VectorScale(desired, MetresPerUnit / seconds, desired);
+		}
+		else VectorClear(desired);
+		desired[2] = 0;
+		if (moving) {
+			PoseModel referenceModel(ent, false);
+			if (!referenceModel.models.size() || !ReadParts(ent, reference, referenceModel.models)) { Reset(false); return; }
+			for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) {
+				const float offset = (navigationOrigin[r]-ent->currentOrigin[r]) * MetresPerUnit;
+				reference[i].bone.matrix[r][3] += offset; reference[i].end[r] += offset;
+			}
+		}
+		fall->Drive(reference, desired, seconds);
+	} else {
+		vec3_t pushed; VectorScale(ent->client->ps.velocity, MetresPerUnit, pushed);
+		fall->AddVelocity(pushed);
+	}
+	const auto start = std::chrono::steady_clock::now();
+	if (!fall->Advance(seconds)) { Reset(true); return; }
+	fallMicroseconds += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
+	fallSteps = fall->Steps();
+	const auto balance = fall->Balance();
+	if (balance.phase == JoltReaction::ControlPhase::Falling && !fallStart) {
+		fallStart = level.time;
+		if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
+		gi.Printf("Jolt: lost support actor=%d steps=%u error=%.3f\n", actor, balance.corrections, balance.error);
+	}
+	fall->Sample(fallPose);
+	for (int i = 1; i <= 2; ++i) {
+		float trace = 0;
+		for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) trace += fallPose[i].matrix[r][c]*reference[i].bone.matrix[r][c];
+		peak = std::max(peak, acosf(std::max(-1.0f, std::min(1.0f, (trace-1)*.5f)))*180/float(M_PI));
+	}
+	const float yaw = fallYaw * M_PI / 180;
+	vec3_t origin = {fallPose[0].matrix[0][3] / MetresPerUnit - cosf(yaw)*pelvisOffset[0] + sinf(yaw)*pelvisOffset[1],
+		fallPose[0].matrix[1][3] / MetresPerUnit - sinf(yaw)*pelvisOffset[0] - cosf(yaw)*pelvisOffset[1],
+		fallPose[0].matrix[2][3] / MetresPerUnit - pelvisOffset[2]};
+	G_SetOrigin(ent, origin); VectorCopy(origin, ent->client->ps.origin); VectorCopy(origin, lastOrigin);
+	if (phase == JoltReaction::ControlPhase::Stepping && balance.phase == JoltReaction::ControlPhase::Tracking) VectorCopy(origin, navigationOrigin);
+	if (balance.phase == JoltReaction::ControlPhase::Tracking) {
+		fall->RootVelocity(ent->client->ps.velocity); VectorScale(ent->client->ps.velocity, 1/MetresPerUnit, ent->client->ps.velocity);
+	} else VectorClear(ent->client->ps.velocity);
+	Render(ent, level.time, origin, ent->currentAngles, false);
+	UpdatePhysicalHull(ent);
+	if (balance.phase == JoltReaction::ControlPhase::Falling) {
+		if (fall->Speed() < .25f) { if (!settledSince) settledSince = level.time; }
+		else settledSince = 0;
+		if (settledSince && level.time - settledSince > 600 && level.time - fallStart > 1200 && level.time >= nextRecoverAttempt) Recover(ent);
+	}
 }
 
 bool Actor::Recover(gentity_t* ent) {
@@ -299,7 +428,7 @@ void Actor::FinishRecovery(gentity_t* ent) {
 	NPC_SetAnim(ent, SETANIM_BOTH, recoveryAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
 	const auto& clip = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations[recoveryAnim];
 	SetGetupClip(ent->ghoul2, clip, false);
-	fall.reset(); fallOwner = -1; recoverStart = 0; simulation->Reset(); instability = 0;
+	fall.reset(); fallOwner = -1; engaged = false; recoverStart = 0; simulation->Reset(); instability = 0;
 	VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs); gi.linkentity(ent);
 }
 
@@ -343,7 +472,7 @@ void LocalVector(gentity_t* ent, const vec3_t world, vec3_t local) {
 	local[2] = world[2];
 }
 void Actor::Reset(bool restoreOrigin) {
-	if (fall && actor > 0 && g_entities[actor].inuse && g_entities[actor].client) {
+	if (engaged && fall && actor > 0 && g_entities[actor].inuse && g_entities[actor].client) {
 		auto* ent = &g_entities[actor];
 		ClearPhysicalBones(ent);
 		VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs);
@@ -352,6 +481,7 @@ void Actor::Reset(bool restoreOrigin) {
 	}
 	if (fallOwner == actor) fallOwner = -1;
 	fall.reset();
+	engaged = false;
 	recoverStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
@@ -370,31 +500,7 @@ void Actor::Frame() {
 	const int elapsed = level.time - lastTime;
 	lastTime = level.time;
 	if (fall) {
-		if (ExternalPoseOwner(ent) || (!recoverStart && DistanceSquared(ent->currentOrigin, lastOrigin) > 16 * 16)) { Reset(false); return; }
-		if (recoverStart) {
-			G_JoltRender(ent, level.time, ent->currentOrigin, ent->currentAngles);
-			UpdatePhysicalHull(ent);
-			if (level.time - recoverStart >= RecoveryBlendTime) FinishRecovery(ent);
-			return;
-		}
-		MoveColliders(std::max(.001f, elapsed * .001f));
-		vec3_t pushed;
-		VectorScale(ent->client->ps.velocity, MetresPerUnit, pushed);
-		fall->AddVelocity(pushed); VectorClear(ent->client->ps.velocity);
-		const auto start = std::chrono::steady_clock::now();
-		if (!fall->Advance(elapsed * .001f)) { Reset(true); return; }
-		fallMicroseconds += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
-		fallSteps = fall->Steps();
-		fall->Sample(fallPose, 1);
-		vec3_t origin;
-		for (int r = 0; r < 3; ++r) origin[r] = fallPose[0].matrix[r][3] / MetresPerUnit;
-		G_SetOrigin(ent, origin); VectorCopy(origin, ent->client->ps.origin);
-		VectorCopy(origin, lastOrigin);
-		G_JoltRender(ent, level.time, origin, ent->currentAngles);
-		UpdatePhysicalHull(ent);
-		if (fall->Speed() < .25f) { if (!settledSince) settledSince = level.time; }
-		else settledSince = 0;
-		if (settledSince && level.time - settledSince > 600 && level.time - fallStart > 1200 && level.time >= nextRecoverAttempt) Recover(ent);
+		UpdateRig(ent, elapsed * .001f);
 		return;
 	}
 	instability = std::max(0.0f, instability - std::max(0, elapsed) * .0005f);
@@ -422,11 +528,17 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 	const int part = hitLoc == HL_HEAD ? 2 : hitLoc == HL_ARM_LT || hitLoc == HL_HAND_LT ? 3 :
 		hitLoc == HL_ARM_RT || hitLoc == HL_HAND_RT ? 5 : hitLoc == HL_LEG_LT || hitLoc == HL_FOOT_LT ? 7 :
 		hitLoc == HL_LEG_RT || hitLoc == HL_FOOT_RT ? 9 : 1;
-	if (fall) {
-		if (!recoverStart) { vec3_t hit; VectorScale(point, MetresPerUnit, hit); fall->Impulse(part, direction, hit, std::min(30.0f, damage * 1.0f)); ++hits; }
+	if ((!engaged && !Active(ent)) || recoverStart) return;
+	lastHit = level.time; lastHitMod = mod;
+	if (!reactionPose->integer && !engaged) { ++hits; return; }
+	if (PrepareRig(ent)) {
+		Engage(ent);
+		vec3_t hit; VectorScale(point, MetresPerUnit, hit);
+		const float injury = part >= 7 ? std::min(.99f, .8f + damage*.01f) : std::min(.75f, damage*.025f);
+		fall->React(part, direction, hit, std::min(3.0f, damage*.12f), injury);
+		++hits;
 		return;
 	}
-	if (!Active(ent)) return;
 	vec3_t pivot, relative, localPoint, localDirection;
 	if (!BoltPosition(ent, pelvisBolt, pivot)) return;
 	VectorSubtract(point, pivot, relative);
@@ -440,15 +552,13 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 	simulation->Impulse(head ? 1 : 0, localDirection, localPoint, std::min(8.0f, damage * 0.65f));
 	lastHit = level.time;
 	lastHitMod = mod;
-	instability += damage * .035f + (part >= 7 ? .3f : 0) + std::min(1.0f, VectorLength(ent->client->ps.velocity) / 200.0f) * .55f;
-	if (instability >= 1) StartFall(ent, direction, point, std::min(65.0f, damage * 2.0f + 20), part);
 	++hits;
 }
 void Actor::BoneAngles(gentity_t* ent, int bone, int time, float* angles) {
-	if (!Active(ent) || fall || (reactionPose && !reactionPose->integer)) return;
+	if (!Active(ent) || engaged || (reactionPose && !reactionPose->integer)) return;
 	const int part = bone == ent->lowerLumbarBone ? 0 : bone == ent->cervicalBone ? 1 : -1;
 	if (part < 0) return;
-	const auto pose = simulation->Sample(std::max(0, time - level.time) * 0.001f);
+	const auto pose = simulation->Sample((PresentationTime(time) - lastTime) * 0.001f);
 	for (int i = 0; i < 3; ++i) angles[i] += pose.angles[part][i];
 	++poses;
 }
@@ -476,17 +586,18 @@ bool Actor::Initialize(gentity_t* ent) {
 }
 void Actor::Status() {
 	const auto pose = simulation ? simulation->Sample(1) : JoltReaction::Pose{};
-	gi.Printf("jolt actor=%d active=%d hits=%d poses=%d steps=%u peak=%.3f torso=%.3f,%.3f,%.3f head=%.3f,%.3f,%.3f health=%d us_per_step=%.2f falling=%d recovering=%d speed=%.2f instability=%.2f launch=%.1f pose_error=%.3f pelvis_z=%.2f painanim=%d movement=%.1f fall_steps=%u fall_us=%.2f tracked=%zu recovery_clip=%d recovery_lift=%.2f\n",
-		actor, actor >= 0 && Active(&g_entities[actor]) && !fall, hits, poses, simulation ? simulation->Steps() : 0, peak,
+	const auto balance = fall ? fall->Balance() : JoltReaction::BalanceStatus{};
+	gi.Printf("jolt actor=%d active=%d hits=%d poses=%d steps=%u peak=%.3f torso=%.3f,%.3f,%.3f head=%.3f,%.3f,%.3f health=%d us_per_step=%.2f falling=%d recovering=%d speed=%.2f instability=%.2f launch=%.1f pose_error=%.3f pelvis_z=%.2f painanim=%d movement=%.1f fall_steps=%u fall_us=%.2f tracked=%zu recovery_clip=%d recovery_lift=%.2f engaged=%d phase=%d corrections=%u strength=%.3f balance_error=%.3f target_change=%.2f\n",
+		actor, actor >= 0 && (engaged ? balance.phase != JoltReaction::ControlPhase::Falling && !recoverStart : Active(&g_entities[actor])), hits, poses, fall ? fall->Steps() : simulation ? simulation->Steps() : 0, peak,
 		pose.angles[0][0], pose.angles[0][1], pose.angles[0][2], pose.angles[1][0], pose.angles[1][1], pose.angles[1][2],
 		actor >= 0 ? g_entities[actor].health : 0, measuredSteps ? stepMicroseconds / measuredSteps : 0,
-		fall && !recoverStart, recoverStart != 0, fall ? fall->Speed() : 0, instability, launchSpeed, poseError,
+		engaged && balance.phase == JoltReaction::ControlPhase::Falling && !recoverStart, recoverStart != 0, fall ? fall->Speed() : 0, instability, launchSpeed, poseError,
 		fall ? fallPose[0].matrix[2][3] / MetresPerUnit : 0, actor >= 0 && PM_PainAnim(g_entities[actor].client->ps.torsoAnim),
 		actor >= 0 ? VectorLength(g_entities[actor].client->ps.velocity) : 0, fallSteps, fallSteps ? fallMicroseconds / fallSteps : 0,
-		actors.size(), recoveryAnim, recoveryLift);
+		actors.size(), recoveryAnim, recoveryLift, engaged, int(balance.phase), balance.corrections, balance.strength, balance.error, balance.targetChange);
 }
 void Actor::HitCommand() {
-	if (actor < 0 || !Active(&g_entities[actor])) { gi.Printf("Select an active stormtrooper first\n"); return; }
+	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active stormtrooper first\n"); return; }
 	gentity_t* ent = &g_entities[actor];
 	vec3_t pivot, direction, point, angles = {0, ent->client->renderInfo.legsYaw, 0};
 	if (!BoltPosition(ent, pelvisBolt, pivot)) return;
@@ -504,25 +615,27 @@ void Actor::HitCommand() {
 }
 
 void Actor::KnockdownCommand() {
-	if (actor < 0 || !Active(&g_entities[actor]) || fall) return;
+	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged) || recoverStart) return;
 	gentity_t* ent = &g_entities[actor];
 	vec3_t direction;
 	AngleVectors(ent->client->ps.viewangles, direction, nullptr, nullptr);
 	G_Knockdown(ent, &g_entities[0], direction, 400, qtrue);
 }
 
-bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles) {
+bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles, bool display) {
 	if (!G_JoltOwns(ent)) return false;
-	angles[0] = angles[2] = 0; angles[1] = fallYaw;
+	angles[0] = angles[2] = 0;
+	angles[1] = fallYaw;
 	JoltReaction::Transform pose[JoltReaction::PartCount];
-	fall->Sample(pose, std::max(0, time - level.time) * .001f);
+	const int poseTime = display ? PresentationTime(time) : lastTime;
+	fall->Sample(pose, (poseTime - lastTime) * .001f);
 	if (recoverStart) {
 		JoltReaction::Transform targets[JoltReaction::PartCount];
 		std::copy(recoveryPose, recoveryPose + JoltReaction::PartCount, targets);
 		JoltReaction::BlendTransforms(pose, targets, JoltReaction::PartCount, float(time - recoverStart) / RecoveryBlendTime);
 		std::copy(targets, targets + JoltReaction::PartCount, pose);
 	}
-	const float c = cosf(fallYaw * M_PI / 180), s = sinf(fallYaw * M_PI / 180);
+	const float c = cosf(angles[1] * M_PI / 180), s = sinf(angles[1] * M_PI / 180);
 	for (int i = 0; i < JoltReaction::PartCount; ++i) {
 		mdxaBone_t matrix;
 		for (int r = 0; r < 3; ++r) for (int col = 0; col < 4; ++col) {
@@ -535,7 +648,8 @@ bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles)
 		}
 		for (int r = 0; r < 3; ++r) if (ent->s.modelScale[r]) matrix.matrix[r][3] /= ent->s.modelScale[r];
 		gi.G2API_SetBoneAnglesMatrix(&ent->ghoul2[0], bones[i], matrix, BONE_ANGLES_PHYSICS, nullptr, 0, time);
-		if (debug && debug->integer && i) {
+		++poses;
+		if (display && debug && debug->integer && i) {
 			refEntity_t line = {};
 			line.reType = RT_LINE; line.renderfx = RF_DEPTHHACK; line.radius = .75f;
 			line.customShader = cgs.media.whiteShader;
@@ -579,7 +693,7 @@ void Actor::ImpulseCommand() {
 }
 
 void Actor::ControlCommand() {
-	if (actor < 0 || !Active(&g_entities[actor]) || fall) return;
+	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged) || G_JoltBlocksAI(&g_entities[actor])) return;
 	auto* ent = &g_entities[actor];
 	ent->NPC->controlledTime = level.time + 30000;
 	G_SetViewEntity(&g_entities[0], ent);
@@ -604,7 +718,7 @@ Actor* Acquire(gentity_t* ent) {
 
 void G_JoltReset() {
 	actors.clear(); selectedActor = fallOwner = -1;
-	collision.clear(); collisionLoaded = false;
+	collision.clear(); collisionScene.reset(); collisionLoaded = false;
 }
 void G_JoltForget(const gentity_t* ent) {
 	if (!ent) return;
@@ -615,6 +729,14 @@ void G_JoltForget(const gentity_t* ent) {
 void G_JoltFrame() {
 	Settings();
 	if (!enabled->integer) { G_JoltReset(); return; }
+	if (fallOwner < 0) {
+		gentity_t* nearest = nullptr; float distance = 512*512;
+		for (int i = 1; i < globals.num_entities; ++i) if (Eligible(&g_entities[i]) && !AnimationOwnsPose(&g_entities[i])) {
+			const float d = DistanceSquared(g_entities[0].currentOrigin, g_entities[i].currentOrigin);
+			if (d < distance && gi.inPVS(g_entities[0].currentOrigin, g_entities[i].currentOrigin)) { nearest = &g_entities[i]; distance = d; }
+		}
+		if (nearest) if (auto* state = Acquire(nearest)) state->PrepareRig(nearest);
+	}
 	for (auto it = actors.begin(); it != actors.end();) {
 		auto& state = *it->second;
 		state.Frame();
@@ -622,6 +744,21 @@ void G_JoltFrame() {
 			if (selectedActor == it->first) selectedActor = -1;
 			it = actors.erase(it);
 		} else ++it;
+	}
+}
+void G_JoltBeginFrame() {
+	for (auto& entry : actors) if (entry.second->engaged) {
+		auto* ent = &g_entities[entry.first];
+		if (Eligible(ent)) {
+			auto& state = *entry.second;
+			state.Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
+			if (state.fall->Balance().phase == JoltReaction::ControlPhase::Tracking) {
+				vec3_t mins, maxs; state.fall->Bounds(mins, maxs);
+				VectorCopy(state.savedMins, ent->mins); VectorCopy(state.savedMaxs, ent->maxs);
+				ent->mins[2] = mins[2]/MetresPerUnit - ent->currentOrigin[2] + .2f;
+				gi.linkentity(ent);
+			}
+		}
 	}
 }
 void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
@@ -635,30 +772,34 @@ void G_JoltBoneAngles(gentity_t* ent, int bone, int time, float* angles) {
 }
 bool G_JoltOwns(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && state->fall;
+	return state && state->fall && state->engaged;
+}
+bool G_JoltBlocksAI(const gentity_t* ent) {
+	const auto* state = ent ? Find(ent->s.number) : nullptr;
+	return state && state->engaged && (state->recoverStart || state->fall->Balance().phase != JoltReaction::ControlPhase::Tracking);
 }
 bool G_JoltPhysicsRoot(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && state->fall && !state->recoverStart;
+	return state && state->fall && state->engaged && !state->recoverStart;
 }
 bool G_JoltRender(gentity_t* ent, int time, const float* origin, float* angles) {
-	if (ent) if (auto* state = Find(ent->s.number)) return state->Render(ent, time, origin, angles);
+	if (ent) if (auto* state = Find(ent->s.number)) return state->Render(ent, time, origin, angles, true);
 	return false;
 }
 bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength) {
-	if (G_JoltOwns(ent)) return true;
+	if (G_JoltBlocksAI(ent)) return true;
 	if (strength < 100) return false;
 	auto* state = Acquire(ent);
-	if (!state || !state->Active(ent)) return false;
+	if (!state || (!state->Active(ent) && !state->engaged)) return false;
 	vec3_t point; VectorCopy(ent->currentOrigin, point); point[2] += 20;
-	return state->StartFall(ent, direction, point, std::min(80.0f, strength * .15f));
+	return state->StartFall(ent, direction, point, std::min(12.0f, strength * .02f));
 }
 bool G_JoltSuppressPain(const gentity_t* ent, int mod) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
 	return state && enabled->integer && state->lastHit == level.time && state->lastHitMod == mod;
 }
 void G_JoltBeforeSave() {
-	if (fallOwner >= 0) {
+	if (fallOwner >= 0 && Find(fallOwner)->engaged) {
 		const int number = fallOwner;
 		actors.erase(number);
 		if (selectedActor == number) selectedActor = -1;
@@ -690,6 +831,7 @@ void G_JoltSelect_f() {
 	actors.erase(ent->s.number);
 	if (auto* state = Acquire(ent)) {
 		selectedActor = ent->s.number;
+		state->PrepareRig(ent);
 		gi.Printf("Jolt: selected stormtrooper %d; torso=%.3fm head=%.3fm radius=%.3fm\n", selectedActor,
 			state->dimensions.torsoLength, state->dimensions.headLength, state->dimensions.torsoRadius);
 	}
@@ -711,6 +853,12 @@ void G_JoltHit_f() { if (auto* state = Find(selectedActor)) state->HitCommand();
 void G_JoltImpulse_f() { if (auto* state = Find(selectedActor)) state->ImpulseCommand(); }
 void G_JoltControl_f() { if (auto* state = Find(selectedActor)) state->ControlCommand(); }
 void G_JoltKnockdown_f() { if (auto* state = Find(selectedActor)) state->KnockdownCommand(); }
+void G_JoltBalance_f() {
+	if (auto* state = Find(selectedActor)) {
+		auto* ent = &g_entities[selectedActor];
+		if (state->PrepareRig(ent)) state->Engage(ent);
+	}
+}
 
 void G_JoltShoot_f() {
 	const char* name = gi.argv(1);

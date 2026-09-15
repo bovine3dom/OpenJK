@@ -2,6 +2,10 @@
 
 ## Status and Scope
 
+The next work follows [Reactive Character Control](docs/reactive-animation-research.md).
+The previous threshold-and-launch design does not meet the motion target.
+Correct pose timing first, then add motor-driven balance and corrective steps.
+
 Jolt projectile reactions are enabled for validated stock stormtroopers without
 manual selection. Each actor has an independent reaction record; one actor can
 use full-body physics at a time. The system uses the existing mesh, skeleton, skin weights, and animation

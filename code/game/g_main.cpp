@@ -1922,6 +1922,7 @@ void G_RunFrame( int levelTime ) {
 	level.framenum++;
 	level.previousTime = level.time;
 	level.time = levelTime;
+	G_JoltBeginFrame();
 
 	//ResetTeamCounters();
 	NAV_RouteTestUpdate();
@@ -2066,7 +2067,7 @@ void G_RunFrame( int levelTime ) {
 			continue;	// players are ucmd driven
 		}
 
-		if (!G_JoltOwns(ent)) G_RunThink( ent );	// be aware that ent may be free after returning from here, at least one func frees them
+		if (!G_JoltBlocksAI(ent)) G_RunThink( ent );	// be aware that ent may be free after returning from here, at least one func frees them
 		ClearNPCGlobals();			//	but these 2 funcs are ok
 		//UpdateTeamCounters( ent );	//	   to call anyway on a freed ent.
 	}
