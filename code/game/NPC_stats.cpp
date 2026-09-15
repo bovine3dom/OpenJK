@@ -4077,6 +4077,45 @@ Ghoul2 Insert End
 	return qtrue;
 }
 
+void NPC_RestoreOutcastClass(gentity_t *ent)
+{
+	if (!G_IsOutcast() || !ent->NPC || !ent->client || ent->client->NPC_class != -1 || !ent->NPC_type)
+		return;
+	// Early JO imports saved an invalid class. Restore only the class, not NPC stats or orders.
+	const char *cursor = NPCParms;
+	int npcClass = -1;
+	COM_BeginParseSession();
+	while (cursor)
+	{
+		const char *name = COM_ParseExt(&cursor, qtrue);
+		if (!name[0]) break;
+		if (Q_stricmp(name, ent->NPC_type))
+		{
+			SkipBracedSection(&cursor);
+			continue;
+		}
+		if (G_ParseLiteral(&cursor, "{")) break;
+		while (cursor)
+		{
+			const char *key = COM_ParseExt(&cursor, qtrue);
+			if (!key[0] || !Q_stricmp(key, "}")) break;
+			if (!Q_stricmp(key, "class"))
+			{
+				npcClass = GetIDForString(ClassTable, COM_ParseExt(&cursor, qtrue));
+				break;
+			}
+			SkipRestOfLine(&cursor);
+		}
+		break;
+	}
+	COM_EndParseSession();
+	if (npcClass >= CLASS_NONE && npcClass < CLASS_NUM_CLASSES)
+	{
+		ent->client->NPC_class = (class_t)npcClass;
+		gi.Printf("JO save: restored NPC class ent=%d type=%s class=%d\n", ent->s.number, ent->NPC_type, npcClass);
+	}
+}
+
 void NPC_LoadParms( void )
 {
 	if (G_IsOutcast())

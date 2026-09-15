@@ -35,6 +35,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "dmstates.h"
 
 bool G_IsOutcast();
+void NPC_RestoreOutcastClass(gentity_t *ent);
 
 //==================================================================
 

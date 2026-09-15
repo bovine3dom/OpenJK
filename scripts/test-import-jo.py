@@ -19,6 +19,16 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_npc_classes_use_academy_names(self):
+        source = ('StormTrooper\n{\n class stormtrooper\n playerTeam enemy\n}\n'
+                  'Galak\n{\n CLASS "galak_mech"\n}\nJan\n{\n class CLASS_JAN\n}\n')
+        converted = jo.convert_npcs(source)
+        self.assertIn("class CLASS_STORMTROOPER", converted)
+        self.assertIn("CLASS CLASS_GALAKMECH", converted)
+        self.assertIn("class CLASS_JAN", converted)
+        self.assertIn("playerTeam enemy", converted)
+        self.assertEqual(jo.convert_npcs(converted), converted)
+
     def test_script_rewrite_preserves_blocks_and_members(self):
         source = script(b"BOTH_COCKPIT_SIT\0")
         result = jo.convert_script(source, {b"BOTH_COCKPIT_SIT\0": b"BOTH_CIN_1\0"})
@@ -57,7 +67,7 @@ class ImportTests(unittest.TestCase):
                     archive.writestr(name, data)
                 for mapname in ("kejim_post", "kejim_base"):
                     archive.writestr(f"maps/{mapname}.bsp", bsp)
-                archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\n}\nJan\n{\nplayerModel jan\n}\n")
+                archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\nclass kyle\n}\nJan\n{\nplayerModel jan\nclass jan\n}\n")
                 archive.writestr(human + "animation.cfg", b"BOTH_COCKPIT_SIT 30 5 0 20\n")
                 archive.writestr(human + "_humanoid.gla", bytes(100))
                 for actor in ("kyle", "jan"):
@@ -92,6 +102,7 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual(glm[72:136].rstrip(b"\0") + b".gla", gla[8:72].rstrip(b"\0"))
                 self.assertIn(b'"NPC_type" "jo_cinematic_kyle"', archive.read("maps/kejim_post.ent"))
                 self.assertIn(b"playerModel jo_cinematic_kyle", archive.read("ext_data/jo/npcs.cfg"))
+                self.assertIn(b"class CLASS_KYLE", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertEqual(archive.read("scripts/cinematics/cinematic1.ibi"), script(b"BOTH_CIN_1\0"))
                 self.assertIn(b"Keep this JA label", archive.read("strings/english/sp_ingame.str"))
                 self.assertEqual(archive.read("ext_data/jo/objectives.dat"), b"KEJIM_POST_OBJ1\n")

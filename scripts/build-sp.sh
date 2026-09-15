@@ -30,6 +30,7 @@ cp docs/squad-tactics.md "$package/squad-tactics.md"
 cp docs/save-migration.md "$package/save-migration.md"
 cp docs/encounter-krildor.md "$package/encounter-krildor.md"
 cp docs/encounter-tatooine.md "$package/"
+cp docs/encounter-kejim.md "$package/"
 cp docs/rend2-sp.md "$package/"
 cp docs/ssao-sp.md "$package/"
 cp docs/materials-sp.md "$package/"
@@ -81,6 +82,8 @@ if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         bash scripts/smoke-sp.sh "$package" kejim_post | tee "$package/smoke-jo-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-sp.py --package "$package" | tee "$package/jo-mvp-result.txt"
+    OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
+        python3 scripts/test-jo-sp.py --package "$package" --ai | tee "$package/jo-ai-result.txt"
 fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"

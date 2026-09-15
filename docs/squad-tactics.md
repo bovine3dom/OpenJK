@@ -13,7 +13,8 @@ controller and use the common movement path for pressure retreats.
 
 Jedi Academy saves use format version 3. Supported project v1 and v2 saves migrate
 on load. The original file is not rewritten. See `save-migration.md`.
-Jedi Outcast is unchanged.
+The unified JO campaign uses the same systems. See `encounter-kejim.md` for
+native NPC checks and the class-conversion fix.
 
 ## Local Reports
 

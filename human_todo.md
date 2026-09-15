@@ -1,4 +1,4 @@
-# Rend2 Human Test Checklist
+# Human Test Checklist
 
 ## Status
 
@@ -93,6 +93,57 @@ See `docs/materials-sp.md` for full control descriptions and cache details.
 
 All strength and roughness controls above change live. Texture-generation
 enablement, diffuse compensation, and parallax enablement require a restart.
+
+## Jedi Outcast Campaign
+
+The JO prototype loads on the desktop. Full mission completion is not yet
+verified. The automated checks cover the opening, equipment, save/load, and an
+explicit map transition. They do not complete the final Kejim puzzle.
+
+Start a new JO test with:
+
+```bash
+openjk-play --worktree jed-joi --campaign jo --new-game --desktop
+```
+
+Omit `--new-game` to open the menu and load a save. Use one package for a
+playthrough. Record its build ID. Enter `campaign_status` in the console to
+record the map, position, equipment, and active objectives.
+See `docs/jo-campaign.md` for setup and renderer options.
+
+### Priority 1: Complete Kejim Through Normal Play
+
+- [ ] Complete `kejim_post` without console workarounds. Collect the three codes, solve the code-entry puzzle, and use the mission's actual exit.
+- [ ] Complete `kejim_base` without console workarounds. Check the objectives and the next mission transition.
+- [ ] Check Jan's movement. She must follow Kyle, reach consoles, open required doors, and recover after combat without getting stuck.
+- [ ] Check doors, lifts, switches, code notifications, and datapad objectives. Record a sequence that stops or an objective that does not update.
+- [ ] Check weapon pickups, ammunition, enemy reactions, and friendly fire. Compare a nearby missed shot with a direct hit when investigating an unresponsive enemy.
+- [ ] Check dialogue, subtitles, music changes between exploration and combat, and cinematic transitions. Test cinematic skipping in a separate session.
+- [ ] Save during combat and during a scripted task. Load each save and check that the encounter or task continues.
+- [ ] Die and reload. Check that objectives, equipment, and required NPCs remain correct.
+- [ ] After a mission transition, check carried weapons, ammunition, health, and Force powers. Quit, restart, load a save, and continue.
+
+Acceptance: complete both Kejim missions through normal play, then load a save
+and continue correctly. Keep a save before each reproducible blocker. Record
+what Jan or another required NPC was doing, what you expected, and what stopped.
+
+### Priority 2: Force Training
+
+After Kejim, check `yavin_temple` and `yavin_trial`. Direct map tests do not
+establish that the intervening Artus missions are complete.
+
+- [ ] Check the scripted Force unlocks and power levels.
+- [ ] Complete the Force training puzzles and required jumps.
+- [ ] Acquire the saber and check selection, attacks, and the shared controls.
+- [ ] Save and load before and after a power unlock or saber acquisition. Check that progression remains correct.
+
+### Priority 3: Remaining Campaign Systems
+
+- [ ] Artus: check escorts, prisoner releases, multi-stage objectives, and mission transitions.
+- [ ] Bespin: check saber encounters, scripted duels, and cinematics.
+- [ ] Doomgiver: check Galak's boss states, damage rules, and encounter completion.
+- [ ] Yavin Swamp: check water, collision, required movement routes, and scripted encounters.
+- [ ] Finale: complete Desann's encounter and check the ending sequence.
 
 ## Report Results
 

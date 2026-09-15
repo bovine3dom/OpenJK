@@ -1,6 +1,6 @@
 # Squad AI and Memory
 
-These changes apply to Jedi Academy single-player. Local reports and bounded
+These changes apply to the shared JA and JO campaign game module. Local reports and bounded
 flank/support/regroup roles now build on the lost-contact memory fix. See
 `squad-tactics.md` for the policy, tests, and save-format change. The dormant
 `ST_GetCPFlags` policy remains disabled.

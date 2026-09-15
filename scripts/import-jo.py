@@ -40,6 +40,15 @@ def stringed(entries):
     return ("\n".join(lines) + "\nENDMARKER\n").encode("cp1252")
 
 
+def convert_npcs(text):
+    def npc_class(match):
+        name = match[2].upper().removeprefix("CLASS_")
+        if name == "GALAK_MECH":
+            name = "GALAKMECH"
+        return match[1] + "CLASS_" + name
+    return re.sub(r'(?im)^([ \t]*class[ \t]+)"?(\w+)"?', npc_class, text)
+
+
 def convert_script(data, aliases):
     """Change animation names without changing ICARUS block or member IDs."""
     if data[:8] != b"IBI\0" + struct.pack("<f", 1.57):
@@ -101,7 +110,7 @@ def build_overlay(ja, jo, output):
 
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
-            npcs = read(outcast, "ext_data/npcs.cfg").decode("cp1252")
+            npcs = convert_npcs(read(outcast, "ext_data/npcs.cfg").decode("cp1252"))
             for actor in ("kyle", "jan"):
                 model = bytearray(read(outcast, f"models/players/{actor}/model.glm"))
                 animation = b"models/players/jo_cinematic/jo_cinematic"

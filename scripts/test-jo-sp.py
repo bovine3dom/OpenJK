@@ -2,6 +2,7 @@
 """Test the JO opening, controls, save/load, and map transition headlessly."""
 
 import argparse
+import math
 import os
 from pathlib import Path
 import re
@@ -17,11 +18,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
+    parser.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
-                                __file__, "--inside", "--package", str(args.package), "--renderer", args.renderer])
+                                __file__, "--inside", "--package", str(args.package), "--renderer", args.renderer]
+                               + (["--ai"] if args.ai else []))
     output = ROOT / "build/jo-tests"
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=args.renderer + ".", dir=output))
@@ -88,6 +91,62 @@ def main():
             assert "actual: 'explore'" in sound, sound
             return text
 
+        def npc():
+            text = cmd("nav memory st_guard2")
+            result = {}
+            for line in text.splitlines():
+                if "aimemory event=sample " in line or "aimemory event=lifecycle " in line:
+                    result.update(dict(word.split("=", 1) for word in line.split("aimemory ", 1)[1].split()))
+            assert result, text
+            return result
+
+        def check_ai():
+            cmd("helpusobi 1; god; set d_npcai 3; set d_squadTactics 0; wait 200")
+            actors = cmd("nav actors")
+            assert "class=-1" not in actors and "name=jan type=jan class=20" in actors, actors
+            # Approach the original guard after the opening. Let scripts and perception run.
+            cmd("setviewpos 400 -2193 0 322; wait 40")
+            before = {}
+            for _ in range(80):
+                before = npc()
+                if before["enemy"] == "0" and before["scripted"] == "0" and before["group"] != "-1":
+                    break
+                cmd("wait 10")
+            else:
+                raise AssertionError(f"Native guard did not finish its orders and acquire Kyle: {before}")
+            assert before["class"] == "48" and before["health"] == "30" and before["los"] == "1", before
+            cmd("nav memory st_guard2 protect; save jo_ai")
+            # A real Bryar shot passes beside the guard. No hit or enemy-assignment command is used.
+            cmd("set d_squadTactics 1; +attack; wait 2; -attack")
+            samples = []
+            for _ in range(20):
+                cmd("wait 5")
+                samples.append(npc())
+            text = log.read_text(errors="replace")
+            assert re.search(r"squad event=incoming_fire ent=" + before["ent"] + r" .*distance=", text), log
+            assert all(s["health"] == before["health"] for s in samples), samples
+            moving = [s for s in samples if s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"])]
+            assert moving, "Native guard did not run from a near miss"
+            origin = tuple(map(float, before["pos"].split(",")))
+            assert max(math.dist(origin, tuple(map(float, s["pos"].split(",")))) for s in moving) >= 32, moving
+            assert all(s["script_flags"] == before["script_flags"] for s in samples), "Script orders changed"
+            capture("native_pressure")
+            cmd("set d_squadTactics 0; load jo_ai; wait 20; set d_squadTactics 0")
+            restored = npc()
+            assert restored["class"] == "48" and restored["health"] == "30", restored
+            cmd("set d_squadTactics 1; nav memory st_guard2 hit; wait 5")
+            damaged = []
+            for _ in range(10):
+                damaged.append(npc())
+                cmd("wait 5")
+            assert all(s["health"] == "25" for s in damaged), "Native damage handler did not receive the hit"
+            assert any(s["role"] == "1" and float(s["speed"]) > float(s["walkSpeed"]) for s in damaged), "Native guard did not retreat after damage"
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|aimemory event=rejected", log.read_text(errors="replace")), log
+            print("PASS: JO native NPC classes, sight acquisition, near-miss retreat, damage, and save/load")
+
         try:
             wait_for("CM_LoadMap( maps/kejim_post.bsp, 1 )")
             subprocess.run(["ffmpeg", "-v", "error", "-f", "x11grab", "-video_size", "640x480",
@@ -103,6 +162,9 @@ def main():
             text = status("kejim_post")
             assert "objective=KEJIM_POST_OBJ1 status=0" in text and "objective=KEJIM_POST_OBJ2 status=0" in text, text
             capture("gameplay")
+            if args.ai:
+                check_ai()
+                return 0
             cmd("toggleconsole; wait 20")
             if args.renderer == "rdsp-rend2":
                 settings = cmd("r_ssao; r_ssaoMethod")

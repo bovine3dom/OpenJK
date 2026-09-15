@@ -117,6 +117,8 @@ still need a manual test.
   cinematic animations still need review.
 - JO NPC definitions and objective names load as campaign data. Objective slot
   zero stays reserved for JA's light-side state. The save layout is unchanged.
+- JO NPC class names convert to JA names. Earlier MVP saves repair invalid NPC
+  classes on load. See `encounter-kejim.md` for pressure tests and remaining limits.
 - English STRIP text converts to StringEd text. Other JO text languages are not
   imported yet.
 - JO's small script navgoals retain their sizes. Blocked points are omitted
