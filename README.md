@@ -11,6 +11,7 @@ rendering:
 - subsurface scattering for skin
 - smaa
 - sgssaa (via msaa, but i can't see a difference, probably needs HD textures)
+- torch bound to L (because the other rendering stuff makes stuff dark, lol)
 
 ai:
 - flanking
