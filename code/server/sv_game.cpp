@@ -901,6 +901,7 @@ void SV_InitGameProgs (void) {
 	import.Error = Com_Error;
 
 	import.Milliseconds = Sys_Milliseconds2;
+	import.PhysicsSurfaces = CM_PhysicsSurfaces;
 
 	import.DropClient = SV_GameDropClient;
 
@@ -1109,4 +1110,3 @@ qboolean SV_GameCommand( void ) {
 
 	return ge->ConsoleCommand();
 }
-

@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "cg_headers.h"
+#include "../game/g_jolt.h"
 
 #define	CG_PLAYERS_CPP
 #include "cg_media.h"
@@ -2478,6 +2479,7 @@ extern int PM_TurnAnimForLegsAnim( gentity_t *gent, int anim );
 extern float PM_GetTimeScaleMod( gentity_t *gent );
 static void CG_G2PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t angles )
 {
+	if (G_JoltRender(cent->gent, cg.time, cent->lerpOrigin, angles)) { AnglesToAxis(angles, legs); return; }
 	vec3_t		headAngles, neckAngles, chestAngles, thoracicAngles = {0,0,0};//legsAngles, torsoAngles,
 	vec3_t		ulAngles, llAngles;
 	//float		speed;

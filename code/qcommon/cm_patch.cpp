@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "cm_local.h"
 #include "cm_patch.h"
+#include <vector>
 
 //#define	CULL_BBOX
 
@@ -1774,4 +1775,67 @@ void CM_DrawDebugSurface( void (*drawPoly)(int color, int numPoints, float *poin
 
 }
 
-
+bool CM_PhysicsSurfaces(int contents, void (*emit)(int, int, const float*, void*), void* context) {
+	// Terrain sub-BSPs need a separate transform bridge.
+	if (NumSubBSP || !cmg.numBrushes) return false;
+	std::vector<int> brushModel(cmg.numBrushes, 0), patchModel(cmg.numSurfaces, 0);
+	int triangles = 0;
+	for (int m = 1; m < cmg.numSubModels; ++m) {
+		const cLeaf_t& leaf = cmg.cmodels[m].leaf;
+		for (int i = 0; i < leaf.numLeafBrushes; ++i) brushModel[cmg.leafbrushes[leaf.firstLeafBrush + i]] = m;
+		for (int i = 0; i < leaf.numLeafSurfaces; ++i) patchModel[cmg.leafsurfaces[leaf.firstLeafSurface + i]] = m;
+	}
+	auto output = [&](int model, winding_t* winding, const float* normal) {
+		if (!winding) return;
+		// Use outward-facing triangles for Jolt's one-sided mesh contacts.
+		for (int i = 1; i + 1 < winding->numpoints; ++i) {
+			vec3_t points[3], a, b, cross;
+			VectorCopy(winding->p[0], points[0]);
+			VectorSubtract(winding->p[i], points[0], a);
+			VectorSubtract(winding->p[i + 1], points[0], b);
+			CrossProduct(a, b, cross);
+			const bool flip = DotProduct(cross, normal) < 0;
+			VectorCopy(winding->p[i + (flip ? 1 : 0)], points[1]);
+			VectorCopy(winding->p[i + (flip ? 0 : 1)], points[2]);
+			emit(model, 3, points[0], context);
+			++triangles;
+		}
+		FreeWinding(winding);
+	};
+	for (int i = 0; i < cmg.numBrushes; ++i) {
+		const cbrush_t& brush = cmg.brushes[i];
+		if (!(brush.contents & contents)) continue;
+		for (int s = 0; s < brush.numsides; ++s) {
+			const cplane_t& face = *brush.sides[s].plane;
+			winding_t* winding = BaseWindingForPlane(const_cast<float*>(face.normal), face.dist);
+			for (int p = 0; p < brush.numsides && winding; ++p) if (p != s) {
+				const cplane_t& plane = *brush.sides[p].plane;
+				vec3_t inward;
+				VectorNegate(plane.normal, inward);
+				ChopWindingInPlace(&winding, inward, -plane.dist, 0.01f);
+			}
+			output(brushModel[i], winding, face.normal);
+		}
+	}
+	for (int i = 0; i < cmg.numSurfaces; ++i) {
+		const cPatch_t* patch = cmg.surfaces[i];
+		if (!patch || !(patch->contents & contents)) continue;
+		const patchCollide_t& pc = *patch->pc;
+		for (int f = 0; f < pc.numFacets; ++f) {
+			const facet_t& facet = pc.facets[f];
+			const float* face = pc.planes[facet.surfacePlane].plane;
+			winding_t* winding = BaseWindingForPlane(const_cast<float*>(face), face[3]);
+			for (int p = 0; p < facet.numBorders && winding; ++p) {
+				if (facet.borderPlanes[p] == facet.surfacePlane) continue;
+				const float* plane = pc.planes[facet.borderPlanes[p]].plane;
+				const float sign = facet.borderInward[p] ? 1 : -1;
+				vec3_t inward;
+				VectorScale(plane, sign, inward);
+				ChopWindingInPlace(&winding, inward, sign * plane[3], 0.01f);
+			}
+			output(patchModel[i], winding, face);
+		}
+	}
+	Com_Printf("Physics collision: %d brushes, %d surfaces, %d triangles\n", cmg.numBrushes, cmg.numSurfaces, triangles);
+	return triangles > 0;
+}

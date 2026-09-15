@@ -82,5 +82,7 @@ int	CM_MarkFragments( int numPoints, const vec3_t *points, const vec3_t projecti
 
 // cm_patch.c
 void CM_DrawDebugSurface( void (*drawPoly)(int color, int numPoints, float *points) );
+// Emit convex brush faces and collision-patch facets, grouped by inline model.
+bool CM_PhysicsSurfaces(int contents, void (*emit)(int model, int count, const float* points, void* context), void* context);
 
 #endif //__CM_PUBLIC_H__

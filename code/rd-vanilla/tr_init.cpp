@@ -2155,6 +2155,7 @@ extern "C" Q_EXPORT refexport_t* QDECL GetRefAPI ( int apiVersion, refimport_t *
 	G2EX(SetBoneAngles);
 	G2EX(SetBoneAnglesIndex);
 	G2EX(SetBoneAnglesMatrix);
+	G2EX(SetBoneAnglesMatrixIndex);
 	G2EX(SetBoneIKState);
 	G2EX(SetGhoul2ModelFlags);
 	G2EX(SetGhoul2ModelIndexes);

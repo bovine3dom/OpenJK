@@ -1261,6 +1261,7 @@ static void ReadGEntities(qboolean qbAutosave)
 
 void WriteLevel(qboolean qbAutosave)
 {
+	G_JoltBeforeSave();
 	NAV_RouteTestReset( "save" );
 	if (!qbAutosave) //-always save the client
 	{

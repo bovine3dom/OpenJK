@@ -10,10 +10,24 @@ void G_JoltSelect_f();
 void G_JoltStatus_f();
 void G_JoltHit_f();
 void G_JoltKnockdown_f();
+void G_JoltImpulse_f();
+void G_JoltControl_f();
+bool G_JoltOwns(const gentity_t* ent);
+bool G_JoltPhysicsRoot(const gentity_t* ent);
+bool G_JoltSuppressPain(const gentity_t* ent);
+bool G_JoltRender(gentity_t* ent, int time, const float* origin, float* angles);
+void G_JoltBeforeSave();
+bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength);
 #else
 inline void G_JoltReset() {}
 inline void G_JoltForget(const gentity_t*) {}
 inline void G_JoltFrame() {}
 inline void G_JoltHit(gentity_t*, const float*, const float*, int, int, int) {}
 inline void G_JoltBoneAngles(gentity_t*, int, int, float*) {}
+inline bool G_JoltOwns(const gentity_t*) { return false; }
+inline bool G_JoltPhysicsRoot(const gentity_t*) { return false; }
+inline bool G_JoltSuppressPain(const gentity_t*) { return false; }
+inline bool G_JoltRender(gentity_t*, int, const float*, float*) { return false; }
+inline void G_JoltBeforeSave() {}
+inline bool G_JoltKnockdown(gentity_t*, const float*, float) { return false; }
 #endif

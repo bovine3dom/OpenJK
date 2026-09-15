@@ -8,6 +8,9 @@
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/TransformedShape.h>
+#include <map>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <algorithm>
 #include <cmath>
@@ -91,7 +94,7 @@ struct Simulation::Impl {
 			settings.mNormalHalfConeAngle = settings.mPlaneHalfConeAngle = JPH::DegreesToRadians(i ? 12.0f : 16.0f);
 			settings.mTwistMinAngle = -JPH::DegreesToRadians(8.0f);
 			settings.mTwistMaxAngle = JPH::DegreesToRadians(8.0f);
-			settings.mSwingMotorSettings = settings.mTwistMotorSettings = JPH::MotorSettings(3.5f, 1.0f);
+			settings.mSwingMotorSettings = settings.mTwistMotorSettings = JPH::MotorSettings(1.8f, 0.8f);
 			settings.mSwingMotorSettings.SetTorqueLimit(i ? 25 : 120);
 			settings.mTwistMotorSettings.SetTorqueLimit(i ? 25 : 120);
 			auto* constraint = static_cast<JPH::SwingTwistConstraint*>(settings.Create(*body[i], *body[i + 1]));
@@ -162,4 +165,166 @@ Pose Simulation::Sample(float secondsAhead) const {
 	return pose;
 }
 unsigned Simulation::Steps() const { return impl->steps; }
+
+namespace {
+struct FallLayers final : JPH::BroadPhaseLayerInterface, JPH::ObjectVsBroadPhaseLayerFilter, JPH::ObjectLayerPairFilter {
+	JPH::uint GetNumBroadPhaseLayers() const override { return 1; }
+	JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer) const override { return JPH::BroadPhaseLayer(0); }
+	bool ShouldCollide(JPH::ObjectLayer, JPH::BroadPhaseLayer) const override { return true; }
+	bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override { return (a == 1 && b == 0) || (a == 0 && b == 1); }
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+	const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer) const override { return "fall"; }
+#endif
+};
+JPH::Vec3 Vector(const float* v) { return JPH::Vec3(v[0], v[1], v[2]); }
+JPH::Mat44 Matrix(const Transform& t) {
+	return JPH::Mat44(JPH::Vec4(t.matrix[0][0], t.matrix[1][0], t.matrix[2][0], 0),
+		JPH::Vec4(t.matrix[0][1], t.matrix[1][1], t.matrix[2][1], 0),
+		JPH::Vec4(t.matrix[0][2], t.matrix[1][2], t.matrix[2][2], 0),
+		JPH::Vec4(t.matrix[0][3], t.matrix[1][3], t.matrix[2][3], 1));
+}
+void Store(JPH::Mat44Arg m, Transform& t) {
+	for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c) t.matrix[r][c] = m(r, c);
+}
+}
+struct FallSimulation::Impl {
+	std::shared_ptr<Runtime> runtime = AcquireRuntime();
+	FallLayers layers;
+	JPH::TempAllocatorImpl allocator{16 * 1024 * 1024};
+	JPH::JobSystemSingleThreaded jobs{1024};
+	JPH::PhysicsSystem world;
+	JPH::BodyID bodies[PartCount];
+	JPH::Mat44 offsets[PartCount];
+	JPH::Vec3 previousPosition[PartCount], position[PartCount];
+	JPH::Quat previousRotation[PartCount], rotation[PartCount];
+	std::map<int, JPH::BodyID> meshes;
+	float accumulator = 0;
+	unsigned steps = 0;
+	explicit Impl(const Part* parts, const float* velocity, float gravity) {
+		world.Init(2048, 0, 8192, 8192, layers, layers, layers);
+		world.SetGravity(JPH::Vec3(0, 0, -gravity));
+		auto& interface = world.GetBodyInterface();
+		JPH::Body* body[PartCount];
+		for (int i = 0; i < PartCount; ++i) {
+			const auto bone = Matrix(parts[i].bone);
+			const auto start = bone.GetTranslation(), end = Vector(parts[i].end);
+			const auto delta = end - start;
+			const auto q = JPH::Quat::sFromTo(JPH::Vec3::sAxisY(), delta.Normalized());
+			const auto center = (start + end) * 0.5f;
+			JPH::BodyCreationSettings settings(new JPH::CapsuleShape(std::max(0.01f, delta.Length() * 0.5f - parts[i].radius), parts[i].radius),
+				center, q, JPH::EMotionType::Dynamic, 1);
+			settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+			settings.mMassPropertiesOverride.mMass = parts[i].mass;
+			settings.mLinearVelocity = Vector(velocity);
+			settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
+			settings.mFriction = 0.7f;
+			settings.mAngularDamping = 0.3f;
+			settings.mMaxAngularVelocity = 15;
+			body[i] = interface.CreateBody(settings);
+			bodies[i] = body[i]->GetID();
+			interface.AddBody(bodies[i], JPH::EActivation::Activate);
+			offsets[i] = body[i]->GetWorldTransform().InversedRotationTranslation() * bone;
+			previousPosition[i] = position[i] = center;
+			previousRotation[i] = rotation[i] = q;
+			if (parts[i].parent >= 0) {
+				JPH::SwingTwistConstraintSettings joint;
+				joint.mPosition1 = joint.mPosition2 = start;
+				joint.mTwistAxis1 = joint.mTwistAxis2 = delta.Normalized();
+				joint.mPlaneAxis1 = joint.mPlaneAxis2 = delta.Normalized().GetNormalizedPerpendicular();
+				joint.mNormalHalfConeAngle = joint.mPlaneHalfConeAngle = JPH::DegreesToRadians(i < 3 ? 35.0f : 65.0f);
+				joint.mTwistMinAngle = -JPH::DegreesToRadians(25.0f);
+				joint.mTwistMaxAngle = JPH::DegreesToRadians(25.0f);
+				joint.mMaxFrictionTorque = 1.0f;
+				world.AddConstraint(joint.Create(*body[parts[i].parent], *body[i]));
+			}
+		}
+	}
+	~Impl() {
+		for (auto& constraint : world.GetConstraints()) world.RemoveConstraint(constraint);
+		auto& interface = world.GetBodyInterface();
+		for (auto id : bodies) { interface.RemoveBody(id); interface.DestroyBody(id); }
+		for (const auto& mesh : meshes) { interface.RemoveBody(mesh.second); interface.DestroyBody(mesh.second); }
+	}
+};
+FallSimulation::FallSimulation(const Part* parts, const float* velocity, float gravity) : impl(new Impl(parts, velocity, gravity)) {}
+FallSimulation::~FallSimulation() = default;
+bool FallSimulation::AddMesh(int model, const float* vertices, int count) {
+	JPH::TriangleList triangles;
+	for (int i = 0; i + 2 < count; i += 3) triangles.emplace_back(Vector(vertices + i * 3), Vector(vertices + (i + 1) * 3), Vector(vertices + (i + 2) * 3));
+	JPH::MeshShapeSettings settings(triangles);
+	settings.Sanitize();
+	const auto shape = settings.Create();
+	if (shape.HasError()) return false;
+	JPH::BodyCreationSettings body(shape.Get(), JPH::RVec3::sZero(), JPH::Quat::sIdentity(),
+		model ? JPH::EMotionType::Kinematic : JPH::EMotionType::Static, 0);
+	auto id = impl->world.GetBodyInterface().CreateAndAddBody(body, JPH::EActivation::DontActivate);
+	if (id.IsInvalid()) return false;
+	impl->meshes[model] = id;
+	return true;
+}
+void FallSimulation::MoveMesh(int model, const Transform& transform, float seconds) {
+	auto found = impl->meshes.find(model);
+	if (found == impl->meshes.end()) return;
+	const auto m = Matrix(transform);
+	if (seconds <= 0) impl->world.GetBodyInterface().SetPositionAndRotation(found->second, m.GetTranslation(), m.GetQuaternion(), JPH::EActivation::DontActivate);
+	else impl->world.GetBodyInterface().MoveKinematic(found->second, m.GetTranslation(), m.GetQuaternion(), seconds);
+}
+void FallSimulation::SetMeshEnabled(int model, bool enabled) {
+	auto found = impl->meshes.find(model);
+	if (found == impl->meshes.end()) return;
+	auto& bodies = impl->world.GetBodyInterface();
+	const JPH::ObjectLayer layer = enabled ? 0 : 2;
+	if (bodies.GetObjectLayer(found->second) != layer) bodies.SetObjectLayer(found->second, layer);
+}
+void FallSimulation::AddVelocity(const float* velocity) {
+	const auto v = Vector(velocity);
+	if (v.IsNaN() || v.LengthSq() > 10000 || v.LengthSq() < .000001f) return;
+	for (auto id : impl->bodies) impl->world.GetBodyInterface().AddLinearVelocity(id, v);
+}
+void FallSimulation::Impulse(int part, const float* direction, const float* point, float strength) {
+	if (part < 0 || part >= PartCount) return;
+	impl->world.GetBodyInterface().AddImpulse(impl->bodies[part], Vector(direction).NormalizedOr(JPH::Vec3::sAxisX()) * std::clamp(strength, 0.0f, 100.0f), Vector(point));
+}
+bool FallSimulation::Advance(float seconds) {
+	if (!std::isfinite(seconds) || seconds < 0 || seconds > 0.25f) return false;
+	auto& s = *impl;
+	s.accumulator += seconds;
+	while (s.accumulator + 0.000001f >= Step) {
+		for (int i = 0; i < PartCount; ++i) { s.previousPosition[i] = s.position[i]; s.previousRotation[i] = s.rotation[i]; }
+		if (s.world.Update(Step, 1, &s.allocator, &s.jobs) != JPH::EPhysicsUpdateError::None) return false;
+		for (int i = 0; i < PartCount; ++i) {
+			s.position[i] = s.world.GetBodyInterface().GetPosition(s.bodies[i]);
+			s.rotation[i] = s.world.GetBodyInterface().GetRotation(s.bodies[i]);
+			if (s.position[i].IsNaN() || s.rotation[i].IsNaN()) return false;
+		}
+		s.accumulator = std::max(0.0f, s.accumulator - Step);
+		++s.steps;
+	}
+	return true;
+}
+void FallSimulation::Sample(Transform* bones, float ahead) const {
+	const float alpha = std::clamp((impl->accumulator + ahead) / Step, 0.0f, 1.0f);
+	for (int i = 0; i < PartCount; ++i)
+		Store(JPH::Mat44::sRotationTranslation(impl->previousRotation[i].SLERP(impl->rotation[i], alpha),
+			impl->previousPosition[i] * (1 - alpha) + impl->position[i] * alpha) * impl->offsets[i], bones[i]);
+}
+float FallSimulation::Speed() const {
+	float speed = 0;
+	for (auto id : impl->bodies) speed = std::max(speed, impl->world.GetBodyInterface().GetLinearVelocity(id).Length());
+	return speed;
+}
+unsigned FallSimulation::Steps() const { return impl->steps; }
+void FallSimulation::Bounds(float* mins, float* maxs) const {
+	JPH::AABox bounds;
+	for (auto id : impl->bodies) bounds.Encapsulate(impl->world.GetBodyInterface().GetTransformedShape(id).GetWorldSpaceBounds());
+	for (int i = 0; i < 3; ++i) { mins[i] = bounds.mMin[i]; maxs[i] = bounds.mMax[i]; }
+}
+void BlendTransforms(const Transform* from, Transform* to, int count, float alpha) {
+	alpha = std::clamp(alpha, 0.0f, 1.0f);
+	for (int i = 0; i < count; ++i) {
+		const auto a = Matrix(from[i]), b = Matrix(to[i]);
+		Store(JPH::Mat44::sRotationTranslation(a.GetQuaternion().Normalized().SLERP(b.GetQuaternion().Normalized(), alpha),
+			a.GetTranslation() * (1 - alpha) + b.GetTranslation() * alpha), to[i]);
+	}
+}
 }

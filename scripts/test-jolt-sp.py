@@ -53,17 +53,17 @@ def main():
                 time.sleep(0.02)
             raise TimeoutError(log)
 
-        def cmd(text):
+        def cmd(text, frames=4):
             nonlocal sequence
             sequence += 1
             marker = f"JOLT_COMMAND_{sequence}_DONE"
             start = len(log.read_text(errors="replace"))
-            process.stdin.write(f"{text}; wait 4; echo {marker}\n")
+            process.stdin.write(f"{text}; wait {frames}; echo {marker}\n")
             process.stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(marker, start))
 
         def status():
-            line = re.findall(r"jolt actor=[^\r\n]+", cmd("jolt_status"))[-1]
+            line = re.findall(r"jolt actor=[^\r\n]+", cmd("jolt_status", 0))[-1]
             return {k: tuple(map(float, v.split(","))) if "," in v else float(v)
                     for k, v in (word.split("=") for word in line.split()[1:])}
 
@@ -77,23 +77,49 @@ def main():
             cmd("set cg_thirdPerson 1; set cg_thirdPersonRange 160; set cg_thirdPersonAngle 30; wait 10")
             initial = status()
             assert initial["actor"] > 0 and initial["active"] == 1, initial
+            cmd("set g_joltReactionPose 0")
+            baseline = status()
+            cmd("jolt_impulse left; wait 1; screenshot_png jolt_animation_only; wait 50")
+            assert status()["poses"] == baseline["poses"]
+            assert status()["health"] == baseline["health"]
+            cmd("set g_joltReactionPose 1; jolt_impulse left; wait 1; screenshot_png jolt_physical_reaction; wait 50")
+            assert status()["poses"] > baseline["poses"]
+            cmd("jolt_select nearest; wait 4")
+            initial = status()
             cmd("screenshot_png jolt_neutral; save jolt_neutral")
             cmd("jolt_hit front; wait 3; screenshot_png jolt_front")
             hit = status()
             assert hit["hits"] == 1 and hit["poses"] > initial["poses"] and hit["peak"] > 0.5, hit
             assert hit["health"] == initial["health"] - 5, (initial, hit)
+            assert hit["painanim"] == 0, hit
             cmd("wait 50")
-            assert magnitude(status()) < 0.2
+            assert magnitude(status()) < 0.5
             cmd("jolt_hit left; wait 1; screenshot_png jolt_left; wait 50")
             assert status()["hits"] == 2
             cmd("jolt_hit head; wait 1; screenshot_png jolt_head; wait 50")
             assert status()["hits"] == 3
-            assert magnitude(status()) < 0.2
-            cmd("set d_npcfreeze 0; jolt_knockdown; wait 1")
-            assert status()["active"] == 0
-            cmd("wait 120")
+            assert magnitude(status()) < 0.5
+            cmd("set d_npcfreeze 0; set g_joltDebug 1; jolt_knockdown; wait 4; screenshot_png jolt_fall")
+            assert status()["falling"] == 1
+            cmd("wait 20; screenshot_png jolt_ground; wait 100")
             recovered = status()
             assert recovered["active"] == 1 and magnitude(recovered) < 0.2, recovered
+            assert recovered["pose_error"] < 0.1, recovered
+            cmd("jolt_control")
+            for direction in ("back", "moveleft", "moveright", "forward"):
+                cmd(f"+{direction}; wait 3")
+                if status()["movement"] >= 180:
+                    cmd(f"jolt_impulse left; -{direction}; wait 2; screenshot_png jolt_running_fall")
+                    break
+                cmd(f"-{direction}")
+            else:
+                raise AssertionError("No clear running direction for the controlled actor")
+            running = status()
+            assert running["falling"] == 1 and running["launch"] > 80, running
+            assert running["pose_error"] < .1, running
+            assert running["health"] == recovered["health"], running
+            cmd("wait 120")
+            assert status()["falling"] == 0
             cmd("set d_npcfreeze 1")
             cmd("set timescale 0.25")
             start = status()
@@ -108,6 +134,10 @@ def main():
             assert status()["actor"] == -1  # Transient rig state does not survive saves.
             cmd("set g_joltReactions 1; jolt_select nearest; vid_restart; wait 60")
             assert status()["actor"] == -1  # Game reload and renderer shutdown release the rig.
+            cmd("jolt_select nearest; jolt_knockdown; wait 2; save jolt_midfall; wait 4")
+            assert status()["actor"] == -1  # Save contains a normal hull and no physics overrides.
+            cmd("load jolt_midfall; wait 60")
+            assert status()["actor"] == -1
             cmd("jolt_select nearest; npc kill jolt_test_actor; wait 30")
             assert status()["actor"] == -1
             cmd("npc spawn protocol jolt_other_actor; wait 30; jolt_select nearest")

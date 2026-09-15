@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_functions.h"
 #include "objectives.h"
 #include "g_local.h"
+#include "g_jolt.h"
 
 #include "../icarus/IcarusInterface.h"
 
@@ -157,6 +158,8 @@ Returns qfalse if the move is blocked
 extern qboolean G_OkayToRemoveCorpse( gentity_t *self );
 
 qboolean	G_TryPushingEntity( gentity_t *check, gentity_t *pusher, vec3_t move, vec3_t amove ) {
+	// Jolt receives this brush model's motion through the kinematic collision body.
+	if (G_JoltPhysicsRoot(check)) return qtrue;
 	vec3_t		forward, right, up;
 	vec3_t		org, org2, move2;
 	gentity_t	*block;

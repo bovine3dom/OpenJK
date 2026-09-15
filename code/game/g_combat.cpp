@@ -5006,6 +5006,7 @@ void G_Knockdown( gentity_t *self, gentity_t *attacker, const vec3_t pushDir, fl
 		return;
 	}
 
+	if (G_JoltKnockdown(self, pushDir, strength)) return;
 	//break out of a saberLock?
 	if ( self->client->ps.saberLockTime > level.time )
 	{

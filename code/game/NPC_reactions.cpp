@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 //NPC_reactions.cpp
 
 #include "b_local.h"
+#include "g_jolt.h"
 #include "anims.h"
 #include "g_functions.h"
 #include "wp_saber.h"
@@ -216,6 +217,7 @@ NPC_ChoosePainAnimation
 extern int G_PickPainAnim( gentity_t *self, const vec3_t point, int damage, int hitLoc );
 void NPC_ChoosePainAnimation( gentity_t *self, gentity_t *other, const vec3_t point, int damage, int mod, int hitLoc, int voiceEvent = -1 )
 {
+	if (G_JoltOwns(self) || ((mod == MOD_BLASTER || mod == MOD_BRYAR || mod == MOD_BRYAR_ALT) && G_JoltSuppressPain(self))) return;
 	//If we've already taken pain, then don't take it again
 	if ( level.time < self->painDebounceTime && mod != MOD_ELECTROCUTE && mod != MOD_MELEE )
 	{//FIXME: if hit while recoving from losing a saber lock, we should still play a pain anim?

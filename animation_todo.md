@@ -5,7 +5,9 @@
 The first Jolt reaction prototype is implemented for one selected stock
 stormtrooper. It uses the existing mesh, skeleton, skin weights, and animation
 clips. See [Jolt Animation Prototype](docs/jolt-animation.md) for controls,
-rig parameters, tests, and limits. Full-body physical falls remain pending.
+rig parameters, tests, and limits. The prototype now supports eleven-body
+falls, retained running momentum, and a checked get-up blend. Balance steps
+and bracing remain pending.
 
 ### First Prototype
 
@@ -15,9 +17,12 @@ rig parameters, tests, and limits. Full-body physical falls remain pending.
 - [x] Apply localized blaster impulses through the existing damage path.
 - [x] Add reaction rotations to the shared Ghoul2 skeleton.
 - [x] Use fixed game-time steps and interpolate display poses.
-- [x] Release pose control during native knockdowns and get-ups.
+- [x] Replace eligible knockdowns with physical falls and blend into a get-up.
 - [x] Clear transient state during loading, restart, removal, and shutdown.
-- [ ] Add world collision and extend the rig to full-body falls and recovery.
+- [x] Add brush and patch collision, kinematic brush models, and full-body falls.
+- [x] Add a non-damaging impulse, pose comparison, and debug joint drawing.
+- [x] Use movement and impact location to increase instability.
+- [ ] Add balance steps, bracing, and pose-specific recovery.
 
 Euphoria combines physical simulation with motor control, balance, stepping,
 bracing, and recovery. A ragdoll solver alone does not supply those behaviours.
@@ -50,18 +55,19 @@ not provide an autonomous balance or recovery controller.
 
 ## Stormtrooper MVP
 
-- [ ] Define one low-detail physics rig: capsule dimensions, masses, joint limits,
+- [x] Define one low-detail physics rig: capsule dimensions, masses, joint limits,
   motor strengths, and the mapping to stock humanoid bones.
 - [ ] Generate initial dimensions from the skeleton and mesh bounds, then inspect
   them. Bone positions alone do not establish correct physical parameters.
-- [ ] Build static collision from BSP collision data, including invisible clip
+- [x] Build static collision from standard BSP collision data, including invisible clip
   brushes and patches. Represent doors and platforms as kinematic bodies.
 - [ ] Keep existing navigation and locomotion. Drive the physical rig toward the
   current animation, with explicit ownership of the root transform.
-- [ ] Add localised blaster-hit and upper-body reactions. Keep weapon aiming and
+- [x] Add localised blaster-hit and upper-body reactions. Keep weapon aiming and
   saber timing under game control.
 - [ ] Blend into falls after strong Force pushes or loss of support.
-- [ ] Select and blend into existing get-up clips after settling.
+- [x] Blend into an existing get-up clip after settling and a clearance check.
+- [ ] Select the get-up clip from the settled orientation and align its start pose.
 - [ ] Add balance steps and bracing only after the first reaction/fall loop works.
 
 ## Integration Requirements

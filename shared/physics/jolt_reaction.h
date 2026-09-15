@@ -3,6 +3,32 @@
 #include <memory>
 
 namespace JoltReaction {
+constexpr int PartCount = 11;
+struct Transform { float matrix[3][4]; };
+void BlendTransforms(const Transform* from, Transform* to, int count, float alpha);
+struct Part {
+	Transform bone;
+	float end[3];
+	float radius, mass;
+	int parent;
+};
+class FallSimulation {
+	struct Impl;
+	std::unique_ptr<Impl> impl;
+public:
+	FallSimulation(const Part* parts, const float* velocity, float gravity = 20.32f);
+	~FallSimulation();
+	bool AddMesh(int model, const float* vertices, int count);
+	void MoveMesh(int model, const Transform& transform, float seconds);
+	void SetMeshEnabled(int model, bool enabled);
+	void AddVelocity(const float* velocity);
+	void Impulse(int part, const float* direction, const float* point, float strength);
+	bool Advance(float seconds);
+	void Sample(Transform* bones, float ahead = 0) const;
+	float Speed() const;
+	unsigned Steps() const;
+	void Bounds(float* mins, float* maxs) const;
+};
 // Metres, kilograms, seconds. Local axes: forward X, left Y, up Z.
 struct Rig {
 	float torsoLength = 0.4f, torsoRadius = 0.14f;

@@ -1623,6 +1623,15 @@ void G2_TransformBone (int child,CBoneCache &BC)
 
 	int parent=BC.mFinalBones[child].parent;
 	assert((parent==-1&&child==0)||(parent>=0&&parent<BC.mNumBones));
+#ifdef BONE_ANGLES_PHYSICS
+	if (angleOverride & BONE_ANGLES_PHYSICS)
+	{
+		const boneInfo_t& override = boneList[boneListIndex];
+		Multiply_3x4Matrix(&BC.mFinalBones[child].boneMatrix,
+			HackadelicOnClient ? &override.newMatrix : &override.matrix, &skel->BasePoseMatInv);
+	}
+	else
+#endif
 	if (angleOverride & BONE_ANGLES_REPLACE)
 	{
 		bool isRag=!!(angleOverride & BONE_ANGLES_RAGDOLL);
@@ -1924,6 +1933,10 @@ void G2_TransformGhoulBones(boneInfo_v &rootBoneList,mdxaBone_t &rootMatrix, CGh
 
 	// master smoothing control
 	float val=r_Ghoul2AnimSmooth->value;
+#ifdef BONE_ANGLES_PHYSICS
+	// The physics pose already has fixed-step interpolation.
+	for (const auto& bone : rootBoneList) if (bone.flags & BONE_ANGLES_PHYSICS) { val = 0; break; }
+#endif
 	if (smooth&&val>0.0f&&val<1.0f)
 	{
 		ghoul2.mBoneCache->mLastTouch=ghoul2.mBoneCache->mLastLastTouch;

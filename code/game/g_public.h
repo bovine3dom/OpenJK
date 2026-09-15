@@ -163,6 +163,7 @@ typedef struct {
 	// this should NOT be used for any game related tasks,
 	// because it is not journaled
 	int		(*Milliseconds)( void );
+	bool (*PhysicsSurfaces)(int contents, void (*emit)(int model, int count, const float* points, void* context), void* context);
 
 	// console variable interaction
 	cvar_t	*(*cvar)( const char *var_name, const char *value, int flags );

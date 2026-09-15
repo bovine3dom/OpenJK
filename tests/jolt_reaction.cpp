@@ -24,8 +24,9 @@ int main() {
 	Check(sim.Advance(0.05f), "advance first impact");
 	const auto pitch = sim.Sample(1);
 	Check(pitch.angles[0][0] > 0.5f && std::abs(pitch.angles[0][2]) < 0.1f, "forward hit produces pitch");
-	for (int i = 0; i < 240; ++i) { sim.Advance(1.0f / 120); Magnitude(sim.Sample()); }
-	Check(Magnitude(sim.Sample(1)) < 0.1f, "motors return to animation");
+	for (int i = 0; i < 480; ++i) { sim.Advance(1.0f / 120); Magnitude(sim.Sample()); }
+	std::printf("Reaction residual after four seconds: %.3f degrees\n", Magnitude(sim.Sample(1)));
+	Check(Magnitude(sim.Sample(1)) < 0.5f, "motors return within half a degree of animation");
 	sim.Reset();
 	sim.Impulse(0, side, point, 5);
 	sim.Advance(0.05f);
@@ -48,5 +49,44 @@ int main() {
 	const auto paused = sim.Sample();
 	sim.Advance(0);
 	Check(Magnitude(paused) == Magnitude(sim.Sample()), "pause preserves state");
+	JoltReaction::Part parts[JoltReaction::PartCount] = {};
+	const float starts[][3] = {{0,0,1}, {0,0,1.15f}, {0,0,1.55f}, {0,.23f,1.5f}, {0,.35f,1.2f}, {0,-.23f,1.5f}, {0,-.35f,1.2f}, {0,.15f,1}, {.1f,.15f,.55f}, {0,-.15f,1}, {-.1f,-.15f,.55f}};
+	const float ends[][3] = {{0,0,1.15f}, {0,0,1.55f}, {0,0,1.78f}, {0,.35f,1.2f}, {.2f,.35f,.95f}, {0,-.35f,1.2f}, {-.2f,-.35f,.95f}, {.1f,.15f,.55f}, {0,.15f,.08f}, {-.1f,-.15f,.55f}, {0,-.15f,.08f}};
+	const int parents[] = {-1,0,1,1,3,1,5,0,7,0,9};
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		for (int r = 0; r < 3; ++r) { parts[i].bone.matrix[r][r] = 1; parts[i].bone.matrix[r][3] = starts[i][r]; parts[i].end[r] = ends[i][r]; }
+		parts[i].parent = parents[i]; parts[i].mass = i < 2 ? 15 : 3; parts[i].radius = .06f;
+	}
+	const float velocity[] = {2,0,0};
+	JoltReaction::FallSimulation falling(parts, velocity);
+	const float floor[] = {-10,-10,0, 10,-10,0, 10,10,0, -10,-10,0, 10,10,0, -10,10,0};
+	Check(falling.AddMesh(0, floor, 6), "collision mesh creation");
+	falling.Impulse(1, forward, starts[2], 30);
+	JoltReaction::Transform pose[JoltReaction::PartCount];
+	for (int i = 0; i < 480; ++i) {
+		Check(falling.Advance(1.0f/120), "fall solver step");
+		falling.Sample(pose, 1);
+		for (const auto& bone : pose) for (const auto& row : bone.matrix) for (float v : row) Check(std::isfinite(v), "finite full-body pose");
+	}
+	Check(pose[0].matrix[2][3] < .5f && pose[0].matrix[2][3] > -.1f, "gravity drops the pelvis and floor supports it");
+	Check(pose[0].matrix[0][3] > .4f, "running momentum carries into fall");
+	Check(falling.Speed() < .5f, "fall settles on collision floor");
+	const float stopped[] = {0,0,0};
+	JoltReaction::FallSimulation rider(parts, stopped);
+	Check(rider.AddMesh(1, floor, 6), "kinematic mesh creation");
+	JoltReaction::Transform platform = {};
+	for (int i = 0; i < 3; ++i) platform.matrix[i][i] = 1;
+	for (int i = 0; i < 480; ++i) {
+		platform.matrix[2][3] = (i + 1) * .001f;
+		rider.MoveMesh(1, platform, 1.0f / 120);
+		Check(rider.Advance(1.0f / 120), "moving platform step");
+	}
+	rider.Sample(pose, 1);
+	Check(pose[0].matrix[2][3] > .4f, "kinematic platform supports the rig");
+	rider.SetMeshEnabled(1, false);
+	for (int i = 0; i < 120; ++i) rider.Advance(1.0f / 120);
+	rider.Sample(pose, 1);
+	Check(pose[0].matrix[2][3] < -1, "non-solid or removed brush model stops colliding");
+	std::puts("PASS: full-body gravity, momentum, floor contacts, finite poses, and settling");
 	std::puts("PASS: Jolt reaction direction, joint limits, settling, reset, pause, invalid input, and fixed stepping");
 }

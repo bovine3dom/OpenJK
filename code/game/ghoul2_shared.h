@@ -85,11 +85,12 @@ surfaceInfo_t():
 #define BONE_ANGLES_PREMULT			0x0001
 #define BONE_ANGLES_POSTMULT		0x0002
 #define BONE_ANGLES_REPLACE			0x0004
+#define BONE_ANGLES_PHYSICS			0x8000 // Complete model-space bone pose, including translation.
 //rww - RAGDOLL_BEGIN
 #define BONE_ANGLES_RAGDOLL			0x2000  // the rag flags give more details
 #define BONE_ANGLES_IK				0x4000  // the rag flags give more details
 //rww - RAGDOLL_END
-#define BONE_ANGLES_TOTAL			( BONE_ANGLES_PREMULT | BONE_ANGLES_POSTMULT | BONE_ANGLES_REPLACE )
+#define BONE_ANGLES_TOTAL			( BONE_ANGLES_PREMULT | BONE_ANGLES_POSTMULT | BONE_ANGLES_REPLACE | BONE_ANGLES_PHYSICS )
 
 #define BONE_ANIM_OVERRIDE			0x0008
 #define BONE_ANIM_OVERRIDE_LOOP		0x0010	// Causes Last Frame To Lerp to First Frame And Start Over
