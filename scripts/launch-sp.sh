@@ -13,6 +13,10 @@ if [[ -e "$package/.update-incomplete" ]]; then
 fi
 assets=$(realpath -- "${1:?Usage: launch-sp.sh /path/to/GameData [engine arguments]}")
 shift
+if [[ ${1:-} == --barks ]]; then
+    shift
+    exec python3 "$package/audition-barks.py" --assets "$assets/base" "$@"
+fi
 for index in 0 1 2 3; do
     test -r "$assets/base/assets$index.pk3" || { printf 'Missing assets%s.pk3\n' "$index" >&2; exit 1; }
 done
