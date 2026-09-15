@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "g_local.h"
+#include "g_jolt.h"
 #include "g_functions.h"
 #include "Q3_Interface.h"
 #include "g_nav.h"
@@ -729,6 +730,7 @@ SavedGameJustLoaded_e g_eSavedGameJustLoaded;
 qboolean g_qbLoadTransition = qfalse;
 void InitGame(  const char *mapname, const char *spawntarget, int checkSum, const char *entities, int levelTime, int randomSeed, int globalTime, SavedGameJustLoaded_e eSavedGameJustLoaded, qboolean qbLoadTransition )
 {
+	G_JoltReset();
 	NAV_RouteTestReset();
 	//rww - default this to 0, we will auto-set it to 1 if we run into a terrain ent
 	gi.cvar_set("RMG", "0");
@@ -833,6 +835,7 @@ ShutdownGame
 */
 void ShutdownGame( void )
 {
+	G_JoltReset();
 	NAV_RouteTestReset( "shutdown" );
 	// write all the client session data so we can get it back
 	if (G_IsOutcast() && gi.Cvar_VariableIntegerValue("cg_missionstatusscreen"))
@@ -2068,6 +2071,7 @@ void G_RunFrame( int levelTime ) {
 		//UpdateTeamCounters( ent );	//	   to call anyway on a freed ent.
 	}
 
+	G_JoltFrame();
 	// perform final fixups on the player
 	ent = &g_entities[0];
 	if ( ent->inuse )

@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../cgame/cg_local.h"
 #include "Q3_Interface.h"
 #include "g_local.h"
+#include "g_jolt.h"
 #include "g_functions.h"
 #include "g_navigator.h"
 #include "b_local.h"
@@ -863,6 +864,7 @@ Marks the entity as free
 =================
 */
 void G_FreeEntity( gentity_t *ed ) {
+	G_JoltForget(ed);
 	for ( int i = 0; i < globals.num_entities; i++ )
 	{
 		gentity_t *member = &g_entities[i];

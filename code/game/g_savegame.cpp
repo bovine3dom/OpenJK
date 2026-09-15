@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../cgame/cg_local.h"
 #include "Q3_Interface.h"
 #include "g_local.h"
+#include "g_jolt.h"
 #include "g_nav.h"
 #include "fields.h"
 #include "objectives.h"
@@ -1298,6 +1299,7 @@ void WriteLevel(qboolean qbAutosave)
 
 void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 {
+	G_JoltReset();
 	ojk::SavedGameHelper saved_game(
 		::gi.saved_game);
 

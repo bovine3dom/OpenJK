@@ -377,6 +377,28 @@ endif(WIN32)
 
 add_library(${SPGame} SHARED ${SPGameFiles})
 
+option(UseJoltReactions "Build the experimental SP stormtrooper reaction rig" ON)
+if(UseJoltReactions)
+	include(JoltDependencies)
+	openjk_add_jolt()
+	add_library(openjk_jolt_reaction STATIC "${SharedDir}/physics/jolt_reaction.cpp")
+	target_compile_features(openjk_jolt_reaction PRIVATE cxx_std_17)
+	target_link_libraries(openjk_jolt_reaction PRIVATE Jolt)
+	target_include_directories(openjk_jolt_reaction PUBLIC "${SharedDir}")
+	target_sources(${SPGame} PRIVATE "${SPDir}/game/g_jolt.cpp")
+	list(APPEND SPGameDefines USE_JOLT_REACTIONS)
+	list(APPEND SPGameLibraries openjk_jolt_reaction)
+	add_executable(jolt-reaction-test EXCLUDE_FROM_ALL "${CMAKE_SOURCE_DIR}/tests/jolt_reaction.cpp")
+	target_link_libraries(jolt-reaction-test openjk_jolt_reaction)
+	# The game DLL must unload before the renderer destroys its Ghoul2 storage.
+	# GNU unique symbols would keep the DLL loaded until process exit.
+	foreach(target Jolt openjk_jolt_reaction ${SPGame})
+		target_compile_options(${target} PRIVATE "$<$<CXX_COMPILER_ID:GNU>:-fno-gnu-unique>")
+	endforeach()
+	set_target_properties(Jolt openjk_jolt_reaction PROPERTIES POSITION_INDEPENDENT_CODE ON
+		CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
+endif()
+
 # Hide symbols not explicitly marked public.
 set_property(TARGET ${SPGame} APPEND PROPERTY COMPILE_OPTIONS ${OPENJK_VISIBILITY_FLAGS})
 

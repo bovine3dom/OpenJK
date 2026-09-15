@@ -2,9 +2,22 @@
 
 ## Status and Scope
 
-Implementation is deferred to another turn. Start with one stormtrooper, using
-the stock humanoid mesh, skeleton, skin weights, and animation clips. This is
-an animation and gameplay project, not a renderer-only feature.
+The first Jolt reaction prototype is implemented for one selected stock
+stormtrooper. It uses the existing mesh, skeleton, skin weights, and animation
+clips. See [Jolt Animation Prototype](docs/jolt-animation.md) for controls,
+rig parameters, tests, and limits. Full-body physical falls remain pending.
+
+### First Prototype
+
+- [x] Pin Jolt 5.3.0 and package its MIT license.
+- [x] Add an opt-in pelvis anchor with powered torso and head capsules.
+- [x] Estimate dimensions from stock bone positions and actor bounds.
+- [x] Apply localized blaster impulses through the existing damage path.
+- [x] Add reaction rotations to the shared Ghoul2 skeleton.
+- [x] Use fixed game-time steps and interpolate display poses.
+- [x] Release pose control during native knockdowns and get-ups.
+- [x] Clear transient state during loading, restart, removal, and shutdown.
+- [ ] Add world collision and extend the rig to full-body falls and recovery.
 
 Euphoria combines physical simulation with motor control, balance, stepping,
 bracing, and recovery. A ragdoll solver alone does not supply those behaviours.
@@ -53,10 +66,10 @@ not provide an autonomous balance or recovery controller.
 
 ## Integration Requirements
 
-- [ ] Use a fixed physics step in game time and interpolate display poses.
+- [x] Use a fixed physics step in game time and interpolate display poses for reactions.
 - [ ] Keep collision and damage queries consistent with the visible pose.
 - [ ] Define transitions between navigation, animation, physics, and cinematics.
-- [ ] Preserve previous project-save loading. Version any new simulation state.
+- [x] Preserve previous project-save loading. The reaction rig has no serialized state.
 - [ ] Test Force powers, dismemberment, doors, slopes, stairs, and ledges.
 - [ ] Restrict the first implementation to the selected humanoid. Other species,
   droids, vehicles, and large creatures need separate rig validation.

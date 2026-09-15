@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "../client/vmachine.h"
 #include "g_local.h"
+#include "g_jolt.h"
 
 #include "../qcommon/sstring.h"
 #include "qcommon/ojk_saved_game_helper.h"
@@ -2122,6 +2123,7 @@ Called after every level change or subsystem restart
 */
 void CG_Init( int serverCommandSequence ) {
 	CG_ResetAutomapLifts();
+	G_JoltReset();
 	cgs.serverCommandSequence = serverCommandSequence;
 
 	cgi_Cvar_Set( "cg_drawHUD", "1" );

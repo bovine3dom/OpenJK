@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "common_headers.h"
+#include "g_jolt.h"
 
 // define GAME_INCLUDE so that g_public.h does not define the
 // short, server-visible gclient_t and gentity_t structures,
@@ -372,7 +373,10 @@ void BG_G2SetBoneAngles( centity_t *cent, gentity_t *gent, int boneIndex, const 
 {
 	if (boneIndex!=-1)
 	{
-		gi.G2API_SetBoneAnglesIndex( &cent->gent->ghoul2[0], boneIndex, angles, flags, up, right, forward, modelList, 0, 0 );
+		vec3_t adjusted;
+		VectorCopy(angles, adjusted);
+		G_JoltBoneAngles(gent, boneIndex, cg.time, adjusted);
+		gi.G2API_SetBoneAnglesIndex( &cent->gent->ghoul2[0], boneIndex, adjusted, flags, up, right, forward, modelList, 0, 0 );
 	}
 }
 

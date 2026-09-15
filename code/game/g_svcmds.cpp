@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "Q3_Interface.h"
 
 #include "g_local.h"
+#include "g_jolt.h"
 #include "wp_saber.h"
 #include "g_functions.h"
 #include "objectives.h"
@@ -1066,6 +1067,12 @@ static svcmd_t svcmds[] = {
 	{ "surface_status", Svcmd_SurfaceStatus_f, CMD_NONE },
 	{ "galak_test", Svcmd_GalakTest_f, CMD_CHEAT },
 	{ "mover_status", Svcmd_MoverStatus_f, CMD_NONE },
+#ifdef USE_JOLT_REACTIONS
+	{ "jolt_select", G_JoltSelect_f, CMD_CHEAT | CMD_ALIVE },
+	{ "jolt_status", G_JoltStatus_f, CMD_NONE },
+	{ "jolt_hit", G_JoltHit_f, CMD_CHEAT | CMD_ALIVE },
+	{ "jolt_knockdown", G_JoltKnockdown_f, CMD_CHEAT | CMD_ALIVE },
+#endif
 	{ "entitylist",					Svcmd_EntityList_f,							CMD_NONE },
 	{ "game_memory",				Svcmd_GameMem_f,							CMD_NONE },
 

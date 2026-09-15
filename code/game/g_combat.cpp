@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // g_combat.c
 
 #include "g_local.h"
+#include "g_jolt.h"
 #include "b_local.h"
 #include "g_functions.h"
 #include "anims.h"
@@ -6506,6 +6507,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 
 	if ( take || (dflags&DAMAGE_NO_DAMAGE) )
 	{
+		const int healthBeforeDamage = targ->health;
 		if ( !targ->client || !attacker->client )
 		{
 			targ->health = targ->health - take;
@@ -6755,6 +6757,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 		}
 		else
 		{
+			G_JoltHit(targ, dir, point, healthBeforeDamage - targ->health, mod, hitLoc);
 			GEntity_PainFunc( targ, inflictor, attacker, point, take, mod, hitLoc );
 			if ( targ->s.number == 0 )
 			{//player run painscript
