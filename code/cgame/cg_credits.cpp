@@ -503,6 +503,7 @@ qboolean CG_Credits_Running( void )
 //
 qboolean CG_Credits_Draw( void )
 {
+	CG_GameTextScope legacyText(false);
 	if ( CG_Credits_Running() )
 	{
 		const int iFontHeight = (int) (1.5f * (float) cgi_R_Font_HeightPixels(ghFontHandle, gfFontScale));	// taiwanese & japanese need 1.5 fontheight spacing
@@ -662,4 +663,3 @@ qboolean CG_Credits_Draw( void )
 
 
 ////////////////////// eof /////////////////////
-

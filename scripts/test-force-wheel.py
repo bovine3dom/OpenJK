@@ -19,12 +19,13 @@ def main():
     parser.add_argument("package", type=Path)
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--weapons", action="store_true", help="Test weapon scrolling and wheel ownership")
+    parser.add_argument("--typography", action="store_true", help="Test gameplay text and menu isolation")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 1280x720x24",
                                 sys.executable, __file__, str(args.package), "--renderer", args.renderer, "--inside"] +
-                               (["--weapons"] if args.weapons else []))
+                               (["--weapons"] if args.weapons else []) + (["--typography"] if args.typography else []))
 
     output = ROOT / "build/force-wheel-tests"
     output.mkdir(parents=True, exist_ok=True)
@@ -121,6 +122,33 @@ def main():
             assert re.search(r'\bMOUSE3\s*=\s*"saberAttackCycle"', bindings, re.I), bindings
             initial = status()
             assert initial["mask"] == 4095 and initial["open"] == 0, initial
+
+            if args.typography:
+                text = cmd('set developer 1; wait 10; clear; testuitext "^3New objective:^7 Reach the landing platform."')
+                values = re.findall(r"uitext gameplay_width=(\d+) legacy_width=(\d+) scope=(\d+)", text)[-1]
+                assert values[0] != values[1] and values[2] == "0", values
+                assert "captions=1" in text, text
+                capture("gameplay_text")
+                cmd("set cg_rmluiHud 0; wait 4; clear; testuitext")
+                capture("gameplay_numbers")
+                cmd('testuitext "' + 'A' * 160 + '"')
+                capture("gameplay_long_text")
+                cmd("uimenu ingameControlsMenu")
+                text = cmd("testuitext")
+                values = re.findall(r"uitext gameplay_width=(\d+) legacy_width=(\d+) scope=(\d+)", text)[-1]
+                assert values[0] == values[1] and values[2] == "0", values
+                capture("typography_menu")
+                for _ in range(3):
+                    xdo("key", "Escape")
+                    if status()["catcher"] == 0:
+                        break
+                cmd("set cg_rmluiHud 1; vid_restart; wait 30")
+                focus_game()
+                cmd("clear; testuitext")
+                capture("gameplay_text_restart")
+                finish()
+                print(f"PASS: {args.renderer} gameplay typography, metrics, long strings, menu isolation, and restart. {run}")
+                return 0
 
             if args.weapons:
                 cmd("give weapons; give ammo -1; wait 10; weapon 3; wait 80")

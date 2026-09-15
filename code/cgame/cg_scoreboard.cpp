@@ -369,6 +369,7 @@ return value is bool to NOT draw centerstring
 */
 qboolean CG_DrawScoreboard( void )
 {
+	CG_GameTextScope legacyText(false);
 	// don't draw anything if the menu is up
 	if ( cg_paused.integer )
 	{
@@ -391,4 +392,3 @@ void ScoreBoardReset(void)
 }
 
 //================================================================================
-

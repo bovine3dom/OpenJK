@@ -203,6 +203,13 @@ Coordinates are at 640 by 480 virtual resolution
 */
 void CG_DrawStringExt( int x, int y, const char *string, const float *setColor,
 		qboolean forceColor, qboolean shadow, int charWidth, int charHeight ) {
+	if (cg_gameplayText) {
+		UiText::Style style;
+		style.x = x; style.y = y; style.size = charHeight;
+		style.forceColor = forceColor != qfalse;
+		memcpy(style.color, setColor, sizeof(style.color));
+		if (cgi_R_PlexText(string, style, nullptr, qtrue)) return;
+	}
 	vec4_t		color;
 	const char	*s;
 	int			xx;
@@ -424,6 +431,21 @@ void CG_DrawNumField (int x, int y, int width, int value,int charWidth,int charH
 	case NUM_FONT_BIG:
 		xWidth = (charWidth/2) + 7;//(charWidth/6);
 		break;
+	}
+
+	if (cg_gameplayText) {
+		std::string digits(num, l);
+		if (zeroFill) digits.insert(0, width - l, '0');
+		UiText::Style textStyle;
+		textStyle.size = charHeight;
+		textStyle.y = y;
+		textStyle.forceColor = true;
+		memcpy(textStyle.color, cgi_R_CurrentColor(), sizeof(textStyle.color));
+		UiText::Metrics metrics;
+		if (cgi_R_PlexText(digits.c_str(), textStyle, &metrics, qfalse)) {
+			textStyle.x = x + 2 + xWidth * width - metrics.width;
+			if (cgi_R_PlexText(digits.c_str(), textStyle, nullptr, qtrue)) return;
+		}
 	}
 
 	if ( zeroFill )

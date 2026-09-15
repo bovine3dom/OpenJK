@@ -43,6 +43,9 @@ default when free. Middle mouse can be assigned in the menu. See
 - [x] Render the wheel label with bundled IBM Plex Mono through FreeType at native pixel size.
 - [x] Highlight the current Force power in the dead zone and use the radial display for Q/E cycling without slow time.
 - [x] Use a separate radial weapon display for scroll cycling without slow time.
+- [x] Refine wheel typography with a stronger font weight, a thin outline, and consistent spacing.
+- [x] Start the gameplay text migration: objectives, captions, notifications, HUD labels, and numbers use Plex. Keep menus on their existing path.
+- [ ] Review gameplay text sizes and line breaks during human play, including localized content.
 
 RmlUi is the leading candidate. Prove its integration before replacing many screens.
 Keep existing screens available during migration.

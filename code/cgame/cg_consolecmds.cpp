@@ -212,6 +212,25 @@ typedef struct {
 	void		(*func)(void);
 } consoleCommand_t;
 
+static void CG_TestUiText_f() {
+	if (!cg.snap || !cg_developer.integer) return;
+	const char* message = CG_Argv(1);
+	if (!message[0]) message = "New objective: Reach the landing platform.";
+	CG_CenterPrint(message, 180);
+	extern qboolean missionInfo_Updated;
+	missionInfo_Updated = qtrue;
+	CG_CaptionText("/#SP_INGAME_NEW_OBJECTIVE_INFO", 0);
+	cg.captionLetterTime = 100;
+	cg.captionNextTextTime = cg.time + 5000;
+	const int legacy = cgi_R_Font_StrLenPixels("iii WWW", cgs.media.qhFontMedium, 1);
+	int gameplay;
+	{
+		CG_GameTextScope textScope;
+		gameplay = cgi_R_Font_StrLenPixels("iii WWW", cgs.media.qhFontMedium, 1);
+	}
+	Com_Printf("uitext gameplay_width=%d legacy_width=%d scope=%d captions=%d\n", gameplay, legacy, cg_gameplayText, cg.captionTextTime != 0);
+}
+
 int cmdcmp( const void *a, const void *b ) {
 	return Q_stricmp( (const char *)a, ((consoleCommand_t*)b)->cmd );
 }
@@ -246,6 +265,7 @@ static consoleCommand_t	commands[] = {
 	{ "testlistsurfaces",	CG_ListModelSurfaces_f},
 	{ "testmodel",			CG_TestModel_f },
 	{ "testsurface",		CG_TestModelSurfaceOnOff_f },
+	{ "testuitext",          CG_TestUiText_f },
 	{ "viewpos",			CG_Viewpos_f },
 	{ "weapnext",			CG_NextWeapon_f },
 	{ "weapon",				CG_Weapon_f },

@@ -1,0 +1,62 @@
+# Gameplay Typography
+
+## Design Basis
+
+These sources guided the first typography pass:
+
+- [Xbox Accessibility Guideline 101: Text display](https://learn.microsoft.com/en-us/xbox/accessibility/xbox-accessibility-guidelines/101).
+  It treats size, weight, spacing, case, and contrast as separate properties.
+  Its Immortals Fenyx Rising example uses dark outlines to keep text visible
+  against the game world. It recommends sentence case for longer text.
+- [Game Accessibility Guidelines: Contrast](https://gameaccessibilityguidelines.com/provide-high-contrast-between-text-ui-and-background/).
+  It recommends a plain background, or outlines and shadows when text must
+  appear over an image.
+- [Indieklem: Typography in game interfaces](https://indieklem.com/13-the-basics-of-typography-in-game-interface/).
+  It uses Destiny 2 to explain hierarchy, and Frostpunk and Red Dead Redemption 2
+  to explain contrast. It also stresses consistent sizes and controlled line lengths.
+
+These sources support the design choices. They do not establish that this
+implementation meets every accessibility guideline.
+
+## Wheel Labels
+
+The font family remains IBM Plex Mono. The labels use SemiBold rather than
+Regular, a thin dark outline, slight letter spacing, and a wider text area.
+Long weapon names can use two readable lines. The original name and casing
+remain intact. Blanket uppercase conversion would make long labels harder to
+read and would not solve the contrast problem.
+
+The outline is restrained. It separates the letters from bright scenery
+without adding a large panel or a heavy decorative border. Glyphs are rendered
+at native pixel size. Both font weights and their license ship with the game.
+
+## Gameplay Text
+
+The gameplay pass uses Plex Mono Regular with a thin dark edge. Objective and
+pickup notifications use SemiBold for emphasis. Its drawing
+and measurement share the same metrics. This covers center messages, objective
+and pickup notifications, subtitles, scrolling text, HUD labels, and numeric
+HUD fields. Transparent console notifications also use Plex and wrap to the
+screen width. Color codes and alpha fades remain available.
+
+The font route is scoped to gameplay. Menu text, datapad pages, mission-analysis
+screens, credits, and the open console retain their existing fonts. Loading
+screens also retain their existing path. Asian-language text keeps the legacy
+font fallback because this bundled font does not supply those character sets.
+Lettering painted into world textures is artwork, not a runtime text draw.
+
+Large text meshes are split into complete triangle batches within renderer
+limits. Font textures and effects are released before renderer shutdown.
+
+## Checks
+
+```sh
+c++ -std=c++11 -I shared tests/ui_text.cpp -o build/ui-text-test
+build/ui-text-test
+python3 scripts/test-force-wheel.py build/ready --renderer rdsp-vanilla --typography
+python3 scripts/test-force-wheel.py build/ready --renderer rdsp-rend2 --typography
+```
+
+The headless checks exercise gameplay text, measurement, numeric fields, long
+strings, menu isolation, and renderer restart. `testuitext` supplies a temporary
+sample when `developer 1` is enabled. It does not change mission objectives.

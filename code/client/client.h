@@ -52,6 +52,7 @@ void CL_ForceWheelUpdate(ForceWheel::Frame* frame);
 int CL_ForceWheelDraw(const char* label);
 void CL_ClearWheelActions();
 bool CL_RmlUiAvailable();
+bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, bool draw);
 void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label, float opacity);
 void CL_RmlUiInit();
 void CL_RmlUiShutdown();

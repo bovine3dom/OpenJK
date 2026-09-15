@@ -28,6 +28,17 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/reticle_hud.h"
 #include "qcommon/force_wheel.h"
 #include "qcommon/weapon_wheel.h"
+#include "qcommon/ui_text.h"
+
+extern bool cg_gameplayText;
+class CG_GameTextScope {
+	bool previous;
+public:
+	explicit CG_GameTextScope(bool enabled = true) : previous(cg_gameplayText) { cg_gameplayText = enabled; }
+	~CG_GameTextScope() { cg_gameplayText = previous; }
+};
+qboolean cgi_R_PlexText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, qboolean draw);
+const float* cgi_R_CurrentColor();
 
 // define GAME_INCLUDE so that g_public.h does not define the
 // short, server-visible gclient_t and gentity_t structures,

@@ -45,6 +45,10 @@ function(openjk_add_rmlui_dependencies)
 	if(NOT plex_hash STREQUAL "fe11304a5fe956d5744e9b6a246cc83d90425245e75a62230044966ca96a7f50")
 		message(FATAL_ERROR "IBM Plex Mono does not match its pinned source hash")
 	endif()
+	file(SHA256 "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-SemiBold.ttf" plex_semibold_hash)
+	if(NOT plex_semibold_hash STREQUAL "c9417148ce13f8fa7d2d5c9180bbc141f72aa0d814ffeb280f6904dc2b1bbd7a")
+		message(FATAL_ERROR "IBM Plex Mono SemiBold does not match its pinned source hash")
+	endif()
 	set(font_install_dir "${JKAInstallDir}/OpenJK/ui/fonts")
 	if(APPLE AND MakeApplicationBundles)
 		set(font_install_dir "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK/ui/fonts")
@@ -56,6 +60,7 @@ function(openjk_add_rmlui_dependencies)
 		"${CMAKE_SOURCE_DIR}/docs/rmlui-reticle.md"
 		"${CMAKE_SOURCE_DIR}/docs/force-wheel.md"
 		"${CMAKE_SOURCE_DIR}/docs/weapon-wheel.md"
+		"${CMAKE_SOURCE_DIR}/docs/ui-typography.md"
 		DESTINATION "${JKAInstallDir}" COMPONENT ${JKASPClientComponent})
 	install(FILES "${rmlui_SOURCE_DIR}/LICENSE.txt"
 		DESTINATION "${JKAInstallDir}/licenses/rmlui" COMPONENT ${JKASPClientComponent})

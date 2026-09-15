@@ -4,9 +4,13 @@
 #include <RmlUi/Core/ElementText.h>
 #include <RmlUi/Core/Geometry.h>
 #include <RmlUi/Core/RenderManager.h>
+#include <RmlUi/Core/FontEngineInterface.h>
+#include <RmlUi/Core/FontEffectInstancer.h>
+#include <RmlUi/Core/FontEffect.h>
 #include "client.h"
 #include <algorithm>
 #include <cmath>
+#include <map>
 
 namespace {
 
@@ -40,11 +44,6 @@ class ReticleRenderer final : public Rml::RenderInterface {
 public:
 	Rml::CompiledGeometryHandle CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
 		Rml::Span<const int> indices) override {
-		// Larger documents must split meshes at the renderer's command limits.
-		if (vertices.size() > REF_UI_MAX_VERTICES || indices.size() > REF_UI_MAX_INDICES) {
-			Com_Printf("RmlUi: reticle geometry exceeds renderer limits\n");
-			return 0;
-		}
 		return reinterpret_cast<Rml::CompiledGeometryHandle>(new Geometry{vertices, indices});
 	}
 	void ReleaseGeometry(Rml::CompiledGeometryHandle handle) override {
@@ -54,17 +53,28 @@ public:
 		Rml::TextureHandle texture) override {
 		const auto& geometry = *reinterpret_cast<Geometry*>(handle);
 		polyVert_t vertices[REF_UI_MAX_VERTICES] = {};
-		for (size_t i = 0; i < geometry.vertices.size(); ++i) {
-			const auto& source = geometry.vertices[i];
-			auto& vertex = vertices[i];
+		auto convert = [&](polyVert_t& vertex, const Rml::Vertex& source) {
 			vertex.xyz[0] = (source.position.x + translation.x) * 640.0f / cls.glconfig.vidWidth;
 			vertex.xyz[1] = (source.position.y + translation.y) * 480.0f / cls.glconfig.vidHeight;
 			vertex.st[0] = source.tex_coord.x;
 			vertex.st[1] = source.tex_coord.y;
 			for (int c = 0; c < 4; ++c) vertex.modulate[c] = source.colour[c];
+		};
+		if (geometry.vertices.size() <= REF_UI_MAX_VERTICES && geometry.indices.size() <= REF_UI_MAX_INDICES) {
+			for (size_t i = 0; i < geometry.vertices.size(); ++i) convert(vertices[i], geometry.vertices[i]);
+			re.DrawUiGeometry(static_cast<int>(geometry.vertices.size()), vertices,
+				static_cast<int>(geometry.indices.size()), geometry.indices.data(), scissor ? clip : nullptr, qhandle_t(texture));
+			return;
 		}
-		re.DrawUiGeometry(static_cast<int>(geometry.vertices.size()), vertices,
-			static_cast<int>(geometry.indices.size()), geometry.indices.data(), scissor ? clip : nullptr, qhandle_t(texture));
+		// Long text can exceed one command. Expand complete triangles in bounded batches.
+		constexpr int batchSize = (REF_UI_MAX_VERTICES / 3) * 3;
+		int indices[batchSize];
+		for (int i = 0; i < batchSize; ++i) indices[i] = i;
+		for (size_t first = 0; first < geometry.indices.size(); first += batchSize) {
+			const int count = int(std::min(size_t(batchSize), geometry.indices.size() - first));
+			for (int i = 0; i < count; ++i) convert(vertices[i], geometry.vertices[geometry.indices[first + i]]);
+			re.DrawUiGeometry(count, vertices, count, indices, scissor ? clip : nullptr, qhandle_t(texture));
+		}
 	}
 	void EnableScissorRegion(bool enable) override { scissor = enable; }
 	void SetScissorRegion(Rml::Rectanglei region) override {
@@ -186,8 +196,11 @@ SelectionWheelElement* wheelElement = nullptr;
 Rml::Element* wheelLabel = nullptr;
 Rml::ElementText* wheelLabelText = nullptr;
 void* fontData = nullptr;
+void* labelFontData = nullptr;
+int wheelOutlineWidth = -1;
 bool fontReady = false;
 bool initialized = false;
+std::map<int, Rml::FontEffectList> textOutlines;
 cvar_t* enabled = nullptr;
 cvar_t* scale = nullptr;
 cvar_t* hudEnabled = nullptr;
@@ -196,9 +209,13 @@ cvar_t* hudEnabled = nullptr;
 
 void CL_RmlUiShutdown() {
 	CL_SelectionWheelsCancel();
+	textOutlines.clear();
 	if (initialized) Rml::Shutdown();
 	if (fontData) FS_FreeFile(fontData);
+	if (labelFontData) FS_FreeFile(labelFontData);
 	fontData = nullptr;
+	labelFontData = nullptr;
+	wheelOutlineWidth = -1;
 	fontReady = false;
 	context = nullptr;
 	document = nullptr;
@@ -225,6 +242,9 @@ void CL_RmlUiInit() {
 		const int fontSize = FS_ReadFile("ui/fonts/plex/IBMPlexMono-Regular.ttf", &fontData);
 		fontReady = fontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(fontData), size_t(fontSize)},
 			"IBM Plex Mono", Rml::Style::FontStyle::Normal, Rml::Style::FontWeight::Normal);
+		const int labelFontSize = FS_ReadFile("ui/fonts/plex/IBMPlexMono-SemiBold.ttf", &labelFontData);
+		fontReady = fontReady && labelFontSize > 0 && Rml::LoadFontFace({static_cast<const Rml::byte*>(labelFontData), size_t(labelFontSize)},
+			"IBM Plex Mono", Rml::Style::FontStyle::Normal, static_cast<Rml::Style::FontWeight>(600));
 		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; selection wheels unavailable\n");
 		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
 		Rml::Factory::RegisterElementInstancer("selection-wheel", &wheelInstancer);
@@ -235,7 +255,8 @@ void CL_RmlUiInit() {
 <rml><head><style>
 body { margin: 0; width: 100%; height: 100%; }
 selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-#selection-name { position: absolute; font-family: IBM Plex Mono; color: #e5ecf2; text-align: center; line-height: 120%; }
+#selection-name { position: absolute; font-family: IBM Plex Mono; font-weight: 600;
+ color: #edf0ef; text-align: center; line-height: 130%; }
 </style></head><body><selection-wheel id="wheel"/><div id="selection-name">Force</div></body></rml>)");
 	}
 	if (document) {
@@ -291,18 +312,87 @@ void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label
 	wheelContext->SetDimensions({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 	const float pixelScale = cls.glconfig.vidHeight / 480.0f;
 	wheelElement->SetView(view, pixelScale, opacity);
-	const float labelWidth = std::round(120 * pixelScale);
+	const float labelWidth = std::round(144 * pixelScale);
 	wheelLabel->SetProperty(Rml::PropertyId::Width, Rml::Property(labelWidth, Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Left, Rml::Property(std::round((cls.glconfig.vidWidth - labelWidth) / 2), Rml::Unit::PX));
 	wheelLabel->SetProperty(Rml::PropertyId::Top, Rml::Property(std::round(cls.glconfig.vidHeight / 2.0f + 18 * pixelScale), Rml::Unit::PX));
 	const float fontSize = view.kind == RadialWheel::Kind::Weapon ? 12 : 14;
 	wheelLabel->SetProperty(Rml::PropertyId::FontSize, Rml::Property(std::round(fontSize * pixelScale), Rml::Unit::PX));
+	wheelLabel->SetProperty(Rml::PropertyId::LetterSpacing, Rml::Property(std::round(0.5f * pixelScale), Rml::Unit::PX));
+	const int outlineWidth = std::max(1, int(std::round(0.55f * pixelScale)));
+	if (outlineWidth != wheelOutlineWidth) {
+		wheelLabel->SetProperty("font-effect", va("outline(%dpx rgba(0, 0, 0, 75%%))", outlineWidth));
+		wheelOutlineWidth = outlineWidth;
+	}
 	wheelLabel->SetProperty(Rml::PropertyId::Opacity, Rml::Property(opacity, Rml::Unit::NUMBER));
 	// Stock Western StringEd labels use single-byte characters, not UTF-8.
 	Rml::String text;
 	for (const unsigned char* p = reinterpret_cast<const unsigned char*>(label); p && *p; ++p)
-		text += Rml::StringUtilities::ToUTF8(Rml::Character(*p));
+		text += Rml::StringUtilities::ToUTF8(Rml::Character(UiText::Codepoint(*p)));
 	wheelLabelText->SetText(text);
 	wheelContext->Update();
 	wheelContext->Render();
+}
+
+bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, bool draw) {
+	if (!fontReady || !context || re.Language_IsAsian() || (Key_GetCatcher() & KEYCATCH_UI) || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0 ||
+		!std::isfinite(style.size) || style.size <= 0) return false;
+	const float sx = style.pixels ? 1 : cls.glconfig.vidWidth / 640.0f;
+	const float sy = style.pixels ? 1 : cls.glconfig.vidHeight / 480.0f;
+	const int size = std::max(1, int(std::round(style.size * sy)));
+	auto* fonts = Rml::GetFontEngineInterface();
+	const auto weight = style.semibold ? static_cast<Rml::Style::FontWeight>(600) : Rml::Style::FontWeight::Normal;
+	const auto face = fonts->GetFontFaceHandle("ibm plex mono", Rml::Style::FontStyle::Normal, weight, size);
+	if (!face) return false;
+	const Rml::String language;
+	const Rml::TextShapingContext shaping{language};
+	const auto& fontMetrics = fonts->GetFontMetrics(face);
+	const float lineHeight = std::ceil(fontMetrics.line_spacing);
+	const float advance = float(fonts->GetStringWidth(face, "M", shaping));
+	const auto layout = UiText::Arrange(text, advance, lineHeight, style.maxWidth < 0 ? -1 : style.maxWidth * sx, style.wrap, style.forceColor);
+	if (metrics) {
+		metrics->width = layout.metrics.width / sx;
+		metrics->height = std::max(lineHeight, layout.metrics.height) / sy;
+	}
+	if (!draw || style.color[3] <= 0 || (style.blink && ((Sys_Milliseconds() >> 7) & 1))) return true;
+	std::vector<Rml::String> strings;
+	for (const auto& run : layout.runs) {
+		Rml::String utf8;
+		for (unsigned char c : run.text) utf8 += Rml::StringUtilities::ToUTF8(Rml::Character(UiText::Codepoint(c)));
+		// Populate all glyphs before generating geometry, so an atlas cannot change mid-string.
+		fonts->GetStringWidth(face, utf8, shaping);
+		strings.push_back(std::move(utf8));
+	}
+	Rml::FontEffectsHandle effects = 0;
+	if (style.outline) {
+		const int width = std::max(1, int(std::round(cls.glconfig.vidHeight / 480.0f * 0.55f)));
+		auto& list = textOutlines[width];
+		if (list.empty()) {
+			auto* instancer = Rml::Factory::GetFontEffectInstancer("outline");
+			Rml::PropertyDictionary properties;
+			instancer->GetPropertySpecification().ParsePropertyDeclaration(properties, "width", va("%dpx", width));
+			instancer->GetPropertySpecification().ParsePropertyDeclaration(properties, "color", "rgba(0, 0, 0, 75%)");
+			list.push_back(instancer->InstanceFontEffect("outline", properties));
+		}
+		effects = fonts->PrepareFontEffects(face, list);
+	}
+	auto& manager = context->GetRenderManager();
+	manager.PrepareRender({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+	for (size_t i = 0; i < layout.runs.size(); ++i) {
+		const auto& run = layout.runs[i];
+		const float* rgb = run.color < 0 ? style.color : g_color_table[run.color];
+		Rml::Colourb color;
+		for (int c = 0; c < 3; ++c) color[c] = byte(std::max(0.0f, std::min(1.0f, rgb[c])) * 255);
+		color.alpha = byte(std::max(0.0f, std::min(1.0f, style.color[3])) * 255);
+		Rml::TexturedMeshList meshes;
+		fonts->GenerateString(manager, face, effects, strings[i],
+			{std::round(style.x * sx + run.x), std::round(style.y * sy + run.y + fontMetrics.ascent)},
+			color.ToPremultiplied(), color.alpha / 255.0f, shaping, meshes);
+		for (auto& mesh : meshes) {
+			auto geometry = manager.MakeGeometry(std::move(mesh.mesh));
+			geometry.Render({}, mesh.texture);
+		}
+	}
+	manager.ResetState();
+	return true;
 }

@@ -632,11 +632,41 @@ void Con_DrawNotify (void)
 		if (time > con_notifytime->value*1000)
 			continue;
 		text = con.text + (i % con.totallines)*con.rowwidth;
+		lineLimit = con.linewidth;
 		if (con_timestamps->integer == 0 || con_timestamps->integer == 2) {
 			// don't show timestamps in the notify lines
 			text += CON_TIMESTAMP_LEN;
 			lineLimit -= CON_TIMESTAMP_LEN;
 		}
+
+#ifdef USE_RMLUI
+		if (cls.state == CA_ACTIVE && !re.Language_IsAsian()) {
+			int last = lineLimit;
+			while (last > 0 && text[last - 1].f.character == ' ') --last;
+			if (last > 0 && text[last - 1].compare == CON_WRAP.compare) --last;
+			std::string message;
+			int color = -1;
+			for (int j = 0; j < last; ++j) {
+				if (text[j].f.color != color) {
+					color = text[j].f.color;
+					message += va("^%d", color);
+				}
+				message += text[j].f.character;
+			}
+			UiText::Style style;
+			style.pixels = true;
+			style.wrap = true;
+			style.size = std::max(12.0f, cls.glconfig.vidHeight / 480.0f * 12);
+			style.x = cls.glconfig.vidWidth / 640.0f * 8;
+			style.y = v + cls.glconfig.vidHeight / 480.0f * 4;
+			style.maxWidth = cls.glconfig.vidWidth - style.x * 2;
+			UiText::Metrics metrics;
+			if (CL_RmlUiText(message.c_str(), style, &metrics, true)) {
+				v += (int)ceilf(metrics.height);
+				continue;
+			}
+		}
+#endif
 
 		// asian language needs to use the new font system to print glyphs...
 		//

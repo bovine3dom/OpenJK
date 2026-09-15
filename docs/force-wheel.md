@@ -51,10 +51,12 @@ selection changes caused by small mouse movements at a boundary.
 
 RmlUi draws the circular sectors, cursor, and power name. The wheel keeps the
 game's Force icons and localized names. The circle and icons use aspect-correct
-dimensions. The label uses bundled IBM Plex Mono Regular, rendered by FreeType
+dimensions. The label uses bundled IBM Plex Mono SemiBold, rendered by FreeType
 at the framebuffer's pixel size. It is not a scaled bitmap font. Font atlases
 do not use game texture detail, gamma adjustment, compression, or mipmaps.
 See `ui/fonts/plex/README.md` for the pinned source and license.
+The label has a thin dark outline, slight letter spacing, and controlled line
+length. See [Gameplay Typography](ui-typography.md) for the design references.
 
 The mouse controls the wheel instead of the camera. Movement remains active:
 you can walk, strafe, jump, crouch, and change between walking and running.

@@ -2414,6 +2414,7 @@ CG_DrawPickupItem
 */
 void CG_DrawCredits(void)
 {
+	CG_GameTextScope legacyText(false);
 	if (!cg.creditsStart)
 	{
 		//
@@ -3959,6 +3960,7 @@ CG_Draw2D
 extern void CG_SaberClashFlare( void );
 static void CG_Draw2D( void )
 {
+	CG_GameTextScope gameplayText;
 	reticleHudDrawn = false;
 	char	text[1024]={0};
 	int		w,y_pos;
@@ -4139,9 +4141,10 @@ static void CG_Draw2D( void )
 
 			int x_pos = 0;
 			y_pos = 20;
-			w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 1.0f);
+			const int font = cgs.media.qhFontMedium | UiText::LabelFontFlag;
+			w = cgi_R_Font_StrLenPixels(text,font, 1.0f);
 			x_pos = (SCREEN_WIDTH/2)-(w/2);
-			cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], cgs.media.qhFontMedium, -1, 1.0f);
+			cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], font, -1, 1.0f);
 		}
 	}
 
@@ -4151,10 +4154,11 @@ static void CG_Draw2D( void )
 		y_pos = 5;
 		gi.Cvar_VariableStringBuffer( "cg_WeaponPickupText", text, sizeof(text) );
 
-		w = cgi_R_Font_StrLenPixels(text,cgs.media.qhFontMedium, 0.8f);
+		const int font = cgs.media.qhFontMedium | UiText::LabelFontFlag;
+		w = cgi_R_Font_StrLenPixels(text,font, 0.8f);
 		x_pos = (SCREEN_WIDTH/2)-(w/2);
 
-		cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_WHITE], cgs.media.qhFontMedium, -1, 0.8f);
+		cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_WHITE], font, -1, 0.8f);
 	}
 }
 

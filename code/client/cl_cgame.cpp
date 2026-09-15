@@ -1074,6 +1074,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #else
 		return 0;
 #endif
+	case CG_R_PLEXTEXT:
+#ifdef USE_RMLUI
+		return CL_RmlUiText((const char*)VMA(1), *(const UiText::Style*)VMA(2), (UiText::Metrics*)VMA(3), args[4] != 0);
+#else
+		return qfalse;
+#endif
 	case CG_R_MODELBOUNDS:
 		re.ModelBounds( args[1], (float *) VMA(2), (float *) VMA(3) );
 		return 0;

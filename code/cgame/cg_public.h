@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/reticle_hud.h"
 #include "qcommon/force_wheel.h"
 #include "qcommon/weapon_wheel.h"
+#include "qcommon/ui_text.h"
 
 #define NUM_EXPLOSION_SHADERS	8
 #define NUM_EXPLOSION_FRAMES	3
@@ -234,6 +235,7 @@ Ghoul2 Insert End
 	CG_WEAPONWHEEL_UPDATE,
 	CG_WEAPONWHEEL_PREVIEW,
 	CG_R_DRAWWEAPONWHEEL,
+	CG_R_PLEXTEXT,
 } cgameImport_t;
 
 #ifdef JK2_MODE

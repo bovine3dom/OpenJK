@@ -263,8 +263,26 @@ qhandle_t cgi_R_RegisterFont( const char *name ) {
 	return Q_syscall( CG_R_REGISTERFONT, name );
 }
 
+bool cg_gameplayText = false;
+static vec4_t textColor = {1, 1, 1, 1};
+
+qboolean cgi_R_PlexText(const char* text, const UiText::Style& style, UiText::Metrics* metrics, qboolean draw) {
+	return (qboolean)Q_syscall(CG_R_PLEXTEXT, text, &style, metrics, draw);
+}
+
+static UiText::Style FontStyle(int font, float scale) {
+	UiText::Style style;
+	style.size = Q_syscall(CG_R_FONTHEIGHTPIXELS, font & ~UiText::LabelFontFlag, PASSFLOAT(scale));
+	style.blink = (font & 0x40000000) != 0;
+	style.semibold = (font & UiText::LabelFontFlag) != 0;
+	return style;
+}
+
 int cgi_R_Font_StrLenPixels(const char *text, const int iFontIndex, const float scale /*= 1.0f*/) {
-	return Q_syscall( CG_R_FONTSTRLENPIXELS, text, iFontIndex, PASSFLOAT(scale) ) ;
+	UiText::Metrics metrics;
+	if (cg_gameplayText && cgi_R_PlexText(text, FontStyle(iFontIndex, scale), &metrics, qfalse))
+		return (int)ceilf(metrics.width);
+	return Q_syscall( CG_R_FONTSTRLENPIXELS, text, iFontIndex & ~UiText::LabelFontFlag, PASSFLOAT(scale) ) ;
 }
 
 int cgi_R_Font_StrLenChars(const char *text) {
@@ -272,7 +290,10 @@ int cgi_R_Font_StrLenChars(const char *text) {
 }
 
 int cgi_R_Font_HeightPixels(const int iFontIndex, const float scale /*= 1.0f*/) {
-	return Q_syscall( CG_R_FONTHEIGHTPIXELS, iFontIndex, PASSFLOAT(scale) );
+	UiText::Metrics metrics;
+	if (cg_gameplayText && cgi_R_PlexText("", FontStyle(iFontIndex, scale), &metrics, qfalse))
+		return (int)ceilf(metrics.height);
+	return Q_syscall( CG_R_FONTHEIGHTPIXELS, iFontIndex & ~UiText::LabelFontFlag, PASSFLOAT(scale) );
 }
 
 qboolean cgi_Language_IsAsian( void )
@@ -291,7 +312,13 @@ unsigned int cgi_AnyLanguage_ReadCharFromString( const char *psText, int *piAdva
 }
 
 void cgi_R_Font_DrawString(int ox, int oy, const char *text, const float *rgba, const int setIndex, int iMaxPixelWidth, const float scale /*= 1.0f*/) {
-	Q_syscall (CG_R_FONTDRAWSTRING, ox, oy, text, rgba, setIndex, iMaxPixelWidth, PASSFLOAT(scale) );
+	if (cg_gameplayText) {
+		UiText::Style style = FontStyle(setIndex, scale);
+		style.x = ox; style.y = oy; style.maxWidth = iMaxPixelWidth;
+		if (rgba) memcpy(style.color, rgba, sizeof(style.color));
+		if (cgi_R_PlexText(text, style, nullptr, qtrue)) return;
+	}
+	Q_syscall (CG_R_FONTDRAWSTRING, ox, oy, text, rgba, setIndex & ~UiText::LabelFontFlag, iMaxPixelWidth, PASSFLOAT(scale) );
 }
 
 //set some properties for the draw layer for my refractive effect (here primarily for mod authors) -rww
@@ -331,8 +358,12 @@ void	cgi_R_RenderScene( const refdef_t *fd ) {
 }
 
 void	cgi_R_SetColor( const float *rgba ) {
+	if (rgba) memcpy(textColor, rgba, sizeof(textColor));
+	else for (float& c : textColor) c = 1;
 	Q_syscall( CG_R_SETCOLOR, rgba );
 }
+
+const float* cgi_R_CurrentColor() { return textColor; }
 
 qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color) {
 	return (qboolean)Q_syscall(CG_R_DRAWRETICLE, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(size), color);
