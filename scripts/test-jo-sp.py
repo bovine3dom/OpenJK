@@ -19,12 +19,16 @@ def main():
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
+    parser.add_argument("--sss", action="store_true", help="Also check imported JO skin masks with Rend2")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.sss and args.renderer != "rdsp-rend2":
+        parser.error("--sss requires --renderer rdsp-rend2")
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
                                 __file__, "--inside", "--package", str(args.package), "--renderer", args.renderer]
-                               + (["--ai"] if args.ai else []))
+                               + (["--ai"] if args.ai else [])
+                               + (["--sss"] if args.sss else []))
     output = ROOT / "build/jo-tests"
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=args.renderer + ".", dir=output))
@@ -68,7 +72,7 @@ def main():
             stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(marker, start))
 
-        def capture(name):
+        def capture(name, contrast=True):
             cmd(f"screenshot_png {name}")
             image = profile / "campaigns/jo/OpenJK/screenshots" / f"{name}.png"
             deadline = time.monotonic() + 30
@@ -76,10 +80,13 @@ def main():
                 if time.monotonic() > deadline:
                     raise TimeoutError(f"Incomplete screenshot: {image}")
                 time.sleep(0.05)
+            width, height = (64, 48) if contrast else (640, 480)
             pixels = subprocess.check_output(["ffmpeg", "-v", "error", "-xerror", "-i", str(image),
-                                              "-vf", "scale=64:48", "-frames:v", "1", "-pix_fmt", "gray",
+                                              "-vf", f"scale={width}:{height}", "-frames:v", "1", "-pix_fmt", "gray",
                                               "-f", "rawvideo", "-"])
-            assert len(pixels) == 64 * 48 and max(pixels) - min(pixels) > 16, image
+            assert len(pixels) == width * height, image
+            if contrast:
+                assert max(pixels) - min(pixels) > 16, image
             return pixels
 
         def status(mapname):
@@ -199,6 +206,20 @@ def main():
             text = status("kejim_base")
             assert "objective=KEJIM_BASE_OBJ1 status=0" in text, text
             capture("base")
+            if args.sss:
+                cmd("helpusobi 1; cg_draw2D 0; con_notifytime -1; d_npcfreeze 1; "
+                    "cg_thirdPerson 1; cg_thirdPersonAngle 180; cg_thirdPersonRange 90; "
+                    "r_smaa 0; r_sss 1; r_sssRadius 0.5; r_sssDebug 1; wait 60")
+                for name, model in (("kyle", "kyle"), ("jan", "jan"),
+                                    ("acrobat", "reborn|model_acrobat"), ("fencer", "reborn|model_fencer"),
+                                    ("prisoner", "prisoner"), ("gran", "gran"), ("ugnaught", "ugnaught"),
+                                    ("cinematic_kyle", "jo_cinematic_kyle"), ("cinematic_jan", "jo_cinematic_jan"),
+                                    ("armour", "stormtrooper")):
+                    cmd(f'playerModel "{model}"; wait 60')
+                    pixels = capture("sss_" + name, contrast=False)
+                    count = sum(value > 128 for value in pixels)
+                    assert (count == 0 if name == "armour" else count > 20), (name, count)
+                    print(f"SSS {name}: {count} mask pixels", flush=True)
             stdin.write("quit\n")
             stdin.flush()
             assert process.wait(timeout=30) == 0

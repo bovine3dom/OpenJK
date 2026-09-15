@@ -79,6 +79,12 @@ profile. Do not use original JO saves or copy JA saves into it.
   state, equipment, ammunition, position, and active objectives.
 - Set `g_subtitles 2` to show subtitles for all voiceovers.
 
+Rend2 skin diffusion uses the shared defaults: `r_sss 1` and `r_sssRadius 0.5`.
+The importer preserves JO material paths, including those in the cinematic
+Kyle and Jan skins. These paths use the existing stock skin profiles. The
+JO-only Reborn acrobat and fencer faces also have profiles. Their armour and
+hoods remain outside the skin effect. Use `r_sssDebug 1` to inspect skin coverage.
+
 ## Build and Automated Checks
 
 From the repository root:
@@ -87,7 +93,7 @@ From the repository root:
 bash scripts/build-sp.sh
 python3 scripts/test-import-jo.py
 python3 scripts/test-play-sp.py
-python3 scripts/test-jo-sp.py --package build/ready --renderer rdsp-rend2
+python3 scripts/test-jo-sp.py --package build/ready --renderer rdsp-rend2 --sss
 ```
 
 The build script checks JA with both renderers. If `GameData_JO/base` is present,
@@ -101,6 +107,9 @@ It records logs and screenshots under `build/jo-tests/`. It uses the real openin
 scripts and the shared game module. The transition check calls `maptransition`;
 it does not complete the mission's final puzzle. Audio and hardware rendering
 still need a manual test.
+The optional `--sss` check tests imported skin masks on Kyle, Jan, both cinematic
+clones, the acrobat and fencer Reborn, a prisoner, Gran, and Ugnaught. It also
+checks that stormtrooper armour has no eligible skin pixels.
 
 ## Implementation and Limits
 

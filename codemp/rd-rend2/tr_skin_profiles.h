@@ -58,7 +58,7 @@ static void R_InitSkinProfile(shader_t &shader)
 		{"rax_joris", "|hands|", {0,0,1,1}},
 		{"rebel", "|face_01|basic_hand|", {0,0,1,1}},
 		{"rebel_pilot", "|face|", {0,0,1,1}},
-		{"reborn", "|face|boss_face|forc_face|", {0,0,1,1}},
+		{"reborn", "|face|boss_face|forc_face|acro_face|fenc_face|", {0,0,1,1}},
 		{"reborn_new", "|head_face|", {0.2f,0.3f,0.7f,0.46f}},
 		{"reborn_twin", "|head|head_boss|head_blue|head_red|", {0,0.12f,0.32f,1}},
 		{"rodian", "|head|basic_hand|", {0,0,1,1}},
