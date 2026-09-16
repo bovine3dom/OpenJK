@@ -19,6 +19,9 @@ void G_JoltPush_f();
 void G_JoltDemo_f();
 void G_JoltBlast_f();
 bool G_JoltOwns(const gentity_t* ent);
+bool G_JoltOnGround(const gentity_t* ent);
+void G_JoltMovementTrace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs,
+	const vec3_t end, int passEntityNum, int contentmask, EG2_Collision collision, int lod);
 bool G_JoltBlocksAI(const gentity_t* ent);
 bool G_JoltPhysicsRoot(const gentity_t* ent);
 bool G_JoltSuppressPain(const gentity_t* ent, int mod);
@@ -38,6 +41,7 @@ inline void G_JoltBeginFrame() {}
 inline void G_JoltHit(gentity_t*, const float*, const float*, int, int, int) {}
 inline void G_JoltBoneAngles(gentity_t*, int, int, float*) {}
 inline bool G_JoltOwns(const gentity_t*) { return false; }
+inline bool G_JoltOnGround(const gentity_t*) { return false; }
 inline bool G_JoltBlocksAI(const gentity_t*) { return false; }
 inline bool G_JoltPhysicsRoot(const gentity_t*) { return false; }
 inline bool G_JoltSuppressPain(const gentity_t*, int) { return false; }

@@ -110,6 +110,10 @@ on the floor becomes passive immediately. Death preserves the initial pose and
 velocity. Native disintegration retains its special handling.
 Low health reduces baseline support by at most 15 percent. Recent hits add
 up to 12 percent temporary weakness. This weakness decreases with time.
+Grounded physical NPCs qualify for the saber floor attack. The recovery
+controller obeys the attack's get-up delay. Movement traces ignore grounded
+physical bodies, but weapon traces keep their full hit bounds. Recovery checks
+for an occupied standing hull before it releases physical control.
 Ordinary saber attacks keep their authored movement; saber users can still
 be knocked down by explosions or eligible knockdown requests.
 

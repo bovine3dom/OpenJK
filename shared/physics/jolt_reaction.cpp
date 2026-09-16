@@ -273,6 +273,7 @@ struct FallSimulation::Impl {
 	FootContacts listener{this};
 	bool supported[2] = {};
 	bool trunkContact = false;
+	float trunkGrace = 0;
 	float supportHeight[2] = {};
 	float contactGrace[2] = {};
 	unsigned handContacts = 0;
@@ -383,13 +384,16 @@ struct FallSimulation::Impl {
 	}
 	void Control() {
 		if (balance.phase == ControlPhase::Shadow) return;
+		if (balance.phase != ControlPhase::Dead || std::any_of(body, body+PartCount, [](const JPH::Body* b) { return b->IsActive(); })) {
+			trunkGrace = trunkContact || (handContacts && (supported[0] || supported[1])) ? .12f : std::max(0.0f, trunkGrace-Step);
+			balance.supportedTrunk = trunkGrace > 0;
+		}
 		if (balance.phase == ControlPhase::Dead) { DeathControl(); return; }
 		auto& api = world.GetBodyInterface();
 		targetAge += Step; reactionAge += Step;
 		landedAge += Step;
 		balance.assistForce = balance.assistTorque = 0;
 		balance.handContacts = handContacts;
-		balance.supportedTrunk = trunkContact || (handContacts && (supported[0] || supported[1]));
 		balance.handContactsSeen |= handContacts;
 		const unsigned previousBrace = balance.braceMask;
 		balance.braceMask = 0;

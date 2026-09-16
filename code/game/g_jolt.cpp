@@ -12,6 +12,7 @@
 #include <set>
 
 extern qboolean PM_InKnockDown(playerState_t* ps);
+extern qboolean PM_StabDownAnim(int anim);
 extern qboolean PM_InGetUp(playerState_t* ps);
 extern qboolean PM_PainAnim(int anim);
 extern Vehicle_t* G_IsRidingVehicle(gentity_t* ent);
@@ -352,6 +353,8 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		return;
 	}
 	if (!recoverStart && DistanceSquared(ent->currentOrigin, lastOrigin) > 128 * 128) { Reset(false); return; }
+	if ((recoverStart || prepareStart) && TIMER_Exists(ent, "noGetUpStraight") && !TIMER_Done(ent, "noGetUpStraight"))
+		CancelRecovery(ent);
 	if (recoverStart) {
 		// Carry both ends of the handoff with a moving platform.
 		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) {
@@ -465,6 +468,7 @@ void Actor::ReturnToAnimation(gentity_t* ent) {
 
 bool Actor::Recover(gentity_t* ent) {
 	nextRecoverAttempt = level.time + 250;
+	if (TIMER_Exists(ent, "noGetUpStraight") && !TIMER_Done(ent, "noGetUpStraight")) return false;
 	const int file = ent->client->clientInfo.animFileIndex;
 	if (file < 0 || file >= level.numKnownAnimFileSets) return false;
 	PoseModel sample(ent);
@@ -553,6 +557,9 @@ bool Actor::Recover(gentity_t* ent) {
 }
 
 void Actor::FinishRecovery(gentity_t* ent) {
+	trace_t space;
+	gi.trace(&space, ent->currentOrigin, savedMins, savedMaxs, ent->currentOrigin, actor, MASK_NPCSOLID, (EG2_Collision)0, 0);
+	if (space.startsolid || space.allsolid) { CancelRecovery(ent); return; }
 	if (recoveryAnim < 0) {
 		ClearPhysicalBones(ent);
 		engaged = false; recoverStart = settledSince = 0;
@@ -835,6 +842,14 @@ void Actor::Status() {
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
+	if (actor > 0) {
+		const auto& ent = g_entities[actor];
+		const auto& player = g_entities[0];
+		gi.Printf("jolt combat grounded=%d origin=%.2f,%.2f,%.2f player_origin=%.2f,%.2f,%.2f finisher=%d player_weapon=%d player_enemy=%d\n",
+			G_JoltOnGround(&ent), ent.currentOrigin[0], ent.currentOrigin[1], ent.currentOrigin[2],
+			player.currentOrigin[0], player.currentOrigin[1], player.currentOrigin[2], PM_StabDownAnim(player.client->ps.torsoAnim),
+			player.client->ps.weapon, player.enemy ? player.enemy->s.number : -1);
+	}
 }
 void Actor::HitCommand() {
 	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active humanoid first\n"); return; }
@@ -1155,6 +1170,29 @@ void G_JoltBoneAngles(gentity_t* ent, int bone, int time, float* angles) {
 bool G_JoltOwns(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
 	return (state && state->fall && state->engaged) || SavedCorpse(ent);
+}
+bool G_JoltOnGround(const gentity_t* ent) {
+	const auto* state = ent ? Find(ent->s.number) : nullptr;
+	if (!state || !state->engaged || !state->fall) return false;
+	const auto b = state->fall->Balance();
+	return b.supportedTrunk && (b.phase == JoltReaction::ControlPhase::Falling ||
+		b.phase == JoltReaction::ControlPhase::Preparing || b.phase == JoltReaction::ControlPhase::Dead);
+}
+void G_JoltMovementTrace(trace_t* result, const vec3_t start, const vec3_t mins, const vec3_t maxs,
+	const vec3_t end, int passEntityNum, int contentmask, EG2_Collision collision, int lod) {
+	// Only movement ignores prone hulls. Weapon traces retain the full hit bounds.
+	std::pair<gentity_t*, int> hidden[MaxActors];
+	int count = 0;
+	for (const auto& entry : actors) {
+		auto* ent = &g_entities[entry.first];
+		if ((contentmask & (CONTENTS_PLAYERCLIP | CONTENTS_MONSTERCLIP)) && !(contentmask & CONTENTS_CORPSE) &&
+			ent->inuse && (ent->contents & CONTENTS_BODY) && G_JoltOnGround(ent)) {
+			hidden[count++] = {ent, ent->contents};
+			ent->contents &= ~CONTENTS_BODY;
+		}
+	}
+	gi.trace(result, start, mins, maxs, end, passEntityNum, contentmask, collision, lod);
+	for (int i = 0; i < count; ++i) hidden[i].first->contents = hidden[i].second;
 }
 bool G_JoltBlocksAI(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;

@@ -35,6 +35,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "anims.h"
 #include "Q3_Interface.h"
 #include "g_local.h"
+#include "g_jolt.h"
 #include "wp_saber.h"
 #include "g_vehicles.h"
 
@@ -2254,7 +2255,7 @@ saberMoveName_t PM_CheckStabDown( void )
 		//&& enemyHDist >= 32 //was 48
 		&& enemyHDist <= 164//was 112
 		&& PM_InKnockDownOnGround( &pm->gent->enemy->client->ps )//still on ground
-		&& !PM_InGetUpNoRoll( &pm->gent->enemy->client->ps )//not getting up yet
+		&& (G_JoltOnGround(pm->gent->enemy) || !PM_InGetUpNoRoll( &pm->gent->enemy->client->ps ))//not getting up yet
 		&& enemyZDiff <= 20 )
 	{//guy is on the ground below me, do a top-down attack
 		if ( pm->gent->enemy->s.number >= MAX_CLIENTS

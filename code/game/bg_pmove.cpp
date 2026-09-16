@@ -38,6 +38,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_shared.h"
 #include "bg_local.h"
 #include "g_local.h"
+#include "g_jolt.h"
 #include "g_functions.h"
 #include "anims.h"
 #include "../cgame/cg_local.h"	// yeah I know this is naughty, but we're shipping soon...
@@ -6013,6 +6014,8 @@ qboolean PM_InGetUpNoRoll( playerState_t *ps )
 
 qboolean PM_InKnockDown( playerState_t *ps )
 {
+	if (ps->clientNum >= 0 && ps->clientNum < ENTITYNUM_WORLD && g_entities[ps->clientNum].health > 0 && G_JoltOnGround(&g_entities[ps->clientNum]))
+		return qtrue;
 	switch ( ps->legsAnim )
 	{
 	case BOTH_KNOCKDOWN1:
@@ -6088,6 +6091,8 @@ qboolean PM_InKnockDownNoGetup( playerState_t *ps )
 
 qboolean PM_InKnockDownOnGround( playerState_t *ps )
 {
+	if (ps->clientNum >= 0 && ps->clientNum < ENTITYNUM_WORLD && G_JoltOwns(&g_entities[ps->clientNum]))
+		return g_entities[ps->clientNum].health > 0 && G_JoltOnGround(&g_entities[ps->clientNum]) ? qtrue : qfalse;
 	switch ( ps->legsAnim )
 	{
 	case BOTH_KNOCKDOWN1:

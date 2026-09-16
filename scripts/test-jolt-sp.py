@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--projectiles", action="store_true", help="Test automatic reactions through real missile collisions")
     parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
+    parser.add_argument("--floor-combat", action="store_true", help="Test movement over fallen NPCs and the saber floor finisher")
     parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
     parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
@@ -104,6 +105,9 @@ def main():
             ownership = re.findall(r"jolt ownership ([^\r\n]+)", text)
             if ownership:
                 line += " " + ownership[-1]
+            combat = re.findall(r"jolt combat ([^\r\n]+)", text)
+            if combat:
+                line += " " + combat[-1]
             return {k: tuple(map(float, v.split(","))) if "," in v else float(v)
                     for k, v in (word.split("=") for word in line.split()[1:])}
 
@@ -121,6 +125,50 @@ def main():
                     "-f", "x11grab", "-framerate", "30", "-video_size", "960x720", "-i", env["DISPLAY"],
                     "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "22",
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
+            if args.floor_combat:
+                for check in ("movement", "finisher"):
+                    start = len(log.read_text(errors="replace"))
+                    cmd("jolt_demo idle")
+                    wait_for("Jolt demo finished: idle", start)
+                    standing = status("jolt_demo_actor")
+                    height = standing["player_origin"][2] + 26
+                    weapon = 3 if check == "movement" else 1
+                    cmd(f"give weaponnum {weapon}; weapon {weapon}; wait 30; jolt_select jolt_demo_actor; jolt_balance; jolt_knockdown", 0)
+                    for _ in range(100):
+                        fallen = status("jolt_demo_actor")
+                        if fallen["grounded"]:
+                            break
+                        cmd("wait 1", 0)
+                    else:
+                        raise AssertionError("Actor did not reach the floor")
+                    x, y, _ = fallen["origin"]
+                    if check == "movement":
+                        cmd(f"setviewpos {x-40} {y} {height} 0; +forward; wait 30; -forward", 0)
+                        moved = status("jolt_demo_actor")
+                        if moved["player_origin"][0] <= x+20:
+                            cmd("campaign_status; screenshot_png floor_movement_failure")
+                        assert moved["player_origin"][0] > x+20, (fallen, moved)
+                    else:
+                        cmd(f"setviewpos {x-65} {y} {height} 0; wait 2; +forward; +attack; wait 2; -forward", 0)
+                        samples = []
+                        for _ in range(30):
+                            samples.append(status("jolt_demo_actor"))
+                            if samples[-1]["health"] <= 0:
+                                break
+                            cmd("wait 2", 0)
+                        cmd("-attack")
+                        assert any(s["finisher"] for s in samples), samples[:3]
+                        assert samples[-1]["health"] <= 0, samples[-1]
+                        cmd("weapon 3; wait 30")
+                        corpse = status("jolt_demo_actor")
+                        assert corpse["sleeping"] and corpse["grounded"], corpse
+                        x, y, _ = corpse["origin"]
+                        cmd(f"setviewpos {x-40} {y} {height} 0; +forward; wait 30; -forward", 0)
+                        assert status("jolt_demo_actor")["player_origin"][0] > x+20
+                    print(f"PASS: {args.renderer}: floor {check}", flush=True)
+                stdin.write("quit\n"); stdin.flush()
+                assert process.wait(timeout=30) == 0
+                return 0
             if args.gameplay:
                 start = len(log.read_text(errors="replace"))
                 cmd("jolt_demo idle")

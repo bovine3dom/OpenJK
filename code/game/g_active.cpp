@@ -22,6 +22,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "g_local.h"
+#include "g_jolt.h"
 #include "g_functions.h"
 #include "../cgame/cg_local.h"
 #include "Q3_Interface.h"
@@ -5397,6 +5398,9 @@ extern cvar_t	*g_skippingcin;
 //	pm.tracemask = MASK_PLAYERSOLID;	// used differently for navgen
 	pm.tracemask = ent->clipmask;
 	pm.trace = gi.trace;
+#ifdef USE_JOLT_REACTIONS
+	pm.trace = G_JoltMovementTrace;
+#endif
 	pm.pointcontents = gi.pointcontents;
 	pm.debugLevel = g_debugMove->integer;
 	pm.noFootsteps = qfalse;//( g_dmflags->integer & DF_NO_FOOTSTEPS ) > 0;
@@ -5746,5 +5750,4 @@ void ClientEndFrame( gentity_t *ent )
 
 //	G_SetClientSound (ent);
 }
-
 
