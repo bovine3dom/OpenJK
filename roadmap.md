@@ -334,3 +334,5 @@ constraints, but it does not remove the need to test campaign progression.
 - jedi outcast: what's the current status of it and how plausible is it to make one kind of grand unified game that unifies the UI, logic, AI, weapons, force powers etc. etc... between JA and JO?
 - suppression: improve fire control of enemies - use real world rates of fire/bursts for standard troops, snipers, machine gunners. encourage enemies to suppress last known positions etc, particularly during manoeuvre
 - gameplay: make it easier to activate 'moves' like wall-running, katas, jump slash... make the combinations more forgiving timing wise
+- better glass materials? still visible as glass, but less ... ugly and white?
+- make jolt apply to pull/push force powers. consider how to integrate jolt with lightsabers?
