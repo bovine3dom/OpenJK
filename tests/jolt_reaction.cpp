@@ -340,4 +340,35 @@ int main() {
 			"recent-hit stress recovers without making low health alone force a fall");
 	}
 	std::puts("PASS: contact-aware bracing, physical preparation, and speed-limited get-up transitions");
+	{
+		JoltReaction::FallSimulation corpse(parts, stopped);
+		corpse.AddMesh(1, largeFloor, 6); corpse.Follow(parts, 0); corpse.Engage(); corpse.Kill();
+		for (int i = 0; i < 1200 && corpse.Awake(); ++i) Check(corpse.Advance(1.0f/120), "corpse settling step");
+		Check(!corpse.Awake(), "corpse sleeps on the platform");
+		const auto steps = corpse.Steps();
+		corpse.Advance(.1f);
+		Check(corpse.Steps() == steps, "sleeping worlds skip solver updates");
+		corpse.Sample(pose);
+		const float hit[3] = {pose[1].matrix[0][3], pose[1].matrix[1][3], pose[1].matrix[2][3]};
+		corpse.Impulse(1, forward, hit, 2);
+		Check(corpse.Awake(), "an impact wakes a sleeping corpse");
+		corpse.Advance(.1f);
+		Check(corpse.Steps() > steps, "physics resumes after an impact");
+		for (int i = 0; i < 1200 && corpse.Awake(); ++i) corpse.Advance(1.0f/120);
+		Check(!corpse.Awake(), "corpse settles after an impact");
+		JoltReaction::Transform platform = {};
+		for (int r = 0; r < 3; ++r) platform.matrix[r][r] = 1;
+		platform.matrix[2][3] = .1f;
+		corpse.MoveMesh(1, platform, .1f); corpse.Advance(.1f);
+		Check(corpse.Awake(), "moving platform wakes a sleeping corpse");
+		corpse.MoveMesh(1, platform, .1f);
+		for (int i = 0; i < 1200 && corpse.Awake(); ++i) corpse.Advance(1.0f/120);
+		Check(!corpse.Awake(), "corpse settles after the platform stops");
+		corpse.Sample(pose);
+		const float height = pose[0].matrix[2][3];
+		corpse.SetMeshEnabled(1, false);
+		Check(corpse.Awake(), "removing support wakes a sleeping corpse");
+		corpse.Advance(.2f); corpse.Sample(pose);
+		Check(pose[0].matrix[2][3] < height-.1f, "corpse falls after support is removed");
+	}
 }

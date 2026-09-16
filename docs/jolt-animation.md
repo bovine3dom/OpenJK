@@ -1,5 +1,10 @@
 # Jolt Reactive Animation
 
+Reactions are enabled by default (`g_joltReactions 1`). Automatic diagnostic
+messages and skeleton lines are disabled by default (`g_joltDebug 0`).
+Use `g_joltDebug 1` to enable diagnostics. Explicit status commands still print
+their results. See [Performance Check](jolt-performance.md) for measurements.
+
 ## Start the Demonstration
 
 On the configured desktop, run:

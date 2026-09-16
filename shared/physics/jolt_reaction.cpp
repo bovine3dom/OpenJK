@@ -784,15 +784,22 @@ void FallSimulation::MoveMesh(int model, const Transform& transform, float secon
 	auto found = impl->meshes.find(model);
 	if (found == impl->meshes.end()) return;
 	const auto m = Matrix(transform);
-	if (seconds <= 0) impl->world.GetBodyInterface().SetPositionAndRotation(found->second, m.GetTranslation(), m.GetQuaternion(), JPH::EActivation::DontActivate);
-	else impl->world.GetBodyInterface().MoveKinematic(found->second, m.GetTranslation(), m.GetQuaternion(), seconds);
+	auto& api = impl->world.GetBodyInterface();
+	if ((api.GetPosition(found->second)-m.GetTranslation()).LengthSq() < 1e-10f &&
+		std::abs(api.GetRotation(found->second).Dot(m.GetQuaternion())) > 1-1e-6f &&
+		api.GetLinearVelocity(found->second).IsNearZero() && api.GetAngularVelocity(found->second).IsNearZero()) return;
+	if (seconds <= 0) api.SetPositionAndRotation(found->second, m.GetTranslation(), m.GetQuaternion(), JPH::EActivation::DontActivate);
+	else api.MoveKinematic(found->second, m.GetTranslation(), m.GetQuaternion(), seconds);
 }
 void FallSimulation::SetMeshEnabled(int model, bool enabled) {
 	auto found = impl->meshes.find(model);
 	if (found == impl->meshes.end()) return;
 	auto& bodies = impl->world.GetBodyInterface();
 	const JPH::ObjectLayer layer = enabled ? 0 : 2;
-	if (bodies.GetObjectLayer(found->second) != layer) bodies.SetObjectLayer(found->second, layer);
+	if (bodies.GetObjectLayer(found->second) != layer) {
+		bodies.SetObjectLayer(found->second, layer);
+		if (impl->balance.phase == ControlPhase::Dead) bodies.ActivateBodies(impl->bodies, PartCount);
+	}
 }
 void FallSimulation::AddVelocity(const float* velocity) {
 	const auto v = Vector(velocity);
@@ -975,6 +982,11 @@ void FallSimulation::RootVelocity(float* velocity) const {
 bool FallSimulation::Advance(float seconds) {
 	if (!std::isfinite(seconds) || seconds < 0 || seconds > 0.25f) return false;
 	auto& s = *impl;
+	if (s.balance.phase == ControlPhase::Dead && !s.world.GetNumActiveBodies(JPH::EBodyType::RigidBody)) {
+		s.clock += seconds;
+		s.history.Push(s.clock, s.position, s.rotation);
+		return true;
+	}
 	s.accumulator += seconds;
 	while (s.accumulator + 0.000001f >= Step) {
 		if (s.balance.strength > 0 || s.balance.phase != ControlPhase::Falling) s.Control();

@@ -48,7 +48,7 @@ def run(args, suite, index, settings):
               "package_build_id": (args.package / "build-id.txt").read_text().strip(),
               "system": platform.platform(),
               "cache_note": CACHE_NOTE,
-              "scene": {"map": "t2_wedge", "third_person": settings["cg_thirdPerson"],
+              "scene": {"map": args.map, "third_person": settings["cg_thirdPerson"],
                          "npc_freeze": settings.get("d_npcfreeze", 0), "weapon_command": args.weapon,
                          "viewpos": args.viewpos, "noclip": args.noclip},
               "environment": {k: env.get(k) for k in ("SDL_VIDEODRIVER", "EGL_PLATFORM",
@@ -95,6 +95,17 @@ def run(args, suite, index, settings):
                 return event[0]
         raise RuntimeError(f"Timeout waiting for {marker}")
 
+    def commands(text):
+        # Engine stdin has a bounded line buffer.
+        (profile / "OpenJK/benchmark_scene.cfg").write_text(text + "\necho OJK_SCENE_READY\n")
+        send("exec benchmark_scene.cfg")
+        wait_for("OJK_SCENE_READY")
+
+    def settle(seconds):
+        until = time.monotonic() + seconds
+        while time.monotonic() < until:
+            receive(until)
+
     try:
         active = wait_for("OJK_BENCH_ACTIVE")
         result["load_total_receipt_seconds"] = active - started
@@ -127,6 +138,47 @@ def run(args, suite, index, settings):
                 receive(deadline)
             send(f"weapon {args.weapon}; cg_thirdPerson 0; cg_drawGun 1; echo OJK_BENCH_WEAPON")
             scene = wait_for("OJK_BENCH_WEAPON")
+        on = 0
+        if args.jolt_scene:
+            commands("exitview; notarget; set d_npcfreeze 1; set cg_drawGun 0; set cg_thirdPerson 0")
+            on = int(settings.get("g_joltReactions", 1))
+            for first in range(0, args.characters, 10):
+                last = min(first+10, args.characters)
+                for i in range(first, last):
+                    x, y = 5324 + (i % 10)*40, -3950 + (i // 10)*48
+                    commands(f"setviewpos {x} {y-64} 64 90; wait 2; npc spawn stormtrooper bench_{i}; wait 2")
+                settle(2)
+                if on and args.jolt_scene != "idle":
+                    commands("; ".join(f"jolt_select bench_{i}; jolt_balance 60" for i in range(first, last)))
+                if args.jolt_scene == "corpses":
+                    commands("; ".join(f"npc kill bench_{i}" for i in range(first, last)))
+                    settle(4)
+                    if on:
+                        for attempt in range(10):
+                            start_line = len(lines)
+                            commands("; ".join(f"jolt_status bench_{i}" for i in range(first, last)))
+                            settled = re.findall(r"jolt ownership corpse=1 sleeping=1", "".join(lines[start_line:]))
+                            if len(settled) == last-first:
+                                break
+                            settle(3)
+                        else:
+                            raise RuntimeError("Corpse batch did not settle before the next allocation")
+            commands("setviewpos 5504 -4300 90 90; set cg_thirdPerson 0; set cg_drawGun 0")
+            settle(1)
+            start_line = len(lines)
+            commands("; ".join(f"jolt_status bench_{i}" for i in range(args.characters)))
+            status = "".join(lines[start_line:])
+            ownership = re.findall(r"jolt ownership corpse=(\d+) sleeping=(\d+)", status)
+            health = list(map(int, re.findall(r"jolt actor=\d+ .*? health=(-?\d+)", status)))
+            if len(health) != args.characters or any((h <= 0) != (args.jolt_scene == "corpses") for h in health):
+                raise RuntimeError("Benchmark population does not match the requested scene")
+            if on and args.jolt_scene == "corpses" and sum(int(s) for _, s in ownership) != args.characters:
+                raise RuntimeError("Physical corpses have not all settled")
+            if on and args.jolt_scene == "active" and len(re.findall(r"engaged=1 phase=1", status)) != args.characters:
+                raise RuntimeError("Not all benchmark rigs are active and balanced")
+            result["jolt_scene"] = dict(kind=args.jolt_scene, characters=args.characters, enabled=on)
+            result["scene"].update(viewpos=[5504, -4300, 90, 90], npc_freeze=1, third_person=0)
+            scene = time.monotonic()
         deadline = scene + args.warmup
         while time.monotonic() < deadline:
             receive(deadline)
@@ -137,6 +189,7 @@ def run(args, suite, index, settings):
         capsule_cpu = []
         ghoul2_cpu = []
         ghoul2_gpu = []
+        game_work = []
         deadline = begin + args.seconds
         stopping = False
         while True:
@@ -167,13 +220,38 @@ def run(args, suite, index, settings):
             match = FRAME.match(line)
             if match:
                 samples.append(tuple(map(int, match.groups())))
+                game = re.search(r"\bgm:\s*(\d+)", line)
+                if not game:
+                    raise RuntimeError("Engine work sample has no game timing")
+                game_work.append(int(game[1]))
         if not samples or any(b[0] != a[0] + 1 for a, b in zip(samples, samples[1:])):
             raise RuntimeError("Missing or discontinuous engine work samples")
+        # The first frame can span the change of timing instrumentation.
+        samples, game_work = samples[1:], game_work[1:]
+        if not samples:
+            raise RuntimeError("Not enough complete engine work samples")
         result.update(measured_receipt_seconds=end - begin, frame_count=len(samples),
                       approximate_throughput_fps=len(samples) / (end - begin),
                       engine_work_ms=percentiles([s[1] for s in samples]),
                       renderer_frontend_work_ms=percentiles([s[2] for s in samples]),
                       renderer_backend_work_ms=percentiles([s[3] for s in samples]))
+        result["mean_game_ms_per_frame"] = statistics.mean(game_work)
+        result["mean_engine_ms_per_frame"] = statistics.mean(s[1] for s in samples)
+        memory = Path(f"/proc/{process.pid}/status").read_text()
+        rss = re.search(r"VmRSS:\s*(\d+)", memory)
+        if rss:
+            result["resident_mib"] = int(rss[1]) / 1024
+        if args.jolt_scene:
+            start_line = len(lines)
+            commands("; ".join(f"jolt_status bench_{i}" for i in range(args.characters)))
+            final_status = "".join(lines[start_line:])
+            final_health = list(map(int, re.findall(r"jolt actor=\d+ .*? health=(-?\d+)", final_status)))
+            if len(final_health) != args.characters or any((h <= 0) != (args.jolt_scene == "corpses") for h in final_health):
+                raise RuntimeError("Benchmark population changed during measurement")
+            if on and args.jolt_scene == "corpses" and len(re.findall(r"corpse=1 sleeping=1", final_status)) != args.characters:
+                raise RuntimeError("Physical corpse population changed during measurement")
+            if on and args.jolt_scene == "active" and len(re.findall(r"engaged=1 ", final_status)) != args.characters:
+                raise RuntimeError("Active rig population changed during measurement")
         result["gpu_pass_ms"] = {name: dict(samples=len(values), **percentiles(values))
                                  for name, values in gpu_samples.items()}
         result["capsule_cpu"] = {name: percentiles([row[i] for row in capsule_cpu])
@@ -268,7 +346,9 @@ def main():
     parser.add_argument("--noclip", action="store_true", help="Hold an airborne test position")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
-    parser.add_argument("--map", choices=("t2_wedge",), default="t2_wedge")
+    parser.add_argument("--map", choices=("t2_wedge", "t1_sour"), default="t2_wedge")
+    parser.add_argument("--jolt-scene", choices=("idle", "active", "corpses"))
+    parser.add_argument("--characters", type=int, default=10)
     parser.add_argument("--video-driver", choices=("offscreen", "x11", "wayland"), default="offscreen")
     parser.add_argument("--gpu", default="Intel", help="Required GL_RENDERER substring")
     parser.add_argument("--timeout", type=float, default=180, help="Startup/command/exit timeout in seconds")
@@ -276,6 +356,12 @@ def main():
     parser.add_argument("--cvar", nargs=2, action="append", default=[], metavar=("NAME", "VALUE"),
                         help="Override a numeric or single-word setting for an A/B test")
     args = parser.parse_args()
+    if args.jolt_scene:
+        args.map = "t1_sour"
+        if not 1 <= args.characters <= (60 if args.jolt_scene == "corpses" else 10):
+            parser.error("Use 1..10 live characters or 1..60 corpses")
+        if args.seconds + args.warmup > 45:
+            parser.error("Keep the active control benchmark within its 60-second hold")
     if any(not math.isfinite(value) or abs(value) > 100000 for value in args.viewpos):
         parser.error("Invalid view position")
     for name, value in args.cvar:
@@ -312,6 +398,10 @@ def main():
     try:
         for index in range(1, args.runs + 1):
             results.append(run(args, suite, index, settings))
+            r = results[-1]
+            print(f"Run {index}: {r['approximate_throughput_fps']:.2f} fps, "
+                  f"engine {r['mean_engine_ms_per_frame']:.2f} ms/frame, "
+                  f"game {r['mean_game_ms_per_frame']:.2f} ms/frame", flush=True)
     finally:
         aggregate = dict(arguments={k: str(v) if isinstance(v, Path) else v
                                    for k, v in vars(args).items()}, cache_note=CACHE_NOTE,

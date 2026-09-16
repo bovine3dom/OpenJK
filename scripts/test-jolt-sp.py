@@ -323,6 +323,7 @@ def main():
                 stdin.flush()
                 assert process.wait(timeout=30) == 0
                 assert not re.search(r"Unknown command|trying to load fallback|GL_INVALID_|GL_OUT_OF_MEMORY", log.read_text(errors="replace"))
+                assert not re.search(r"Jolt: (active control|released control|lost support|grounded recovery)", log.read_text(errors="replace"))
                 print(f"PASS: {args.renderer}: primary/alt projectiles, automatic multi-actor reactions, unchanged damage, protected/unsupported targets, disable", flush=True)
                 return 0
             start = len(log.read_text(errors="replace"))

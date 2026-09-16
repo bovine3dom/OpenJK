@@ -377,7 +377,7 @@ endif(WIN32)
 
 add_library(${SPGame} SHARED ${SPGameFiles})
 
-option(UseJoltReactions "Build the experimental SP stormtrooper reaction rig" ON)
+option(UseJoltReactions "Build SP physical character reactions" ON)
 if(UseJoltReactions)
 	include(JoltDependencies)
 	openjk_add_jolt()

@@ -105,6 +105,7 @@ struct Actor {
 	JoltReaction::Part reference[JoltReaction::PartCount];
 	bool engaged = false;
 	bool dead = false;
+	bool sleepingPose = false;
 	int riseStart = 0;
 	float handoffError = 0;
 	vec3_t displayedMins, displayedMaxs;
@@ -227,7 +228,7 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 	VectorClear(ent->client->ps.velocity); // The rig already carries the native velocity.
 	fallStart = level.time;
 	if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
-	gi.Printf("Jolt: released control actor=%d launch_speed=%.1f\n", actor, launchSpeed);
+	if (debug->integer) gi.Printf("Jolt: released control actor=%d launch_speed=%.1f\n", actor, launchSpeed);
 	return true;
 }
 bool Actor::PrepareRig(gentity_t* ent) {
@@ -235,7 +236,7 @@ bool Actor::PrepareRig(gentity_t* ent) {
 	if (!BodyRoom(this)) return false;
 	if (!collisionLoaded) {
 		collisionLoaded = true;
-		if (!gi.PhysicsSurfaces(MASK_NPCSOLID, ExportSurface, nullptr)) gi.Printf("Jolt: unsupported collision format; using small reactions\n");
+		if (!gi.PhysicsSurfaces(MASK_NPCSOLID, ExportSurface, nullptr) && debug->integer) gi.Printf("Jolt: unsupported collision format; using small reactions\n");
 		if (!collision.empty()) {
 			collisionScene.reset(new JoltReaction::CollisionScene);
 			for (const auto& mesh : collision) if (!collisionScene->AddMesh(mesh.first, mesh.second.data(), int(mesh.second.size()/3))) {
@@ -270,7 +271,7 @@ bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& 
 		mdxaBone_t bone, end;
 		if (bolts[i] < 0 || endBolts[i] < 0 || !gi.G2API_GetBoltMatrix(models, 0, bolts[i], &bone, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale) ||
 			!gi.G2API_GetBoltMatrix(models, 0, endBolts[i], &end, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale)) {
-			gi.Printf("Jolt: missing segment %s -> %s\n", bones[i], ends[i]); return false;
+			if (debug->integer) gi.Printf("Jolt: missing segment %s -> %s\n", bones[i], ends[i]); return false;
 		}
 		for (int r = 0; r < 3; ++r) {
 			for (int c = 0; c < 4; ++c) parts[i].bone.matrix[r][c] = bone.matrix[r][c] * (c == 3 ? MetresPerUnit : 1);
@@ -290,7 +291,7 @@ bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& 
 			length = .12f;
 			for (int r = 0; r < 3; ++r) parts[i].end[r] = parts[i].bone.matrix[r][3]+delta[r]*length;
 		}
-		if (!std::isfinite(length) || length < 0.015f || length > 1) { gi.Printf("Jolt: invalid segment %s %.3f\n", bones[i], length); return false; }
+		if (!std::isfinite(length) || length < 0.015f || length > 1) { if (debug->integer) gi.Printf("Jolt: invalid segment %s %.3f\n", bones[i], length); return false; }
 		parts[i].radius = std::min(radii[i], length * .45f);
 		parts[i].mass = masses[i];
 		parts[i].parent = parents[i];
@@ -339,7 +340,7 @@ void Actor::Engage(gentity_t* ent) {
 	settledSince = recoverStart = prepareStart = nextRecoverAttempt = 0;
 	riseStart = 0;
 	vec3_t carried; fall->RootVelocity(carried);
-	gi.Printf("Jolt: active control actor=%d speed=%.1f carried=%.3f,%.3f,%.3f gap=%.3f angle=%.1f\n", actor, launchSpeed, carried[0], carried[1], carried[2], fall->Balance().handoffGap, fall->Balance().handoffAngle);
+	if (debug->integer) gi.Printf("Jolt: active control actor=%d speed=%.1f carried=%.3f,%.3f,%.3f gap=%.3f angle=%.1f\n", actor, launchSpeed, carried[0], carried[1], carried[2], fall->Balance().handoffGap, fall->Balance().handoffAngle);
 }
 
 void Actor::UpdateRig(gentity_t* ent, float seconds) {
@@ -399,13 +400,14 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	const auto start = std::chrono::steady_clock::now();
 	const unsigned before = fall->Steps();
 	if (!fall->Advance(seconds)) { Reset(true); return; }
+	if (dead && sleepingPose && !fall->Awake()) return;
 	fallMicroseconds += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
 	fallSteps += fall->Steps()-before;
 	const auto balance = fall->Balance();
 	if (balance.phase == JoltReaction::ControlPhase::Falling && !fallStart) {
 		fallStart = level.time;
 		if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
-		gi.Printf("Jolt: lost support actor=%d steps=%u error=%.3f\n", actor, balance.corrections, balance.error);
+		if (debug->integer) gi.Printf("Jolt: lost support actor=%d steps=%u error=%.3f\n", actor, balance.corrections, balance.error);
 	}
 	fall->Sample(fallPose);
 	for (int i = 1; i <= 2; ++i) {
@@ -552,7 +554,7 @@ bool Actor::Recover(gentity_t* ent) {
 	VectorClear(ent->client->ps.velocity);
 	recoverStart = level.time;
 	gi.linkentity(ent);
-	gi.Printf("Jolt: grounded recovery actor=%d clip=%d pelvis_lift=%.2f blend_ms=%d\n", actor, recoveryAnim, recoveryLift, recoveryTime);
+	if (debug->integer) gi.Printf("Jolt: grounded recovery actor=%d clip=%d pelvis_lift=%.2f blend_ms=%d\n", actor, recoveryAnim, recoveryLift, recoveryTime);
 	return true;
 }
 
@@ -695,6 +697,7 @@ void Actor::Reset(bool restoreOrigin) {
 	}
 	fall.reset();
 	engaged = false;
+	sleepingPose = false;
 	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
@@ -726,7 +729,7 @@ void Actor::Frame() {
 	if (!suspended) {
 		const auto start = std::chrono::steady_clock::now();
 		const unsigned before = simulation->Steps();
-		if (!simulation->Advance(elapsed * 0.001f)) gi.Printf("Jolt reaction: reset after time discontinuity or solver error\n");
+		if (!simulation->Advance(elapsed * 0.001f) && debug->integer) gi.Printf("Jolt reaction: reset after time discontinuity or solver error\n");
 		stepMicroseconds += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
 		measuredSteps += simulation->Steps() - before;
 	}
@@ -812,7 +815,7 @@ bool Actor::Initialize(gentity_t* ent) {
 	const int head = endBolts[2];
 	vec3_t pelvisPosition, neckPosition, headPosition;
 	if (!BoltPosition(ent, pelvisBolt, pelvisPosition) || !BoltPosition(ent, neck, neckPosition) ||
-		!BoltPosition(ent, head, headPosition)) { gi.Printf("Jolt: missing humanoid rig landmarks\n"); return false; }
+		!BoltPosition(ent, head, headPosition)) { if (debug->integer) gi.Printf("Jolt: missing humanoid rig landmarks\n"); return false; }
 	dimensions.torsoLength = Distance(pelvisPosition, neckPosition) * MetresPerUnit;
 	dimensions.headLength = Distance(neckPosition, headPosition) * MetresPerUnit * (rigidHelmet ? 1 : 2);
 	dimensions.torsoRadius = std::max(.06f, std::min(.18f, dimensions.torsoLength*.4f));
@@ -820,7 +823,7 @@ bool Actor::Initialize(gentity_t* ent) {
 	if (dimensions.torsoLength < 0.15f || dimensions.torsoLength > 0.8f ||
 		dimensions.headLength < 0.04f || dimensions.headLength > (rigidHelmet ? .8f : .4f) ||
 		dimensions.torsoRadius < 0.05f || dimensions.torsoRadius > 0.3f) {
-		gi.Printf("Jolt: rig dimensions outside prototype limits (torso %.3f head %.3f radius %.3f)\n",
+		if (debug->integer) gi.Printf("Jolt: rig dimensions outside prototype limits (torso %.3f head %.3f radius %.3f)\n",
 			dimensions.torsoLength, dimensions.headLength, dimensions.torsoRadius); return false;
 	}
 	simulation.reset(new JoltReaction::Simulation(dimensions));
@@ -887,6 +890,8 @@ bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles,
 	if (!G_JoltOwns(ent)) return false;
 	angles[0] = angles[2] = 0;
 	angles[1] = fallYaw;
+	if (dead && sleepingPose && !debug->integer && !fall->Awake() && VectorCompare(origin, lastOrigin)) return true;
+	sleepingPose = false;
 	JoltReaction::Transform pose[JoltReaction::PartCount];
 	const int poseTime = display ? PresentationTime(time) : lastTime;
 	if (recoverStart) {
@@ -937,6 +942,7 @@ bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles,
 			poseError = std::max(poseError, VectorLength(delta));
 		}
 	}
+	if (dead && !display && !fall->Awake() && !(debug && debug->integer)) sleepingPose = true;
 	return true;
 }
 
@@ -1281,7 +1287,10 @@ void G_JoltKnockdown_f() { if (auto* state = Find(selectedActor)) state->Knockdo
 void G_JoltBalance_f() {
 	if (auto* state = Find(selectedActor)) {
 		auto* ent = &g_entities[selectedActor];
-		if (state->PrepareRig(ent)) { state->Engage(ent); state->lastHit = level.time; }
+		if (state->PrepareRig(ent)) {
+			state->Engage(ent);
+			state->lastHit = level.time + 1000*std::max(0, std::min(60, atoi(gi.argv(1))));
+		}
 	}
 }
 
