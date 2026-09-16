@@ -116,9 +116,9 @@ def main():
             after=cmd("campaign_status")
             beforeOrigin=re.search(r"origin=([^\n]+)",before);afterOrigin=re.search(r"origin=([^\n]+)",after)
             assert beforeOrigin and afterOrigin and beforeOrigin[0]==afterOrigin[0]
-            click(264,48,"map_wider")
+            click(246,48,"map_wider")
             assert float(state("wider")["slice"])==320
-            click(318,48,"map_narrower")
+            click(295,48,"map_narrower")
             assert float(state("narrower")["slice"])==256
             key("bracketright");assert float(state("wider_key")["slice"])==320
             key("Home")
@@ -136,7 +136,7 @@ def main():
             assert pan["centre"]!=up["centre"]
             oldOrigin=re.search(r"origin=([^\n]+)",before);newOrigin=re.search(r"origin=([^\n]+)",after)
             assert oldOrigin and newOrigin and oldOrigin[0]==newOrigin[0],"Map input moved the player"
-            click(372,48,"map_tilt")
+            click(344,48,"map_tilt")
             assert state("button_tilt")["tilt"]=="55.0"
             key("Home");key("equal")
             assert float(state("zoom")["span"])<float(initial["span"])
@@ -151,6 +151,35 @@ def main():
             assert int(lift["lifts_shown"])>0
             image=capture("lift")
             assert re.search(r"automap lift=\d+ stops=[2-8]",text()),"No known lift travel"
+            click(590,48,"map_explode")
+            navstate=cmd("automap_status")
+            match=re.search(r"exploded=1 nav_polygons=(\d+) floors=(\d+) connections=(\d+)",navstate)
+            assert match and int(match[1])>10 and int(match[2])>1,navstate
+            records["navigation"]=dict(polygons=int(match[1]),floors=int(match[2]),connections=int(match[3]))
+            bounds=[tuple(map(float,m.split(","))) for m in re.findall(r"bounds=([\d.,-]+)",navstate)]
+            assert len(bounds)==int(match[2])
+            for i,a in enumerate(bounds):
+                for b in bounds[i+1:]:
+                    assert a[2]<=b[0] or b[2]<=a[0] or a[3]<=b[1] or b[3]<=a[1],(a,b)
+            expanded=capture("exploded")
+            oldcentre=re.search(r"nav_centre=([^\n ]+)",navstate)[1]
+            before=cmd("campaign_status")
+            move(310,220)
+            subprocess.run(["xdotool","mousedown","1"],check=True)
+            subprocess.run(["xdotool","mousemove_relative","--","30","15"],check=True);cmd("wait 10")
+            subprocess.run(["xdotool","mouseup","1"],check=True);cmd("wait 10")
+            newcentre=re.search(r"nav_centre=([^\n ]+)",cmd("automap_status"))[1]
+            assert newcentre!=oldcentre
+            assert re.search(r"origin=([^\n]+)",before)[0]==re.search(r"origin=([^\n]+)",cmd("campaign_status"))[0]
+            key("Home");key("equal")
+            capture("exploded_player")
+            key("Prior");key("Next");key("q");key("t")
+            assert "exploded=1" in cmd("automap_status")
+            capture("exploded_top")
+            key("x")
+            assert "exploded=0" in cmd("automap_status")
+            sliced=capture("slice_return")
+            assert sum(abs(a-b) for a,b in zip(expanded,sliced))/len(sliced)>1
             # Other tabs use the same evenly spaced bottom row.
             click(270,432,"weapons");assert "datapadWeaponsMenu" in cmd("ui_report")
             click(170,432,"map_tab");assert "datapadMapMenu" in cmd("ui_report")
@@ -158,6 +187,7 @@ def main():
             assert "UI focus: datapadMapMenu;" not in cmd("ui_report")
             cmd("load automap_test; wait 150; datapad")
             key("F4"); assert state("loaded")["valid"]=="1"
+            assert "exploded=0 nav_polygons=0 floors=0" in cmd("automap_status")
             key("Escape");cmd("vid_restart; wait 150; datapad")
             key("F4");assert state("restarted")["valid"]=="1"
             assert float(state("saved_slice")["slice"])==320

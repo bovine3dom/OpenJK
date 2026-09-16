@@ -4101,6 +4101,7 @@ void _UI_KeyEvent( int key, qboolean down )
 			case 't': action="tilt"; break;
 			case 'c': action="control"; break;
 			case 'l': action="lift"; break;
+			case 'x': action="explode"; break;
 			case A_HOME: action="centre"; break;
 			}
 			if (action) { ui.Cmd_ExecuteText(EXEC_APPEND,va("automap %s\n",action)); return; }

@@ -5888,8 +5888,8 @@ void UI_AddDatapadMap()
 		}
 		const char *actions[][2] = {{"Zoom +","zoomin"},{"Zoom -","zoomout"},{"Height +","up"},{"Height -","down"},
 			{"Slice +","wider"},{"Slice -","narrower"},
-			{"Tilt","tilt"},{"Player","centre"},{"Fit","fit"},{"Control","control"},{"Lift","lift"}};
-		for (int i=0;i<11;++i) button(map, va("map_%s",actions[i][1]), actions[i][0], 24+i*(592.0f/11), 37, 50,
+			{"Tilt","tilt"},{"Player","centre"},{"Fit","fit"},{"Control","control"},{"Lift","lift"},{"Explode","explode"}};
+		for (int i=0;i<12;++i) button(map, va("map_%s",actions[i][1]), actions[i][0], 24+i*(592.0f/12), 37, 47,
 			va("exec \"automap %s\" ;",actions[i][1]));
 		Menu_PostParse(map);
 	}

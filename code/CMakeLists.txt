@@ -49,6 +49,8 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		"${GSLIncludeDirectory}")
 
 	#    Dependencies
+	include("${CMAKE_SOURCE_DIR}/cmake/Modules/AutomapNavigation.cmake")
+	list(APPEND SPEngineLibraries automap_recast)
 
 	if (NOT WIN32)
 		# OpenGL
@@ -125,6 +127,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		"${SPDir}/client/cl_keys.cpp"
 		"${SPDir}/client/cl_main.cpp"
 		"${SPDir}/client/cl_automap.cpp"
+		"${SharedDir}/qcommon/automap_nav.cpp"
 		"${SPDir}/client/cl_mp3.cpp"
 		"${SPDir}/client/cl_parse.cpp"
 		"${SPDir}/client/cl_scrn.cpp"

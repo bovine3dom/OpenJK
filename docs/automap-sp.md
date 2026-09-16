@@ -20,6 +20,7 @@ It works in the JA runtime with either SP renderer and with JA or JO content.
 | Fit button | Fit the level's horizontal bounds |
 | C or Control button | Centre on the next marked control, including its height |
 | L or Lift button | Centre on the next lift |
+| X or Explode button | Switch between slice and exploded views |
 | Escape or the datapad key | Close the datapad |
 
 The map opens centred on the player. Zoom and view orientation are retained
@@ -45,6 +46,51 @@ This adapts the multiplayer automap's BSP-surface and height-aware approach.
 Its old fixed-function OpenGL drawing code is not used. A shared UI geometry
 path draws the map in both vanilla and Rend2. Coplanar triangle edges are merged
 to reduce wireframe clutter. Curved BSP patches use a coarse tessellation.
+
+## Exploded View
+
+Press **X** or select **Explode** to build a Recast navigation mesh for the map.
+The first build occurs when you select this view. The mesh stays in memory
+until the level state resets. A build failure keeps the slice view available.
+
+The view groups navigation polygons into height bands. Large, approximately
+level areas supply the reference elevations. A 48-unit tolerance combines
+nearby elevation samples. The reference does not move as samples are added.
+Slope boundaries and 16-unit elevation bands remain separate during mesh
+generation. This keeps stairs and ramps from removing the landing boundaries.
+An elevation peak must have at least 4096 square units of support and 10 percent
+of the largest peak's support to create another floor. This reduces small
+platform and stair-tread bands.
+
+The layout puts the bands in rows, with the highest band first. Their projected
+bounds do not overlap. Each band keeps its shape, scale, and compass orientation.
+Disconnected areas can share a band. These bands are estimates, not room names
+or architectural storeys. Small landings can join the nearest main band.
+
+- **F1**, **F2**, and subsequent labels identify bands from lowest to highest.
+  **Z** gives the reference elevation in world units.
+- The player's band has a brighter fill. The cyan arrow shows the player.
+- Tan lines show navigation-polygon connections across bands.
+- Green lines show possible lift routes. These routes can require a story event.
+- Gold diamonds show active controls. Grey diamonds show inactive controls.
+- **Page Up / Page Down**, or **Height + / Height -**, centres the view on the
+  next band. **Player** returns to the player at a local zoom. **Fit** shows all bands.
+- Drag with the left mouse button to pan. Zoom, rotation, and tilt remain
+  available. Rotation and tilt fit the layout again.
+- Slice thickness and right-drag height adjustment apply to the slice view.
+
+This MVP uses static BSP surfaces marked solid. It includes ceilings for
+clearance tests. It does not reconstruct collision brushes, moving geometry,
+or AI-only restrictions. The mesh is for display; it is not an AI route source.
+The build uses 16-unit horizontal cells, 4-unit vertical cells, 56-unit clearance,
+16-unit radius erosion, a 16-unit step limit, and a 45-degree slope limit.
+Input and grid-size limits bound the build. Large levels can use the slice view
+if they exceed these limits.
+
+The first configuration downloads Recast 1.6.0 at commit
+`6dc1667f580357e8a2154c28b7867bea7e8ad3a7`. Only the Recast library is linked.
+Its source is cached in the CMake build directory. Its license is installed
+under `licenses/recast`.
 
 ## Switch and Button Coverage
 
@@ -89,6 +135,10 @@ engine and game module from the published package.
 ```sh
 c++ -std=c++11 -I shared tests/automap.cpp -o build/automap-test
 build/automap-test
+c++ -std=c++11 -I shared -I build/sp/cache/automap_recast-src/Recast/Include \
+  tests/automap_nav.cpp shared/qcommon/automap_nav.cpp \
+  build/sp/code/libautomap_recast.a -o build/automap-nav-test
+build/automap-nav-test
 python3 scripts/test-automap-sp.py
 python3 scripts/test-automap-sp.py --renderer rdsp-vanilla
 python3 scripts/test-automap-sp.py --campaign jo
@@ -96,6 +146,6 @@ python3 scripts/test-automap-sp.py --campaign jo
 
 The UI tests use headless windows and real keyboard/mouse events. They cover
 the Map tab, geometry, height, tilt, pan, zoom, close keys, control markers,
-drag release, slice thickness, lift routes, save/load, and renderer restart.
+drag release, slice thickness, lift routes, exploded bounds, save/load, and renderer restart.
 Use `automap_status` for diagnostic counts and
 marker positions. Logs and images are under `build/smoke/automap.*`.
