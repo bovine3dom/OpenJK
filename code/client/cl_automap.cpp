@@ -26,6 +26,7 @@ int nextLift, visibleLifts;
 bool valid;
 bool recenter = true;
 Automap::NavMap nav;
+std::vector<Automap::FloorLink> displayLinks;
 std::vector<Point> navInput, floorOffsets, floorLow, floorHigh;
 Point navCentre = {};
 bool exploded = false, navAttempted = false;
@@ -47,7 +48,7 @@ Point Position(const drawVert_t &v) { return {{LittleFloat(v.xyz[0]), LittleFloa
 // Keep the mesh renderer-independent; the old immediate-mode GL drawing is not reused.
 bool LoadMesh(const char *name) {
 	triangles.clear(); edges.clear(); navInput.clear(); nav = {}; navAttempted = exploded = false;
-	explodedTriangles.clear(); explodedEdges.clear();
+	explodedTriangles.clear(); explodedEdges.clear(); displayLinks.clear();
 	void *buffer = nullptr;
 	const int length = FS_ReadFile(name, &buffer);
 	if (length < int(sizeof(dheader_t))) { if (buffer) FS_FreeFile(buffer); return false; }
@@ -211,6 +212,7 @@ Point NavPosition(const Point &p,int floor) {
 }
 void PartitionMap() {
 	explodedTriangles.clear(); explodedEdges.clear();
+	displayLinks=nav.DisplayLinks();
 	for (int floor=0;floor<int(nav.floors.size());++floor) {
 		const float low=floor ? (nav.floors[floor-1].height+nav.floors[floor].height)/2 : -MAX_WORLD_COORD;
 		const float high=floor+1<int(nav.floors.size()) ? (nav.floors[floor].height+nav.floors[floor+1].height)/2 : MAX_WORLD_COORD;
@@ -360,7 +362,7 @@ void Action() {
 }
 void Status() {
 	Com_Printf("automap exploded=%d nav_polygons=%d floors=%d connections=%d nav_centre=%.1f,%.1f\n",exploded,int(nav.faces.size()),int(nav.floors.size()),int(nav.links.size()),navCentre[0],navCentre[1]);
-	Com_Printf("automap bsp_parts=%d bsp_edges=%d\n",int(explodedTriangles.size()),int(explodedEdges.size()));
+	Com_Printf("automap bsp_parts=%d bsp_edges=%d grouped_links=%d\n",int(explodedTriangles.size()),int(explodedEdges.size()),int(displayLinks.size()));
 	if (exploded) for (size_t i=0;i<nav.floors.size();++i) Com_Printf("automap floor=%d elevation=%.1f bounds=%.1f,%.1f,%.1f,%.1f\n",int(i)+1,nav.floors[i].height,
 		floorLow[i][0]+floorOffsets[i][0],floorLow[i][1]+floorOffsets[i][1],floorHigh[i][0]+floorOffsets[i][0],floorHigh[i][1]+floorOffsets[i][1]);
 	Com_Printf("automap map=%s valid=%d triangles=%d edges=%d drawn=%d markers=%d shown=%d height=%.1f span=%.1f yaw=%.1f tilt=%.1f centre=%.1f,%.1f lifts=%d lifts_shown=%d\n",
@@ -391,7 +393,7 @@ void DrawExploded(Batch &batch) {
 		++visibleTriangles;
 	}
 	for (const auto &edge : explodedEdges) batch.Line(NavScreen(edge.a,edge.floor),NavScreen(edge.b,edge.floor),EdgeColor(edge));
-	for (const auto &link : nav.links) batch.Line(NavScreen(link.a,link.from),NavScreen(link.b,link.to),{{175,151,90,170}},1);
+	for (const auto &link : displayLinks) batch.Line(NavScreen(link.a,link.from),NavScreen(link.b,link.to),{{175,151,90,170}},1);
 	for (int i=0;i<current.liftCount;++i) {
 		const auto &lift=current.lifts[i];
 		for (int j=0;j<Com_Clampi(0,Automap::MaxStops,lift.count);++j) {
@@ -433,7 +435,7 @@ void DrawExploded(Batch &batch) {
 void CL_InitAutomap() {
 	Cmd_AddCommand("automap", Action); Cmd_AddCommand("automap_status", Status);
 }
-void CL_ResetAutomap() { loadedMap.clear(); triangles.clear(); edges.clear(); explodedTriangles.clear(); explodedEdges.clear(); navInput.clear(); nav={}; floorOffsets.clear(); floorLow.clear(); floorHigh.clear(); exploded=navAttempted=false; current = {}; valid = false; nextControl = nextLift = 0; recenter = true; }
+void CL_ResetAutomap() { loadedMap.clear(); triangles.clear(); edges.clear(); explodedTriangles.clear(); explodedEdges.clear(); displayLinks.clear(); navInput.clear(); nav={}; floorOffsets.clear(); floorLow.clear(); floorHigh.clear(); exploded=navAttempted=false; current = {}; valid = false; nextControl = nextLift = 0; recenter = true; }
 
 void CL_DrawAutomap(const Automap::Frame *frame) {
 	if (!frame || !re.DrawUiGeometry) return;

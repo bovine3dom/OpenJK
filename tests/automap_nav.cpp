@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 #include <limits>
+#include <algorithm>
 
 using Automap::Point;
 static void Quad(std::vector<Point> &mesh,float x0,float x1,float z0,float z1,bool ceiling=false) {
@@ -46,5 +47,17 @@ int main() {
 	mesh[0][0]=std::numeric_limits<float>::quiet_NaN();
 	assert(!nav.Build(mesh));
 	assert(!nav.Build({}));
-	std::cout << "PASS: stacked floors, supporting surface, ramps, stairs, clearance, invalid input\n";
+	nav.links={
+		{{{0,0,0}},{{0,0,256}},0,1},
+		{{{32,0,256}},{{32,0,0}},1,0}, // Reversed connection within the same group.
+		{{{120,0,0}},{{120,0,256}},0,1},
+		{{{240,0,0}},{{240,0,256}},0,1}, // Near the previous member, but not the seed.
+		{{{0,0,0}},{{0,512,256}},0,1}, // Only one endpoint is close.
+		{{{0,0,0}},{{0,0,256}},0,2}}; // Another layer pair.
+	const auto grouped=nav.DisplayLinks();
+	assert(grouped.size()==4 && nav.links.size()==6);
+	std::reverse(nav.links.begin(),nav.links.end());
+	const auto reversed=nav.DisplayLinks();
+	for (size_t i=0;i<grouped.size();++i) assert(grouped[i].a==reversed[i].a && grouped[i].b==reversed[i].b && grouped[i].from==reversed[i].from && grouped[i].to==reversed[i].to);
+	std::cout << "PASS: floors, ramps, stairs, clearance, invalid input, and link grouping\n";
 }

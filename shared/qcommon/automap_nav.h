@@ -14,5 +14,6 @@ struct NavMap {
 	// Input triangles use game coordinates (Z up) and outward winding.
 	bool Build(const std::vector<Point> &triangles);
 	int FloorAt(const Point &point) const;
+	std::vector<FloorLink> DisplayLinks(float radius=128) const;
 };
 }

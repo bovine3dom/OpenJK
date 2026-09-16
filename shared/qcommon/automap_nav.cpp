@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <limits>
+#include <tuple>
 
 namespace Automap {
 namespace {
@@ -112,6 +113,27 @@ bool NavMap::Build(const std::vector<Point> &input) {
 		links.push_back({Middle(faces[i]),Middle(faces[other]),faces[i].floor,faces[other].floor});
 	}
 	return true;
+}
+
+std::vector<FloorLink> NavMap::DisplayLinks(float radius) const {
+	auto sorted=links;
+	for (auto &link : sorted) if (link.from>link.to) { std::swap(link.from,link.to); std::swap(link.a,link.b); }
+	std::sort(sorted.begin(),sorted.end(),[](const FloorLink &a,const FloorLink &b) {
+		return std::tie(a.from,a.to,a.a,a.b)<std::tie(b.from,b.to,b.a,b.b);
+	});
+	auto near=[&](const Point &a,const Point &b) {
+		float distance=0;
+		for (int j=0;j<3;++j) distance+=(a[j]-b[j])*(a[j]-b[j]);
+		return distance<=radius*radius;
+	};
+	std::vector<FloorLink> result;
+	for (const auto &link : sorted) {
+		bool grouped=false;
+		for (const auto &prior : result) if (link.from==prior.from && link.to==prior.to && near(link.a,prior.a) && near(link.b,prior.b)) { grouped=true; break; }
+		// Keep a real connection as the representative. Do not chain groups or average endpoints into walls.
+		if (!grouped) result.push_back(link);
+	}
+	return result;
 }
 
 int NavMap::FloorAt(const Point &point) const {

@@ -75,6 +75,8 @@ or architectural storeys. Small landings can join the nearest main band.
   **Z** gives the reference elevation in world units.
 - The cyan arrow shows the player. The status line identifies the player's band.
 - Tan lines show navigation-polygon connections across bands.
+  Nearby links between the same two bands share one line when both endpoints
+  are within 128 world units of a representative connection.
 - Green lines show possible lift routes. These routes can require a story event.
 - Gold diamonds show active controls. Grey diamonds show inactive controls.
 - **Page Up / Page Down**, or **Floor + / Floor -**, centres the view on the
