@@ -613,6 +613,19 @@ Update the default VBO to replace the client side vertex arrays
 void RB_UpdateVBOs(unsigned int attribBits)
 {
 	gpuFrame_t *currentFrame = backEndData->currentFrame;
+	VertexArraysProperties vertexArrays = {};
+	CalculateVertexArraysProperties(attribBits, &vertexArrays);
+	// UI draws are immediate. Large automaps can fill a frame's streaming buffers;
+	// wait for their consumers before reusing storage, including persistent mappings.
+	// A 3D pass can still contain queued draws, so its storage must not be recycled here.
+	if (!backEndData->currentPass &&
+		(currentFrame->dynamicVboWriteOffset + tess.numVertexes * vertexArrays.vertexDataSize > size_t(currentFrame->dynamicVbo->vertexesSize) ||
+		 currentFrame->dynamicIboWriteOffset + tess.numIndexes * sizeof(tess.indexes[0]) > size_t(currentFrame->dynamicIbo->indexesSize)))
+	{
+		qglFinish();
+		currentFrame->dynamicVboWriteOffset = currentFrame->dynamicVboCommitOffset = 0;
+		currentFrame->dynamicIboWriteOffset = currentFrame->dynamicIboCommitOffset = 0;
+	}
 
 	GLimp_LogComment("--- RB_UpdateVBOs ---\n");
 
@@ -623,8 +636,6 @@ void RB_UpdateVBOs(unsigned int attribBits)
 	{
 		VBO_t *frameVbo = currentFrame->dynamicVbo;
 		GLbitfield mapFlags = GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT;
-		VertexArraysProperties vertexArrays = {};
-		CalculateVertexArraysProperties(attribBits, &vertexArrays);
 
 		int totalVertexDataSize = tess.numVertexes * vertexArrays.vertexDataSize;
 		backEnd.pc.c_dynamicVboTotalSize += totalVertexDataSize;

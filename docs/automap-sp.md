@@ -147,6 +147,8 @@ build/automap-nav-test
 python3 scripts/test-automap-sp.py
 python3 scripts/test-automap-sp.py --renderer rdsp-vanilla
 python3 scripts/test-automap-sp.py --campaign jo
+python3 scripts/test-automap-layout.py --map yavin_trial
+python3 scripts/test-automap-layout.py --map artus_mine
 ```
 
 The UI tests use headless windows and real keyboard/mouse events. They cover
@@ -154,3 +156,8 @@ the Map tab, whole-map geometry, tilt, pan, zoom, close keys, control markers,
 drag release, lift routes, exploded bounds, save/load, and renderer restart.
 Use `automap_status` for diagnostic counts and
 marker positions. Logs and images are under `build/smoke/automap.*`.
+
+The layout check compares the title, toolbar, tabs, and cursor area before and
+after map changes. Artus Mine exercises Rend2's geometry-buffer reuse with a
+large exploded map. Add `--buffer-storage` to check persistent mapped buffers.
+Layout captures are under `build/smoke/automap-layout.*`.
