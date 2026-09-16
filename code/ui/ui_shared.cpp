@@ -1648,6 +1648,7 @@ Menu_RunCloseScript
 */
 static void Menu_RunCloseScript(menuDef_t *menu)
 {
+	if (menu && menu->window.name && !Q_stricmp(menu->window.name,"datapadMapMenu")) UI_CancelAutomapDrag();
 	if (menu && menu->window.flags & WINDOW_VISIBLE && menu->onClose)
 	{
 		itemDef_t item;
@@ -5711,6 +5712,7 @@ Menu_Reset
 */
 void Menu_Reset(void)
 {
+	UI_CancelAutomapDrag();
 	//FIXME iterate menus to destoy G2 assets.
 	int i;
 
@@ -5885,16 +5887,38 @@ void UI_AddDatapadMap()
 			map->items[map->itemCount++] = item;
 		}
 		const char *actions[][2] = {{"Zoom +","zoomin"},{"Zoom -","zoomout"},{"Height +","up"},{"Height -","down"},
-			{"Tilt","tilt"},{"Player","centre"},{"Fit","fit"},{"Control","control"}};
-		for (int i=0;i<8;++i) button(map, va("map_%s",actions[i][1]), actions[i][0], 24+i*74, 37, 70,
+			{"Slice +","wider"},{"Slice -","narrower"},
+			{"Tilt","tilt"},{"Player","centre"},{"Fit","fit"},{"Control","control"},{"Lift","lift"}};
+		for (int i=0;i<11;++i) button(map, va("map_%s",actions[i][1]), actions[i][0], 24+i*(592.0f/11), 37, 50,
 			va("exec \"automap %s\" ;",actions[i][1]));
 		Menu_PostParse(map);
 	}
 	if (!map) return;
 	for (int i=0;i<menuCount;++i) {
 		menuDef_t *menu = &Menus[i];
-		if (!menu->window.name || Q_stricmpn(menu->window.name,"datapad",7) || Menu_FindItemByName(menu,"map_tab")) continue;
-		button(menu,"map_tab","Map  F4",538,3,90,"close all ; open datapadMapMenu ;");
+		if (!menu->window.name || Q_stricmpn(menu->window.name,"datapad",7)) continue;
+		if (!Menu_FindItemByName(menu,"map_tab"))
+			button(menu,"map_tab","MAP",120,420,100,"close all ; open datapadMapMenu ;");
+		itemDef_t *tabs[7]; int count=0;
+		for (const char *name : {"mission","map_tab","weapons","force","moves","inventory","exit"}) {
+			auto *item = static_cast<itemDef_t *>(Menu_FindItemByName(menu,name));
+			if (item) tabs[count++]=item;
+		}
+		if (!count) continue;
+		const float width=600.0f/count;
+		for (int j=0;j<count;++j) {
+			auto *item=tabs[j];
+			item->window.rectClient={20+j*width,420,width,25};
+			item->textalignment=ITEM_ALIGN_CENTER; item->textalignx=width/2; item->textscale=1;
+			if (menu==map && !Q_stricmp(item->window.name,"map_tab")) {
+				item->window.flags|=WINDOW_DECORATION;
+				VectorSet4(item->window.foreColor,1,1,1,1);
+			}
+			if (!(item->window.flags&WINDOW_DECORATION)) {
+				item->mouseEnter=String_Alloc(va("show button_glow ; setitemrect button_glow %.1f 419 %.1f 30 ;",15+j*width,width+10));
+				item->mouseExit=String_Alloc("hide button_glow ;");
+			}
+		}
 		Menu_UpdatePosition(menu);
 	}
 #endif

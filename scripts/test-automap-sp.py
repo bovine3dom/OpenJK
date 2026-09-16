@@ -76,11 +76,13 @@ def main():
         def key(value):
             subprocess.run(["xdotool","key","--clearmodifiers",value],check=True)
             cmd("wait 15")
-        def click(x,y,item):
+        def move(x,y):
             subprocess.run(["xdotool","mousemove","--window",window,"958","718"],check=True);cmd("wait 5")
             for _ in range(2):
                 subprocess.run(["xdotool","mousemove","--window",window,"1","1"],check=True);cmd("wait 5")
             subprocess.run(["xdotool","mousemove_relative","--",str(x),str(y)],check=True);cmd("wait 10")
+        def click(x,y,item):
+            move(x,y)
             assert f"item: {item};" in cmd("ui_report")
             subprocess.run(["xdotool","click","1"],check=True);cmd("wait 15")
         try:
@@ -91,11 +93,35 @@ def main():
             if args.campaign=="ja": cmd("noclip; setviewpos 2688 640 -60 315; wait 60")
             cmd("save automap_test; datapad")
             assert "UI focus: datapad" in cmd("ui_report")
-            click(580,14,"map_tab")
+            click(170,432,"map_tab")
             assert "UI focus: datapadMapMenu;" in cmd("ui_report")
             initial=state("isometric")
             assert initial["valid"]=="1" and int(initial["triangles"])>100 and int(initial["drawn"])>10,initial
+            assert float(initial["slice"])==256,initial
+            assert int(initial["lifts"])>0,initial
             iso=capture("isometric")
+            before=cmd("campaign_status")
+            move(310,220)
+            subprocess.run(["xdotool","mousedown","1"],check=True)
+            subprocess.run(["xdotool","mousemove_relative","--","40","20"],check=True);cmd("wait 10")
+            subprocess.run(["xdotool","mouseup","1"],check=True);cmd("wait 10")
+            dragged=state("drag_pan");assert dragged["centre"]!=initial["centre"]
+            subprocess.run(["xdotool","mousemove_relative","--","20","0"],check=True);cmd("wait 10")
+            assert state("released_pan")["centre"]==dragged["centre"]
+            move(310,220)
+            subprocess.run(["xdotool","mousedown","3"],check=True)
+            subprocess.run(["xdotool","mousemove_relative","--","0","-24"],check=True);cmd("wait 10")
+            subprocess.run(["xdotool","mouseup","3"],check=True);cmd("wait 10")
+            assert float(state("drag_height")["height"])==float(initial["height"])+96
+            after=cmd("campaign_status")
+            beforeOrigin=re.search(r"origin=([^\n]+)",before);afterOrigin=re.search(r"origin=([^\n]+)",after)
+            assert beforeOrigin and afterOrigin and beforeOrigin[0]==afterOrigin[0]
+            click(264,48,"map_wider")
+            assert float(state("wider")["slice"])==320
+            click(318,48,"map_narrower")
+            assert float(state("narrower")["slice"])==256
+            key("bracketright");assert float(state("wider_key")["slice"])==320
+            key("Home")
             key("t");top=state("top")
             assert top["tilt"]=="0.0"
             flat=capture("top")
@@ -110,7 +136,7 @@ def main():
             assert pan["centre"]!=up["centre"]
             oldOrigin=re.search(r"origin=([^\n]+)",before);newOrigin=re.search(r"origin=([^\n]+)",after)
             assert oldOrigin and newOrigin and oldOrigin[0]==newOrigin[0],"Map input moved the player"
-            click(355,48,"map_tilt")
+            click(372,48,"map_tilt")
             assert state("button_tilt")["tilt"]=="55.0"
             key("Home");key("equal")
             assert float(state("zoom")["span"])<float(initial["span"])
@@ -121,13 +147,28 @@ def main():
                 gold=sum(image[i]>180 and image[i+1]>120 and image[i+2]<110
                          for y in range(300,365) for x in range(445,515) for i in [(y*960+x)*3])
                 assert gold>12,"Control marker was not drawn"
+            key("l");lift=state("lift")
+            assert int(lift["lifts_shown"])>0
+            image=capture("lift")
+            assert re.search(r"automap lift=\d+ stops=[2-8]",text()),"No known lift travel"
+            # Other tabs use the same evenly spaced bottom row.
+            click(270,432,"weapons");assert "datapadWeaponsMenu" in cmd("ui_report")
+            click(170,432,"map_tab");assert "datapadMapMenu" in cmd("ui_report")
             key("Tab")
             assert "UI focus: datapadMapMenu;" not in cmd("ui_report")
             cmd("load automap_test; wait 150; datapad")
             key("F4"); assert state("loaded")["valid"]=="1"
             key("Escape");cmd("vid_restart; wait 150; datapad")
             key("F4");assert state("restarted")["valid"]=="1"
+            assert float(state("saved_slice")["slice"])==320
             capture("restarted")
+            move(310,220);subprocess.run(["xdotool","mousedown","1"],check=True)
+            key("Escape")
+            subprocess.run(["xdotool","mouseup","1"],check=True)
+            cmd("datapad");key("F4")
+            reopened=state("reopened")
+            subprocess.run(["xdotool","mousemove_relative","--","30","0"],check=True);cmd("wait 10")
+            assert state("cancelled_drag")["centre"]==reopened["centre"]
             key("Escape")
             stdin.write("quit\n");stdin.flush()
             assert process.wait(timeout=30)==0

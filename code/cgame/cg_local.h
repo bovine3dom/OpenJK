@@ -618,6 +618,8 @@ extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 extern vmCvar_t cg_hudReveal;
 void CG_HudStatus_f();
 void CG_DrawDataPadMap();
+void CG_AddAutomapLifts(Automap::Frame &frame);
+void CG_ResetAutomapLifts();
 void cgi_R_DrawAutomap(const Automap::Frame *frame);
 extern	vmCvar_t		cg_autoswitch;
 extern	vmCvar_t		cg_simpleItems;

@@ -4009,8 +4009,18 @@ UI_MouseEvent
 =================
 */
 //JLFMOUSE  CALLED EACH FRAME IN UI
+static int automapDragButton;
+void UI_CancelAutomapDrag() { automapDragButton=0; }
+static bool UI_AutomapFocused() {
+	const auto *menu=Menu_GetFocused();
+	return menu && menu->window.name && !Q_stricmp(menu->window.name,"datapadMapMenu") &&
+		(trap_Key_GetCatcher() & KEYCATCH_UI) && !(trap_Key_GetCatcher() & KEYCATCH_CONSOLE) &&
+		!Cvar_VariableIntegerValue("com_unfocused") && !Cvar_VariableIntegerValue("com_minimized");
+}
+
 void _UI_MouseEvent( int dx, int dy )
 {
+	const float oldX=uiInfo.uiDC.cursorx, oldY=uiInfo.uiDC.cursory;
 	// update mouse screen position
 	uiInfo.uiDC.cursorx += dx;
 	if (uiInfo.uiDC.cursorx < 0)
@@ -4032,6 +4042,12 @@ void _UI_MouseEvent( int dx, int dy )
 		uiInfo.uiDC.cursory = SCREEN_HEIGHT;
 	}
 
+	if (!UI_AutomapFocused()) UI_CancelAutomapDrag();
+	if (automapDragButton) {
+		ui.Cmd_ExecuteText(EXEC_NOW,va("automap drag %.3f %.3f %d\n",uiInfo.uiDC.cursorx-oldX,
+			uiInfo.uiDC.cursory-oldY,automapDragButton==A_MOUSE2));
+		return;
+	}
 	if (Menu_Count() > 0)
 	{
     //menuDef_t *menu = Menu_GetFocused();
@@ -4049,6 +4065,18 @@ UI_KeyEvent
 void _UI_KeyEvent( int key, qboolean down )
 {
 #ifndef JK2_MODE
+	if (!UI_AutomapFocused()) UI_CancelAutomapDrag();
+	if (key==A_MOUSE1 || key==A_MOUSE2) {
+		if (automapDragButton) {
+			if (!down && key==automapDragButton) UI_CancelAutomapDrag();
+			return;
+		}
+		if (down && UI_AutomapFocused() && uiInfo.uiDC.cursorx>=Automap::ViewLeft &&
+			uiInfo.uiDC.cursorx<=Automap::ViewLeft+Automap::ViewWidth && uiInfo.uiDC.cursory>=Automap::ViewTop &&
+			uiInfo.uiDC.cursory<=Automap::ViewTop+Automap::ViewHeight) {
+			automapDragButton=key; return;
+		}
+	}
 	menuDef_t *focused = Menu_GetFocused();
 	if (down && focused && focused->window.name && !(key & K_CHAR_FLAG)) {
 		if (key == A_F4 && !Q_stricmpn(focused->window.name,"datapad",7) && Menus_FindByName("datapadMapMenu")) {
@@ -4062,6 +4090,8 @@ void _UI_KeyEvent( int key, qboolean down )
 			case A_MWHEELDOWN: case A_KP_MINUS: case '-': action="zoomout"; break;
 			case A_PAGE_UP: action="up"; break;
 			case A_PAGE_DOWN: action="down"; break;
+			case A_OPEN_SQUARE: action="narrower"; break;
+			case A_CLOSE_SQUARE: action="wider"; break;
 			case A_CURSOR_LEFT: action="panleft"; break;
 			case A_CURSOR_RIGHT: action="panright"; break;
 			case A_CURSOR_UP: action="panup"; break;
@@ -4070,6 +4100,7 @@ void _UI_KeyEvent( int key, qboolean down )
 			case 'e': action="right"; break;
 			case 't': action="tilt"; break;
 			case 'c': action="control"; break;
+			case 'l': action="lift"; break;
 			case A_HOME: action="centre"; break;
 			}
 			if (action) { ui.Cmd_ExecuteText(EXEC_APPEND,va("automap %s\n",action)); return; }

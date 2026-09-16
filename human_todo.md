@@ -16,6 +16,10 @@ visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
 ## Prepare
 
+- [ ] Check left-drag panning and right-drag height changes in both map views. Try wider and narrower slices, then confirm the preferred thickness survives a restart.
+- [ ] Check the evenly spaced datapad tabs and the Map tab between Mission and Weapons.
+- [ ] Check lift positions and green travel arrows in Kril'dor and Kejim. Compare the indicated stops with actual platform movement, including script-controlled lifts.
+
 - [ ] Open the datapad Map tab in JA and JO. Check stairs, shafts, stacked corridors, and the height controls in both map views.
 - [ ] Check the explicit control markers and the Control button. Trigger-backed panels are outside this MVP's marker coverage.
 - [ ] Check map readability and responsiveness at desktop resolution. Check that panning and rotating the map do not move the player.

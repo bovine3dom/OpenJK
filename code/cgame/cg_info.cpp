@@ -44,6 +44,7 @@ void CG_DrawDataPadMap()
 		marker.enabled = !(ent.svFlags & SVF_INACTIVE);
 		for (int axis = 0; axis < 3; ++axis) marker.position[axis] = (ent.absmin[axis] + ent.absmax[axis]) * 0.5f;
 	}
+	CG_AddAutomapLifts(frame);
 	cgi_R_DrawAutomap(&frame);
 }
 

@@ -199,6 +199,7 @@ set(SPGameCGameFiles
 	"${SPDir}/cgame/cg_event.cpp"
 	"${SPDir}/cgame/cg_headers.cpp"
 	"${SPDir}/cgame/cg_info.cpp"
+	"${SPDir}/cgame/cg_automap_lifts.cpp"
 	"${SPDir}/cgame/cg_lights.cpp"
 	"${SPDir}/cgame/cg_localents.cpp"
 	"${SPDir}/cgame/cg_main.cpp"

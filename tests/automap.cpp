@@ -13,6 +13,14 @@ int main() {
 	const Point centre = {{0,0,0}};
 	assert(Project({{10,20,30}},centre,0,0)[0]==10 && Project({{10,20,30}},centre,0,0)[1]==-20);
 	assert(Project({{0,0,30}},centre,45,55)[1]<0); // Height rises on the isometric display.
+	for (float tilt : {0.0f,55.0f}) for (float yaw : {0.0f,45.0f,90.0f}) {
+		const auto delta=DragPan(20,-12,1024,yaw,tilt,4.0f/3);
+		const Point point={{32,80,5}};
+		const auto before=Project(point,centre,yaw,tilt),after=Project(point,delta,yaw,tilt);
+		assert(std::abs((after[0]-before[0])*ViewWidth/(2*1024)-20)<0.001f);
+		assert(std::abs((after[1]-before[1])*ViewWidth/(2*1024)*(4.0f/3)+12)<0.001f);
+	}
+	assert(Clip(Clip(p,-128,true),128,false).count==3); // Wider slices retain the full floor/ramp.
 	assert(IsControl("func_button",false));
 	assert(IsControl("func_usable",true) && !IsControl("func_usable",false));
 	assert(IsControl("misc_model_breakable",true));

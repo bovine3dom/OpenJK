@@ -2121,6 +2121,7 @@ Called after every level change or subsystem restart
 =================
 */
 void CG_Init( int serverCommandSequence ) {
+	CG_ResetAutomapLifts();
 	cgs.serverCommandSequence = serverCommandSequence;
 
 	cgi_Cvar_Set( "cg_drawHUD", "1" );
