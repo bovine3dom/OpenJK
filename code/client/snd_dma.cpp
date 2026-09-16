@@ -1055,6 +1055,15 @@ sfxHandle_t	S_RegisterSound( const char *name)
 	return sfx - s_knownSfx;
 }
 
+void S_PrepareLevelSounds( void )
+{
+	if ( !s_soundStarted ) return;
+#ifdef USE_OPENAL
+	if ( s_UseOpenAL ) return;
+#endif
+	S_SteamPrepare();
+}
+
 void S_memoryLoad(sfx_t	*sfx)
 {
 	// load the sound file...

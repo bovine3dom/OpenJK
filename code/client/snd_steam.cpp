@@ -221,23 +221,32 @@ void S_SteamInit() {
 void S_SteamClear() { engine.reset(); loadedMap.clear(); objects.clear(); slots={}; lastUpdate=lastReflection=mixedBlocks=0; mixPeakUs=mixCalls=mixEnd=underrunFrames=0; sceneCache=probeCache=false; }
 void S_SteamShutdown() { S_SteamClear(); recording.clear(); recordFrames=0; Cmd_RemoveCommand("s_steam_status"); Cmd_RemoveCommand("s_steam_bake"); Cmd_RemoveCommand("s_steam_emit"); Cmd_RemoveCommand("s_steam_record"); }
 bool S_SteamActive() { return enabled && enabled->integer && engine && engine->Ready(); }
-void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool inWater) {
-	(void)listener; (void)inWater;
-	if(!enabled || !enabled->integer || cls.state!=CA_ACTIVE || !cl.mapname[0] || (dma.speed!=44100 && dma.speed!=48000)) { if(!loadedMap.empty()) S_SteamClear(); return; }
+void S_SteamPrepare() {
+	if(!enabled || !enabled->integer || !cl.mapname[0] || (dma.speed!=44100 && dma.speed!=48000)) return;
 	if(loadedMap!=cl.mapname || serverId!=cl.serverId) {
 		S_SteamClear(); loadedMap=cl.mapname; serverId=cl.serverId;
 		engine.reset(new SteamSound::Engine(dma.speed));
 		if(!engine->Ready() || !LoadMap()) { engine.reset(); Com_Printf("Steam Audio: initialization failed for %s; retaining legacy sound.\n",loadedMap.c_str()); return; }
 		Status();
 	}
+}
+void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool inWater) {
+	(void)listener; (void)inWater;
+	if(!enabled || !enabled->integer || cls.state!=CA_ACTIVE || !cl.mapname[0]) {
+		if(cls.state!=CA_LOADING && cls.state!=CA_PRIMED && !loadedMap.empty()) S_SteamClear();
+		return;
+	}
+	S_SteamPrepare();
 	if(!engine || engine->Busy()) return;
 	std::array<SteamSound::Voice,SteamSound::Voices> voices={}; bool changed=false;
 	for(int i=0;i<SteamSound::Voices;++i) {
 		const auto &ch=s_channels[i]; auto &slot=slots[i]; const bool active=Eligible(ch);
-		if(slot.sound!=ch.thesfx || slot.entity!=ch.entnum || slot.loop!=bool(ch.loopSound) || (!ch.loopSound && slot.start!=ch.startSample)) {
+		if(slot.sound!=ch.thesfx || slot.entity!=ch.entnum || slot.active!=active || slot.loop!=bool(ch.loopSound) ||
+			(!ch.loopSound && slot.start!=ch.startSample && slot.start!=START_SAMPLE_IMMEDIATE)) {
 			if(ch.thesfx) engine->ResetVoice(i);
-			slot.sound=ch.thesfx; slot.entity=ch.entnum; slot.loop=ch.loopSound; slot.start=ch.startSample; changed=true;
+			slot.sound=ch.thesfx; slot.entity=ch.entnum; slot.loop=ch.loopSound; changed=true;
 		}
+		slot.start=ch.startSample;
 		slot.active=active; if(!active) continue;
 		const float *origin=ch.fixed_origin ? ch.origin : s_entityPosition[Com_Clampi(0,MAX_GENTITIES-1,ch.entnum)];
 		voices[i].position=Position(origin); voices[i].active=true; voices[i].priority=float(std::max(ch.leftvol,ch.rightvol));

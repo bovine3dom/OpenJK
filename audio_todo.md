@@ -2,6 +2,18 @@
 
 ## Current Status
 
+The user confirms that almost all crackling is gone. Brief sound gaps on first
+use and frame-time peaks near doors remain. Work now targets those stalls and
+environmental emitters that stop outside the visible room.
+
+First-use changes move acoustic scene creation into level loading. Hybrid
+convolution now allocates and processes 0.15 seconds, which matches its transition
+to parametric reverb. The 1.5-second simulation and late reverb remain in use.
+An immediate sound start no longer resets its DSP again when the mixer assigns
+its sample time. `tests/steam_audio_perf.cpp` checks 32 sources, repeated reflection
+updates, and a moving door against a large static mesh. The initial comparison
+reduced mean DSP time from 1.83 ms to 0.40 ms per 128-sample block on this host.
+
 **A mixer timing defect is fixed. Clean device playback still needs a check.**
 The user reported severe crackling. The old mixer moved `s_paintedtime` backwards
 on each update. Steam Audio then processed overlapping samples with advanced

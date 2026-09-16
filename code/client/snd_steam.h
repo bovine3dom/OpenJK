@@ -5,6 +5,7 @@
 void S_SteamInit();
 void S_SteamShutdown();
 void S_SteamClear();
+void S_SteamPrepare();
 bool S_SteamActive();
 void S_SteamUpdate(const float *head, const float axis[3][3], int listener, bool inWater);
 void S_SteamBeginMix();
@@ -16,6 +17,7 @@ void S_SteamEndBlock(portable_samplepair_t *output, int count);
 inline void S_SteamInit() {}
 inline void S_SteamShutdown() {}
 inline void S_SteamClear() {}
+inline void S_SteamPrepare() {}
 inline bool S_SteamActive() { return false; }
 inline void S_SteamUpdate(const float *, const float [3][3], int, bool) {}
 inline void S_SteamBeginMix() {}

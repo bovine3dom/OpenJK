@@ -12,6 +12,7 @@
 namespace SteamSound {
 namespace {
 constexpr float Duration=1.5f;
+constexpr float HybridDuration=0.15f;
 constexpr int Order=1, Channels=4;
 IPLSimulationFlags All=static_cast<IPLSimulationFlags>(IPL_SIMULATIONFLAGS_DIRECT|IPL_SIMULATIONFLAGS_REFLECTIONS|IPL_SIMULATIONFLAGS_PATHING);
 }
@@ -78,7 +79,7 @@ struct Engine::Impl {
 		pathSettings.speakerLayout.type=IPL_SPEAKERLAYOUTTYPE_STEREO;
 		pathSettings.hrtf=hrtf;
 		IPLReflectionEffectSettings reflectionSettings={}; reflectionSettings.type=settings.reflectionType;
-		reflectionSettings.irSize=int(rate*Duration); reflectionSettings.numChannels=Channels;
+		reflectionSettings.irSize=int(rate*HybridDuration); reflectionSettings.numChannels=Channels;
 		IPLAmbisonicsDecodeEffectSettings decodeSettings={}; decodeSettings.maxOrder=Order;
 		decodeSettings.speakerLayout.type=IPL_SPEAKERLAYOUTTYPE_STEREO;
 		decodeSettings.hrtf=hrtf;
@@ -133,7 +134,8 @@ struct Engine::Impl {
 	}
 	void Reflect(Source &s,float *input,float gain,float *left,float *right) {
 		if (!s.hasReflection) return;
-		auto params=s.output.reflections; params.type=IPL_REFLECTIONEFFECTTYPE_HYBRID; params.numChannels=Channels; params.irSize=int(audio.samplingRate*Duration);
+		// The remaining IR is silent: the parametric tail starts at the hybrid transition.
+		auto params=s.output.reflections; params.type=IPL_REFLECTIONEFFECTTYPE_HYBRID; params.numChannels=Channels; params.irSize=int(audio.samplingRate*HybridDuration);
 		float decay=Duration;
 		for(float &time:params.reverbTimes) { time=std::max(0.1f,std::min(6.0f,time)); decay=std::max(decay,time); }
 		bool signal=false; for(int i=0;i<Block;++i) signal|=std::abs(input[i])>0.000001f;
@@ -276,7 +278,7 @@ void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSp
 		in.directFlags=static_cast<IPLDirectSimulationFlags>(s.active && i<Voices ? IPL_DIRECTSIMULATIONFLAGS_OCCLUSION|IPL_DIRECTSIMULATIONFLAGS_TRANSMISSION|IPL_DIRECTSIMULATIONFLAGS_AIRABSORPTION : 0);
 		in.occlusionType=IPL_OCCLUSIONTYPE_VOLUMETRIC; in.occlusionRadius=0.2f; in.numOcclusionSamples=8; in.numTransmissionRays=8;
 		in.reverbScale[0]=in.reverbScale[1]=in.reverbScale[2]=1;
-		in.hybridReverbTransitionTime=0.15f; in.hybridReverbOverlapPercent=0.25f;
+		in.hybridReverbTransitionTime=HybridDuration; in.hybridReverbOverlapPercent=0.25f;
 		if(s.active && reflections && (s.reflected || i==Voices)) { in.flags=static_cast<IPLSimulationFlags>(in.flags|IPL_SIMULATIONFLAGS_REFLECTIONS); ++p->info.reflected; }
 		if(i==Voices && p->probes && p->cachedRoom) { in.baked=IPL_TRUE; in.bakedDataIdentifier.type=IPL_BAKEDDATATYPE_REFLECTIONS; in.bakedDataIdentifier.variation=IPL_BAKEDDATAVARIATION_REVERB; }
 		if(i<Voices && s.active && pathing && p->probes) {
