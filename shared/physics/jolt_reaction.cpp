@@ -293,6 +293,8 @@ struct FallSimulation::Impl {
 	float mass[PartCount], weakness[PartCount] = {}, weaknessHold[PartCount] = {};
 	float totalMass = 0, targetAge = 0, targetDuration = Step, reactionAge = 10, reactionAngle = 0;
 	float stepAge = 0, landedAge = 10, fallAge = 0, unsupported = 0, standingHeight = .8f;
+	float vitality = 1, recentStress = 0, deathAge = 0, deathStrength = 0;
+	JPH::Mat44 deathPose[PartCount];
 	int swing = 0;
 	JPH::Vec3 desiredVelocity = JPH::Vec3::sZero(), reactionAxis = JPH::Vec3::sAxisY();
 	JPH::Vec3 stepStart = JPH::Vec3::sZero(), stepGoal = JPH::Vec3::sZero(), planted = JPH::Vec3::sZero();
@@ -380,7 +382,8 @@ struct FallSimulation::Impl {
 		}
 	}
 	void Control() {
-		if (balance.phase == ControlPhase::Shadow || balance.phase == ControlPhase::Dead) return;
+		if (balance.phase == ControlPhase::Shadow) return;
+		if (balance.phase == ControlPhase::Dead) { DeathControl(); return; }
 		auto& api = world.GetBodyInterface();
 		targetAge += Step; reactionAge += Step;
 		landedAge += Step;
@@ -500,7 +503,9 @@ struct FallSimulation::Impl {
 			}
 			if (balance.error > .65f) balance.phase = ControlPhase::Falling;
 		}
-		const float wantedStrength = balance.phase == ControlPhase::Falling || preparing ? .12f : 1.0f;
+		recentStress = std::max(0.0f, recentStress-Step*.08f);
+		const float wantedStrength = balance.phase == ControlPhase::Falling || preparing ? .12f :
+			1-.15f*(1-vitality)-recentStress;
 		PalmCollision(balance.phase == ControlPhase::Falling || preparing);
 		balance.strength += std::clamp(wantedStrength-balance.strength, -Step*3, Step*2);
 		const float pulse = reactionAge < .08f ? reactionAge/.08f : std::max(0.0f, 1-(reactionAge-.08f)/.55f);
@@ -640,6 +645,40 @@ struct FallSimulation::Impl {
 				if (torque.Length() > cap) torque *= cap/torque.Length();
 				api.AddTorque(bodies[0], torque); api.AddTorque(bodies[stance], -torque);
 			}
+		}
+	}
+	void DeathControl() {
+		if (deathStrength <= 0) return;
+		deathAge += Step;
+		const float t = std::min(1.0f, deathAge/.45f);
+		const float fade = 1-t*t*(3-2*t);
+		balance.strength = deathStrength*fade;
+		if (trunkContact || t >= 1) {
+			deathStrength = balance.strength = 0;
+			for (int i = 1; i < PartCount; ++i) {
+				joints[i]->SetSwingMotorState(JPH::EMotorState::Off);
+				joints[i]->SetTwistMotorState(JPH::EMotorState::Off);
+			}
+			for (auto* b : body) b->SetAllowSleeping(true);
+			return;
+		}
+		JPH::Mat44 goals[PartCount];
+		std::copy(deathPose, deathPose+PartCount, goals);
+		// Lower the hips while the feet keep their initial targets. The solver permits yielding.
+		for (int side = 0; side < 2; ++side) {
+			const int upper = side ? 9 : 7;
+			const auto hip = (deathPose[upper]*offsets[upper]).GetTranslation() - JPH::Vec3(0,0,.22f*t*t);
+			LegTargets(goals, side, deathPose[upper+1]*endLocal[upper+1], &hip);
+		}
+		const auto forward = (deathPose[11].GetAxisY()*JPH::Vec3(1,1,0)).NormalizedOr(JPH::Vec3::sAxisX());
+		const auto fold = JPH::Quat::sRotation(JPH::Vec3::sAxisZ().Cross(forward), .25f*t);
+		goals[1] = JPH::Mat44::sRotationTranslation(fold*goals[1].GetQuaternion(), goals[1].GetTranslation());
+		for (int i = 1; i < PartCount; ++i) {
+			joints[i]->SetTargetOrientationBS(goals[parent[i]].GetQuaternion().Conjugated()*goals[i].GetQuaternion());
+			const float region = i >= 7 ? fade : 1.0f;
+			const float torque = (i >= 7 ? 300.0f : i == 1 ? 180.0f : 35.0f)*balance.strength*region*MuscleStrength(i);
+			joints[i]->GetSwingMotorSettings().SetTorqueLimit(torque);
+			joints[i]->GetTwistMotorSettings().SetTorqueLimit(torque);
 		}
 	}
 	explicit Impl(const Part* parts, const float* velocity, float gravity) {
@@ -835,6 +874,7 @@ void FallSimulation::React(int part, const float* direction, const float* point,
 	Impulse(part, direction, point, impulse);
 	impl->weakness[part] = std::max(impl->weakness[part], std::clamp(weakness, 0.0f, 1.0f));
 	impl->weaknessHold[part] = .3f;
+	impl->recentStress = std::min(.12f, impl->recentStress + weakness*.06f);
 	if (part >= 7 && part < 11) {
 		const int side = part >= 9 ? 1 : 0;
 		impl->injuredFoot[side] = impl->Foot(side);
@@ -851,11 +891,21 @@ void FallSimulation::ReleaseControl() {
 	impl->balance.phase = ControlPhase::Falling;
 	impl->balance.assistForce = impl->balance.assistTorque = 0;
 }
-void FallSimulation::Kill() {
+void FallSimulation::SetVitality(float fraction) {
+	impl->vitality = std::clamp(fraction, 0.0f, 1.0f);
+}
+void FallSimulation::Kill(bool soften) {
 	auto& s = *impl;
+	if (s.balance.phase == ControlPhase::Dead) return;
+	const float height = (s.world.GetBodyInterface().GetWorldTransform(s.bodies[0])*s.offsets[0]).GetTranslation().GetZ()
+		- std::min(s.Foot(0).GetZ(), s.Foot(1).GetZ());
+	s.deathStrength = soften && !s.trunkContact && height > .45f ? s.balance.strength : 0;
+	for (int i = 0; i < PartCount; ++i) s.deathPose[i] = s.world.GetBodyInterface().GetWorldTransform(s.bodies[i]);
 	s.balance.phase = ControlPhase::Dead;
-	s.balance.strength = s.balance.assistForce = s.balance.assistTorque = 0;
+	s.balance.strength = s.deathStrength;
+	s.balance.assistForce = s.balance.assistTorque = 0;
 	s.balance.braceMask = 0;
+	if (s.deathStrength > 0) return;
 	for (int i = 1; i < PartCount; ++i) {
 		s.joints[i]->SetSwingMotorState(JPH::EMotorState::Off);
 		s.joints[i]->SetTwistMotorState(JPH::EMotorState::Off);

@@ -305,5 +305,39 @@ int main() {
 		for (int i = 0; i < 360; ++i) brace.Advance(1.0f/120);
 		Check(brace.Balance().phase == JoltReaction::ControlPhase::Dead && brace.Balance().strength == 0, "corpses remain passive and cannot get up");
 	}
+	{
+		JoltReaction::FallSimulation dying(parts, stopped);
+		dying.AddMesh(0, largeFloor, 6); dying.Follow(parts, 0); dying.Engage();
+		dying.Sample(pose);
+		float before[3], after[3]; dying.RootVelocity(before);
+		dying.Kill(true); dying.RootVelocity(after);
+		JoltReaction::Transform unchanged[JoltReaction::PartCount]; dying.Sample(unchanged);
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(pose[i].matrix[r][c] == unchanged[i].matrix[r][c], "guided death preserves the initial pose");
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "guided death preserves momentum");
+		Check(dying.Balance().strength > 0, "standing death retains initial muscle support");
+		float strength = dying.Balance().strength;
+		for (int i = 0; i < 120; ++i) {
+			Check(dying.Advance(1.0f/120), "guided death solver step");
+			const auto b = dying.Balance();
+			Check(b.strength <= strength && b.assistForce == 0 && b.assistTorque == 0, "death strength fades without root assistance");
+			strength = b.strength;
+		}
+		Check(strength == 0 && dying.Balance().phase == JoltReaction::ControlPhase::Dead, "guided death ends in a passive corpse");
+	}
+	{
+		JoltReaction::FallSimulation injured(parts, stopped);
+		injured.AddMesh(0, largeFloor, 6); injured.Follow(parts, 0); injured.Engage();
+		injured.SetVitality(.25f);
+		for (int hit = 0; hit < 3; ++hit) {
+			injured.React(1, forward, parts[1].end, .2f, .3f);
+			for (int i = 0; i < 24; ++i) Check(injured.Advance(1.0f/120), "injured balance step");
+		}
+		const float weakened = injured.Balance().strength;
+		Check(weakened < .9f && weakened > .7f, "health and repeated hits reduce support within bounds");
+		for (int i = 0; i < 600; ++i) injured.Advance(1.0f/120);
+		Check(injured.Balance().phase == JoltReaction::ControlPhase::Tracking && injured.Balance().strength > weakened,
+			"recent-hit stress recovers without making low health alone force a fall");
+	}
 	std::puts("PASS: contact-aware bracing, physical preparation, and speed-limited get-up transitions");
 }

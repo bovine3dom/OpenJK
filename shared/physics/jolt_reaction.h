@@ -62,7 +62,8 @@ public:
 	void Drive(const Part* pose, const float* desiredVelocity, float seconds);
 	void React(int part, const float* direction, const float* point, float impulse, float weakness);
 	void ReleaseControl();
-	void Kill();
+	void Kill(bool soften = false);
+	void SetVitality(float fraction);
 	bool Awake() const;
 	float TrunkSpeed() const;
 	void PrepareRecovery(const Transform* bones, float seconds);

@@ -103,9 +103,13 @@ physical falls. Native damage supplies blast distance, cover, armour, team
 protection, and knockback. The controller consumes that knockback once.
 
 Damage, death scripts, kill counts, sounds, and item drops use the game rules.
-A lethal supported hit can start a physical corpse. Killing an actor already
-under physical control disables its motors without changing its pose or adding
-a death-animation kick. Native disintegration retains its special handling.
+A lethal supported hit can start a physical corpse. An upright actor loses
+motor strength over 0.45 seconds. The targets lower the hips and bend the torso
+during this interval. Torso contact ends motor control early. An actor already
+on the floor becomes passive immediately. Death preserves the initial pose and
+velocity. Native disintegration retains its special handling.
+Low health reduces baseline support by at most 15 percent. Recent hits add
+up to 12 percent temporary weakness. This weakness decreases with time.
 Ordinary saber attacks keep their authored movement; saber users can still
 be knocked down by explosions or eligible knockdown requests.
 

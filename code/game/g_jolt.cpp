@@ -619,7 +619,7 @@ void Actor::Die(gentity_t* ent) {
 	if (dead || !engaged || !fall) return;
 	CancelRecovery(ent);
 	dead = true; riseStart = 0;
-	fall->Kill();
+	fall->Kill(true);
 	fall->Sample(fallPose);
 	Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
 }
@@ -745,6 +745,7 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 	if (!reactionPose->integer && !engaged) { ++hits; return; }
 	if ((ent->s.weapon != WP_SABER || engaged || blast || ent->health <= 0) && PrepareRig(ent)) {
 		Engage(ent);
+		fall->SetVitality(float(std::max(0, ent->health)) / std::max(1, ent->client->ps.stats[STAT_MAX_HEALTH]));
 		if (blast) {
 			// Native damage already supplied distance-scaled knockback. Do not add it twice.
 			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
