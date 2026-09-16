@@ -440,9 +440,11 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 	SamplerBindingsWriter samplerBindingsWriter;
 	Allocator& frameAllocator = *backEndData->perFrameMemory;
 
-	shaderProgram_t *sp = &tr.lightallShader[0];
+	const bool cube = (image->flags & IMGFLAG_CUBEMAP) != 0;
+	shaderProgram_t *sp = cube ? &tr.skyCubeShader : &tr.lightallShader[0];
 	float colorScale = backEnd.refdef.colorScale;
 	uniformDataWriter.Start(sp);
+	uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, colorScale, colorScale, colorScale, 1.0f);
 	uniformDataWriter.SetUniformVec4(
 		UNIFORM_BASECOLOR, colorScale, colorScale, colorScale, 1.0f);
 	uniformDataWriter.SetUniformVec4(
@@ -556,7 +558,8 @@ static void DrawSkyBox( shader_t *shader )
 			}
 		}
 
-		DrawSkySide( shader->sky.outerbox[i],
+		DrawSkySide( r_seamlessSky->integer && !backEnd.comparisonBaseline && shader->sky.cubemap
+					 ? shader->sky.cubemap : shader->sky.outerbox[i],
 			         sky_mins_subd,
 					 sky_maxs_subd );
 	}
@@ -864,7 +867,6 @@ void RB_StageIteratorSky( void ) {
 	// note that sky was drawn so we will draw a sun later
 	backEnd.skyRenderedThisView = qtrue;
 }
-
 
 
 

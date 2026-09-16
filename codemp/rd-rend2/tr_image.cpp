@@ -2943,6 +2943,56 @@ Finds or loads the given image.
 Returns NULL if it fails, not a default image.
 ==============
 */
+image_t *R_CreateSkyCube(const char *name, image_t *const faces[6])
+{
+	const int size = faces[0]->uploadWidth;
+	// Keep incomplete, non-square, mixed-format and oversized custom skies on
+	// the original path. The extra cube is capped at 64 MiB including mipmaps.
+	if (size < 1 || size > 1024)
+		return nullptr;
+	for (int i = 0; i < 6; ++i)
+		if (!faces[i] || faces[i] == tr.defaultImage ||
+			faces[i]->uploadWidth != size || faces[i]->uploadHeight != size ||
+			faces[i]->internalFormat != faces[0]->internalFormat)
+			return nullptr;
+
+	char cubeName[MAX_QPATH];
+	if (strlen(name) + 6 >= sizeof(cubeName))
+		return nullptr;
+	Com_sprintf(cubeName, sizeof(cubeName), "*sky:%s", name);
+	const int flags = IMGFLAG_CUBEMAP | IMGFLAG_MIPMAP | IMGFLAG_CLAMPTOEDGE;
+	if (image_t *cached = R_GetLoadedImage(cubeName, flags))
+		return cached;
+	const int format = faces[0]->internalFormat == GL_RGBA16F ? GL_RGBA16F :
+		(faces[0]->flags & IMGFLAG_SRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8);
+	image_t *cube = R_CreateImage(cubeName, nullptr, size, size, IMGTYPE_COLORALPHA, flags, format);
+	float *source = (float *)Z_Malloc(size * size * sizeof(vec4_t), TAG_TEMP_WORKSPACE, qfalse);
+	float *target = (float *)Z_Malloc(size * size * sizeof(vec4_t), TAG_TEMP_WORKSPACE, qfalse);
+	for (int face = 0; face < 6; ++face)
+	{
+		GL_Bind(faces[face]);
+		qglGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, source);
+		// Convert MakeSkyVec's rt/lf/bk/ft/up/dn convention to GL cube axes.
+		for (int y = 0; y < size; ++y)
+			for (int x = 0; x < size; ++x)
+			{
+				int sx = y, sy = x;
+				if (face == 1) { sx = size - 1 - y; sy = size - 1 - x; }
+				if (face == 2) { sx = x; sy = size - 1 - y; }
+				if (face == 3) { sx = size - 1 - x; sy = y; }
+				memcpy(target + 4 * (y * size + x), source + 4 * (sy * size + sx), sizeof(vec4_t));
+			}
+		GL_Bind(cube);
+		qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0,
+			size, size, GL_RGBA, GL_FLOAT, target);
+	}
+	qglGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+	Z_Free(target);
+	Z_Free(source);
+	ri.Printf(PRINT_DEVELOPER, "Sky cube: %s (%d)\n", name, size);
+	return cube;
+}
+
 image_t	*R_FindImageFile( const char *name, imgType_t type, int flags )
 {
 	image_t	*image;

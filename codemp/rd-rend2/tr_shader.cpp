@@ -2366,6 +2366,7 @@ static void ParseSkyParms( const char **text ) {
 	char		pathname[MAX_QPATH];
 	int			i;
 	int imgFlags = IMGFLAG_MIPMAP | IMGFLAG_PICMIP | IMGFLAG_CLAMPTOEDGE;
+	bool completeSky = true;
 
 	if (shader.noTC)
 		imgFlags |= IMGFLAG_NO_COMPRESSION;
@@ -2385,6 +2386,7 @@ static void ParseSkyParms( const char **text ) {
 			shader.sky.outerbox[i] = R_FindImageFile( ( char * ) pathname, IMGTYPE_COLORALPHA, imgFlags );
 
 			if ( !shader.sky.outerbox[i] ) {
+				completeSky = false;
 				if ( i )
 					shader.sky.outerbox[i] = shader.sky.outerbox[i-1];	//not found, so let's use the previous image
 				else
@@ -2394,6 +2396,9 @@ static void ParseSkyParms( const char **text ) {
 	}
 
 	// cloudheight
+	if (completeSky && shader.sky.outerbox[0])
+		shader.sky.cubemap = R_CreateSkyCube(token, shader.sky.outerbox);
+
 	token = COM_ParseExt( text, qfalse );
 	if ( token[0] == 0 ) {
 		ri.Printf( PRINT_WARNING, "WARNING: 'skyParms' missing cloudheight in shader '%s'\n", shader.name );

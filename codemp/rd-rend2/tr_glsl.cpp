@@ -2529,6 +2529,12 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramFogPass(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramRefraction(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramTextureColor(builder, allocator);
+	GLSL_LoadGPUProgramBasic(builder, allocator, &tr.skyCubeShader, "skycube", fallback_skycubeProgram, ATTR_POSITION);
+	GLSL_InitUniforms(&tr.skyCubeShader);
+	qglUseProgram(tr.skyCubeShader.program);
+	GLSL_SetUniformInt(&tr.skyCubeShader, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
+	qglUseProgram(0);
+	GLSL_FinishGPUShader(&tr.skyCubeShader);
 	numEtcShaders += GLSL_LoadGPUProgramPShadow(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramVShadow(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramDownscale4x(builder, allocator);
@@ -2602,6 +2608,7 @@ void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 		GLSL_DeleteGPUShader(&tr.refractionShader[i]);
 
 	GLSL_DeleteGPUShader(&tr.textureColorShader);
+	GLSL_DeleteGPUShader(&tr.skyCubeShader);
 
 	for ( i = 0; i < FOGDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.fogShader[i]);
