@@ -3,7 +3,7 @@ set -euo pipefail
 
 config=${OJK_DESKTOP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf}
 if [[ ${1:-} == --help ]]; then
-    printf 'Usage: %s --configure SSH_HOST /path/to/GameData [/path/to/GameData_JO]\n       %s --configure-jo /path/to/GameData_JO\n       %s [--worktree NAME] [--campaign ja|jo] [--new-game] [--desktop|--resolution WIDTHxHEIGHT] [--atmosphere-review [all]] [engine arguments]\nConfiguration: %s\n' "$0" "$0" "$0" "$config"
+    printf 'Usage: %s --configure SSH_HOST /path/to/GameData [/path/to/GameData_JO]\n       %s --configure-jo /path/to/GameData_JO\n       %s [--worktree NAME] [--campaign ja|jo] [--new-game] [--desktop|--resolution WIDTHxHEIGHT] [--atmosphere-review [all]|--atmosphere-edit] [engine arguments]\nConfiguration: %s\n' "$0" "$0" "$0" "$config"
     exit 0
 fi
 if [[ -f "$config" ]]; then

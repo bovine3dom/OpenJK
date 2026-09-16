@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/yavin
+// Initial palette: yavin-jo. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.023 0.026 0.023
+absorption 0.002 0.003 0.006
+groundAlbedo 0.14 0.25 0.12
+anisotropy 0.76
+illuminance 16
+sunDirection 0.35 -0.45 0.82
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.2
+cloudColor 0.95 0.96 0.9
+skyBlend 0.25

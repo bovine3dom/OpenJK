@@ -89,10 +89,72 @@ JA and JO use separate processes because their asset and campaign state differ.
 
 ## Edit and Record Results
 
-The launcher prints the full profile and notes paths. Each selected map has an
-editable copy in the review profile's `OpenJK/maps/<map>.atmosphere` directory.
-Edit that file and press F6. Restarts and build updates retain these local edits.
-Delete an override file before relaunching to adopt the latest packaged version.
+The launcher prints the full profile, shared file, and notes paths. F10 also
+shows the active local edit path for the current map. Edit the canonical shared file
+listed below, or the map's private file, then press F6. Restarts and build updates
+retain these local edits. A different existing override can remain private even
+when the packaged map uses a shared file; setup and F10 report those exceptions.
+
+## Shared Profiles
+
+Map aliases are relative symlinks to `OpenJK/maps/shared/`. There are 17 editable
+profiles for the 33 selected maps: seven shared files and ten private files.
+The same layout is used in `scripts/maps/` and in the published package.
+
+| Shared file under `maps/shared/` | Maps |
+| --- | --- |
+| `ja-yavin.atmosphere` | `academy1`–`academy6`, `t1_inter`, `yavin1`, `yavin2` |
+| `ja-korriban.atmosphere` | `kor1`, `kor2` |
+| `ja-tatooine.atmosphere` | `t1_sour`, `t1_surprise` |
+| `ja-amber.atmosphere` | `t2_rancor`, `taspir2` |
+| `jo-artus.atmosphere` | `artus_mine`, `artus_topside` |
+| `jo-bespin.atmosphere` | `bespin_undercity`, `ns_starpad` |
+| `jo-yavin.atmosphere` | `yavin_courtyard`, `yavin_final`, `yavin_temple`, `yavin_trial` |
+
+The shared Korriban file contains the user's grey tuning. `yavin1b.atmosphere`
+keeps its separately tuned moody variant. Files with different shader targets
+remain separate, including Bespin Platform and Bespin Streets. JA and JO are
+also separate groups because matching asset names can contain different art.
+
+Edit the canonical file in `shared/` directly. Some editors replace a symlink
+with a regular file when saving its map alias. Changes to a shared file apply to
+its aliases when their profiles load. Reload the current map's profile with F6
+in review mode or `r_atmosphereReload` in normal play.
+
+### Existing Local Edits
+
+On the next setup, equivalent old per-map copies become links. Original files,
+including their comments, are saved in `OpenJK/maps/atmosphere-backups/` first.
+If all existing copies in a group have the same custom values, those values seed
+the shared file. Differing edits remain private per-map files. Setup does not
+choose one conflicting edit over another or overwrite an existing shared file.
+
+To give one shared map its own settings, run this from the package directory:
+
+```bash
+python3 atmosphere_profiles.py /path/to/active/campaign/profile ja --detach kor2
+```
+
+This makes a regular copy and records the exception in
+`OpenJK/maps/shared/private-maps.json`. Later setup runs retain it even while its
+values still match the group. Use `jo` for an Outcast map.
+If the game is running, enter `exec atmosphere-edit-paths.cfg` to refresh the
+reported edit paths, then use `r_atmosphereReload` after editing the private file.
+
+### Normal Playthroughs
+
+Use `--atmosphere-edit` instead of `--atmosphere-review` to prepare shared editable
+files in the normal campaign profile and enable atmosphere. It opens the normal
+game; load your save or continue your campaign. See the short per-map checklist
+in `human_todo.md`. To print the active edit path in the console, enter
+`vstr ar_edit_kor2`, replacing `kor2` with the current map name.
+
+Review and normal campaign directories remain separate. The three committed
+tweaks are included in the package defaults. For newer edits that exist only in
+your review directory, copy their shared or private files into the matching
+normal campaign directory once. Edit the normal campaign's files during play.
+
+### Color Controls and Notes
 
 Start with these fields:
 
@@ -119,8 +181,10 @@ such as a faded planet, an incorrect horizon color, or excessive brightness.
 The current log is `OpenJK/qconsole.log`. Before each review launch, the previous
 log is copied to `OpenJK/review-logs/` with a timestamp.
 
-To retain changes in the project, copy the edited files back to `scripts/maps/`
-and update the review decisions. The build validates and packages those files.
+To retain changes in the project, copy edited shared files back to
+`scripts/maps/shared/` and private files to `scripts/maps/`. Update the review
+decisions. If a map becomes a private exception, replace its source symlink with
+that private file too. The build validates and packages the complete layout.
 Palette seeding creates only missing files; it never replaces per-map edits.
 
 ## Scope of This Pass

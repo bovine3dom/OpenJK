@@ -3,9 +3,10 @@
 
 import argparse
 import json
-import math
 from pathlib import Path
 import re
+
+from atmosphere_profiles import read_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGUE = ROOT / "scripts/atmosphere-catalogue.json"
@@ -24,32 +25,7 @@ def profile_text(entry, policy):
 
 
 def validate_profile(path, entry):
-    text = re.sub(r"//[^\n]*|/\*.*?\*/", "", path.read_text(), flags=re.S).split()
-    if text[:4] != ["atmosphere", "1", "sky", entry["sky"]]:
-        raise ValueError(f"Wrong version or sky target: {path}")
-    ranges = {"radius": (1000, 10000), "thickness": (20, 200), "observerHeight": (.001, 10),
-              "rayHeight": (1, 20), "mieHeight": (.1, 10), "anisotropy": (0, .9), "illuminance": (.1, 64),
-              "rayleigh": (.0001, .1), "mie": (.0001, .1), "absorption": (0, .1), "groundAlbedo": (0, 1),
-              "sunDirection": (-1, 1), "sunRadius": (.001, .03), "sunDisk": (0, 32),
-              "cloudStrength": (0, 1), "cloudColor": (0, 2), "skyBlend": (0, 1)}
-    vectors = {"rayleigh", "mie", "absorption", "groundAlbedo", "sunDirection", "cloudColor"}
-    fields, pos = {}, 4
-    while pos < len(text):
-        key = text[pos]
-        if key not in ranges or key in fields:
-            raise ValueError(f"Unknown or duplicate field in {path}: {key}")
-        count = 3 if key in vectors else 1
-        values = list(map(float, text[pos+1:pos+1+count]))
-        if len(values) != count or any(not math.isfinite(x) or not ranges[key][0] <= x <= ranges[key][1] for x in values):
-            raise ValueError(f"Invalid {key} in {path}")
-        fields[key] = values
-        pos += count + 1
-    if set(ranges) - {"skyBlend"} - set(fields):
-        raise ValueError(f"Missing fields in {path}")
-    sun = fields["sunDirection"]
-    if sun[2] <= 0 or sum(x*x for x in sun) <= .25:
-        raise ValueError(f"Invalid sun direction in {path}")
-    return fields
+    return read_profile(path, entry["sky"])[1]
 
 
 def message(text):
@@ -64,6 +40,7 @@ def write_playlist(output, campaign, mode, maps):
         'r_mapHaze 0', 'r_localFog 0', 'r_highResSkies 0', 'r_seamlessSky 1',
         'cg_draw2D 0', 'cg_drawGun 0', 'con_notifytime -1', 'cg_bobup 0', 'cg_bobpitch 0', 'cg_bobroll 0')]
     controls += [
+        'exec atmosphere-edit-paths.cfg',
         'bind PGDN "vstr ar_next"', 'bind PGUP "vstr ar_prev"', 'bind HOME "vstr ar_current"',
         'bind F4 "exitview"', 'bind F5 "r_compareEnhancements 0; toggle r_atmosphere"',
         'bind F6 "r_atmosphereReload"', 'bind F7 "vstr ar_stock"', 'bind F8 "vstr ar_atmosphere"',
@@ -75,10 +52,11 @@ def write_playlist(output, campaign, mode, maps):
         here = f"atmosphere-review/{campaign}/{mode}/{name}.cfg"
         state = item["palette"] or "STOCK - no atmosphere profile"
         label = message(f"ATMO REVIEW {campaign.upper()} {i+1}/{len(maps)} {name}: {state}")
+        edit_status = f'; vstr ar_edit_{name}' if item.get("profile_file") else ''
         lines = [f'set ar_current "exec {here}"',
             f'set ar_next "exec atmosphere-review/{campaign}/{mode}/{maps[(i+1)%len(maps)]["map"]}.cfg"',
             f'set ar_prev "exec atmosphere-review/{campaign}/{mode}/{maps[(i-1)%len(maps)]["map"]}.cfg"',
-            f'set ar_status "echo {label}; echo {message(item["reason"])}"',
+            f'set ar_status "echo {label}; echo {message(item["reason"])}{edit_status}"',
             f'set ar_flag "echo ATMO_TWEAK {campaign}/{name}; viewpos; screenshot_png"',
             f'set ar_stock "r_compareEnhancements 0; r_atmosphere 0; wait 10; viewpos; screenshot_png atmo_{campaign}_{name}_stock"',
             f'set ar_atmosphere "r_compareEnhancements 0; r_atmosphere 1; wait 10; viewpos; screenshot_png atmo_{campaign}_{name}_profile"',
@@ -144,9 +122,11 @@ def main():
             raise ValueError("Invalid map identifier")
     for m in selected:
         path = ROOT / "scripts/maps" / (m["map"] + ".atmosphere")
-        if args.seed_profiles and not path.exists():
+        if args.seed_profiles and not path.exists() and not path.is_symlink():
             path.write_text(profile_text(m, policy))
         validate_profile(path, m)
+        target = path.resolve(strict=True).relative_to((ROOT / "scripts/maps").resolve())
+        m["profile_file"] = "maps/" + target.as_posix()
     if args.output:
         args.output.mkdir(parents=True, exist_ok=True)
         folder = args.output / "atmosphere-review"
@@ -162,7 +142,7 @@ def main():
             write_playlist(args.output, campaign, "profiles", [m for m in ordered if m["palette"]])
     if args.report:
         report(maps, args.report)
-    print(f"Validated {len(selected)} profiles; audited {len(maps)} retail maps")
+    print(f"Validated {len(selected)} map profiles in {len({m['profile_file'] for m in selected})} editable files; audited {len(maps)} retail maps")
 
 
 if __name__ == "__main__":

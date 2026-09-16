@@ -35,11 +35,16 @@ if [[ $campaign == jo ]]; then
 fi
 display=()
 review=
+atmosphere_edit=false
 while [[ $# -gt 0 ]]; do
 case $1 in
     --jolt-demo)
         profile="${profile%/}/jolt-demo"
         campaign_args+=(+exec jolt-demo.cfg)
+        shift
+        ;;
+    --atmosphere-edit)
+        atmosphere_edit=true
         shift
         ;;
     --atmosphere-review)
@@ -88,6 +93,9 @@ if [[ -n $review ]]; then
     suffix=
     if [[ $review == all ]]; then suffix=-all; fi
     campaign_args+=(+set cl_renderer rdsp-rend2 +exec "atmosphere-review-$campaign$suffix.cfg")
+elif $atmosphere_edit; then
+    python3 "$package/atmosphere_profiles.py" "$profile" "$campaign"
+    campaign_args+=(+set cl_renderer rdsp-rend2 +set r_atmosphere 1 +exec atmosphere-edit-paths.cfg)
 fi
 printf 'Package: %s\nProfile: %s\n' "$package" "$profile"
 if [[ -f "$package/build-id.txt" ]]; then

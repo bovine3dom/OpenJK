@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import shutil
 
+from atmosphere_profiles import prepare_profiles
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -20,12 +22,7 @@ def main():
     (home / "maps").mkdir(parents=True, exist_ok=True)
     catalogue = json.loads((source / "atmosphere-review/catalogue.json").read_text())
     maps = [m for m in catalogue["maps"] if m["campaign"] == args.campaign and m["kind"] == "sp"]
-    for entry in maps:
-        if entry["palette"]:
-            name = entry["map"] + ".atmosphere"
-            destination = home / "maps" / name
-            if not destination.exists():
-                shutil.copyfile(source / "maps" / name, destination)
+    prepare_profiles(args.package, args.profile, args.campaign)
     notes = args.profile / "atmosphere-review-notes.csv"
     if not notes.exists():
         with notes.open("w", newline="") as stream:

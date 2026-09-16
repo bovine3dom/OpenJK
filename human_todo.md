@@ -7,6 +7,43 @@ Software-renderer tests already cover map loading, characters, sabers, 4K output
 renderer restarts, save migration, and selected shadow modes. They do not prove
 visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
+## Atmospheres: Check During Normal Play
+
+Review each map when you reach it in the campaign. A separate full-map tour is
+optional. Stop tuning when the sky fits the scene and the important art is clear.
+
+- [x] Initial tuning saved for `yavin1b`, `kor1`, and `kor2`.
+- [x] The `t1_sour` appearance was approved earlier.
+
+Prepare editable atmospheres for normal play, then load your campaign save:
+
+```bash
+openjk-play --worktree squad_ai --campaign ja --desktop --atmosphere-edit
+openjk-play --worktree squad_ai --campaign jo --desktop --atmosphere-edit
+```
+
+Use one command for the campaign you are playing. This prepares local files and
+enables atmosphere in the normal game. The launcher prints shared file paths.
+Use `fs_homepath` in the console to find the active campaign profile. Use
+`vstr ar_edit_kor2` (with your current map name) to print the file to edit.
+
+Repeat this short check on each map:
+
+- [ ] At the first useful outdoor view, enter `mapname`. Check the map's decision in [the audit](docs/atmosphere-map-audit.md). For an intentionally stock map, note whether that choice still fits and continue.
+- [ ] Compare `r_atmosphere 0` and `r_atmosphere 1` from the same view. Check sky color, brightness, mood, and the match to the baked lighting. Keep exposure fixed while tuning, then restore your normal exposure setting.
+- [ ] Look at the horizon, sun, clouds, painted planets, and treetops. Check for lost detail, faded landmarks, seams, or sky glow over foreground objects.
+- [ ] If a change is needed, edit the shared file listed in [the sharing guide](docs/atmosphere-review.md#shared-profiles), or the map's private file. Change one control at a time. Use `rayleigh`/`mie` for color balance, `illuminance` for brightness, and `skyBlend` for effect strength.
+- [ ] Enter `r_atmosphereReload` after each edit. Check the console for a successful load. Leave `r_atmosphere 1` enabled when the result is satisfactory.
+- [ ] During the rest of the mission, check another sky opening and any outdoor cinematic. If the map uses a shared file, a quick check is enough unless that scene needs different settings.
+- [ ] Record `campaign, map, shared/private file, approved/tweak/stock, notes`. For an issue, include `viewpos`, a screenshot, or a save. Copy final shared files and private exceptions back to the matching paths under `scripts/maps/` for the next build.
+
+Edit a shared file once, then check its other maps as you encounter them. `kor1`
+and `kor2` share the tuned grey profile. `yavin1b` is a separate tuned variant.
+Sharing reduces repeated edits; it does not establish that every map looks right.
+The review-session keys are specific to review mode. During normal play, use the
+console commands above. See [the review guide](docs/atmosphere-review.md) for
+file locations, existing-edit migration, and private map exceptions.
+
 ## Weapon Torch
 
 - [ ] Toggle the torch with L in dark JA and JO interiors. Check brightness, beam width, and readability.

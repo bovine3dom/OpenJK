@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import time
@@ -151,12 +152,10 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertGreater(int(matched[1].replace(",", "")), 1_000_000)
 
     def test_atmosphere_review_isolation(self):
-        (self.first / "setup-atmosphere-review.py").write_bytes(
-            (ROOT / "scripts/setup-atmosphere-review.py").read_bytes())
+        for name in ("setup-atmosphere-review.py", "atmosphere_profiles.py"):
+            (self.first / name).write_bytes((ROOT / "scripts" / name).read_bytes())
         maps = self.first / "OpenJK/maps"
-        maps.mkdir()
-        for source in (ROOT / "scripts/maps").glob("*.atmosphere"):
-            (maps / source.name).write_bytes(source.read_bytes())
+        shutil.copytree(ROOT / "scripts/maps", maps, symlinks=True)
         subprocess.run(["python3", str(ROOT / "scripts/build-atmosphere-review.py"),
                         "--output", str(self.first / "OpenJK")], check=True, capture_output=True)
         home = Path(self.env["OJK_PROFILE"])
@@ -169,6 +168,7 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertEqual(args[args.index("fs_homepath") + 1], str(review))
         self.assertIn("atmosphere-review-ja.cfg", args)
         profile = review / "OpenJK/maps/t1_sour.atmosphere"
+        self.assertTrue(profile.is_symlink())
         edited = profile.read_text() + "// Local review edit.\n"
         profile.write_text(edited)
         notes = review / "atmosphere-review-notes.csv"
@@ -189,6 +189,14 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertEqual(imported[-1], str(jo_review))
         self.assertEqual(sentinel.read_text(), "campaign configuration")
         self.assertFalse((home / "OpenJK/maps").exists())
+        self.run_play("--atmosphere-edit")
+        args = json.loads(self.launch.read_text())
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(home))
+        self.assertEqual(args[args.index("+exec") + 1], "atmosphere-edit-paths.cfg")
+        self.assertNotIn("+devmap", args)
+        self.assertEqual(args[args.index("r_atmosphere") + 1], "1")
+        self.assertTrue((home / "OpenJK/maps/kor2.atmosphere").is_symlink())
+        self.assertEqual(sentinel.read_text(), "campaign configuration")
 
     def test_publication_does_not_change_transfer_source(self):
         second = self.package("second")
