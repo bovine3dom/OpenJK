@@ -295,6 +295,7 @@ struct FallSimulation::Impl {
 	float totalMass = 0, targetAge = 0, targetDuration = Step, reactionAge = 10, reactionAngle = 0;
 	float stepAge = 0, landedAge = 10, fallAge = 0, unsupported = 0, standingHeight = .8f;
 	float vitality = 1, recentStress = 0, deathAge = 0, deathStrength = 0;
+	float deathTorque[PartCount] = {};
 	JPH::Mat44 deathPose[PartCount];
 	int swing = 0;
 	JPH::Vec3 desiredVelocity = JPH::Vec3::sZero(), reactionAxis = JPH::Vec3::sAxisY();
@@ -680,7 +681,7 @@ struct FallSimulation::Impl {
 		for (int i = 1; i < PartCount; ++i) {
 			joints[i]->SetTargetOrientationBS(goals[parent[i]].GetQuaternion().Conjugated()*goals[i].GetQuaternion());
 			const float region = i >= 7 ? fade : 1.0f;
-			const float torque = (i >= 7 ? 300.0f : i == 1 ? 180.0f : 35.0f)*balance.strength*region*MuscleStrength(i);
+			const float torque = deathTorque[i]*fade*region;
 			joints[i]->GetSwingMotorSettings().SetTorqueLimit(torque);
 			joints[i]->GetTwistMotorSettings().SetTorqueLimit(torque);
 		}
@@ -905,6 +906,11 @@ void FallSimulation::Kill(bool soften) {
 		- std::min(s.Foot(0).GetZ(), s.Foot(1).GetZ());
 	s.deathStrength = soften && !s.trunkContact && height > .45f ? s.balance.strength : 0;
 	for (int i = 0; i < PartCount; ++i) s.deathPose[i] = s.world.GetBodyInterface().GetWorldTransform(s.bodies[i]);
+	for (int i = 1; i < PartCount; ++i) {
+		// A newly engaged rig may not have run its first bounded motor update yet.
+		const float maximum = i >= 11 ? 400.0f : i >= 7 ? 900.0f : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f;
+		s.deathTorque[i] = std::min(maximum, s.joints[i]->GetSwingMotorSettings().mMaxTorqueLimit);
+	}
 	s.balance.phase = ControlPhase::Dead;
 	s.balance.strength = s.deathStrength;
 	s.balance.assistForce = s.balance.assistTorque = 0;

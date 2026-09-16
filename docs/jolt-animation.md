@@ -114,6 +114,13 @@ Grounded physical NPCs qualify for the saber floor attack. The recovery
 controller obeys the attack's get-up delay. Movement traces ignore grounded
 physical bodies, but weapon traces keep their full hit bounds. Recovery checks
 for an occupied standing hull before it releases physical control.
+
+Use `--floor-combat` with `scripts/test-jolt-sp.py` to check movement across
+fallen NPCs, a lethal saber floor attack, and movement across a sleeping corpse.
+Use `--collapse --record` to record a standing death and check the strength fade.
+The projectile comparison found the same health loss with reactions on and off.
+The thermal blast comparison also passed. These checks measure damage from
+accepted hits; they do not measure how easy a moving target is to hit.
 Ordinary saber attacks keep their authored movement; saber users can still
 be knocked down by explosions or eligible knockdown requests.
 

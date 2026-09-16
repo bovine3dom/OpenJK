@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--projectiles", action="store_true", help="Test automatic reactions through real missile collisions")
     parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
     parser.add_argument("--floor-combat", action="store_true", help="Test movement over fallen NPCs and the saber floor finisher")
+    parser.add_argument("--collapse", action="store_true", help="Test and record the motor fade during a standing death")
     parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
     parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
@@ -125,6 +126,30 @@ def main():
                     "-f", "x11grab", "-framerate", "30", "-video_size", "960x720", "-i", env["DISPLAY"],
                     "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "22",
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
+            if args.collapse:
+                start = len(log.read_text(errors="replace"))
+                cmd("jolt_demo idle")
+                wait_for("Jolt demo finished: idle", start)
+                standing = status("jolt_demo_actor")
+                assert standing["engaged"] and standing["phase"] == 1, standing
+                cmd("set timescale .1; npc kill jolt_demo_actor", 0)
+                samples = []
+                for _ in range(100):
+                    sample = status("jolt_demo_actor")
+                    samples.append(sample)
+                    if sample["sleeping"]:
+                        break
+                    cmd("wait 2", 0)
+                (run / "collapse-results.json").write_text(json.dumps(samples, indent=2))
+                assert all(s["corpse"] and s["health"] <= 0 for s in samples), samples[:3]
+                assert any(0 < s["strength"] < standing["strength"] for s in samples), samples[:3]
+                assert all(b["strength"] <= a["strength"] for a, b in zip(samples, samples[1:])), samples[:3]
+                assert samples[-1]["strength"] == 0 and samples[-1]["sleeping"], samples[-1]
+                assert abs(samples[0]["pelvis_z"]-standing["pelvis_z"]) < 4, samples[0]
+                stdin.write("quit\n"); stdin.flush()
+                assert process.wait(timeout=30) == 0
+                print(f"PASS: {args.renderer}: standing death, gradual motor fade, passive settling", flush=True)
+                return 0
             if args.floor_combat:
                 for check in ("movement", "finisher"):
                     start = len(log.read_text(errors="replace"))
