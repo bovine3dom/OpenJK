@@ -8,6 +8,10 @@ landmarks, visibility, and scripted camera behavior. A sky-only prototype is now
 implemented for `t1_sour`. See [the prototype report](atmosphere-sp.md) for its
 scope, controls, captures, and measured cost. Aerial perspective is still planned.
 
+The [JA/JO map audit](atmosphere-map-audit.md) now supplies candidate profiles and
+an [isolated map review mode](atmosphere-review.md). [Volumetric clouds](volumetric-clouds.md)
+remain deferred at the user's request.
+
 The current foundation provides seamless sky cubes, selected source-derived
 2048-pixel skies, bounded analytic haze, and an optional local fog grid.
 See [SP Sky and Fog](sky-fog-sp.md) for controls, tests, and measured costs.

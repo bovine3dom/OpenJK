@@ -113,6 +113,8 @@ void AmbientRadiance(const AtmosphereProfile &p, const vec3_t sun, vec3_t *ambie
 void R_LoadAtmosphere(world_t *world)
 {
 	world->atmosphereImage = nullptr;
+	// Older version-1 profiles keep their full replacement strength.
+	world->atmosphereParams[3] = 1.0f;
 #ifdef REND2_SP
 	COM_ParseSession session;
 #else
@@ -139,7 +141,8 @@ void R_LoadAtmosphere(world_t *world)
 		{"sunRadius", world->atmosphereSun + 3, 1, 0.001f, 0.03f, false},
 		{"cloudStrength", world->atmosphereParams + 1, 1, 0, 1, false},
 		{"sunDisk", world->atmosphereParams + 2, 1, 0, 32, false},
-		{"cloudColor", world->atmosphereCloudColor, 3, 0, 2, false}
+		{"cloudColor", world->atmosphereCloudColor, 3, 0, 2, false},
+		{"skyBlend", world->atmosphereParams + 3, 1, 0, 1, false}
 	};
 	const char *text = buffer;
 	bool valid = length > 0 && length < 4096;
@@ -168,7 +171,8 @@ void R_LoadAtmosphere(world_t *world)
 			field->value[i] = value;
 		}
 	}
-	for (const Field &field : fields) valid = valid && field.seen;
+	for (const Field &field : fields)
+		valid = valid && (field.seen || !strcmp(field.name, "skyBlend"));
 	valid = valid && VectorLength(world->atmosphereSun) > 0.5f && world->atmosphereSun[2] > 0;
 	ri.FS_FreeFile(buffer);
 	if (!valid)

@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/test2
+// Initial palette: artus. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.065 0.05 0.035
+absorption 0.003 0.006 0.013
+groundAlbedo 0.28 0.24 0.12
+anisotropy 0.76
+illuminance 10
+sunDirection 0.35 -0.93 0.18
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.25
+cloudColor 0.77 0.59 0.34
+skyBlend 0.25

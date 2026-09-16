@@ -48,12 +48,12 @@ void main()
 		sky = mix(sky, sky * 0.65 + u_AtmosphereCloudColor, cloud * u_AtmosphereParams.y);
 		sky += vec3(1.0, 0.94, 0.82) * u_AtmosphereParams.z *
 			(1.0 - smoothstep(u_AtmosphereSun.w * 0.8, u_AtmosphereSun.w * 1.2, sunAngle));
-		// The desert mountains are below the upper angular bound and have a
-		// warm color. Use their source silhouette at the horizon transition.
+		// The original mask protects the desert horizon. Other map profiles
+		// reduce skyBlend to retain their painted terrain and celestial features.
 		float horizonMask = smoothstep(-0.015, 0.025, out_Color.b - out_Color.r);
 		float skyMask = max(smoothstep(0.025, 0.06, direction.z),
 			horizonMask * smoothstep(-0.06, -0.02, direction.z));
-		out_Color.rgb = mix(out_Color.rgb, sky, skyMask);
+		out_Color.rgb = mix(out_Color.rgb, sky, skyMask * u_AtmosphereParams.w);
 	}
 	out_Color *= u_Color;
 	out_Color.rgb = ApplyMapHaze(out_Color.rgb, u_HazeOrigin, u_HazeOrigin + normalize(var_Direction) * 8192.0);

@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/hevil_2
+// Initial palette: storm-grey. Edit this map profile for tuning.
+// Authored shader sun direction; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.06 0.062 0.065
+absorption 0.004 0.004 0.004
+groundAlbedo 0.15 0.17 0.17
+anisotropy 0.5
+illuminance 7
+sunDirection 0.321394 -0.55667 0.766044
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.45
+cloudColor 0.58 0.65 0.66
+skyBlend 0.25

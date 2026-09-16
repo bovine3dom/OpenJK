@@ -1,0 +1,2476 @@
+{
+  "version": 1,
+  "maps": [
+    {
+      "campaign": "ja",
+      "map": "academy1",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "academy2",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "academy3",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "academy4",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "academy5",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "academy6",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 15
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1408.0,
+        272.0,
+        753.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "hoth2",
+      "kind": "sp",
+      "palette": null,
+      "reason": "The sky has no six-face outerbox. Keep its authored geometry, layers, and fog.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/hoth",
+          "outer": "-",
+          "source": "shaders/skies.shader",
+          "surfaces": 32
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -2312.0,
+        9856.0,
+        1066.0,
+        315.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "hoth3",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -1911.0,
+        708.0,
+        1101.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "kor1",
+      "kind": "sp",
+      "palette": "korriban",
+      "reason": "Use a muted warm-dust blend for the tomb landscape.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/korriban",
+          "outer": "textures/skies/dos",
+          "source": "shaders/skies.shader",
+          "surfaces": 10
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        384.0,
+        656.0,
+        -951.0,
+        225.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/korriban",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.55,
+        -0.55,
+        0.63
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "kor2",
+      "kind": "sp",
+      "palette": "korriban",
+      "reason": "Profile only the Korriban material. Keep the ending's Yavin and space materials stock.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/korriban",
+          "outer": "textures/skies/dos",
+          "source": "shaders/skies.shader",
+          "surfaces": 19
+        },
+        {
+          "shader": "textures/skies/ships",
+          "outer": "textures/skies/nebula2",
+          "source": "shaders/skies.shader",
+          "surfaces": 3
+        },
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 0
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        3240.0,
+        3032.0,
+        -2495.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/korriban",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.55,
+        -0.55,
+        0.63
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ctf1",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/coruscant",
+          "outer": "textures/skies/cs1",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -608.0,
+        416.0,
+        305.0,
+        315.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ctf2",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/hoth_ctf_sky_sides",
+          "outer": "-",
+          "source": "shaders/mp3.shader",
+          "surfaces": 9
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        1840.0,
+        5720.0,
+        177.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ctf3",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_fatalsky",
+          "outer": "textures/skies/fatal",
+          "source": "shaders/mp2.shader",
+          "surfaces": 41
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1024.0,
+        -2048.0,
+        497.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ctf4",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ctf5",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel1",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/mp2.shader",
+          "surfaces": 10
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel10",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel2",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel3",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel4",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_space",
+          "outer": "textures/skies/space",
+          "source": "shaders/mp2.shader",
+          "surfaces": 6
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -2496.0,
+        3232.0,
+        49.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel5",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel6",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 12
+        }
+      ],
+      "sky_portal": true
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel7",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel8",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 7
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/duel9",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_hothsky",
+          "outer": "textures/skies/hevil",
+          "source": "shaders/mp2.shader",
+          "surfaces": 10
+        }
+      ],
+      "sky_portal": true
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ffa1",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_vjunsky",
+          "outer": "textures/skies/cs1",
+          "source": "shaders/mp2.shader",
+          "surfaces": 30
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ffa2",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_kor_sky",
+          "outer": "textures/skies/b",
+          "source": "shaders/mp2.shader",
+          "surfaces": 9
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -3680.0,
+        2528.0,
+        545.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ffa3",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/h_tatsky",
+          "outer": "textures/skies/desert",
+          "source": "shaders/mp4.shader",
+          "surfaces": 9
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        680.0,
+        1424.0,
+        -31.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ffa4",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/mp/s_blacksky",
+          "outer": null,
+          "source": "shaders/mp2.shader",
+          "surfaces": 2
+        }
+      ],
+      "sky_portal": false
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/ffa5",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        0.0,
+        -672.0,
+        49.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/siege_desert",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/korr2",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 17
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        11368.0,
+        848.0,
+        329.0,
+        225.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/siege_hoth",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/siege/hoth_sky",
+          "outer": "textures/skies/hevil",
+          "source": "shaders/siege.shader",
+          "surfaces": 53
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        7544.0,
+        -400.0,
+        329.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "mp/siege_korriban",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/korr2",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 48
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        1360.0,
+        -816.0,
+        569.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_danger",
+      "kind": "sp",
+      "palette": "blenjeel",
+      "reason": "Add a mild dry-air gradient. Keep the two painted planets prominent; use a low blend.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/dune",
+          "outer": "textures/skies/dune",
+          "source": "shaders/skies.shader",
+          "surfaces": 12
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        -3712.0,
+        -2664.0,
+        1137.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/dune",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.56,
+        -0.04,
+        0.83
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_fatal",
+      "kind": "sp",
+      "palette": "bakura",
+      "reason": "Add a restrained teal-green atmosphere. Keep the painted moon and water composition prominent.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/t1_fatal",
+          "outer": "textures/skies/fatal",
+          "source": "shaders/skies.shader",
+          "surfaces": 44
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1280.0,
+        -4528.0,
+        4593.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/t1_fatal",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.9,
+        0.05,
+        0.44
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_inter",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -192.0,
+        -696.0,
+        113.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_rail",
+      "kind": "sp",
+      "palette": null,
+      "reason": "The sky has no six-face outerbox. Keep its authored geometry, layers, and fog.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/rail_sun",
+          "outer": "-",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -3184.0,
+        -184.0,
+        49.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_sour",
+      "kind": "sp",
+      "palette": "tatooine",
+      "reason": "Daylight cube with a low mountain horizon; suitable for the established desert atmosphere.",
+      "approved": true,
+      "skies": [
+        {
+          "shader": "textures/skies/desert",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 56
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        4693,
+        -1624,
+        380,
+        45
+      ],
+      "view_source": "Verified rooftop capture point.",
+      "sky": "textures/skies/desert",
+      "sun_basis": "Painted desert sun measured from the JA up face.",
+      "sun_direction": [
+        0.011,
+        -0.146,
+        0.989
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t1_surprise",
+      "kind": "sp",
+      "palette": "tatooine",
+      "reason": "Reuse the Tatooine daylight palette for the droid-recovery landscape.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/desert",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 155
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2088.0,
+        -5960.0,
+        265.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/desert",
+      "sun_basis": "Painted desert sun measured from the JA up face.",
+      "sun_direction": [
+        0.011,
+        -0.146,
+        0.989
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t2_dpred",
+      "kind": "sp",
+      "palette": "dosuun",
+      "reason": "Use muted overcast daylight; retain most of the cloud and terrain artwork.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/dosuun",
+          "outer": "textures/skies/dos",
+          "source": "shaders/skies.shader",
+          "surfaces": 16
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -2112.0,
+        -3888.0,
+        -103.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/dosuun",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.55,
+        -0.55,
+        0.63
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t2_rancor",
+      "kind": "sp",
+      "palette": "amber-overcast",
+      "reason": "Use a low amber blend to retain the bright cloud deck and rocky horizon.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -896.0,
+        1348.0,
+        1765.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/narkreeta",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.06,
+        -0.66,
+        0.75
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t2_rogue",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the night sky, stars, and painted celestial disc.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/coruscant",
+          "outer": "textures/skies/cs1",
+          "source": "shaders/skies.shader",
+          "surfaces": 48
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        1872.0,
+        -1984.0,
+        -527.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t2_trip",
+      "kind": "sp",
+      "palette": null,
+      "reason": "The sky has no six-face outerbox. Keep its authored geometry, layers, and fog.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/taspir1",
+          "outer": "-",
+          "source": "shaders/taspir.shader",
+          "surfaces": 11
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -5568.0,
+        -22304.0,
+        1809.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t2_wedge",
+      "kind": "sp",
+      "palette": "krildor",
+      "reason": "Use a restrained golden atmosphere above the authored cloud sea. Volumetric clouds remain deferred.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/wedge_sky",
+          "outer": "textures/skies/wedge",
+          "source": "shaders/skies.shader",
+          "surfaces": 8
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        6336.0,
+        638.0,
+        -87.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/wedge_sky",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.5,
+        -0.65,
+        0.57
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t3_bounty",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the night sky and stars. The current optical profile is a daylight model.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/boba_night",
+          "outer": "textures/skies/b",
+          "source": "shaders/skies.shader",
+          "surfaces": 80
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -3483.0,
+        -733.0,
+        97.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t3_byss",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the space backdrop and nebulae.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/byss",
+          "outer": "textures/skies/byss",
+          "source": "shaders/skies.shader",
+          "surfaces": 56
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        736.0,
+        112.0,
+        49.0,
+        225.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "t3_hevil",
+      "kind": "sp",
+      "palette": "storm-grey",
+      "reason": "Use a low cool-grey blend. Preserve the storm lighting and cloud contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/hevil_2",
+          "outer": "textures/skies/hevil",
+          "source": "shaders/skies.shader",
+          "surfaces": 12
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        296.0,
+        -2304.0,
+        -719.0,
+        75.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/hevil_2",
+      "sun_basis": "Authored shader sun direction; no new sun disc.",
+      "sun_direction": [
+        0.321394,
+        -0.55667,
+        0.766044
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t3_rift",
+      "kind": "sp",
+      "palette": "chandrila",
+      "reason": "Use restrained canyon daylight. Keep the painted sun; add no second disc.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/artus_light",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 1
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2272.0,
+        7464.0,
+        3999.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/artus_light",
+      "sun_basis": "Authored shader sun direction; no new sun disc.",
+      "sun_direction": [
+        0.422618,
+        0.0,
+        0.906308
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "t3_stamp",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        1193.0,
+        576.0,
+        113.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "taspir1",
+      "kind": "sp",
+      "palette": null,
+      "reason": "The sky has no six-face outerbox. Keep its authored geometry, layers, and fog.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/taspir1",
+          "outer": "-",
+          "source": "shaders/taspir.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1448.0,
+        -1760.0,
+        673.0,
+        100.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "taspir2",
+      "kind": "sp",
+      "palette": "amber-overcast",
+      "reason": "Use a low amber blend to retain the bright cloud deck and rocky horizon.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/narkreeta",
+          "outer": "textures/skies/korb",
+          "source": "shaders/skies.shader",
+          "surfaces": 17
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        112.0,
+        -2872.0,
+        369.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/narkreeta",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.06,
+        -0.66,
+        0.75
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "vjun1",
+      "kind": "sp",
+      "palette": null,
+      "reason": "The sky has no six-face outerbox. Keep its authored geometry, layers, and fog.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/taspir1",
+          "outer": "-",
+          "source": "shaders/taspir.shader",
+          "surfaces": 18
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -7002.0,
+        7044.0,
+        881.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "vjun2",
+      "kind": "sp",
+      "palette": "bespin",
+      "reason": "Use a low peach-haze blend for the authored cloud backdrop; inspect its limited sky openings.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 10
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        -960.0,
+        428.0,
+        249.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/bespin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.12
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "vjun3",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the acid-haze background and its authored fog match.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/vjun",
+          "outer": "textures/skies/vu",
+          "source": "shaders/skies.shader",
+          "surfaces": 33
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -8218.0,
+        -494.0,
+        1269.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "ja",
+      "map": "yavin1",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 29
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        296.0,
+        -4848.0,
+        481.0,
+        100.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "yavin1b",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 39
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        296.0,
+        -4848.0,
+        481.0,
+        100.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "ja",
+      "map": "yavin2",
+      "kind": "sp",
+      "palette": "yavin-ja",
+      "reason": "Profile the Yavin cube. Keep the more numerous no-outerbox helper sky surfaces stock.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 6
+        },
+        {
+          "shader": "textures/skies/yavin_nodraw",
+          "outer": "-",
+          "source": "shaders/skies.shader",
+          "surfaces": 16
+        }
+      ],
+      "sky_portal": true,
+      "view": [
+        2516.0,
+        -5520.0,
+        113.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        -0.08,
+        -0.08,
+        0.994
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "artus_detention",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the moonlit mountain and cloud composition; a daylight replacement would alter the scene.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/kejim_light",
+          "outer": "textures/skies/desert2",
+          "source": "shaders/skies.shader",
+          "surfaces": 6
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1191.0,
+        4344.0,
+        701.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "artus_mine",
+      "kind": "sp",
+      "palette": "artus",
+      "reason": "Use JO's dark amber-overcast palette. This asset differs from JA's blue desert sky.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/test2",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 27
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        3904.0,
+        -2888.0,
+        1217.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/test2",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.18
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "artus_topside",
+      "kind": "sp",
+      "palette": "artus",
+      "reason": "Use JO's dark amber-overcast palette. This asset differs from JA's blue desert sky.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/test2",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 43
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2204.0,
+        1852.0,
+        181.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/test2",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.18
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "bespin_platform",
+      "kind": "sp",
+      "palette": "bespin",
+      "reason": "Use a restrained peach-haze blend while retaining the cloud-city backdrop.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/bespin/sky_platform",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/bespin.shader",
+          "surfaces": 24
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1280.0,
+        0.0,
+        49.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/bespin/sky_platform",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.12
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "bespin_streets",
+      "kind": "sp",
+      "palette": "bespin",
+      "reason": "Use a restrained peach-haze blend while retaining the cloud-city backdrop.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/bespin/sky",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/bespin.shader",
+          "surfaces": 95
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -3728.0,
+        -3840.0,
+        -1679.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/bespin/sky",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.12
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "bespin_undercity",
+      "kind": "sp",
+      "palette": "bespin",
+      "reason": "Profile the 29-surface sky material. One secondary sky surface remains stock; inspect its transition.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/bespin/sky",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/bespin.shader",
+          "surfaces": 1
+        },
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 29
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        0.0,
+        -496.0,
+        -3407.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/bespin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.12
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "cairn_assembly",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -2160.0,
+        747.0,
+        565.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "cairn_bay",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the stars and dark space/night background.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/stars",
+          "outer": "textures/skies/stars",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -3128.0,
+        216.0,
+        625.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "cairn_dock1",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        6624.0,
+        -5928.0,
+        489.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "cairn_reactor",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        1424.0,
+        -8912.0,
+        -559.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ctf_bespin",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -1000.0,
+        128.0,
+        113.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ctf_imperial",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 8
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        656.0,
+        -336.0,
+        49.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ctf_ns_streets",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/stars",
+          "outer": "textures/skies/stars",
+          "source": "shaders/skies.shader",
+          "surfaces": 55
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1240.0,
+        128.0,
+        1073.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ctf_yavin",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 28
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -408.0,
+        1888.0,
+        81.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "doom_comm",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the painted space backdrop and planets.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/ships",
+          "outer": "textures/skies/nebula2",
+          "source": "shaders/skies.shader",
+          "surfaces": 17
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        0.0,
+        -832.0,
+        49.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "doom_detention",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the painted space backdrop and planets.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/ships",
+          "outer": "textures/skies/nebula2",
+          "source": "shaders/skies.shader",
+          "surfaces": 2
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1024.0,
+        -416.0,
+        241.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "doom_shields",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        2144.0,
+        -1536.0,
+        49.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_bay",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -2336.0,
+        -864.0,
+        625.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_bespin",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        2400.0,
+        -480.0,
+        13621.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_carbon",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        4224.0,
+        0.0,
+        13873.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_hangar",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/space",
+          "outer": "textures/skies/space",
+          "source": "shaders/skies.shader",
+          "surfaces": 1
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1040.0,
+        -1744.0,
+        953.0,
+        225.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_jedi",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/artus_light",
+          "outer": "textures/skies/desert",
+          "source": "shaders/skies.shader",
+          "surfaces": 14
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -96.0,
+        576.0,
+        529.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_pit",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        256.0,
+        -1080.0,
+        241.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_temple",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -5544.0,
+        4544.0,
+        -1071.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "duel_training",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 1
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -64.0,
+        -296.0,
+        113.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_bespin",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 51
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        1120.0,
+        544.0,
+        49.0,
+        225.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_deathstar",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/space",
+          "outer": "textures/skies/space",
+          "source": "shaders/skies.shader",
+          "surfaces": 30
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2944.0,
+        -6144.0,
+        -463.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_imperial",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/space",
+          "outer": "textures/skies/space",
+          "source": "shaders/skies.shader",
+          "surfaces": 41
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -28.0,
+        -84.0,
+        33.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_ns_hideout",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 2
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2496.0,
+        480.0,
+        -111.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_ns_streets",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/stars",
+          "outer": "textures/skies/stars",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -672.0,
+        1947.0,
+        1588.0,
+        0.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_raven",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/space",
+          "outer": "textures/skies/space",
+          "source": "shaders/skies.shader",
+          "surfaces": 21
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1600.0,
+        1600.0,
+        49.0,
+        270.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ffa_yavin",
+      "kind": "mp",
+      "palette": null,
+      "reason": "Retail multiplayer map; retain stock rendering in this SP campaign rollout.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 5
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        672.0,
+        -312.0,
+        177.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "kejim_base",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the stars and dark space/night background.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/stars",
+          "outer": "textures/skies/stars",
+          "source": "shaders/skies.shader",
+          "surfaces": 17
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        416.0,
+        792.0,
+        49.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "kejim_post",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the moonlit mountain and cloud composition; a daylight replacement would alter the scene.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/kejim",
+          "outer": "textures/skies/desert2",
+          "source": "shaders/skies.shader",
+          "surfaces": 13
+        },
+        {
+          "shader": "textures/skies/ships",
+          "outer": "textures/skies/nebula2",
+          "source": "shaders/skies.shader",
+          "surfaces": 0
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        1692.0,
+        -1692.0,
+        -15.0,
+        180.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ns_hideout",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -1032.0,
+        2416.0,
+        -175.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "ns_starpad",
+      "kind": "sp",
+      "palette": "bespin",
+      "reason": "Use the authored peach cloud backdrop as the palette reference, with a low blend.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/bespin",
+          "outer": "textures/skies/bespin",
+          "source": "shaders/skies.shader",
+          "surfaces": 6
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1768.0,
+        -3368.0,
+        -7755.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/bespin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.93,
+        0.12
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "ns_streets",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        2292.0,
+        428.0,
+        -199.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "pit",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        312.0,
+        -1080.0,
+        241.0,
+        360.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "valley",
+      "kind": "sp",
+      "palette": null,
+      "reason": "Keep the painted space backdrop and planets.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/ships",
+          "outer": "textures/skies/nebula2",
+          "source": "shaders/skies.shader",
+          "surfaces": 6
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -1312.0,
+        -1040.0,
+        -79.0,
+        135.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_canyon",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -4282.0,
+        -4798.0,
+        2263.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_courtyard",
+      "kind": "sp",
+      "palette": "yavin-jo",
+      "reason": "Use a restrained bright jungle profile. Retain most of JO's painted Yavin Prime and canopy.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 56
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        2504.0,
+        -2424.0,
+        -511.0,
+        45.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.45,
+        0.82
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_final",
+      "kind": "sp",
+      "palette": "yavin-jo",
+      "reason": "Use a restrained bright jungle profile. Retain most of JO's painted Yavin Prime and canopy.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 43
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        -8568.0,
+        3944.0,
+        -639.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.45,
+        0.82
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_swamp",
+      "kind": "sp",
+      "palette": null,
+      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "approved": false,
+      "skies": [],
+      "sky_portal": false,
+      "view": [
+        -5914.0,
+        -4174.0,
+        1775.0,
+        315.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening."
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_temple",
+      "kind": "sp",
+      "palette": "yavin-jo",
+      "reason": "Use a restrained bright jungle profile. Retain most of JO's painted Yavin Prime and canopy.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 56
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        936.0,
+        -1336.0,
+        -463.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.45,
+        0.82
+      ]
+    },
+    {
+      "campaign": "jo",
+      "map": "yavin_trial",
+      "kind": "sp",
+      "palette": "yavin-jo",
+      "reason": "Use a restrained bright jungle profile. Retain most of JO's painted Yavin Prime and canopy.",
+      "approved": false,
+      "skies": [
+        {
+          "shader": "textures/skies/yavin",
+          "outer": "textures/skies/yavin",
+          "source": "shaders/skies.shader",
+          "surfaces": 14
+        }
+      ],
+      "sky_portal": false,
+      "view": [
+        200.0,
+        -632.0,
+        471.0,
+        90.0
+      ],
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/yavin",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [
+        0.35,
+        -0.45,
+        0.82
+      ]
+    }
+  ]
+}

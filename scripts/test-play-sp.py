@@ -150,6 +150,46 @@ class DesktopUpdateTests(unittest.TestCase):
             self.fail(result.stdout)
         self.assertGreater(int(matched[1].replace(",", "")), 1_000_000)
 
+    def test_atmosphere_review_isolation(self):
+        (self.first / "setup-atmosphere-review.py").write_bytes(
+            (ROOT / "scripts/setup-atmosphere-review.py").read_bytes())
+        maps = self.first / "OpenJK/maps"
+        maps.mkdir()
+        for source in (ROOT / "scripts/maps").glob("*.atmosphere"):
+            (maps / source.name).write_bytes(source.read_bytes())
+        subprocess.run(["python3", str(ROOT / "scripts/build-atmosphere-review.py"),
+                        "--output", str(self.first / "OpenJK")], check=True, capture_output=True)
+        home = Path(self.env["OJK_PROFILE"])
+        home.mkdir()
+        sentinel = home / "keep.cfg"
+        sentinel.write_text("campaign configuration")
+        self.run_play("--desktop", "--atmosphere-review")
+        args = json.loads(self.launch.read_text())
+        review = home / "atmosphere-review"
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(review))
+        self.assertIn("atmosphere-review-ja.cfg", args)
+        profile = review / "OpenJK/maps/t1_sour.atmosphere"
+        edited = profile.read_text() + "// Local review edit.\n"
+        profile.write_text(edited)
+        notes = review / "atmosphere-review-notes.csv"
+        notes.write_text("local notes\n")
+        (review / "OpenJK/qconsole.log").write_text("ATMO_TWEAK ja/t1_sour\n")
+        self.run_play("--atmosphere-review", "all")
+        self.assertIn("atmosphere-review-ja-all.cfg", json.loads(self.launch.read_text()))
+        self.assertEqual(profile.read_text(), edited)
+        self.assertEqual(notes.read_text(), "local notes\n")
+        self.assertEqual(next((review / "OpenJK/review-logs").glob("*.log")).read_text(), "ATMO_TWEAK ja/t1_sour\n")
+        self.run_play("--campaign", "jo", "--atmosphere-review", "all", OJK_JO_ASSETS=str(self.jo_assets))
+        args = json.loads(self.launch.read_text())
+        jo_review = review / "campaigns/jo"
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(jo_review))
+        self.assertIn("atmosphere-review-jo-all.cfg", args)
+        self.assertTrue((jo_review / "OpenJK/maps/bespin_streets.atmosphere").exists())
+        imported = json.loads(Path(str(self.launch) + ".import").read_text())
+        self.assertEqual(imported[-1], str(jo_review))
+        self.assertEqual(sentinel.read_text(), "campaign configuration")
+        self.assertFalse((home / "OpenJK/maps").exists())
+
     def test_publication_does_not_change_transfer_source(self):
         second = self.package("second")
         self.run_play(OJK_TEST_PUBLISH=str(second))

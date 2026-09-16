@@ -8,8 +8,9 @@ Use the published Rend2 build. On `t1_sour`, enter:
 r_atmosphere 1
 ```
 
-Set `r_atmosphere 0` to restore the stock sky. Both settings are live. The default
-is `0` until desktop visual review is complete. Sky filtering, reconstructed sky
+Set `r_atmosphere 0` to restore the stock sky. Both settings are live. The master
+switch defaults to `0`. The `t1_sour` appearance has user approval; the new JA/JO
+candidate profiles await review. Sky filtering, reconstructed sky
 assets, and local fog have separate controls.
 
 For a fixed rooftop preview, enter:
@@ -71,7 +72,9 @@ an override at `maps/t1_sour.atmosphere` in the active `OpenJK` profile. Run
 `r_atmosphereReload` after an edit. Reloading updates the existing texture.
 
 The versioned file starts with `atmosphere 1`, then `sky <shader-name>`. All named
-fields in `scripts/maps/t1_sour.atmosphere` are required. Duplicate, unknown,
+fields in `scripts/maps/t1_sour.atmosphere` are required. The additional `skyBlend`
+field is optional and defaults to `1`. Use values from `0` to `1` to retain more
+source artwork on other maps. Duplicate, unknown,
 missing, out-of-range, and non-finite fields reject the profile and select the
 stock sky. Missing map profiles also select stock rendering.
 
@@ -113,6 +116,8 @@ GPU figures are medians of the per-run medians. The added sky-pass cost was
 about 0.16 ms at 720p and 0.39 ms at 1080p. Shared server load can affect throughput.
 Table construction took about 0.57–0.64 seconds during load or explicit reload.
 The table is currently prepared even when the live effect is off. Desktop GPU
-measurements and final art approval are still outstanding.
+measurements are still outstanding.
 
 See [the atmosphere plan](procedural-atmosphere-plan.md) for the next stages.
+See [the campaign review guide](atmosphere-review.md) for the JA/JO profile audit
+and the map-cycling review mode.

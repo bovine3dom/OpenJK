@@ -30,18 +30,21 @@ if [[ ${1:-} == --campaign ]]; then
 fi
 campaign_args=(+set com_outcast 0)
 if [[ $campaign == jo ]]; then
-    profile="${profile%/}/campaigns/jo"
-    jo_assets=$(realpath -e -- "${OJK_JO_ASSETS:?Set OJK_JO_ASSETS to the Jedi Outcast GameData directory}")
-    python3 "$package/import-jo.py" "$assets" "$jo_assets" "$profile"
     campaign_args=(+set com_outcast 1)
     start_map=kejim_post
 fi
 display=()
+review=
 while [[ $# -gt 0 ]]; do
 case $1 in
     --jolt-demo)
         profile="${profile%/}/jolt-demo"
         campaign_args+=(+exec jolt-demo.cfg)
+        shift
+        ;;
+    --atmosphere-review)
+        review=profiles
+        if [[ ${2:-} == all ]]; then review=all; shift; fi
         shift
         ;;
     --new-game)
@@ -69,11 +72,23 @@ case $1 in
     *) break ;;
 esac
 done
-if [[ ${#display[@]} == 0 && ! -f "$profile/OpenJK/openjk_sp.cfg" && ! -f "$profile/base/openjk_sp.cfg" ]]; then
-    display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+if [[ -n $review ]]; then profile="${profile%/}/atmosphere-review"; fi
+if [[ $campaign == jo ]]; then
+    profile="${profile%/}/campaigns/jo"
+    jo_assets=$(realpath -e -- "${OJK_JO_ASSETS:?Set OJK_JO_ASSETS to the Jedi Outcast GameData directory}")
+    python3 "$package/import-jo.py" "$assets" "$jo_assets" "$profile"
 fi
 mkdir -p -- "$profile"
 profile=$(realpath -- "$profile")
+if [[ ${#display[@]} == 0 && ! -f "$profile/OpenJK/openjk_sp.cfg" && ! -f "$profile/base/openjk_sp.cfg" ]]; then
+    display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+fi
+if [[ -n $review ]]; then
+    python3 "$package/setup-atmosphere-review.py" "$profile" "$campaign"
+    suffix=
+    if [[ $review == all ]]; then suffix=-all; fi
+    campaign_args+=(+set cl_renderer rdsp-rend2 +exec "atmosphere-review-$campaign$suffix.cfg")
+fi
 printf 'Package: %s\nProfile: %s\n' "$package" "$profile"
 if [[ -f "$package/build-id.txt" ]]; then
     cat -- "$package/build-id.txt"

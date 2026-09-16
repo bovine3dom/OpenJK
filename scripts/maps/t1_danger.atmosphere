@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/dune
+// Initial palette: blenjeel. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.04 0.032 0.022
+absorption 0.002 0.003 0.006
+groundAlbedo 0.4 0.32 0.17
+anisotropy 0.76
+illuminance 17
+sunDirection -0.56 -0.04 0.83
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.15
+cloudColor 1 0.83 0.6
+skyBlend 0.2

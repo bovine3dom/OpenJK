@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/wedge_sky
+// Initial palette: krildor. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.009 0.014 0.019
+mie 0.055 0.041 0.016
+absorption 0.001 0.003 0.018
+groundAlbedo 0.42 0.28 0.08
+anisotropy 0.76
+illuminance 13
+sunDirection -0.5 -0.65 0.57
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.2
+cloudColor 1 0.69 0.2
+skyBlend 0.25

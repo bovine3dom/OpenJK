@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "base": {
+    "radius": 6360, "thickness": 60, "observerHeight": 0.15,
+    "rayHeight": 8, "mieHeight": 1.5,
+    "rayleigh": [0.0058, 0.0135, 0.0331], "mie": [0.035, 0.030, 0.022],
+    "absorption": [0.002, 0.003, 0.006], "groundAlbedo": [0.35, 0.28, 0.18],
+    "anisotropy": 0.76, "illuminance": 16,
+    "sunDirection": [0.011, -0.146, 0.989], "sunRadius": 0.006, "sunDisk": 0,
+    "cloudStrength": 0.3, "cloudColor": [0.90, 0.85, 0.75], "skyBlend": 0.3
+  },
+  "palettes": {
+    "tatooine": {"cloudStrength": 0.55, "sunDisk": 8, "skyBlend": 1},
+    "chandrila": {"mie": [0.030, 0.025, 0.020], "groundAlbedo": [0.28, 0.22, 0.16], "illuminance": 14, "skyBlend": 0.55},
+    "yavin-ja": {"mie": [0.024, 0.026, 0.025], "groundAlbedo": [0.14, 0.24, 0.11], "illuminance": 14, "cloudStrength": 0.2, "cloudColor": [0.90, 0.86, 0.82], "sunDirection": [-0.08, -0.08, 0.994], "skyBlend": 0.3},
+    "yavin-jo": {"mie": [0.023, 0.026, 0.023], "groundAlbedo": [0.14, 0.25, 0.12], "illuminance": 16, "cloudStrength": 0.2, "cloudColor": [0.95, 0.96, 0.90], "sunDirection": [0.35, -0.45, 0.82], "skyBlend": 0.25},
+    "blenjeel": {"mie": [0.040, 0.032, 0.022], "groundAlbedo": [0.40, 0.32, 0.17], "illuminance": 17, "cloudStrength": 0.15, "cloudColor": [1.0, 0.83, 0.60], "sunDirection": [-0.56, -0.04, 0.83], "skyBlend": 0.2},
+    "bakura": {"rayleigh": [0.0058, 0.022, 0.025], "mie": [0.025, 0.035, 0.030], "absorption": [0.008, 0.002, 0.004], "groundAlbedo": [0.12, 0.22, 0.18], "illuminance": 12, "cloudStrength": 0.15, "cloudColor": [0.80, 0.94, 0.84], "sunDirection": [0.90, 0.05, 0.44], "skyBlend": 0.2},
+    "dosuun": {"mie": [0.045, 0.043, 0.039], "groundAlbedo": [0.23, 0.25, 0.18], "illuminance": 11, "cloudStrength": 0.4, "cloudColor": [0.78, 0.78, 0.71], "sunDirection": [-0.55, -0.55, 0.63], "skyBlend": 0.35},
+    "korriban": {"mie": [0.043, 0.037, 0.028], "groundAlbedo": [0.32, 0.25, 0.16], "illuminance": 12, "cloudStrength": 0.35, "cloudColor": [0.84, 0.77, 0.62], "sunDirection": [-0.55, -0.55, 0.63], "skyBlend": 0.3},
+    "amber-overcast": {"rayleigh": [0.009, 0.014, 0.024], "mie": [0.052, 0.037, 0.019], "absorption": [0.001, 0.004, 0.013], "groundAlbedo": [0.40, 0.26, 0.11], "illuminance": 12, "cloudStrength": 0.2, "cloudColor": [1.0, 0.70, 0.34], "sunDirection": [-0.06, -0.66, 0.75], "skyBlend": 0.25},
+    "krildor": {"rayleigh": [0.009, 0.014, 0.019], "mie": [0.055, 0.041, 0.016], "absorption": [0.001, 0.003, 0.018], "groundAlbedo": [0.42, 0.28, 0.08], "illuminance": 13, "cloudStrength": 0.2, "cloudColor": [1.0, 0.69, 0.20], "sunDirection": [-0.5, -0.65, 0.57], "skyBlend": 0.25},
+    "storm-grey": {"mie": [0.060, 0.062, 0.065], "absorption": [0.004, 0.004, 0.004], "groundAlbedo": [0.15, 0.17, 0.17], "anisotropy": 0.5, "illuminance": 7, "cloudStrength": 0.45, "cloudColor": [0.58, 0.65, 0.66], "sunDirection": [0.32, -0.56, 0.766], "skyBlend": 0.25},
+    "bespin": {"mie": [0.045, 0.033, 0.022], "absorption": [0.001, 0.004, 0.012], "mieHeight": 2.0, "groundAlbedo": [0.32, 0.19, 0.17], "illuminance": 16, "cloudStrength": 0.2, "cloudColor": [1.05, 0.70, 0.60], "sunDirection": [0.35, -0.93, 0.12], "skyBlend": 0.3},
+    "artus": {"mie": [0.065, 0.050, 0.035], "absorption": [0.003, 0.006, 0.013], "groundAlbedo": [0.28, 0.24, 0.12], "illuminance": 10, "cloudStrength": 0.25, "cloudColor": [0.77, 0.59, 0.34], "sunDirection": [0.35, -0.93, 0.18], "skyBlend": 0.25}
+  },
+  "campaigns": {
+    "ja": {
+      "order": ["yavin1", "yavin1b", "yavin2", "academy1", "t1_sour", "t1_fatal", "t1_danger", "t1_rail", "t1_surprise", "t1_inter", "hoth2", "hoth3", "academy2", "t2_rancor", "t2_wedge", "t2_dpred", "t2_rogue", "t2_trip", "academy3", "vjun1", "vjun2", "vjun3", "academy4", "t3_rift", "t3_bounty", "t3_hevil", "t3_byss", "t3_stamp", "academy5", "taspir1", "taspir2", "academy6", "kor1", "kor2"],
+      "skies": {
+        "textures/skies/yavin": {"palette": "yavin-ja", "reason": "Add restrained jungle daylight. Retain most of the painted planet and canopy; review their contrast."},
+        "textures/skies/desert": {"palette": "tatooine", "reason": "Daylight cube with a low mountain horizon; suitable for the established desert atmosphere."},
+        "textures/skies/dune": {"palette": "blenjeel", "reason": "Add a mild dry-air gradient. Keep the two painted planets prominent; use a low blend."},
+        "textures/skies/fatal": {"palette": "bakura", "reason": "Add a restrained teal-green atmosphere. Keep the painted moon and water composition prominent."},
+        "textures/skies/dos": {"palette": "dosuun", "reason": "Use muted overcast daylight; retain most of the cloud and terrain artwork."},
+        "textures/skies/korb": {"palette": "amber-overcast", "reason": "Use a low amber blend to retain the bright cloud deck and rocky horizon."},
+        "textures/skies/wedge": {"palette": "krildor", "reason": "Use a restrained golden atmosphere above the authored cloud sea. Volumetric clouds remain deferred."},
+        "textures/skies/hevil": {"palette": "storm-grey", "reason": "Use a low cool-grey blend. Preserve the storm lighting and cloud contrast."},
+        "textures/skies/bespin": {"palette": "bespin", "reason": "Use a low peach-haze blend for the authored cloud backdrop; inspect its limited sky openings."},
+        "textures/skies/cs1": {"reason": "Keep the night sky, stars, and painted celestial disc."},
+        "textures/skies/b": {"reason": "Keep the night sky and stars. The current optical profile is a daylight model."},
+        "textures/skies/byss": {"reason": "Keep the space backdrop and nebulae."},
+        "textures/skies/nebula2": {"reason": "Keep the space backdrop and painted planets."},
+        "textures/skies/vu": {"reason": "Keep the acid-haze background and its authored fog match."}
+      },
+      "overrides": {
+        "t1_sour": {"view": [4693, -1624, 380, 45], "approved": true},
+        "yavin2": {"sky": "textures/skies/yavin", "reason": "Profile the Yavin cube. Keep the more numerous no-outerbox helper sky surfaces stock."},
+        "t1_surprise": {"reason": "Reuse the Tatooine daylight palette for the droid-recovery landscape."},
+        "t3_rift": {"palette": "chandrila", "reason": "Use restrained canyon daylight. Keep the painted sun; add no second disc."},
+        "kor1": {"palette": "korriban", "reason": "Use a muted warm-dust blend for the tomb landscape."},
+        "kor2": {"sky": "textures/skies/korriban", "palette": "korriban", "reason": "Profile only the Korriban material. Keep the ending's Yavin and space materials stock."}
+      }
+    },
+    "jo": {
+      "order": ["kejim_post", "kejim_base", "artus_mine", "artus_detention", "artus_topside", "valley", "yavin_temple", "yavin_trial", "ns_streets", "ns_hideout", "ns_starpad", "bespin_undercity", "bespin_streets", "bespin_platform", "cairn_bay", "cairn_assembly", "cairn_reactor", "cairn_dock1", "doom_comm", "doom_detention", "doom_shields", "yavin_swamp", "yavin_canyon", "yavin_courtyard", "yavin_final", "pit"],
+      "skies": {
+        "textures/skies/yavin": {"palette": "yavin-jo", "reason": "Use a restrained bright jungle profile. Retain most of JO's painted Yavin Prime and canopy."},
+        "textures/skies/desert": {"palette": "artus", "reason": "Use JO's dark amber-overcast palette. This asset differs from JA's blue desert sky."},
+        "textures/skies/bespin": {"palette": "bespin", "reason": "Use a restrained peach-haze blend while retaining the cloud-city backdrop."},
+        "textures/skies/desert2": {"reason": "Keep the moonlit mountain and cloud composition; a daylight replacement would alter the scene."},
+        "textures/skies/stars": {"reason": "Keep the stars and dark space/night background."},
+        "textures/skies/nebula2": {"reason": "Keep the painted space backdrop and planets."}
+      },
+      "overrides": {
+        "bespin_undercity": {"sky": "textures/skies/bespin", "reason": "Profile the 29-surface sky material. One secondary sky surface remains stock; inspect its transition."},
+        "ns_starpad": {"reason": "Use the authored peach cloud backdrop as the palette reference, with a low blend."}
+      }
+    }
+  }
+}

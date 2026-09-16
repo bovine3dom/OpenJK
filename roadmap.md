@@ -154,6 +154,8 @@ generated caches and explicit material or map configuration.
 
 - [ ] Volumetric fog: derive initial media from existing fog volumes; provide
   conservative density controls and preserve authored scene visibility.
+- [ ] Volumetric clouds remain deferred. See the
+  [cloud investigation](docs/volumetric-clouds.md) for the proposed Krildor scope.
 - [ ] Light shafts: use known light sources and shadow information. Do not infer
   every baked light from texture brightness or force outdoor sunlight indoors.
 - [ ] Indirect lighting: prototype screen-space colour bounce, including
@@ -163,6 +165,9 @@ generated caches and explicit material or map configuration.
 References: [Wronski's volumetric rendering work](https://bartwronski.com/publications/)
 and [visibility-bitmask indirect lighting](https://arxiv.org/abs/2301.11376).
 Physics-driven animation is tracked separately in `animation_todo.md`.
+
+Current atmosphere profiles have a [JA/JO map audit](docs/atmosphere-map-audit.md)
+and a [map-cycling review guide](docs/atmosphere-review.md).
 
 ## Squad Behaviour
 

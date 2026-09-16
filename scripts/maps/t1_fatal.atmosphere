@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/t1_fatal
+// Initial palette: bakura. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.022 0.025
+mie 0.025 0.035 0.03
+absorption 0.008 0.002 0.004
+groundAlbedo 0.12 0.22 0.18
+anisotropy 0.76
+illuminance 12
+sunDirection 0.9 0.05 0.44
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.15
+cloudColor 0.8 0.94 0.84
+skyBlend 0.2

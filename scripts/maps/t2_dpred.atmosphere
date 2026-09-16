@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/dosuun
+// Initial palette: dosuun. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.045 0.043 0.039
+absorption 0.002 0.003 0.006
+groundAlbedo 0.23 0.25 0.18
+anisotropy 0.76
+illuminance 11
+sunDirection -0.55 -0.55 0.63
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.4
+cloudColor 0.78 0.78 0.71
+skyBlend 0.35

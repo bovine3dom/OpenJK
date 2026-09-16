@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/artus_light
+// Initial palette: chandrila. Edit this map profile for tuning.
+// Authored shader sun direction; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.03 0.025 0.02
+absorption 0.002 0.003 0.006
+groundAlbedo 0.28 0.22 0.16
+anisotropy 0.76
+illuminance 14
+sunDirection 0.422618 0 0.906308
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.3
+cloudColor 0.9 0.85 0.75
+skyBlend 0.55
