@@ -12,6 +12,7 @@ rendering:
 - smaa
 - sgssaa (via msaa, but i can't see a difference, probably needs HD textures)
 - torch bound to L (because the other rendering stuff makes stuff dark, lol)
+- simulated atmosphere for skybox
 
 ai:
 - flanking
@@ -21,9 +22,14 @@ ui:
 - rmlui minimal in-game ui with weapon, force selection wheels on H/G, health, ammo, saber style, shields in centre
 - slowly porting over other bits of the UI like the datapad, mission success screen. but i care about this less. the minimal hud is already fantastic
 - ibm plex used under licence for in-game fonts and the bits of the menus i have bothered porting
+- map on datapad with over-my-head algorithms to automatically detect separate floors. lifts, travelling platforms and ...some... switches shown.
+- compass added on V with allies marked. including ones off-screen that the game is just holding there for fun.
 
 animations:
-- experimental jolt ragdoll stuff
+- experimental jolt physics ragdoll - enemies stumble and fall when damaged
+
+unification:
+- play jedi outcast in the jedi academy engine. mostly to make my life easier for all the improvements without maintaining two codebases, but you can also use weapons and force powers from JA. every time i reach a new level i find a broken thing so don't play it faster than me.
 
 ---
 
