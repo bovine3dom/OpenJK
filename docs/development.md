@@ -15,6 +15,9 @@ Both tests must pass before it updates `build/ready`. The output gives a fixed
 package path under `build/packages/`. Do not change source files during packaging.
 Failed candidates remain available for diagnosis.
 
+To also run the JO asset audits and campaign integration tests, use
+`bash scripts/build-sp.sh --integration`. These checks require local JO assets.
+
 The launcher enables all dismemberment categories (`g_dismemberment 3`),
 damage-based cuts (`g_dismemberProbabilities 0`), and ragdolls (`broadsword 1`).
 These launch settings also apply to existing profiles. Engine arguments can

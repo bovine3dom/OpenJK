@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-[[ $# == 0 ]] || { printf 'Usage: build-sp.sh\n' >&2; exit 1; }
+integration=false
+if [[ $# == 1 && $1 == --integration ]]; then
+    integration=true
+elif [[ $# != 0 ]]; then
+    printf 'Usage: build-sp.sh [--integration]\n' >&2; exit 1
+fi
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$root"
@@ -86,7 +91,7 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
     bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
-if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
+if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     python3 scripts/audit-jo.py --academy "${OJK_ASSETS:-$root/GameData}" \
         --outcast "${OJK_JO_ASSETS:-$root/GameData_JO}" | tee "$package/jo-audit-result.txt"
     python3 scripts/audit-jo-cinematics.py --academy "${OJK_ASSETS:-$root/GameData}" \
