@@ -47,7 +47,9 @@ def main():
                "+safe", "+set", "cl_renderer", args.renderer, "+set", "r_fullscreen", "0",
                "+set", "r_mode", "3", "+set", "s_initsound", "1", "+set", "developer", "1",
                "+set", "logfile", "2", "+set", "com_maxfps", "60", "+set", "g_subtitles", "2",
-               "+set", "cg_thirdPerson", "0", "+wait", "150", "+echo", "JO_READY"]
+                "+set", "cg_thirdPerson", "0", "+wait", "150", "+echo", "JO_READY"]
+    if args.jolt:
+        command += ["+set", "g_joltReactions", "0"]
     print(f"JO integration results: {run}", flush=True)
     with log.open("w") as stream:
         process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=stream, stderr=subprocess.STDOUT,
@@ -175,12 +177,12 @@ def main():
                 line = re.findall(r"jolt actor=[^\r\n]+", text)[-1]
                 return {k: float(v) for k, v in (word.split("=", 1) for word in line.split()[1:]) if "," not in v}
 
-            cmd("helpusobi 1; god; set g_joltReactions 1; set g_joltDebug 1; wait 200")
+            cmd("helpusobi 1; god; set d_squadTactics 0; set g_joltDebug 1; wait 200")
             cmd("setviewpos 400 -2193 0 322; wait 40")
             guard = {}
             for _ in range(80):
                 guard = npc()
-                if guard["scripted"] == "0" and not int(guard["script_flags"]) & 0x200:
+                if guard["enemy"] == "0" and guard["los"] == "1" and guard["scripted"] == "0" and not int(guard["script_flags"]) & 0x200:
                     break
                 cmd("wait 10")
             else:
