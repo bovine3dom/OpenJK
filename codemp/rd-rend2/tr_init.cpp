@@ -143,6 +143,7 @@ cvar_t *r_compareEnhancements;
 cvar_t *r_seamlessSky;
 cvar_t *r_highResSkies;
 cvar_t *r_mapHaze;
+cvar_t *r_localFog;
 cvar_t *r_g2GeometryCache;
 cvar_t *r_g2GpuSkinning, *r_g2GpuValidate;
 cvar_t *r_g2GeometryValidate;
@@ -1548,6 +1549,8 @@ void R_Register( void )
 	r_seamlessSky = ri.Cvar_Get("r_seamlessSky", "1", CVAR_ARCHIVE, "Filter sky faces as a seamless cubemap. Live toggle.");
 	r_highResSkies = ri.Cvar_Get("r_highResSkies", "1", CVAR_ARCHIVE, "Use selected reconstructed sky assets. Live toggle.");
 	r_mapHaze = ri.Cvar_Get("r_mapHaze", "1", CVAR_ARCHIVE, "Use bounded distance/height haze from map profiles.");
+	r_localFog = ri.Cvar_Get("r_localFog", "0", CVAR_ARCHIVE, "Prototype: 0 off, 1 local fog, 2 grid debug. Replaces map haze.");
+	ri.Cvar_CheckRange(r_localFog, 0, 2, qtrue);
 	r_g2GeometryCache = ri.Cvar_Get("r_g2GeometryCache", "1", CVAR_ARCHIVE, "Reuse SP Ghoul2 geometry for identical evaluated bone poses.");
 	r_g2GpuSkinning = ri.Cvar_Get("r_g2GpuSkinning", "1", CVAR_ARCHIVE, "Use SP GPU skinning for supported Ghoul2 surfaces.");
 	r_g2GpuValidate = ri.Cvar_Get("r_g2GpuValidate", "0", 0, "Read back GPU skinning and compare positions with CPU skinning.");

@@ -66,6 +66,38 @@ comparison disables haze. There is no temporal history or full-screen depth
 approximation. Author bounds around outdoor regions; this box is not an indoor
 visibility detector. Do not put enclosed rooms inside a haze box.
 
+## Local Volumetric Prototype
+
+`r_localFog 1` enables the prototype. `0` disables it. `2` shows the accumulated
+volume grid. The default is `0`. A valid local profile replaces analytic map
+haze while the prototype is active. The base comparison disables both effects.
+
+`maps/<map>.volfog` contains up to four records. Each record has ten numbers:
+RGB color, density, minimum XYZ, and maximum XYZ. Colors must be 0–1. Density
+must be greater than zero and no greater than 0.005. Each box dimension must be
+at least 64 world units. Coordinates must be within ±65536. Invalid profiles
+disable local fog. Reload the map after an edit. The packaged Krildor profile
+adds mist below the platforms.
+
+The camera-aligned grid has 64×36 columns and 33 depth slices. It stores
+accumulated scattering and transmission in an RGBA16F atlas (about 0.58 MiB).
+Each cell uses 24 integration samples. View depth is capped at 2048 units.
+Opacity is capped at 0.35. Box boundaries fade over 32 units. Static world-space
+density variation gives the fog a three-dimensional shape.
+
+The grid is shared by the main view and its sky view in the same frame. Surface
+shaders interpolate between depth slices at each surface's position. Alpha
+materials use their own depth. Additive materials receive attenuation only.
+The same material exclusions as analytic haze apply. This prototype does not
+convert stock BSP fog or reconstruct baked map lights.
+
+The torch contributes warm scattering only when its scene shadow map is valid.
+No other dynamic light contributes yet. There is no temporal accumulation, so
+moving lights do not leave history trails. The prototype uses a single shadow
+sample per integration point. Coarse cells can produce boundary blur, banding,
+and light-edge aliasing. Thin volumes need more samples. Mirrors retain their
+original rendering. Portal scenery still needs a separate distance policy.
+
 ## Verification
 
 Run `python3 scripts/test-sky-fog.py`. This headless EGL test checks six view
@@ -88,5 +120,17 @@ downward view, mean image change was 0.639. Restart and disable errors were
 0.007 and 0.031. The MSAA 4 capture also showed the bounded effect. A short P630
 sky-heavy benchmark measured 71.65 FPS with haze off and 68.03 FPS with haze on,
 using the same sample lengths as the replacement test.
+
+Run `python3 scripts/test-local-fog.py --msaa 4` for a denser isolated volume.
+It checks torch scattering in the grid, light removal, live restoration, and a
+map change. Add `--invalid` to check rejection of a non-finite profile.
+The MSAA 4 run measured a mean fog image change of 3.74. The lit-grid change was
+8.61. Repeated torch states and light removal had zero image difference.
+The sky fixture also passed local-fog restart and disable checks.
+
+A short P630 sky-heavy benchmark measured 81.08 FPS with local fog off and
+78.18 FPS with it on. These are a paired cost check with the same sample lengths
+as above. Do not compare absolute FPS across earlier runs with different server
+load. Desktop appearance and full campaign coverage still need human review.
 
 See [the research notes](sky-fog-investigation.md) for sources and stage order.

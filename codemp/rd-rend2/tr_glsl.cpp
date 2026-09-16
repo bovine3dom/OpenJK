@@ -118,6 +118,15 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_HazeMins", GLSL_VEC4, 1 },
 	{ "u_HazeMaxs", GLSL_VEC4, 1 },
 	{ "u_HazeOrigin", GLSL_VEC3, 1 },
+	{ "u_VolumeMap", GLSL_INT, 1 },
+	{ "u_VolumeParams", GLSL_VEC4, 1 },
+	{ "u_VolumeMatrix", GLSL_MAT4x4, 1 },
+	{ "u_VolumeMins", GLSL_VEC4, 4 },
+	{ "u_VolumeMaxs", GLSL_VEC4, 4 },
+	{ "u_VolumeColor", GLSL_VEC4, 4 },
+	{ "u_VolumeTorchOrigin", GLSL_VEC4, 1 },
+	{ "u_VolumeTorchDirection", GLSL_VEC4, 1 },
+	{ "u_VolumeTorchParams", GLSL_VEC4, 1 },
 
 	{ "u_ModelMatrix",               GLSL_MAT4x4, 1 },
 	{ "u_ModelViewProjectionMatrix", GLSL_MAT4x4, 1 },
@@ -2546,6 +2555,12 @@ void GLSL_LoadGPUShaders()
 	GLSL_SetUniformInt(&tr.skyCubeShader, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
 	qglUseProgram(0);
 	GLSL_FinishGPUShader(&tr.skyCubeShader);
+	GLSL_LoadGPUProgramBasic(builder, allocator, &tr.localFogShader, "localfog", fallback_localfogProgram, 0);
+	GLSL_InitUniforms(&tr.localFogShader);
+	qglUseProgram(tr.localFogShader.program);
+	GLSL_SetUniformInt(&tr.localFogShader, UNIFORM_TORCHSHADOWMAP, TB_TORCHSHADOWMAP);
+	qglUseProgram(0);
+	GLSL_FinishGPUShader(&tr.localFogShader);
 	numEtcShaders += GLSL_LoadGPUProgramPShadow(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramVShadow(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramDownscale4x(builder, allocator);
@@ -2620,6 +2635,7 @@ void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 
 	GLSL_DeleteGPUShader(&tr.textureColorShader);
 	GLSL_DeleteGPUShader(&tr.skyCubeShader);
+	GLSL_DeleteGPUShader(&tr.localFogShader);
 
 	for ( i = 0; i < FOGDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.fogShader[i]);

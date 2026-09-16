@@ -47,7 +47,10 @@ def main():
                  "r_highResSkies 1", "wait 5", "screenshot_png highres", "wait 2",
                  "r_highResSkies 0", "r_mapHaze 1", "wait 5", "screenshot_png haze", "wait 2",
                  "vid_restart", "wait 80", "screenshot_png haze_restart", "wait 2",
-                 "r_mapHaze 0", "wait 5", "screenshot_png haze_off", "wait 2", "echo OJK_SKY_DONE", "quit"]
+                 "r_mapHaze 0", "wait 5", "screenshot_png haze_off", "wait 2",
+                 "r_localFog 1", "wait 5", "screenshot_png local_fog", "wait 2",
+                 "vid_restart", "wait 80", "screenshot_png local_restart", "wait 2",
+                 "r_localFog 0", "wait 5", "screenshot_png local_off", "wait 2", "echo OJK_SKY_DONE", "quit"]
     (profile / "sky-test.cfg").write_text("\n".join(commands) + "\n")
     env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_VIDEODRIVER="offscreen",
                EGL_PLATFORM="surfaceless", SDL_AUDIODRIVER="dummy")
@@ -88,6 +91,15 @@ def main():
         results[name + "_error"] = sum(abs(x-y) for x, y in zip(reference, image)) / len(image)
         if results[name + "_error"] > 1:
             raise RuntimeError(f"Haze lifecycle mismatch: {name}")
+    fog = pixels(profile / "screenshots/local_fog.png")
+    results["local_fog_delta"] = sum(abs(x-y) for x, y in zip(a, fog)) / len(a)
+    if "Local fog grid: 64x36x33" not in text or results["local_fog_delta"] < 0.1:
+        raise RuntimeError("Local fog grid missing or invisible")
+    for name, reference in (("local_restart", fog), ("local_off", a)):
+        image = pixels(profile / "screenshots" / f"{name}.png")
+        results[name + "_error"] = sum(abs(x-y) for x, y in zip(reference, image)) / len(image)
+        if results[name + "_error"] > 1:
+            raise RuntimeError(f"Local fog lifecycle mismatch: {name}")
     (suite / "result.json").write_text(json.dumps(results, indent=2) + "\n")
     print(json.dumps(results, indent=2))
     print("PASS: sky orientation, live fallback, and restart")

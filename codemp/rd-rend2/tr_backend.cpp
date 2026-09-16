@@ -3283,6 +3283,81 @@ static void RB_CreatePostTarget(image_t **image, FBO_t **fbo, const char *name, 
 	R_CheckFBO(*fbo);
 }
 
+static void RB_BuildLocalFog()
+{
+	backEnd.localFogReady = false;
+	if (!r_localFog->integer || !tr.world || !tr.world->numLocalFogs || backEnd.comparisonBaseline ||
+		(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) ||
+		(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_POINTSHADOW)) ||
+		(backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal)) return;
+	const trRefdef_t &view = backEnd.refdef;
+	const vec2_t fov = {view.fov_x, view.fov_y};
+	if (tr.localFogImage && tr.localFogFrame == backEndData->realFrameNumber &&
+		!memcmp(tr.localFogViewOrigin, view.vieworg, sizeof(vec3_t)) &&
+		!memcmp(tr.localFogViewAxis, view.viewaxis, sizeof(view.viewaxis)) &&
+		!memcmp(tr.localFogFov, fov, sizeof(fov)))
+	{
+		backEnd.localFogReady = true;
+		return;
+	}
+	FBO_t *oldFbo = glState.currentFBO;
+	if (!tr.localFogImage)
+	{
+		tr.localFogImage = R_CreateImage("*localFog", nullptr, 64, 36 * 33, IMGTYPE_COLORALPHA,
+			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE | IMGFLAG_NOLIGHTSCALE, GL_RGBA16F);
+		tr.localFogFbo = FBO_Create("*localFog", 64, 36 * 33);
+		FBO_Bind(tr.localFogFbo);
+		FBO_AttachTextureImage(tr.localFogImage, 0);
+		FBO_SetupDrawBuffers();
+		R_CheckFBO(tr.localFogFbo);
+		ri.Printf(PRINT_ALL, "Local fog grid: 64x36x33, 24 steps, %d volumes\n", tr.world->numLocalFogs);
+	}
+	FBO_Bind(tr.localFogFbo);
+	qglViewport(0, 0, 64, 36 * 33);
+	qglScissor(0, 0, 64, 36 * 33);
+	GL_State(GLS_DEPTHTEST_DISABLE);
+	GL_Cull(CT_TWO_SIDED);
+	shaderProgram_t *sp = &tr.localFogShader;
+	GLSL_BindProgram(sp);
+	const vec4_t info = {0, 0, tanf(DEG2RAD(view.fov_x * 0.5f)), tanf(DEG2RAD(view.fov_y * 0.5f))};
+	GLSL_SetUniformVec4(sp, UNIFORM_VIEWINFO, info);
+	GLSL_SetUniformVec3(sp, UNIFORM_VIEWORIGIN, view.vieworg);
+	GLSL_SetUniformVec3(sp, UNIFORM_VIEWFORWARD, view.viewaxis[0]);
+	GLSL_SetUniformVec3(sp, UNIFORM_VIEWLEFT, view.viewaxis[1]);
+	GLSL_SetUniformVec3(sp, UNIFORM_VIEWUP, view.viewaxis[2]);
+	qglUniform4fv(sp->uniforms[UNIFORM_VOLUMEMINS], 4, tr.world->localFogMins[0]);
+	qglUniform4fv(sp->uniforms[UNIFORM_VOLUMEMAXS], 4, tr.world->localFogMaxs[0]);
+	qglUniform4fv(sp->uniforms[UNIFORM_VOLUMECOLOR], 4, tr.world->localFogColor[0]);
+	vec4_t torch = {};
+	if (r_torchShadows->integer && tr.torchShadowImage && view.torchParams[2] > 0)
+	{
+		VectorCopy4(view.torchOrigin, torch);
+		GL_BindToTMU(tr.torchShadowImage, TB_TORCHSHADOWMAP);
+		GLSL_SetUniformMatrix4x4(sp, UNIFORM_SHADOWMVP, view.torchVP);
+		GLSL_SetUniformVec4(sp, UNIFORM_VOLUMETORCHDIRECTION, view.torchDirection);
+		GLSL_SetUniformVec4(sp, UNIFORM_VOLUMETORCHPARAMS, view.torchParams);
+	}
+	GLSL_SetUniformVec4(sp, UNIFORM_VOLUMETORCHORIGIN, torch);
+	RB_InstantTriangle();
+	FBO_Bind(oldFbo);
+	SetViewportAndScissor();
+	Matrix16Identity(tr.localFogMatrix);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		tr.localFogMatrix[axis*4] = -view.viewaxis[1][axis] / info[2];
+		tr.localFogMatrix[axis*4+1] = view.viewaxis[2][axis] / info[3];
+		tr.localFogMatrix[axis*4+2] = view.viewaxis[0][axis];
+	}
+	for (int row = 0; row < 3; ++row)
+		tr.localFogMatrix[12+row] = -(view.vieworg[0] * tr.localFogMatrix[row] +
+			view.vieworg[1] * tr.localFogMatrix[4+row] + view.vieworg[2] * tr.localFogMatrix[8+row]);
+	tr.localFogFrame = backEndData->realFrameNumber;
+	VectorCopy(view.vieworg, tr.localFogViewOrigin);
+	memcpy(tr.localFogViewAxis, view.viewaxis, sizeof(view.viewaxis));
+	VectorCopy2(fov, tr.localFogFov);
+	backEnd.localFogReady = true;
+}
+
 static FBO_t *RB_SkinDiffusion(FBO_t *scene)
 {
 	if (backEnd.comparisonBaseline) return scene;
@@ -3603,6 +3678,8 @@ const void *RB_PostProcess(const void *data)
 		qglScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
 	}
 
+	if (!backEnd.comparisonBaseline && r_localFog->integer == 2 && backEnd.localFogReady)
+		FBO_Blit(tr.localFogFbo, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0);
 	if (!backEnd.comparisonBaseline && r_compareEnhancements->integer == 2 && RB_CompareView())
 	{
 		// Preserve this frame's completed enhanced image before replaying its draw list.
@@ -3688,6 +3765,7 @@ static const void *RB_DrawSurfs(const void *data) {
 
 	cmd = (const drawSurfsCommand_t *)data;
 	backEnd.softDepthViewParm = -1;
+	backEnd.localFogReady = false;
 
 	backEnd.ssaoViewParm = -1;
 	backEnd.ssaoWeaponViewParm = -1;
@@ -3704,6 +3782,7 @@ static const void *RB_DrawSurfs(const void *data) {
 	if (cmd->numDrawSurfs > 0)
 	{
 		RB_RenderAllDepthRelatedPasses(cmd->drawSurfs, cmd->numDrawSurfs);
+		RB_BuildLocalFog();
 
 		RB_RenderMainPass(cmd->drawSurfs, cmd->numDrawSurfs);
 	}

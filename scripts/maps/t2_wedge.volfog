@@ -1,0 +1,2 @@
+// Color RGB, density, minimum XYZ, maximum XYZ. Prototype cloud-layer mist.
+0.38 0.24 0.045 0.00015 -32768 -32768 -4096 32768 32768 -256

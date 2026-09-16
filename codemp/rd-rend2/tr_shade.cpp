@@ -1403,16 +1403,25 @@ void RB_ShadowTessEnd(shaderCommands_t *input, const VertexArraysProperties *ver
 	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
-void RB_SetHazeUniforms(UniformDataWriter &writer, bool enabled, bool scatter, bool sky)
+void RB_SetHazeUniforms(UniformDataWriter &writer, SamplerBindingsWriter &samplers,
+	bool enabled, bool scatter, bool sky)
 {
 	vec4_t params = {};
-	if (enabled && r_mapHaze->integer && tr.world && !backEnd.comparisonBaseline &&
+	vec4_t volumeParams = {};
+	writer.SetUniformInt(UNIFORM_VOLUMEMAP, TB_LOCALFOG);
+	if (enabled && tr.world && !backEnd.projection2D && !backEnd.comparisonBaseline &&
 		!backEnd.depthFill && !backEnd.sssFill && (!backEnd.viewParms.isSkyPortal || sky) &&
 		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
 		!(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_POINTSHADOW)) &&
 		!(backEnd.currentEntity->e.renderfx & RF_DEPTHHACK))
 	{
-		VectorCopy4(tr.world->hazeParams, params);
+		if (r_mapHaze->integer) VectorCopy4(tr.world->hazeParams, params);
+		if (backEnd.localFogReady)
+		{
+			VectorSet4(volumeParams, 1, scatter ? 1 : 0, 0, 0);
+			writer.SetUniformMatrix4x4(UNIFORM_VOLUMEMATRIX, tr.localFogMatrix);
+			samplers.AddStaticImage(tr.localFogImage, TB_LOCALFOG);
+		}
 		writer.SetUniformVec3(UNIFORM_HAZEORIGIN, backEnd.refdef.vieworg);
 		writer.SetUniformVec4(UNIFORM_HAZECOLOR, tr.world->hazeColor);
 		writer.SetUniformVec4(UNIFORM_HAZEMINS, tr.world->hazeMins[0], tr.world->hazeMins[1],
@@ -1421,6 +1430,7 @@ void RB_SetHazeUniforms(UniformDataWriter &writer, bool enabled, bool scatter, b
 			tr.world->hazeMaxs[2], 8192.0f);
 	}
 	writer.SetUniformVec4(UNIFORM_HAZEPARAMS, params);
+	writer.SetUniformVec4(UNIFORM_VOLUMEPARAMS, volumeParams);
 }
 
 static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArraysProperties *vertexArrays )
@@ -1530,7 +1540,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		const bool alphaBlend = blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
 		const bool additive = blend == (GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE) ||
 			blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE);
-		RB_SetHazeUniforms(uniformDataWriter, !input->fogNum && !input->shader->isSky &&
+		RB_SetHazeUniforms(uniformDataWriter, samplerBindingsWriter, !input->fogNum && !input->shader->isSky &&
 			input->shader->numUnfoggedPasses == 1 && (!blend || alphaBlend || additive), !additive);
 
 		if ( input->fogNum ) {

@@ -163,6 +163,7 @@ extern cvar_t *r_compareEnhancements;
 extern cvar_t *r_seamlessSky;
 extern cvar_t *r_highResSkies;
 extern cvar_t *r_mapHaze;
+extern cvar_t *r_localFog;
 #ifdef REND2_SP
 void R_ReportGhoul2Work();
 void R_ClearGhoul2GeometryCache();
@@ -899,7 +900,8 @@ enum
 	TB_SSAOMAP     = 9,
 	TB_SKINDEPTHMAP = 10,
 	TB_TORCHSHADOWMAP = 11,
-	NUM_TEXTURE_BUNDLES = 12
+	TB_LOCALFOG = 12,
+	NUM_TEXTURE_BUNDLES = 13
 };
 
 typedef enum
@@ -1453,6 +1455,15 @@ typedef enum
 	UNIFORM_HAZEMINS,
 	UNIFORM_HAZEMAXS,
 	UNIFORM_HAZEORIGIN,
+	UNIFORM_VOLUMEMAP,
+	UNIFORM_VOLUMEPARAMS,
+	UNIFORM_VOLUMEMATRIX,
+	UNIFORM_VOLUMEMINS,
+	UNIFORM_VOLUMEMAXS,
+	UNIFORM_VOLUMECOLOR,
+	UNIFORM_VOLUMETORCHORIGIN,
+	UNIFORM_VOLUMETORCHDIRECTION,
+	UNIFORM_VOLUMETORCHPARAMS,
 
 	UNIFORM_MODELMATRIX,
 	UNIFORM_MODELVIEWPROJECTIONMATRIX,
@@ -2038,6 +2049,8 @@ typedef struct {
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
 	vec4_t hazeColor, hazeParams;
 	vec3_t hazeMins, hazeMaxs;
+	int numLocalFogs;
+	vec4_t localFogMins[4], localFogMaxs[4], localFogColor[4];
 
 	int			dataSize;
 
@@ -2452,6 +2465,7 @@ typedef struct {
 	backEndCounters_t	pc;
 	trRefEntity_t	*currentEntity;
 	qboolean	skyRenderedThisView;	// flag for drawing sun
+	bool localFogReady;
 
 	qboolean	projection2D;	// if qtrue, drawstretchpic doesn't need to change modes
 	float		color2D[4];
@@ -2615,6 +2629,13 @@ typedef struct trGlobals_s {
 	shaderProgram_t refractionShader[REFRACTIONDEF_COUNT];
 	shaderProgram_t textureColorShader;
 	shaderProgram_t skyCubeShader;
+	shaderProgram_t localFogShader;
+	image_t *localFogImage;
+	FBO_t *localFogFbo;
+	matrix_t localFogMatrix;
+	int localFogFrame;
+	vec3_t localFogViewOrigin, localFogViewAxis[3];
+	vec2_t localFogFov;
 	shaderProgram_t fogShader[FOGDEF_COUNT];
 	shaderProgram_t lightallShader[LIGHTDEF_COUNT];
 	shaderProgram_t pshadowShader;
@@ -3257,7 +3278,8 @@ extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
 void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
-void RB_SetHazeUniforms(class UniformDataWriter &writer, bool enabled, bool scatter, bool sky = false);
+void RB_SetHazeUniforms(class UniformDataWriter &writer, class SamplerBindingsWriter &samplers,
+	bool enabled, bool scatter, bool sky = false);
 void RB_EndSurface(void);
 void RB_CheckOverflow( int verts, int indexes );
 #define RB_CHECKOVERFLOW(v,i) if (tess.numVertexes + (v) >= SHADER_MAX_VERTEXES || tess.numIndexes + (i) >= SHADER_MAX_INDEXES ) {RB_CheckOverflow(v,i);}

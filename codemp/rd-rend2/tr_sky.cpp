@@ -444,7 +444,7 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 	shaderProgram_t *sp = cube ? &tr.skyCubeShader : &tr.lightallShader[0];
 	float colorScale = backEnd.refdef.colorScale;
 	uniformDataWriter.Start(sp);
-	RB_SetHazeUniforms(uniformDataWriter, cube, true, true);
+	RB_SetHazeUniforms(uniformDataWriter, samplerBindingsWriter, cube, true, true);
 	uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, colorScale, colorScale, colorScale, 1.0f);
 	uniformDataWriter.SetUniformVec4(
 		UNIFORM_BASECOLOR, colorScale, colorScale, colorScale, 1.0f);
@@ -870,4 +870,3 @@ void RB_StageIteratorSky( void ) {
 	// note that sky was drawn so we will draw a sun later
 	backEnd.skyRenderedThisView = qtrue;
 }
-

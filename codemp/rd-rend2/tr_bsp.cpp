@@ -2954,6 +2954,47 @@ void R_LoadLightGridArray( world_t *worldData, lump_t *l ) {
 R_LoadEntities
 ================
 */
+static void R_LoadLocalFog(world_t *world)
+{
+#ifdef REND2_SP
+	COM_ParseSession session;
+#else
+	COM_BeginParseSession("local fog");
+#endif
+	char *buffer = nullptr;
+	const int length = ri.FS_ReadFile(va("maps/%s.volfog", world->baseName), (void **)&buffer);
+	if (!buffer) return;
+	const char *text = buffer;
+	bool valid = length > 0 && length < 4096;
+	int count = 0;
+	while (valid)
+	{
+		const char *token = COM_ParseExt(&text, qtrue);
+		if (!*token) break;
+		if (count == 4) { valid = false; break; }
+		float values[10];
+		for (int i = 0; i < 10; ++i)
+		{
+			if (i) token = COM_ParseExt(&text, qtrue);
+			char *end;
+			values[i] = strtof(token, &end);
+			valid = valid && end != token && !*end && std::isfinite(values[i]) && fabsf(values[i]) <= 65536;
+		}
+		for (int axis = 0; axis < 3; ++axis)
+			valid = valid && values[axis] >= 0 && values[axis] <= 1 && values[7+axis] - values[4+axis] >= 64;
+		valid = valid && values[3] > 0 && values[3] <= 0.005f;
+		VectorCopy(values, world->localFogColor[count]);
+		VectorCopy(values + 4, world->localFogMins[count]);
+		VectorCopy(values + 7, world->localFogMaxs[count]);
+		world->localFogMins[count][3] = values[3];
+		++count;
+	}
+	world->numLocalFogs = valid ? count : 0;
+	ri.Printf(valid ? PRINT_ALL : PRINT_WARNING, "Local fog profile: %s (%d volumes%s)\n",
+		world->baseName, world->numLocalFogs, valid ? "" : ", invalid");
+	ri.FS_FreeFile(buffer);
+}
+
 static void R_LoadMapHaze(world_t *world)
 {
 #ifdef REND2_SP
@@ -4355,6 +4396,7 @@ world_t *R_LoadBSP(const char *name, int *bspIndex)
 	// load into heap
 	R_LoadEntities(worldData, &header->lumps[LUMP_ENTITIES]);
 	R_LoadMapHaze(worldData);
+	R_LoadLocalFog(worldData);
 	R_LoadShaders(worldData, &header->lumps[LUMP_SHADERS]);
 	R_LoadLightmaps(
 		worldData,

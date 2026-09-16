@@ -3,9 +3,26 @@ uniform vec4 u_HazeColor;  // RGB, maximum opacity
 uniform vec4 u_HazeParams; // density, reference height, height falloff, start distance
 uniform vec4 u_HazeMins;   // box minimum, scattering enabled
 uniform vec4 u_HazeMaxs;   // box maximum, maximum view distance
+uniform sampler2D u_VolumeMap;
+uniform vec4 u_VolumeParams; // enabled, scattering enabled
+uniform mat4 u_VolumeMatrix;
+
+vec3 ApplyLocalFog(vec3 color, vec3 position)
+{
+	vec3 projected = (u_VolumeMatrix * vec4(position, 1.0)).xyz;
+	if (projected.z <= 0.0) return color;
+	vec2 uv = clamp(projected.xy / projected.z * 0.5 + 0.5,
+		vec2(0.5 / 64.0, 0.5 / 36.0), vec2(1.0 - 0.5 / 64.0, 1.0 - 0.5 / 36.0));
+	float slice = clamp(projected.z / 2048.0, 0.0, 1.0) * 32.0;
+	float low = floor(slice), high = min(low + 1.0, 32.0);
+	vec4 fog = mix(texture(u_VolumeMap, vec2(uv.x, (low + uv.y) / 33.0)),
+		texture(u_VolumeMap, vec2(uv.x, (high + uv.y) / 33.0)), fract(slice));
+	return color * fog.a + fog.rgb * u_VolumeParams.y;
+}
 
 vec3 ApplyMapHaze(vec3 color, vec3 origin, vec3 position)
 {
+	if (u_VolumeParams.x > 0.0) return ApplyLocalFog(color, position);
 	if (u_HazeParams.x <= 0.0) return color;
 	vec3 ray = position - origin;
 	float distanceToSurface = length(ray);
