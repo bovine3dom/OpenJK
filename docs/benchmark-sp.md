@@ -313,6 +313,10 @@ distinguishes CPU command work, GPU work, and synchronization delays. Use a
 desktop GPU trace to identify the next limit before choosing a Vulkan port.
 CPU skinning and draw submission remain useful follow-up measurements.
 
+The subsequent EternalJK and TaystJK source review is in
+`vulkan-investigation.md`. No fork benchmark was run. Vulkan implementation
+remains deferred; the review identifies candidates for future measured work.
+
 ## Second Performance Pass: September 16, 2026
 
 This comparison starts from the previous optimization, commit `75c25fd0`, in

@@ -163,6 +163,9 @@ the completed frame, including postprocessing and debug output.
 
 ### Remaining Work
 
+Vulkan implementation remains deferred. See `vulkan-investigation.md` for the
+EternalJK and TaystJK source review, possible transfers, and SP integration work.
+
 Desktop feedback reports much longer loading, stutter, and input lag. SSAO with
 `cg_shadows 3` received positive visual feedback. Keep those effects as a test
 configuration while investigating performance; do not assume SSAO causes the

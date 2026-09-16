@@ -48,12 +48,16 @@ migration. Vulkan can reduce driver overhead, but texture decoding, CPU skinning
 and expensive pixel shaders still need separate work. Pipeline creation can
 still cause load delays.
 
-[JKSunny/OpenJK](https://github.com/JKSunny/OpenJK) has a Vulkan renderer under
-`codemp/rd-vulkan`. [TaystJK](https://github.com/taysta/TaystJK) also identifies
-EternalJK-Vulkan as an upstream project. Evaluate this existing work before a
-new backend. Its multiplayer location does not establish SP support or Rend2
-feature parity. Check Ghoul2, campaign effects, RmlUi, save/load, renderer restart,
-MSAA, and the current lighting passes in an isolated SP prototype.
+[JKSunny/EternalJK](https://github.com/JKSunny/EternalJK) has a Quake3e-derived
+Vulkan backend under `codemp/rd-vulkan`, a Rend2-derived PBR branch, and resource
+and instancing experiments. [TaystJK](https://github.com/taysta/TaystJK) integrates
+the Vulkan backend. The source review is recorded in
+[`docs/vulkan-investigation.md`](docs/vulkan-investigation.md).
+
+Evaluate this work before designing a new backend. The inspected target is MP;
+SP support and parity with our rendering passes still need validation. The
+instancing experiment reports both gains and regressions, depending on the scene.
+No fork was built or benchmarked in this review. Implementation remains deferred.
 
 [Mesa Zink](https://docs.mesa3d.org/drivers/zink.html) provides OpenGL over Vulkan.
 Where supported, use it for an initial driver comparison. Its results do not
