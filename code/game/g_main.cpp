@@ -748,6 +748,7 @@ void InitGame(  const char *mapname, const char *spawntarget, int checkSum, cons
 	srand( randomSeed );
 
 	G_InitCvars();
+	G_ResetJoPreparation();
 	OBJ_InitCampaign();
 
 	G_InitMemory();

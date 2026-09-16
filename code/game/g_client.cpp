@@ -2465,7 +2465,7 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 		IIcarusInterface::GetIcarus()->DeleteIcarusID( ent->m_iIcarusID );
 		ent->m_iIcarusID = IIcarusInterface::GetIcarus()->GetIcarusID( ent->s.number );
 
-		if ( spawnPoint->spawnflags & 64 )	//NOWEAPON
+		if ( (spawnPoint->spawnflags & 64) && !G_JoPreparedLoadout() )	//NOWEAPON
 		{//player starts with absolutely no weapons
 			ent->client->ps.stats[STAT_WEAPONS] = ( 1 << WP_NONE );
 			ent->client->ps.ammo[weaponData[WP_NONE].ammoIndex] = 32000;

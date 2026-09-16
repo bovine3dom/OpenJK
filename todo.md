@@ -19,8 +19,10 @@ remain in `human_todo.md`.
 
 - [x] Keep JO completion statistics visible until a click or Enter. Pause the next map while the player reads them.
 - [x] Restore the vestless Rodian back panel. Check native bar bouncers and save/load in both renderers.
-- [ ] Add weapon selection, including JA-only weapons, at true mission boundaries. Keep internal map transitions uninterrupted.
-- [ ] Add Force-point spending after the story unlocks Force powers. Confirm which powers remain controlled by the story.
+- [x] Add weapon selection, including JA-only weapons, at true mission boundaries. Do not open setup on internal map transitions.
+- [x] Keep all JO powers story-controlled. Allow seven total points for the five JA-only powers, with three ranks each.
+- [x] Check two-main-weapon and one-explosive limits, full saves, entry autosaves, story upgrades, and earlier-save restoration in both renderers.
+- [x] Fix the Rend2 fog-array overflow found while checking the Yavin transition. Use the map-format limit in CPU and shader blocks.
 
 ### 1. Whole-Campaign Compatibility Report
 

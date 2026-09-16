@@ -1,0 +1,86 @@
+{
+    menuDef {
+        name "joPreparation"
+        fullscreen 1
+        rect 0 0 640 480
+        visible 0
+        style WINDOW_STYLE_FILLED
+        backcolor 0.025 0.04 0.07 1
+        focusColor 1 0.75 0.25 1
+        disableColor 0.35 0.4 0.45 1
+        onESC { play "sound/interface/menuroam.wav" }
+
+        itemDef { name title type ITEM_TYPE_TEXT rect 28 20 584 30 cvar "ui_jo_prep_title"
+            font 2 textscale 1 forecolor 1 1 1 1 visible 1 decoration }
+        itemDef { name weaponCount type ITEM_TYPE_TEXT rect 28 64 270 24 cvar "ui_jo_prep_count"
+            font 2 textscale 0.75 forecolor 1 0.75 0.25 1 visible 1 decoration }
+        itemDef { name forceTitle type ITEM_TYPE_TEXT rect 340 64 270 24 text "Additional Force powers"
+            font 2 textscale 0.75 forecolor 1 0.75 0.25 1 visible 1 decoration }
+
+        itemDef { name weapon3 type ITEM_TYPE_BUTTON rect 28 96 270 25 cvar "ui_jo_weapon_3"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 3" } }
+        itemDef { name weapon4 type ITEM_TYPE_BUTTON rect 28 124 270 25 cvar "ui_jo_weapon_4"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 4" } }
+        itemDef { name weapon5 type ITEM_TYPE_BUTTON rect 28 152 270 25 cvar "ui_jo_weapon_5"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 5" } }
+        itemDef { name weapon6 type ITEM_TYPE_BUTTON rect 28 180 270 25 cvar "ui_jo_weapon_6"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 6" } }
+        itemDef { name weapon7 type ITEM_TYPE_BUTTON rect 28 208 270 25 cvar "ui_jo_weapon_7"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 7" } }
+        itemDef { name weapon8 type ITEM_TYPE_BUTTON rect 28 236 270 25 cvar "ui_jo_weapon_8"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 8" } }
+        itemDef { name weapon9 type ITEM_TYPE_BUTTON rect 28 264 270 25 cvar "ui_jo_weapon_9"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 9" } }
+        itemDef { name weapon13 type ITEM_TYPE_BUTTON rect 28 292 270 25 cvar "ui_jo_weapon_13"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare weapon 13" } }
+
+        itemDef { name explosiveTitle type ITEM_TYPE_TEXT rect 28 328 270 24 text "Explosives: choose one type"
+            font 2 textscale 0.7 forecolor 1 0.75 0.25 1 visible 1 decoration }
+        itemDef { name weapon10 type ITEM_TYPE_BUTTON rect 28 356 270 25 cvar "ui_jo_weapon_10"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare explosive 10" } }
+        itemDef { name weapon11 type ITEM_TYPE_BUTTON rect 28 384 270 25 cvar "ui_jo_weapon_11"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare explosive 11" } }
+        itemDef { name weapon12 type ITEM_TYPE_BUTTON rect 28 412 270 25 cvar "ui_jo_weapon_12"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 action { exec "jo_prepare explosive 12" } }
+
+        itemDef { name absorb type ITEM_TYPE_TEXT rect 340 105 190 25 cvar "ui_jo_power_absorb"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 decoration }
+        itemDef { name absorbMinus type ITEM_TYPE_BUTTON rect 538 100 30 28 text "-"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_down_absorb" enableCvar { "1" } action { exec "jo_prepare force absorb -1" } }
+        itemDef { name absorbPlus type ITEM_TYPE_BUTTON rect 580 100 30 28 text "+"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_up_absorb" enableCvar { "1" } action { exec "jo_prepare force absorb 1" } }
+        itemDef { name protect type ITEM_TYPE_TEXT rect 340 147 190 25 cvar "ui_jo_power_protect"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 decoration }
+        itemDef { name protectMinus type ITEM_TYPE_BUTTON rect 538 142 30 28 text "-"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_down_protect" enableCvar { "1" } action { exec "jo_prepare force protect -1" } }
+        itemDef { name protectPlus type ITEM_TYPE_BUTTON rect 580 142 30 28 text "+"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_up_protect" enableCvar { "1" } action { exec "jo_prepare force protect 1" } }
+        itemDef { name rage type ITEM_TYPE_TEXT rect 340 189 190 25 cvar "ui_jo_power_rage"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 decoration }
+        itemDef { name rageMinus type ITEM_TYPE_BUTTON rect 538 184 30 28 text "-"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_down_rage" enableCvar { "1" } action { exec "jo_prepare force rage -1" } }
+        itemDef { name ragePlus type ITEM_TYPE_BUTTON rect 580 184 30 28 text "+"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_up_rage" enableCvar { "1" } action { exec "jo_prepare force rage 1" } }
+        itemDef { name drain type ITEM_TYPE_TEXT rect 340 231 190 25 cvar "ui_jo_power_drain"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 decoration }
+        itemDef { name drainMinus type ITEM_TYPE_BUTTON rect 538 226 30 28 text "-"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_down_drain" enableCvar { "1" } action { exec "jo_prepare force drain -1" } }
+        itemDef { name drainPlus type ITEM_TYPE_BUTTON rect 580 226 30 28 text "+"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_up_drain" enableCvar { "1" } action { exec "jo_prepare force drain 1" } }
+        itemDef { name sense type ITEM_TYPE_TEXT rect 340 273 190 25 cvar "ui_jo_power_sense"
+            font 2 textscale 0.7 forecolor 0.9 0.95 1 1 visible 1 decoration }
+        itemDef { name senseMinus type ITEM_TYPE_BUTTON rect 538 268 30 28 text "-"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_down_sense" enableCvar { "1" } action { exec "jo_prepare force sense -1" } }
+        itemDef { name sensePlus type ITEM_TYPE_BUTTON rect 580 268 30 28 text "+"
+            font 2 textscale 0.9 forecolor 0.9 0.95 1 1 visible 1 cvarTest "ui_jo_up_sense" enableCvar { "1" } action { exec "jo_prepare force sense 1" } }
+
+        itemDef { name points type ITEM_TYPE_TEXT rect 340 312 270 46 cvar "ui_jo_prep_points" autowrapped
+            font 2 textscale 0.65 forecolor 1 0.75 0.25 1 visible 1 decoration }
+        itemDef { name story type ITEM_TYPE_TEXT rect 340 365 270 50 text "JO powers follow the story. Unspent points remain available." autowrapped
+            font 2 textscale 0.65 forecolor 0.7 0.8 0.9 1 visible 1 decoration }
+        itemDef { name continue type ITEM_TYPE_BUTTON rect 400 426 210 32 text "Begin mission"
+            font 2 textscale 0.85 forecolor 1 0.75 0.25 1 visible 1 cvarTest "ui_jo_prep_valid" enableCvar { "1" } action { exec "jo_prepare commit" } }
+        itemDef { name retained type ITEM_TYPE_TEXT rect 28 453 330 20 text "Your sidearm and unlocked saber are retained."
+            font 2 textscale 0.5 forecolor 0.7 0.8 0.9 1 visible 1 decoration }
+    }
+}

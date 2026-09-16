@@ -79,6 +79,7 @@ def main():
         assert process.stdin
         stdin = process.stdin
         serial = 0
+        prepared = -1
 
         def wait(pattern, start=0):
             deadline = time.monotonic() + 180
@@ -103,7 +104,12 @@ def main():
             return wait(marker, start)
 
         def ready(mapname):
+            nonlocal prepared
             for _ in range(80):
+                prompt = log.read_text(errors="replace").rfind("JO preparation: ready")
+                if prompt > prepared:
+                    send("jo_prepare commit")
+                    prepared = prompt
                 text = cmd("wait 10; campaign_status; missionstats_status")
                 alive = re.search(r"campaign=jo map=" + mapname + r" camera=\d+ health=(\d+)", text)
                 if alive and int(alive[1]) > 0 and f"missionstats live map={mapname} " in text: return text
@@ -133,7 +139,8 @@ def main():
             text = ready(destination)
             trace = log.read_text(errors="replace")[start:]
             assert ("jo_stats draw " in trace) == visible, (destination, log)
-            assert parse(text, "snapshot")["visible"] == str(int(visible)), text
+            show = visible and "JO preparation: committed" not in trace
+            assert parse(text, "snapshot")["visible"] == str(int(show)), text
             return text
 
         def compare(live, snapshot):
@@ -154,9 +161,13 @@ def main():
             position = re.search(r"origin=([-\d.]+),([-\d.]+),([-\d.]+)", actor)
             assert position, actor
             x, y, z = map(float, position.groups())
-            cmd(f"noclip; setviewpos {x - 96} {y} {z + 48} 5; wait 30; +movedown; wait 10; screenshot_png stats_aim")
-            cmd("+attack; wait 90; -attack; -movedown; wait 120")
-            before = parse(cmd("missionstats_status"), "live")
+            cmd("noclip")
+            for yaw in (5, 10, 15):
+                cmd(f"setviewpos {x - 96} {y} {z + 48} {yaw}; wait 30; +movedown; wait 10; screenshot_png stats_aim")
+                cmd("+attack; wait 90; -attack; -movedown; wait 120")
+                before = parse(cmd("missionstats_status"), "live")
+                if int(before["kills"]) > 0:
+                    break
             assert int(before["shots"]) > 0 and int(before["hits"]) > 0 and int(before["kills"]) > 0 and before["secrets"] == "1", before
             early = before
             result = transition("use to_kejim_base", "kejim_base", True, "early_stats")

@@ -49,6 +49,7 @@ cp docs/jo-campaign.md "$package/"
 cp docs/jo-compatibility.md "$package/"
 cp docs/jo-cinematics.md "$package/"
 cp docs/jo-statistics.md "$package/"
+cp docs/jo-mission-preparation.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp docs/torch-sp.md "$package/"
 cp docs/hud-reveal-sp.md "$package/"
@@ -131,6 +132,10 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
             | tee "$package/jo-stats-$renderer-result.txt"
         python3 scripts/test-jo-sp.py --package "$package" --bouncers --renderer "$renderer" \
             | tee "$package/jo-bouncers-$renderer-result.txt"
+        python3 scripts/test-jo-preparation.py --package "$package" --renderer "$renderer" \
+            | tee "$package/jo-preparation-$renderer-result.txt"
+        python3 scripts/test-jo-sp.py --package "$package" --world --renderer "$renderer" \
+            | tee "$package/jo-world-$renderer-result.txt"
         python3 scripts/test-jo-sp.py --package "$package" --puzzle --renderer "$renderer" \
             | tee "$package/jo-puzzle-$renderer-result.txt"
         OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
@@ -144,7 +149,6 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     done
     python3 scripts/test-jo-sp.py --package "$package" --progression | tee "$package/jo-progression-result.txt"
     python3 scripts/test-jo-sp.py --package "$package" --galak | tee "$package/jo-galak-result.txt"
-    python3 scripts/test-jo-sp.py --package "$package" --world | tee "$package/jo-world-result.txt"
 fi
 mv -- "$package" "build/packages/$id"
 ln -s "packages/$id" "$stage/ready"

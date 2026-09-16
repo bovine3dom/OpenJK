@@ -1640,7 +1640,7 @@ CL_FirstSnapshot
 ==================
 */
 void CL_FirstSnapshot( void ) {
-	// Per gamestate: 0 = loading, 1 = waiting, 2 = ready to play.
+	// 0 = loading, 1 = statistics, 2 = ready to play, 3 = mission preparation.
 	cvar_t *stats = Cvar_Get("cl_joStatsState", "0", CVAR_ROM);
 	if (Cvar_VariableIntegerValue("com_outcast") && Cvar_VariableIntegerValue("cg_missionstatusscreen")
 		&& !stats->integer)
@@ -1648,7 +1648,7 @@ void CL_FirstSnapshot( void ) {
 		Cvar_Set("cl_joStatsState", "1");
 		Com_Printf("JO statistics: waiting for Continue\n");
 	}
-	if (stats->integer == 1)
+	if (stats->integer == 1 || stats->integer == 3)
 	{
 		Cvar_Set("cl_paused", "1");
 		return;

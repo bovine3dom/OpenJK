@@ -59,17 +59,24 @@ def main():
         stdin = process.stdin
         serial = 0
         continued = -1
+        prepared = -1
 
         def wait_for(marker, start=0):
-            nonlocal continued
+            nonlocal continued, prepared
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
-                text = log.read_text(errors="replace")[start:]
-                prompt = text.rfind("JO statistics: waiting for Continue")
-                if prompt >= 0 and start + prompt > continued:
+                whole = log.read_text(errors="replace")
+                text = whole[start:]
+                prompt = whole.rfind("JO statistics: waiting for Continue")
+                if prompt > continued:
                     window = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--name", "."], text=True).splitlines()[-1]
                     subprocess.run(["xdotool", "windowfocus", window, "key", "Return"], check=True, timeout=10)
-                    continued = start + prompt
+                    continued = prompt
+                prompt = whole.rfind("JO preparation: ready")
+                if prompt > prepared:
+                    stdin.write("jo_prepare commit\n")
+                    stdin.flush()
+                    prepared = prompt
                 if "ERROR: Failed to load jagame" in text:
                     raise RuntimeError(f"Game module did not load: {log}")
                 if marker in text:

@@ -217,9 +217,10 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
-	if (Cvar_VariableIntegerValue("cl_joStatsState") == 1)
+	if (Cvar_VariableIntegerValue("cl_joStatsState") == 1 || Cvar_VariableIntegerValue("cl_joStatsState") == 3)
 		Cvar_Set("cl_paused", "0");
 	Cvar_Set("cl_joStatsState", "0");
+	Cvar_Set("jo_prep_pending", "0");
 	CL_ResetAutomap();
 	CL_CancelHudReveal();
 #ifdef USE_RMLUI
@@ -404,7 +405,7 @@ void CL_Vid_Restart_f( void ) {
 	CL_StartHunkUsers();
 
 	// Resume rendering unless completion statistics still need confirmation.
-	Cvar_Set( "cl_paused", Cvar_VariableIntegerValue("cl_joStatsState") == 1 ? "1" : "0" );
+	Cvar_Set( "cl_paused", Cvar_VariableIntegerValue("cl_joStatsState") == 1 || Cvar_VariableIntegerValue("cl_joStatsState") == 3 ? "1" : "0" );
 }
 
 /*
@@ -1235,6 +1236,12 @@ void CL_InitRef( void ) {
 
 void CL_CompleteCinematic( char *args, int argNum );
 
+static void CL_JoPreparationClose_f() {
+	if (Cvar_VariableIntegerValue("cl_joStatsState") != 2 || Cvar_VariableIntegerValue("jo_prep_pending")) return;
+	extern void UI_ForceMenuOff(void);
+	UI_ForceMenuOff();
+}
+
 /*
 ====================
 CL_Init
@@ -1341,6 +1348,7 @@ void CL_Init( void ) {
 	Cmd_SetCommandCompletionFunc( "cinematic", CL_CompleteCinematic );
 	Cmd_AddCommand ("ingamecinematic", CL_PlayInGameCinematic_f);
 	Cmd_AddCommand ("uimenu", CL_GenericMenu_f);
+	Cmd_AddCommand ("jo_prepare_close", CL_JoPreparationClose_f);
 	Cmd_AddCommand ("datapad", CL_DataPad_f);
 	Cmd_AddCommand ("endscreendissolve", CL_EndScreenDissolve_f);
 
@@ -1394,6 +1402,7 @@ void CL_Shutdown( void ) {
 	Cmd_RemoveCommand ("cinematic");
 	Cmd_RemoveCommand ("ingamecinematic");
 	Cmd_RemoveCommand ("uimenu");
+	Cmd_RemoveCommand ("jo_prepare_close");
 	Cmd_RemoveCommand ("datapad");
 	Cmd_RemoveCommand ("endscreendissolve");
 

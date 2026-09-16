@@ -162,6 +162,11 @@ enablement, diffuse compensation, and parallax enablement require a restart.
 
 ## Jedi Outcast Campaign
 
+- [ ] At a true mission boundary, choose two main weapons and one explosive type. Check mouse and keyboard controls.
+- [ ] Choose a JA concussion rifle and optional Force ranks. Reload the entry autosave and check the equipment and powers.
+- [ ] Check that connected maps do not open preparation. Confirm that JO powers still advance with the story.
+- [ ] Check Yavin Swamp in Rend2. The fog-array overflow is fixed; review fog appearance during normal play.
+
 - [ ] Check the statistics at a normal mission exit. Confirm kills, secrets, accuracy, favorite weapon, and Force/saber use. Check readability at the desktop resolution.
 - [ ] Load a save and start a new game. Neither loading screen should show stale completion statistics.
 

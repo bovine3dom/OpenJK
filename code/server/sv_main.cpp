@@ -392,6 +392,8 @@ SV_CheckPaused
 ==================
 */
 qboolean SV_CheckPaused( void ) {
+	const int missionScreen = Cvar_VariableIntegerValue("cl_joStatsState");
+	if (missionScreen == 1 || missionScreen == 3) Cvar_Set("cl_paused", "1");
 	if ( !cl_paused->integer ) {
 		return qfalse;
 	}

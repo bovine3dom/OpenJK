@@ -1016,6 +1016,10 @@ void G_ShowOutcastMissionStats(qboolean show)
 	gi.cvar_set("ui_stats_jo_secrets", va("%d %s %d", stats.secretsFound, of, stats.totalSecrets));
 	gi.cvar_set("ui_stats_otherattacks", va("%d", stats.otherAttacksCnt));
 	gi.cvar_set("ui_stats_saber", ((client.ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) || stats.weaponUsed[WP_SABER]) ? "1" : "0");
+	bool extraForce = false;
+	for (int power = FP_RAGE; power < NUM_FORCE_POWERS; ++power)
+		extraForce |= client.ps.forcePowerLevel[power] > 0 || stats.forceUsed[power] > 0;
+	gi.cvar_set("ui_stats_extra_force", extraForce ? "1" : "0");
 	gi.cvar_set("ui_stats_map", level.mapname);
 }
 
@@ -1023,16 +1027,9 @@ void G_ShowOutcastMissionStats(qboolean show)
 extern void G_ChangeMap (const char *mapname, const char *spawntarget, qboolean hub);	//g_utils
 void target_level_change_use(gentity_t *self, gentity_t *other, gentity_t *activator)
 {
+	if (G_IsOutcast() && gi.Cvar_VariableIntegerValue("jo_prep_pending")) return;
 	G_ActivateBehavior(self,BSET_USE);
 
-	if( self->message && !Q_stricmp( "disconnect", self->message ) )
-	{
-		gi.SendConsoleCommand( "disconnect\n");
-	}
-	else
-	{
-		G_ChangeMap( self->message, self->target, (qboolean)((self->spawnflags&1) != 0) );
-	}
 	if (self->count>=0)
 	{
 		gi.cvar_set("tier_storyinfo", va("%i",self->count));
@@ -1060,6 +1057,9 @@ void target_level_change_use(gentity_t *self, gentity_t *other, gentity_t *activ
 
 	if (G_IsOutcast()) G_ShowOutcastMissionStats((self->spawnflags & 2) ? qfalse : qtrue);
 	else set_mission_stats_cvars();
+	if (G_QueueJoPreparation(self->message, self->target, (qboolean)((self->spawnflags & 1) != 0))) return;
+	if (self->message && !Q_stricmp("disconnect", self->message)) gi.SendConsoleCommand("disconnect\n");
+	else G_ChangeMap(self->message, self->target, (qboolean)((self->spawnflags & 1) != 0));
 
 }
 

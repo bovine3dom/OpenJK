@@ -1115,6 +1115,7 @@ static void SG_WriteScreenshot(qboolean qbAutosave, const char *psMapName)
 
 qboolean SG_GameAllowedToSaveHere(qboolean inCamera)
 {
+	if (Cvar_VariableIntegerValue("jo_prep_pending")) return qfalse;
 	if (!inCamera) {
 		if ( !com_sv_running || !com_sv_running->integer )
 		{
@@ -1240,6 +1241,7 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 qboolean SG_ReadSavegame(
 	const char* psPathlessBaseName)
 {
+	Cvar_Set("jo_loadoutMap", "");
 	char sComment[iSG_COMMENT_SIZE];
 	char sMapCmd[iSG_MAPCMD_SIZE];
 

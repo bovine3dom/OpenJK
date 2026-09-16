@@ -1250,9 +1250,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 	{
 		if ((key == A_ENTER || key == A_MOUSE1) && kg.keys[keynames[key].upper].repeats == 1)
 		{
-			Cvar_Set("cl_joStatsState", "2");
-			Cvar_Set("cl_paused", "0");
-			cl.newSnapshots = qtrue;
+			if (Cvar_VariableIntegerValue("jo_prep_pending")) Cbuf_AddText("jo_prepare begin\n");
+			else {
+				Cvar_Set("cl_joStatsState", "2");
+				Cvar_Set("cl_paused", "0");
+				cl.newSnapshots = qtrue;
+			}
 		}
 		return;
 	}

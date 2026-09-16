@@ -854,15 +854,23 @@ static void CG_DrawOutcastMissionStats(void)
 		}, force[] = {
 			{"HEAL", "heal"}, {"JUMP2", "jump"}, {"SPEED", "speed"}, {"PUSH", "push"},
 			{"PULL", "pull"}, {"MINDTRICK", "mindtrick"}, {"GRIP", "grip"}, {"LIGHTNING", "lightning"}
+		}, extraForce[] = {
+			{"ABSORB2", "absorb"}, {"PROTECT2", "protect"}, {"DARK_RAGE2", "rage"},
+			{"DRAIN2", "drain"}, {"SEEING2", "sense"}
 		};
+		const bool expanded = gi.Cvar_VariableIntegerValue("ui_stats_extra_force") != 0;
 		cgi_SP_GetStringTextString("SP_INGAME_LIGHTSABERUSE", title, sizeof(title));
 		cgi_R_Font_DrawString(62, 220, title, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 		cgi_SP_GetStringTextString("SP_INGAME_FORCEUSE", title, sizeof(title));
-		cgi_R_Font_DrawString(336, 220, title, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+		const int forceTitleX = expanded ? 414 - cgi_R_Font_StrLenPixels(title, cgs.media.qhFontSmall, 0.8f) / 2 : 336;
+		cgi_R_Font_DrawString(forceTitleX, 220, title, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
 		for (int i = 0; i < ARRAY_LEN(saber); ++i)
-			CG_MissionStatsRow(saber[i].label, va("ui_stats_%s", saber[i].cvar), 62, 246 + i * 18);
+			CG_MissionStatsRow(saber[i].label, va("ui_stats_%s", saber[i].cvar), 62, 246 + i * 18, expanded ? 150 : 242);
 		for (int i = 0; i < ARRAY_LEN(force); ++i)
-			CG_MissionStatsRow(force[i].label, va("ui_stats_%s", force[i].cvar), 336, 246 + i * 18);
+			CG_MissionStatsRow(force[i].label, va("ui_stats_%s", force[i].cvar), expanded ? 250 : 336, 246 + i * 18, expanded ? 150 : 242);
+		if (expanded)
+			for (int i = 0; i < ARRAY_LEN(extraForce); ++i)
+				CG_MissionStatsRow(extraForce[i].label, va("ui_stats_%s", extraForce[i].cvar), 430, 246 + i * 18, 148);
 	}
 	if (gi.Cvar_VariableIntegerValue("d_missionStats"))
 		gi.Printf("jo_stats draw source=%s shots=%d hits=%d saber=%d stage=%d\n", map,

@@ -2,8 +2,10 @@
 
 JO now shows completion statistics on its loading screen. The panel uses the
 shared statistics counters, fonts, and renderer interface.
-After loading, the panel waits for a click or Enter. The next map stays paused
-until you continue. Holding a movement or attack button does not dismiss the panel.
+The panel waits for a click or Enter. At a true mission boundary, statistics and
+mission preparation appear before the next map loads. Other displayed transitions
+hold the next map paused after loading. Holding a movement or attack button does
+not dismiss the panel. See `jo-mission-preparation.md` for mission groups.
 
 ## Display Rules
 
@@ -22,6 +24,7 @@ behavior. No new save format is required.
 
 The panel shows secrets, kills, favorite weapon, shots, hits, and accuracy.
 Force and saber rows appear after saber acquisition or recorded saber use.
+The panel also shows the additional JA powers after they are acquired or used.
 Favorite weapon measures use time, not shots fired. Zero shots therefore do not
 necessarily mean that there is no favorite weapon. An unarmed mission clears a
 stale favorite label, and zero shots produce `0.00%` accuracy.

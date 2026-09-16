@@ -483,6 +483,18 @@ void _UI_Refresh( int realtime )
 {
 	static int index;
 	static int	previousTimes[UI_FPS_FRAMES];
+	menuDef_t *preparation = Menus_FindByName("joPreparation");
+	if (preparation) {
+		if (Cvar_VariableIntegerValue("cl_joStatsState") == 3) {
+			if (!(preparation->window.flags & WINDOW_VISIBLE)) Menus_ActivateByName("joPreparation");
+			UI_Cursor_Show(qtrue);
+			ui.Key_SetCatcher(Key_GetCatcher() | KEYCATCH_UI);
+			ui.Cvar_Set("cl_paused", "1");
+		} else if (preparation->window.flags & WINDOW_VISIBLE) {
+			Menus_CloseByName("joPreparation");
+			ui.Key_SetCatcher(0);
+		}
+	}
 
 	if ( !( Key_GetCatcher() & KEYCATCH_UI ) )
 	{
@@ -2745,6 +2757,7 @@ void _UI_Init( qboolean inGameLoad )
 		UI_LoadMenus(menuSet, qtrue);
 	}
 
+	if (Cvar_VariableIntegerValue("com_outcast")) UI_LoadMenus("ui/jo_preparation.txt", qfalse);
 	Menus_CloseAll();
 
 	uiInfo.uiDC.whiteShader = ui.R_RegisterShaderNoMip( "white" );

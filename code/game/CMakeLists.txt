@@ -77,6 +77,7 @@ set(SPGameGameFiles
 	"${SPDir}/game/g_inventory.cpp"
 	"${SPDir}/game/g_itemLoad.cpp"
 	"${SPDir}/game/g_items.cpp"
+	"${SPDir}/game/g_jo_missions.cpp"
 	"${SPDir}/game/g_main.cpp"
 	"${SPDir}/game/g_mem.cpp"
 	"${SPDir}/game/g_misc.cpp"
@@ -427,6 +428,12 @@ else(WIN32)
 endif()
 
 set_target_properties(${SPGame} PROPERTIES COMPILE_DEFINITIONS "${SPGameDefines}")
+set(JoUiInstallDir "${JKAInstallDir}/OpenJK/ui")
+if(MakeApplicationBundles AND BuildSPEngine)
+	set(JoUiInstallDir "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK/ui")
+endif()
+install(FILES "${CMAKE_SOURCE_DIR}/ui/jo_preparation.menu" "${CMAKE_SOURCE_DIR}/ui/jo_preparation.txt"
+	DESTINATION "${JoUiInstallDir}" COMPONENT ${JKASPClientComponent})
 set_target_properties(${SPGame} PROPERTIES INCLUDE_DIRECTORIES "${SPGameIncludeDirectories}")
 set_target_properties(${SPGame} PROPERTIES PROJECT_LABEL "SP Game Library")
 # no libraries used

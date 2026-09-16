@@ -36,6 +36,10 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 bool G_IsOutcast();
 void G_ShowOutcastMissionStats(qboolean show);
+void G_ResetJoPreparation();
+qboolean G_QueueJoPreparation(const char *map, const char *spawn, qboolean hub);
+qboolean G_JoPreparedLoadout();
+void G_JoPreparationCommand();
 void NPC_RestoreOutcastClass(gentity_t *ent);
 void NPC_RestoreOutcastEquipment(gentity_t *ent);
 const char *NPC_OutcastCinematicParms(const char *name, char *buffer, int size);

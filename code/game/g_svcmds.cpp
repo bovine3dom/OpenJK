@@ -1063,6 +1063,7 @@ static int svcmdcmp( const void *a, const void *b ) {
 static svcmd_t svcmds[] = {
 	{ "campaign_status", Svcmd_CampaignStatus_f, CMD_NONE },
 	{ "missionstats_status", Svcmd_MissionStatsStatus_f, CMD_NONE },
+	{ "jo_prepare", G_JoPreparationCommand, CMD_NONE },
 	{ "cinematic_status", Svcmd_CinematicStatus_f, CMD_NONE },
 	{ "surface_status", Svcmd_SurfaceStatus_f, CMD_NONE },
 	{ "galak_test", Svcmd_GalakTest_f, CMD_CHEAT },

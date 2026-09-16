@@ -2739,6 +2739,9 @@ static	void R_LoadFogs( world_t *worldData, lump_t *l, lump_t *brushesLump, lump
 		ri.Error (ERR_DROP, "LoadMap: funny lump size in %s",worldData->name);
 	}
 	count = l->filelen / sizeof(*fogs);
+	if (count > MAX_MAP_FOGS) {
+		ri.Error(ERR_DROP, "LoadMap: too many fog volumes (%d) in %s", count, worldData->name);
+	}
 
 	// create fog strucutres for them
 	worldData->numfogs = count + 1;

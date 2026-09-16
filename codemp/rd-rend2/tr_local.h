@@ -809,7 +809,7 @@ struct FogsBlock
 
 	int numFogs;
 	float pad0[3];
-	Fog fogs[16];
+	Fog fogs[MAX_MAP_FOGS];
 };
 
 struct EntityBlock

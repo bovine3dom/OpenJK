@@ -153,6 +153,11 @@ The collision check samples the thin opaque water boundary in `yavin_swamp`.
 The boundary retains opacity but has no solid contents in JO mode. JA keeps its
 existing collision rules.
 
+Rend2's fog constant block previously held only 16 volumes. Yavin Swamp has 20,
+which caused a stack overwrite during loading. CPU and shader arrays now use
+the map-format limit of 256. The loader rejects counts above that limit.
+The Yavin Swamp check now passes with Rend2 and is included in both renderer runs.
+
 The spawn-flag report entry for `valley` entity 2 is now implemented and tested.
 JO uses bit 2 to hide completion statistics; JA uses it for optional story audio.
 The JO loading panel and script request are restored. See `jo-statistics.md`.

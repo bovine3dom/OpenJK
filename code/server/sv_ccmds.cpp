@@ -256,6 +256,7 @@ extern void SCR_UnprecacheScreenshot();
 #endif
 static void SV_Map_f( void )
 {
+	Cvar_Set("jo_loadoutMap", "");
 	Cvar_Set("cg_missionstatusscreen", "0");
 	Cvar_Set( sCVARNAME_PLAYERSAVE, "");
 	Cvar_Set( "spawntarget", "" );
