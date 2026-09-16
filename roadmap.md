@@ -327,3 +327,5 @@ constraints, but it does not remove the need to test campaign progression.
 - check https://github.com/JKSunny/EternalJK for an already in-progress vulkan port
 - consider looking at https://github.com/taysta/TaystJK for features to cherry-pick
 - modern sound engine with attenuation etc through walls?
+- better glass materials? still visible as glass, but less ... ugly and white?
+- make jolt apply to pull/push force powers. consider how to integrate jolt with lightsabers?
