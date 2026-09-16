@@ -134,3 +134,5 @@ as above. Do not compare absolute FPS across earlier runs with different server
 load. Desktop appearance and full campaign coverage still need human review.
 
 See [the research notes](sky-fog-investigation.md) for sources and stage order.
+See [the procedural atmosphere plan](procedural-atmosphere-plan.md) for the
+proposed `t1_sour` work, rendering design, and acceptance criteria.

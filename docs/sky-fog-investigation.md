@@ -7,10 +7,15 @@ The user approved four implementation stages after this review. Use a separate
 commit for each stage. Measure cost on this project before selecting defaults.
 The source projects' performance figures do not predict performance here.
 
+Stages 1–4 are now implemented. The selected high-resolution assets are
+source-derived reconstructions. See [SP Sky and Fog](sky-fog-sp.md) for their
+limits and tests. See [the atmosphere plan](procedural-atmosphere-plan.md) for
+the proposed `t1_sour` work.
+
 ## Findings
 
-The current sky loader uses six separate 2D images. Each image uses mipmaps and
-clamp-to-edge sampling. A seamless cubemap state change cannot fix that path.
+At the start of the review, the sky loader used six separate 2D images. Each image
+used mipmaps and clamp-to-edge sampling. A cubemap state change alone cannot fix that path.
 Inspect face orientation, source edges, compression, and mipmaps separately.
 Higher image resolution cannot correct a discontinuous horizon.
 
