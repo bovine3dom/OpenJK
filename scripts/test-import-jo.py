@@ -19,6 +19,26 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_legacy_jedi_have_sabers_and_force_data(self):
+        source = 'Desann\n{\nclass desann\nsaberColor red\n}\nKyle\n{\nclass kyle\nsaberColor blue\n}\n'
+        converted = jo.convert_npcs(source)
+        desann, kyle = converted.split("Kyle\n", 1)
+        self.assertIn("saber Desann", desann)
+        self.assertIn("FP_PUSH 3", desann)
+        self.assertIn("FP_LIGHTNING 3", desann)
+        self.assertLess(desann.index("saber Desann"), desann.index("saberColor red"))
+        self.assertIn("saber Kyle", kyle)
+        self.assertNotIn("FP_", kyle)
+        self.assertEqual(jo.convert_npcs(converted), converted)
+
+    def test_explicit_force_and_saber_settings_survive(self):
+        converted = jo.convert_npcs('custom\n{\nclass desann\nsaber custom_saber\nsaberColor blue\nFP_PUSH 0\n}\n')
+        self.assertIn("saber custom_saber", converted)
+        self.assertNotIn("saber Desann", converted)
+        self.assertIn("FP_PUSH 0", converted)
+        self.assertNotIn("FP_PUSH 3", converted)
+        self.assertIn("FP_LIGHTNING 3", converted)
+
     def test_strings_allow_metadata_before_english_text(self):
         data = (b'REFERENCE INGAME\nCOUNT 2\nINDEX 0\n{\n REFERENCE SECRETAREAS_OF\n'
                 b' NOTES "used for "0 of 3" secrets"\n TEXT_LANGUAGE1 "of"\n}\n'

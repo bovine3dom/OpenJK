@@ -1251,6 +1251,10 @@ static void ReadGEntities(qboolean qbAutosave)
 	{
 		ReadInUseBits();//really shouldn't need to read these bits in at all, just restore them from the ents...
 	}
+	// Saber repair can spawn entities. Wait until all saved entity slots are restored.
+	if (G_IsOutcast())
+		for (int ent = 0; ent < globals.num_entities; ++ent)
+			if (g_entities[ent].inuse) NPC_RestoreOutcastEquipment(&g_entities[ent]);
 }
 
 

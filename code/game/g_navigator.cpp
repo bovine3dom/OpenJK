@@ -4591,6 +4591,11 @@ bool			STEER::SafeToGoTo(gentity_t* actor, const vec3_t& targetPosition, int tar
 	int		actorNode				= NAV::GetNearestNode(actor, true, targetNode);
 	mUser.SetActor(actor);
 	float	actorToTargetDistance	= Distance(actor->currentOrigin,  targetPosition);
+	// JO scene goals and script-locked enemies can lie outside the shared navigation graph.
+	if (G_IsOutcast() && actor->NPC
+		&& (actor->NPC->behaviorState == BS_CINEMATIC || (actor->svFlags & SVF_LOCKEDENEMY))
+		&& MoveTrace(actor, targetPosition, true))
+		return true;
 
 
 	// Are They Close Enough To Just Go There

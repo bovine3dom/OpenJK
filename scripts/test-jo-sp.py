@@ -26,6 +26,7 @@ def main():
     mode.add_argument("--progression", action="store_true", help="Test Yavin Force pickups, saber, and transition")
     mode.add_argument("--galak", action="store_true", help="Test the native armoured Galak spawn and damage phases")
     mode.add_argument("--world", action="store_true", help="Test JO's nonsolid opaque water boundary")
+    mode.add_argument("--puzzle", action="store_true", help="Test the Yavin Trial water, floating bridge, and grate")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sss and args.renderer != "rdsp-rend2":
@@ -38,7 +39,7 @@ def main():
     run = Path(tempfile.mkdtemp(prefix=args.renderer + ".", dir=output))
     profile = run / "profile"
     log = run / "console.log"
-    env = dict(os.environ, OJK_PROFILE=str(profile), LIBGL_ALWAYS_SOFTWARE="1", LP_NUM_THREADS="1",
+    env = dict(os.environ, OJK_PROFILE=str(profile), LIBGL_ALWAYS_SOFTWARE="1", LP_NUM_THREADS="4" if args.puzzle else "1",
                SDL_AUDIODRIVER="dummy", OJK_JO_ASSETS=os.environ.get("OJK_JO_ASSETS", str(ROOT / "GameData_JO")))
     command = ["bash", str(args.package.resolve() / "launch-sp.sh"),
                os.environ.get("OJK_ASSETS", str(ROOT / "GameData")), "--campaign", "jo", "--new-game",
@@ -72,7 +73,7 @@ def main():
             serial += 1
             marker = f"JO_COMMAND_{serial}_DONE"
             start = len(log.read_text(errors="replace"))
-            stdin.write(f"{text}; wait 5; echo {marker}\n")
+            stdin.write(f"{text}; wait {1 if args.puzzle else 5}; echo {marker}\n")
             stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(marker, start))
 
@@ -218,6 +219,60 @@ def main():
             text = log.read_text(errors="replace")
             assert not re.search(r"ERROR:|Error:|Unknown command|Duplicate shader entry|Couldn't find image for shader gfx/(?:menus|hud)", text), log
             print(f"PASS: JO weapon cycle, datapad, turret health, goggles, panels, and generator pipe material ({args.renderer})")
+
+        def check_puzzle():
+            def mover_at(name, height):
+                for _ in range(90):
+                    text = cmd(f"wait 20; mover_status {name}")
+                    position = re.search(r"origin=[-\d.]+,[-\d.]+,([-\d.]+)", text)
+                    if position and abs(float(position[1]) - height) < 1:
+                        return
+                raise AssertionError(f"{name} did not reach height {height}")
+
+            # Keep software rendering fast enough for a timed crossing.
+            cmd("helpusobi 1; set r_mode 0; vid_restart; wait 20")
+            cmd("set com_maxfps 60; map yavin_trial; wait 600; god; set cg_thirdPerson 0")
+            cmd("setviewpos -576 1936 56 0; wait 50; setviewpos 1920 240 64 0; wait 50")
+            cmd("setviewpos -224 496 320 0; wait 50")
+            powers = cmd("campaign_status")
+            assert "pull=1 jump=1" in powers, powers
+            for x in (2628, 2852, 3076, 3300):
+                view = cmd(f"noclip; setviewpos {x} 280 320 90; wait 90; viewpos")
+                eye = re.search(r"\(-?\d+ -?\d+ (-?\d+)\) :", view)
+                assert eye, view
+                cmd(f"setviewpos {x} 280 {640 - int(eye[1])} 90; wait 90; force_pull; wait 180; noclip")
+            cmd("setviewpos 2370 184 320 0; wait 300; campaign_status")
+            for name, expected in (("water", 176), ("floater", 176), ("grill", 440)):
+                mover_at(name, expected)
+            capture("floating_bridge")
+            state = cmd("+forward; wait 80; -forward; wait 160; campaign_status")
+            assert "location=captain" in state, state
+            mover_at("floater", 112)
+            mover_at("grill", 208)
+            capture("bridge_under_load")
+            # Adjust the jump point for input latency in software rendering.
+            for jump_x in (3330, 3370, 3400):
+                cmd("setviewpos 2370 184 320 0")
+                mover_at("floater", 176)
+                mover_at("grill", 440)
+                cmd("force_speed; +forward")
+                for _ in range(60):
+                    state = cmd("wait 1; campaign_status")
+                    position = re.search(r"origin=([-\d.]+),", state)
+                    assert position, state
+                    if float(position[1]) > jump_x:
+                        break
+                state = cmd("+moveup; wait 180; -moveup; -forward; campaign_status")
+                position = re.search(r"origin=([-\d.]+),", state)
+                if position and float(position[1]) > 3500 and "location=none" in state:
+                    break
+            else:
+                raise AssertionError(f"Could not cross the floating bridge: {state}")
+            capture("past_grate")
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            print(f"PASS: Yavin Trial fountains, bridge load response, and crossing past the grate ({args.renderer})")
 
         def check_world():
             cmd("helpusobi 1; map yavin_swamp; wait 150; exitview; wait 100; noclip; setviewpos -365.5 3921 2192.5 0; wait 20")
@@ -410,6 +465,9 @@ def main():
                 return 0
             if args.world:
                 check_world()
+                return 0
+            if args.puzzle:
+                check_puzzle()
                 return 0
             cmd("toggleconsole; wait 20")
             if args.renderer == "rdsp-rend2":

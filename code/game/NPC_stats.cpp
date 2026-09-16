@@ -4093,19 +4093,16 @@ const char *NPC_OutcastCinematicParms(const char *name, char *buffer, int size)
 	return strstr(NPCParms, va("\n%s\n", buffer)) ? buffer : name;
 }
 
-void NPC_RestoreOutcastClass(gentity_t *ent)
+static qboolean NPC_OutcastAttribute(const char *type, const char *attribute, char *value, int size)
 {
-	if (!G_IsOutcast() || !ent->NPC || !ent->client || ent->client->NPC_class != -1 || !ent->NPC_type)
-		return;
-	// Early JO imports saved an invalid class. Restore only the class, not NPC stats or orders.
 	const char *cursor = NPCParms;
-	int npcClass = -1;
+	qboolean found = qfalse;
 	COM_BeginParseSession();
 	while (cursor)
 	{
 		const char *name = COM_ParseExt(&cursor, qtrue);
 		if (!name[0]) break;
-		if (Q_stricmp(name, ent->NPC_type))
+		if (Q_stricmp(name, type))
 		{
 			SkipBracedSection(&cursor);
 			continue;
@@ -4115,9 +4112,10 @@ void NPC_RestoreOutcastClass(gentity_t *ent)
 		{
 			const char *key = COM_ParseExt(&cursor, qtrue);
 			if (!key[0] || !Q_stricmp(key, "}")) break;
-			if (!Q_stricmp(key, "class"))
+			if (!Q_stricmp(key, attribute))
 			{
-				npcClass = GetIDForString(ClassTable, COM_ParseExt(&cursor, qtrue));
+				Q_strncpyz(value, COM_ParseExt(&cursor, qtrue), size);
+				found = qtrue;
 				break;
 			}
 			SkipRestOfLine(&cursor);
@@ -4125,6 +4123,39 @@ void NPC_RestoreOutcastClass(gentity_t *ent)
 		break;
 	}
 	COM_EndParseSession();
+	return found;
+}
+
+void NPC_RestoreOutcastEquipment(gentity_t *ent)
+{
+	if (!G_IsOutcast() || !ent->NPC || !ent->client || !ent->NPC_type || ent->health <= 0) return;
+	// Artus scripts change pull, grip, and lightning, but rely on Desann's default push.
+	// Limit this repair to old actors with no Force resources; preserve scripted levels.
+	char value[MAX_QPATH];
+	if (!ent->client->ps.forcePowerMax && ent->targetname && !Q_stricmp(ent->targetname, "cinematic9_desann")
+		&& NPC_OutcastAttribute(ent->NPC_type, "FP_PUSH", value, sizeof(value)) && atoi(value) > 0 && atoi(value) <= FORCE_LEVEL_3)
+	{
+		ent->client->ps.forcePowerLevel[FP_PUSH] = atoi(value);
+		ent->client->ps.forcePowersKnown |= (1 << FP_PUSH);
+	}
+	if (ent->client->ps.forcePowersKnown && !ent->client->ps.forcePowerMax)
+		WP_InitForcePowers(ent);
+	if (ent->client->ps.saber[0].numBlades || !NPC_OutcastAttribute(ent->NPC_type, "saber", value, sizeof(value))) return;
+	WP_SaberParseParms(value, &ent->client->ps.saber[0], qfalse);
+	WP_SaberInitBladeData(ent);
+	if (ent->client->ps.weapon == WP_SABER)
+	{
+		WP_SaberAddG2SaberModels(ent);
+		ent->client->ps.SaberActivate();
+	}
+}
+
+void NPC_RestoreOutcastClass(gentity_t *ent)
+{
+	if (!G_IsOutcast() || !ent->NPC || !ent->client || ent->client->NPC_class != -1 || !ent->NPC_type) return;
+	char name[MAX_QPATH];
+	if (!NPC_OutcastAttribute(ent->NPC_type, "class", name, sizeof(name))) return;
+	const int npcClass = GetIDForString(ClassTable, name);
 	if (npcClass >= CLASS_NONE && npcClass < CLASS_NUM_CLASSES)
 	{
 		ent->client->NPC_class = (class_t)npcClass;

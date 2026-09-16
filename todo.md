@@ -71,6 +71,16 @@ separate manual checks; record any diagnostic trigger activation in automated te
 - [x] Extend the audit to registered script properties, actual dispatch handlers, empty handlers, and reviewed behavior differences. Separate implementation from runtime verification.
 - [x] Update the compatibility report and publish the tested package `20260916T073530525195835-50a3e4ec`.
 
+## JO Combat and Scripted Progression Follow-up
+
+- [x] Verify actual Desann attacks and the Artus defeat sequence. Restore missing Desann and Tavion sabers.
+- [x] Correct the Kejim CCTV crew movement. Check actual walk-animation playback in both renderers.
+- [x] Check Kyle's rendered facing toward Desann during the aiming and startled poses. Keep the normal-play camera review as a manual check.
+- [x] Complete the shrine scene and the Yavin Trial ending without skipping, in both renderers.
+- [x] Verify the fountain pulls, water and mover heights, and bridge load response in both renderers.
+- [ ] Resolve the intermittent timed-crossing failure. Focused runs passed in both renderers, but the full publication run failed all three crossing attempts. Evidence: `build/jo-tests/rdsp-vanilla.mv1m6219/console.log`.
+- [ ] Check older saves, publish the tested update, and commit this batch separately from the statistics work.
+
 ## Verified Prerequisites
 
 - [x] Confirm that this server runs x86-64 Arch Linux.

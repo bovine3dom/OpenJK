@@ -4756,6 +4756,9 @@ void PM_SetAnimFinal(int *torsoAnim,int *legsAnim,
 	//--------------------------------------------------------------------------------------
 	if (g_noFootSlide->integer
 		&& animFootMove
+		// JO scripts hold walk animations that start before the actor moves.
+		&& !(G_IsOutcast() && gent->NPC
+			&& (gent->NPC->behaviorState == BS_CINEMATIC || gent->NPC->behaviorState == BS_NOCLIP))
 		&& !(animSpeed<0.0f)
 		//FIXME: either read speed from animation.cfg or only do this for NPCs
 		//			for whom we've specifically determined the proper numbers!

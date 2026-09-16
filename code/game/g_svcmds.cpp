@@ -859,6 +859,9 @@ static void Svcmd_CampaignStatus_f(void)
 		ps.forcePowerLevel[FP_TELEPATHY], ps.forcePowerLevel[FP_LIGHTNING], ps.forcePowerLevel[FP_SABER_OFFENSE],
 		ps.forcePowerLevel[FP_SABER_DEFENSE], ps.forcePowerLevel[FP_SABERTHROW]);
 	gi.Printf("world contents=%d\n", gi.pointcontents(ps.origin, pl->s.number));
+	extern char *G_GetLocationForEnt(gentity_t *ent);
+	const char *location = G_GetLocationForEnt(&g_entities[0]);
+	gi.Printf("location=%s\n", location ? location : "none");
 	for (int i = 0; i < objectiveCount; ++i)
 		if (pl->client->sess.mission_objectives[i].display || (gi.argc() == 2 && !Q_stricmp(gi.argv(1), "all")))
 			gi.Printf("objective=%s status=%d\n", objectiveTable[i].name,
@@ -873,9 +876,9 @@ static void Svcmd_MoverStatus_f(void)
 		gi.Printf("mover name=%s absent=1\n", gi.argv(1));
 		return;
 	}
-	gi.Printf("mover name=%s origin=%.2f,%.2f,%.2f angles=%.2f,%.2f,%.2f\n", gi.argv(1),
+	gi.Printf("mover name=%s origin=%.2f,%.2f,%.2f angles=%.2f,%.2f,%.2f active=%d nav=%d\n", gi.argv(1),
 		ent->currentOrigin[0], ent->currentOrigin[1], ent->currentOrigin[2],
-		ent->currentAngles[0], ent->currentAngles[1], ent->currentAngles[2]);
+		ent->currentAngles[0], ent->currentAngles[1], ent->currentAngles[2], !(ent->svFlags & SVF_INACTIVE), Q3_TaskIDPending(ent, TID_MOVE_NAV));
 }
 
 static void Svcmd_GalakTest_f(void)
@@ -947,6 +950,22 @@ static void Svcmd_CinematicStatus_f(void)
 			GetStringForID(animTable, ps.legsAnim), GetStringForID(animTable, ps.torsoAnim), ps.legsAnimTimer, ps.torsoAnimTimer,
 			Q3_TaskIDPending(ent, TID_MOVE_NAV), Q3_TaskIDPending(ent, TID_ANIM_LOWER), Q3_TaskIDPending(ent, TID_ANIM_UPPER),
 			Q3_TaskIDPending(ent, TID_ANIM_BOTH), Q3_TaskIDPending(ent, TID_CHAN_VOICE), ent->NPC->behaviorState, ent->client->noclip);
+		gi.Printf("cinematic_combat name=%s health=%d enemy=%d weapon=%d force=%d max_force=%d known=%d active_force=%d blades=%d blade_active=%d blade_length=%.1f hilt=%d yaw=%.2f desired_yaw=%.2f body_yaw=%.2f script_flags=%d\n",
+			ent->targetname, ent->health, ent->enemy ? ent->enemy->s.number : -1, ps.weapon,
+			ps.forcePower, ps.forcePowerMax, ps.forcePowersKnown, ps.forcePowersActive,
+			ps.saber[0].numBlades, ps.saber[0].blade[0].active, ps.saber[0].blade[0].length, ent->weaponModel[0],
+			ps.viewangles[YAW], ent->NPC->desiredYaw, ent->client->renderInfo.legsYaw, ent->NPC->scriptFlags);
+		if (ent->NPC->goalEntity)
+			gi.Printf("cinematic_goal name=%s origin=%.2f,%.2f,%.2f radius=%d waypoint=%d speed=%d\n", ent->targetname,
+				ent->NPC->goalEntity->currentOrigin[0], ent->NPC->goalEntity->currentOrigin[1], ent->NPC->goalEntity->currentOrigin[2],
+				ent->NPC->goalRadius, ent->NPC->goalEntity->waypoint, ps.speed);
+		if (ent->playerModel >= 0 && ent->playerModel < ent->ghoul2.size() && ent->rootBone >= 0)
+		{
+			float frame = 0, speed = 0;
+			int start = 0, end = 0, flags = 0;
+			if (gi.G2API_GetBoneAnimIndex(&ent->ghoul2[ent->playerModel], ent->rootBone, level.time, &frame, &start, &end, &flags, &speed, NULL))
+				gi.Printf("cinematic_bone name=%s frame=%.2f start=%d end=%d flags=%d speed=%.2f\n", ent->targetname, frame, start, end, flags, speed);
+		}
 		const int setIndex = ent->client->clientInfo.animFileIndex;
 		if (setIndex >= 0 && setIndex < level.numKnownAnimFileSets && ps.legsAnim >= 0 && ps.legsAnim < MAX_ANIMATIONS
 			&& ps.torsoAnim >= 0 && ps.torsoAnim < MAX_ANIMATIONS)

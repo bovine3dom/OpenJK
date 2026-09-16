@@ -4006,6 +4006,8 @@ static void Q3_SetForcePowerLevel ( int entID, int forcePower, int forceLevel )
 	if ( forceLevel )
 	{
 		self->client->ps.forcePowersKnown |= ( 1 << forcePower );
+		if (G_IsOutcast() && self->NPC && !self->client->ps.forcePowerMax)
+			WP_InitForcePowers(self);
 	}
 	else
 	{

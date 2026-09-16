@@ -13,6 +13,8 @@ import zipfile
 
 UI_PREFIXES = ("gfx/menus/", "gfx/hud/", "gfx/2d/")
 NPC_CLASSES = {"GALAK_MECH": "GALAKMECH", "MORGAN": "MORGANKATARN"}
+NPC_SABERS = {"CLASS_KYLE": "Kyle", "CLASS_LUKE": "Luke", "CLASS_DESANN": "Desann",
+              "CLASS_TAVION": "Tavion", "CLASS_REBORN": "Reborn"}
 CINEMATIC_GESTURES = (b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2")
 # Slots 45-50 are shared with the Galak controller in codeJK2/game/AI_GalakMech.cpp.
 GALAK_ANIMATIONS = (b"BOTH_ALERT1", b"TORSO_RAISEWEAP2", b"TORSO_DROPWEAP2",
@@ -61,8 +63,44 @@ def convert_npcs(text):
         name = match[2].upper().removeprefix("CLASS_")
         return match[1] + "CLASS_" + NPC_CLASSES.get(name, name)
     text = re.sub(r'(?im)^([ \t]*class[ \t]+)"?(\w+)"?', npc_class, text)
-    return re.sub(r'(?im)^(\s*surf(?:On|Off)\s+)([^\r\n]+)',
+    text = re.sub(r'(?im)^(\s*surf(?:On|Off)\s+)([^\r\n]+)',
                   lambda m: m[1] + surface_names(m[2]), text)
+    def defaults(match):
+        body = match[2]
+        cls = re.search(r'(?im)^\s*class\s+(\w+)', body)
+        rank = re.search(r'(?im)^\s*rank\s+(\w+)', body)
+        cls = cls[1].upper() if cls else ""
+        rank = rank[1].lower() if rank else "civilian"
+        extra = []
+        if re.search(r'(?im)^\s*saberColor\s+', body) and not re.search(r'(?im)^\s*saber\s+', body):
+            extra.append("saber " + NPC_SABERS.get(cls, "single_1"))
+        for power, level in outcast_force_defaults(cls, rank).items():
+            if not re.search(r'(?im)^\s*FP_' + power + r'\s+', body):
+                extra.append(f"FP_{power} {level}")
+        return match[1] + "{" + ("\n" + "\n".join(extra) + "\n" if extra else "") + body + "}"
+    return re.sub(r'(?im)^(\s*\w+\s*)\{([^}]+)\}', defaults, text)
+
+
+def outcast_force_defaults(cls, rank):
+    # JO supplied these NPC defaults in WP_InitForcePowers; JA reads them as data.
+    if cls not in ("CLASS_DESANN", "CLASS_LUKE", "CLASS_TAVION", "CLASS_SHADOWTROOPER", "CLASS_JEDI", "CLASS_REBORN"):
+        return {}
+    if cls in ("CLASS_DESANN", "CLASS_LUKE", "CLASS_TAVION") or (cls == "CLASS_JEDI" and rank == "commander"):
+        powers = {key: 3 for key in ("LEVITATION", "PUSH", "PULL", "SABERTHROW", "SPEED", "SABER_DEFENSE", "SABER_OFFENSE")}
+        if cls == "CLASS_DESANN": powers.update(GRIP=3, LIGHTNING=3)
+        elif cls == "CLASS_TAVION": powers.update(PULL=2, GRIP=2, LIGHTNING=2)
+        elif cls == "CLASS_JEDI": powers["PULL"] = 2
+        return powers
+    if cls == "CLASS_SHADOWTROOPER":
+        return dict(LEVITATION=3, PUSH=3, PULL=2, SABERTHROW=2, GRIP=2, LIGHTNING=1, SPEED=3, SABER_DEFENSE=3, SABER_OFFENSE=3)
+    if cls == "CLASS_JEDI" or rank == "lt":
+        powers = dict(LEVITATION=2, PUSH=2, PULL=1, SABERTHROW=2, SPEED=2, SABER_DEFENSE=3, SABER_OFFENSE=3)
+        if cls != "CLASS_JEDI": powers["GRIP"] = 2
+        return powers
+    if rank == "ltjg": return dict(PUSH=2, SABERTHROW=2, SPEED=1, SABER_DEFENSE=3, SABER_OFFENSE=2)
+    if rank == "ensign": return dict(LEVITATION=1, PUSH=2, PULL=1, SPEED=1, SABER_DEFENSE=1, SABER_OFFENSE=1)
+    if rank == "crewman": return dict(LEVITATION=2, SPEED=1, SABER_DEFENSE=1, SABER_OFFENSE=1)
+    return dict(SPEED=1, SABER_DEFENSE=1, SABER_OFFENSE=1)
 
 
 def surface_names(text):

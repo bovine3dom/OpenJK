@@ -84,12 +84,20 @@ loads a save from before the scene. A save from inside the reported hang has not
 been verified; the normal save command rejects the test's attempt to save during
 the cinematic.
 
+The importer now supplies NPC saber definitions and JO's class/rank Force defaults.
+JO supplied these defaults in code; JA reads them from NPC data. Existing explicit
+power levels and saber colors take priority. The combat check now requires damage,
+the defeat scene, active aftermath sabers, and the transition to Valley.
+The idle test player is returned to the arena after large knockback. The test does
+not reduce health or apply damage directly.
+
 ## Progression and Boss Checks
 
 These focused checks pass:
 
 ```bash
 python3 scripts/test-jo-sp.py --progression
+python3 scripts/test-jo-sp.py --puzzle
 python3 scripts/test-jo-sp.py --galak
 python3 scripts/test-jo-sp.py --world
 python3 scripts/test-jo-cinematics.py --case topside
@@ -101,6 +109,17 @@ and active speed. The button checks hold the camera still with noclip. They use
 the normal Force commands and the retail scripts, not direct button activation.
 The check then verifies the Force wheel, save/load, and the retail exit target.
 It does not establish normal traversal of the complete training route.
+
+The separate puzzle check pulls all four fountains with the normal Force command.
+It checks water, bridge, and grate heights. It then checks their response to Kyle's
+position and crosses to the far ledge with Speed and Jump. The check uses retail
+holocrons. It moves Kyle to the test room and back to its entrance between attempts.
+The timed crossing allows three jump points to account for software-rendering input delay.
+No direct mover activation is used. Focused runs have passed in both renderers.
+The full publication run still has intermittent crossing failures. Mover heights and
+load response pass, but the timed crossing is not yet a reliable regression check.
+The test uses a smaller window and four software-rendering threads during the timed crossing.
+It does not establish reliable movement at very low frame rates.
 
 JO's saber pickup has no saber-definition name. The campaign loader supplies the
 shared `player` definition. The pickup then fires its target, completes the
