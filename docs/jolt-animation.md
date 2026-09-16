@@ -67,6 +67,16 @@ correction in game units. Its limit is eight units.
 
 ## Normal Play and Manual Controls
 
+For normal JO gameplay, use the imported campaign profile:
+
+```sh
+openjk-play --worktree rmlui --campaign jo --desktop +set g_joltReactions 1
+```
+
+The JO combat stormtroopers use the validated stormtrooper model path. The
+campaign tests check a real projectile hit and a physical fall on Kejim's
+original `st_guard2`, plus save/load and the transition to `kejim_base`.
+
 `g_joltReactions` defaults to `1` and is saved in the configuration. Accepted
 nonfatal projectile damage starts reactions on stock stormtrooper rigs.
 `stormtrooper2` is also eligible. Manual selection is not required.
@@ -175,6 +185,8 @@ python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --projectiles
 python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --projectiles
 python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla
 python3 scripts/test-jolt-sp.py --renderer rdsp-rend2
+python3 scripts/test-jo-sp.py --jolt --renderer rdsp-vanilla
+python3 scripts/test-jo-sp.py --jolt --renderer rdsp-rend2
 ```
 
 The game tests use an isolated profile and Xvfb. Logs, screenshots, and demo
@@ -188,6 +200,6 @@ with a 120 Hz reference and a 20 Hz server update schedule.
 
 Jolt 5.3.0 is pinned, linked statically, and packaged with its MIT licence.
 `-DUseJoltReactions=OFF` removes the dependency and game hooks. The SP game API
-is 11 and the renderer API is 22. See
+is 13 and the renderer API is 22. See
 [Reactive Character Control](reactive-animation-research.md) for the research
 and the remaining validation work.

@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--sss", action="store_true", help="Also check imported JO skin masks with Rend2")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--ai", action="store_true", help="Test native Kejim guard pressure reactions")
+    mode.add_argument("--jolt", action="store_true", help="Test Jolt hits and falls on a native JO stormtrooper")
     mode.add_argument("--content", action="store_true", help="Test Kejim equipment, materials, and datapad")
     mode.add_argument("--prisoners", action="store_true", help="Test both prisoner heads and save/load")
     mode.add_argument("--progression", action="store_true", help="Test Yavin Force pickups, saber, and transition")
@@ -167,6 +168,47 @@ def main():
             assert process.wait(timeout=30) == 0
             assert not re.search(r"ERROR:|Error:|Unknown command|aimemory event=rejected", log.read_text(errors="replace")), log
             print("PASS: JO native NPC classes, sight acquisition, near-miss retreat, damage, and save/load")
+
+        def check_jolt():
+            def reaction():
+                text = cmd("jolt_status st_guard2")
+                line = re.findall(r"jolt actor=[^\r\n]+", text)[-1]
+                return {k: float(v) for k, v in (word.split("=", 1) for word in line.split()[1:]) if "," not in v}
+
+            cmd("helpusobi 1; god; set g_joltReactions 1; set g_joltDebug 1; wait 200")
+            cmd("setviewpos 400 -2193 0 322; wait 40")
+            guard = {}
+            for _ in range(80):
+                guard = npc()
+                if guard["scripted"] == "0" and not int(guard["script_flags"]) & 0x200:
+                    break
+                cmd("wait 10")
+            else:
+                raise AssertionError(f"JO script still owns the guard: {guard}")
+            assert guard["class"] == "48", guard
+            cmd("set d_npcfreeze 1; save jo_jolt")
+            before = reaction()
+            cmd("jolt_shoot st_guard2; wait 2")
+            hit = reaction()
+            assert 0 < hit["health"] < before["health"] and hit["hits"] == 1, hit
+            assert hit["engaged"] == 1 and hit["poses"] > 0 and hit["painanim"] == 0, hit
+            assert hit["pose_error"] < .1, hit
+            capture("jolt_native_hit")
+            cmd("load jo_jolt; wait 60")
+            restored = reaction()
+            assert restored["health"] == before["health"] and restored["hits"] == 0 and restored["engaged"] == 0, restored
+            cmd("jolt_select st_guard2; jolt_knockdown; wait 2")
+            falling = reaction()
+            assert falling["falling"] == 1 and falling["health"] == before["health"], falling
+            capture("jolt_native_fall")
+            cmd("set g_joltReactions 0; wait 10")
+            assert reaction()["engaged"] == 0
+            cmd("maptransition kejim_base; wait 100")
+            assert "campaign=jo map=kejim_base" in cmd("campaign_status")
+            stdin.write("quit\n"); stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command|trying to load fallback renderer", log.read_text(errors="replace")), log
+            print(f"PASS: JO native stormtrooper projectile reaction, physical fall, save/load, disable, and transition ({args.renderer})")
 
         def key(name):
             window = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--pid", str(process.pid)], text=True).splitlines()[-1]
@@ -450,6 +492,9 @@ def main():
             capture("gameplay")
             if args.ai:
                 check_ai()
+                return 0
+            if args.jolt:
+                check_jolt()
                 return 0
             if args.content:
                 check_content()

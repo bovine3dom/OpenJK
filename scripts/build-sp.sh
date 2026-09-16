@@ -118,6 +118,11 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
             python3 scripts/test-jo-sp.py --package "$package" --prisoners --renderer "$renderer" \
             | tee "$package/jo-prisoners-$renderer-result.txt"
+        if grep -q '^UseJoltReactions:BOOL=ON$' build/sp/CMakeCache.txt; then
+            OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
+                python3 scripts/test-jo-sp.py --package "$package" --jolt --renderer "$renderer" \
+                | tee "$package/jo-jolt-$renderer-result.txt"
+        fi
     done
     python3 scripts/test-jo-sp.py --package "$package" --progression | tee "$package/jo-progression-result.txt"
     python3 scripts/test-jo-sp.py --package "$package" --galak | tee "$package/jo-galak-result.txt"
