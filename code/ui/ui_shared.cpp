@@ -5909,6 +5909,7 @@ void UI_AddDatapadMap()
 			auto *item=tabs[j];
 			item->window.rectClient={20+j*width,420,width,25};
 			item->textalignment=ITEM_ALIGN_CENTER; item->textalignx=width/2; item->textscale=1;
+			item->textaligny=tabs[0]->textaligny;
 			if (menu==map && !Q_stricmp(item->window.name,"map_tab")) {
 				item->window.flags|=WINDOW_DECORATION;
 				VectorSet4(item->window.foreColor,1,1,1,1);
