@@ -3478,20 +3478,31 @@ void R_CreateBuiltinImages( void ) {
 		const int outputHeight = r_ssaoMethod->integer ? height : aoHeight;
 		if (r_ssaoMethod->integer)
 			ri.Printf(PRINT_ALL, "GTAO: %dx%d -> %dx%d\n", aoWidth, aoHeight, outputWidth, outputHeight);
+		const int aoFormat = r_ssaoMethod->integer && r_compactAO->integer && glRefConfig.textureSwizzle ? GL_R8 : GL_RGBA8;
+		ri.Printf(PRINT_ALL, "AO storage: %s\n", aoFormat == GL_R8 ? "R8" : "RGBA8");
 		for (int i = 0; i < 2; ++i)
 			tr.aoScratchImage[i] = R_CreateImage(va("*aoScratch%d", i), NULL, aoWidth, aoHeight,
-				IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+				IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, aoFormat);
 		tr.ssaoRawImage = R_CreateImage("*ssaoRaw", NULL, aoWidth, aoHeight,
-			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, aoFormat);
 		tr.weaponDepthImage = R_CreateImage("*weaponDepth", NULL, width, height,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_DEPTH_COMPONENT24);
 		tr.weaponDepthFloatImage = R_CreateImage("*weaponDepthFloat", NULL, width, height,
 			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);
 		tr.weaponSsaoImage = R_CreateImage("*weaponSsao", NULL, outputWidth, outputHeight,
-			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, aoFormat);
 		tr.screenSsaoImage = R_CreateImage(
 			"*screenSsao", NULL, outputWidth, outputHeight, IMGTYPE_COLORALPHA,
-			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_RGBA8);
+			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, aoFormat);
+		if (aoFormat == GL_R8)
+		{
+			const GLint swizzle[] = {GL_RED, GL_RED, GL_RED, GL_ONE};
+			for (image_t *image : {tr.aoScratchImage[0], tr.aoScratchImage[1], tr.ssaoRawImage, tr.weaponSsaoImage, tr.screenSsaoImage})
+			{
+				GL_BindToTMU(image, 0);
+				qglTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
+			}
+		}
 		tr.hdrDepthImage = R_CreateImage(
 			"*hdrDepth", NULL, width, height, IMGTYPE_COLORALPHA,
 			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R32F);

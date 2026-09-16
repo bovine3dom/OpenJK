@@ -162,9 +162,11 @@ float gtao(vec2 uv)
 				vec2 sampleUV = uv + offset;
 				if (any(lessThan(sampleUV, pixel * 0.5)) || any(greaterThan(sampleUV, 1.0 - pixel * 0.5))) continue;
 				vec3 delta = positionAt(sampleUV) - p;
-				float distanceVS = length(delta);
-				if (distanceVS < 0.001 || distanceVS >= radius) continue;
-				float horizon = dot(delta / distanceVS, view);
+				float distanceSquared = dot(delta, delta);
+				if (distanceSquared < 0.000001 || distanceSquared >= radius * radius) continue;
+				float inverseDistance = inversesqrt(distanceSquared);
+				float distanceVS = distanceSquared * inverseDistance;
+				float horizon = dot(delta, view) * inverseDistance;
 				float weight = 1.0 - smoothstep(radius * 0.6, radius, distanceVS);
 				horizons[side] = max(horizons[side], mix(-1.0, horizon, weight));
 			}

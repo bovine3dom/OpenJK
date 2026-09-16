@@ -312,3 +312,57 @@ The [Khronos profiling guide](https://github.khronos.org/Vulkan-Site/guide/lates
 distinguishes CPU command work, GPU work, and synchronization delays. Use a
 desktop GPU trace to identify the next limit before choosing a Vulkan port.
 CPU skinning and draw submission remain useful follow-up measurements.
+
+## Second Performance Pass: September 16, 2026
+
+This comparison starts from the previous optimization, commit `75c25fd0`, in
+package `20260915T224059376153003-75c25fd0`. The enhanced graphics settings remain
+enabled. Hardware, map, shadows, warmup, and measurement duration follow the
+previous pass. The regular views use frozen NPC AI. All rows use approximate
+throughput, not presentation frame times.
+
+| View | Resolution | Previous FPS | New FPS | Change |
+| --- | --- | ---: | ---: | ---: |
+| First-person blaster | 1280 x 720 | 35.35 | 37.96 | +7.4% |
+| Third person | 1280 x 720 | 32.17 | 36.82 | +14.5% |
+| First-person blaster | 1920 x 1080 | 19.83 | 21.59 | +8.9% |
+| Third person | 1920 x 1080 | 18.77 | 20.14 | +7.3% |
+| Front-facing character | 1280 x 720 | 42.39 | 57.50 | +35.6% |
+
+Regular 720p rows use three runs. The other rows use two. Server load can vary.
+These results support a large gain in the character test, not a general 30–50%
+gain across maps or a prediction for the GTX 1080 Ti.
+
+The character test uses an elevated, noclip camera. Reproduce it with:
+
+```sh
+python3 scripts/benchmark-sp.py --shadows 1 --noclip --viewpos 2688 640 400 315 --cvar cg_thirdPersonAngle 180 --cvar cg_thirdPersonRange 80 --cvar d_npcfreeze 1 --cvar r_ssaoAmbientOnly 0 --runs 2 --seconds 10 --timeout 600
+```
+
+Paired result directories under `build/benchmark-sp/`, previous then new:
+
+- First-person 720p: `rdsp-rend2.c7rx3ckf`, `rdsp-rend2.cllym66a`.
+- Third-person 720p: `rdsp-rend2.7sr_pvhc`, `rdsp-rend2.8mg7l9hr`.
+- First-person 1080p: `rdsp-rend2.ahofdc2t`, `rdsp-rend2.kt0vq7n8`.
+- Third-person 1080p: `rdsp-rend2.5f6p8cme`, `rdsp-rend2.iyzimmz6`.
+- Character view: `rdsp-rend2.axefezmp`, `rdsp-rend2.y_7rkjtf`.
+
+The changes are an exact-pose Ghoul2 geometry cache, empty-pixel GTAO rejection,
+less horizon-sample normalization work, and compact GTAO colour storage. They do
+not reduce sample counts, resolution, or shadow settings. In separate timed
+runs, median weapon-AO time fell from 1.20 to 0.57 ms. Coarse skinning time fell
+from 2 to 1 ms. The first-person scene reused about 78 skinning results per frame
+with about 0.97 MB of cached data. Timed results are in `rdsp-rend2.ucb4h2fq` and
+`rdsp-rend2.q8ezarex`. `r_speeds 100` records these counters in `ghoul2_cpu`.
+
+The persistent-buffer trial did not establish a repeatable benefit, so its
+default remains unchanged.
+
+Validation included exact cached/uncached skin and tangent comparisons, renderer
+restart, save/load, map changes, stencil shadows, and persistent buffers. Hardware
+weapon tests passed at MSAA 0 and 4. Raster effects and the live split comparison
+also passed. AO storage tests retain a separate RGBA8 reference and legacy path.
+
+Further large gains will need investigation of the remaining character tangent
+work and GPU passes. GPU skinning is a candidate, but it needs its own image,
+animation, gore, and lifecycle checks.

@@ -104,8 +104,23 @@ It also skips this work for built-in Lightall when the effective normal-scale
 X and Y values are both zero and parallax is disabled. External GLSL and
 parallax retain the full path as a precaution. Materials with effective
 normal maps still use MikkTSpace. CPU skinning, fallback tangent writes, and
-gore writes are unchanged. The experimental frame-pose tangent cache was
-removed to keep the change small; it has no available cache cvar.
+gore writes are unchanged.
+
+SP now has a bounded geometry cache controlled by `r_g2GeometryCache`, default
+`1`. It compares every used, evaluated bone matrix before reusing positions,
+normals, or MikkTSpace tangents. Changed poses are recalculated. Gore surfaces
+use the uncached path. The cache has an 8 MiB data budget, plus container overhead.
+It keeps current-frame entries for later passes, evicts older entries when
+needed, and uses the uncached path when the budget is full. Renderer shutdown
+clears it, including soft map resets.
+
+Set `r_g2GeometryCache 0` for the reference path. For development checks, set
+`r_g2GeometryValidate 1`. This recomputes cached skinning and tangents and requires
+exact matches. Validation is slow and is not enabled by default.
+
+The September 16 pass also skips empty GTAO filter pixels and uses single-channel
+AO colour buffers on supported hardware. See `benchmark-sp.md` for the measured
+7–15% gains in regular views and the 36% gain in a front-facing character test.
 
 Linked GL programs and their CPU uniform-state cache survive soft map resets
 only. Exact cache keys include the complete final sources, stage type and

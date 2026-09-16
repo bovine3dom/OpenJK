@@ -64,6 +64,9 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 	// Hardware depth is affine across a projected plane; view-space Z is not.
 	float planeDepth = u_ViewInfo.z > 0.0 ? hardwareDepth : depthCenter;
 	vec2 centerSlope = vec2(dFdx(planeDepth), dFdy(planeDepth)) / vec2(dFdx(tex.x), dFdy(tex.y));
+	// GTAO sky samples are white, and the filter rejects cross-sky taps.
+	// Keep derivatives above this exit for adjacent foreground fragments.
+	if (u_ViewInfo.z > 0.0 && depthCenter >= zFar * 0.9999) return vec4(1.0);
 	bool wide = u_ViewInfo.z > 0.0 && u_SSAOParams.x > 0.0;
 	float centerWeight = wide ? wideGauss[0] : gauss[0];
 	vec4 result = texture(imageMap, tex) * centerWeight;

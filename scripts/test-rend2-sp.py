@@ -15,20 +15,23 @@ def main():
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=1)
     parser.add_argument("--buffer-storage", action="store_true")
+    parser.add_argument("--geometry-validate", action="store_true")
     args = parser.parse_args()
     package = args.package.resolve()
-    fixture = package / "OpenJK/rend2-smoke.cfg"
-    if not fixture.is_file() or fixture.read_bytes() != (root / "scripts/rend2-smoke.cfg").read_bytes():
-        parser.error("Stage scripts/rend2-smoke.cfg in PACKAGE/OpenJK before this test")
+    fixture_name = "rend2-geometry-validate.cfg" if args.geometry_validate else "rend2-smoke.cfg"
+    for name in ("rend2-smoke.cfg", fixture_name):
+        fixture = package / "OpenJK" / name
+        if not fixture.is_file() or fixture.read_bytes() != (root / "scripts" / name).read_bytes():
+            parser.error(f"Build the current {name}")
     output = root / "build/smoke"
     output.mkdir(parents=True, exist_ok=True)
     suite = Path(tempfile.mkdtemp(prefix="rend2.", dir=output))
     print(f"Rend2 results: {suite}", flush=True)
     subprocess.run(["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge",
-                    "+set", "com_maxfps", "10", "+set", "r_debugContext", "1",
+                    "+set", "r_debugContext", "1",
                     "+set", "cg_shadows", str(args.shadows), "+set", "r_patchStitching", "0",
                     "+set", "r_arb_buffer_storage", str(int(args.buffer_storage)),
-                    "+set", "r_ignoreGLErrors", "0", "+exec", "rend2-smoke.cfg"],
+                    "+set", "r_ignoreGLErrors", "0", "+exec", fixture_name],
                    env=dict(os.environ, OJK_SMOKE_ROOT=str(suite), OJK_SMOKE_RENDERER="rdsp-rend2",
                             OJK_SMOKE_TIMEOUT="600", OJK_SMOKE_WAIT="10", OJK_SMOKE_DISPLAY="640x480"),
                    check=True)
@@ -36,6 +39,8 @@ def main():
     if len(logs) != 1:
         raise RuntimeError(f"Missing unique log: {suite}")
     text = logs[0].read_text(errors="replace")
+    if args.geometry_validate and not re.search(r"Ghoul2 cache validated: vertices=[1-9]\d* tangents=[1-9]\d*", text):
+        raise RuntimeError(f"No geometry/tangent reference checks: {logs[0]}")
     if args.buffer_storage and "...using GL_ARB_buffer_storage" not in text:
         raise RuntimeError(f"Buffer storage was not enabled: {logs[0]}")
     if re.search(r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]|GL_INVALID_\w+|GL_OUT_OF_MEMORY|"

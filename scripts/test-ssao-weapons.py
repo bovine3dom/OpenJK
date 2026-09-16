@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--method", type=int, choices=(0, 1), default=0)
     parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
+    parser.add_argument("--geometry-validate", action="store_true")
     args = parser.parse_args()
     if not (64 <= args.width <= 16384 and 64 <= args.height <= 16384):
         parser.error("Invalid dimensions")
@@ -55,44 +56,41 @@ def main():
     print(f"Weapon AO results: {suite}", flush=True)
     for msaa in ((args.msaa,) if args.msaa is not None else (0, 4)):
         case = suite / str(msaa)
-        env = dict(os.environ, OJK_SMOKE_ROOT=str(case), OJK_SMOKE_RENDERER="rdsp-rend2",
-                   OJK_SMOKE_TIMEOUT="600", OJK_SMOKE_DISPLAY=f"{args.width}x{args.height}")
+        profile = case / "profile/OpenJK"
+        profile.mkdir(parents=True)
+        settings = dict(cl_renderer="rdsp-rend2", r_fullscreen=0, s_initsound=0, developer=1,
+                        r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res,
+                        r_sampleShading=args.sample_shading, r_ext_multisample=msaa,
+                        r_normalMapping=1, r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0,
+                        r_g2GeometryValidate=int(args.geometry_validate), com_maxfps=10,
+                        r_mode=-1, r_customwidth=args.width, r_customheight=args.height, cg_fov=args.fov)
+        # Keep renderer settings out of the bounded startup command list.
+        (profile / "openjk_sp.cfg").write_text("".join(f'set {name} "{value}"\n' for name, value in settings.items()))
+        (profile / "autoexec_sp.cfg").write_text("// Controlled weapon AO test.\n")
+        env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_AUDIODRIVER="dummy")
+        command = ["timeout", "--kill-after=5s", "600s"]
         if args.hardware:
-            case.mkdir(parents=True)
-            env.update(SDL_VIDEODRIVER="offscreen", EGL_PLATFORM="surfaceless",
-                       SDL_AUDIODRIVER="dummy", OJK_PROFILE=str(case / "profile"))
+            env.update(SDL_VIDEODRIVER="offscreen", EGL_PLATFORM="surfaceless")
             env.pop("LIBGL_ALWAYS_SOFTWARE", None)
-            command = ["timeout", "--kill-after=5s", "600s", "bash", str(package / "launch-sp.sh"),
-                       os.environ.get("OJK_ASSETS", str(root / "GameData")), "+safe",
-                       "+set", "cl_renderer", "rdsp-rend2", "+set", "r_fullscreen", "0",
-                       "+set", "s_initsound", "0", "+devmap", "t2_wedge"]
         else:
-            env["SDL_VIDEODRIVER"] = "x11"
+            env.update(SDL_VIDEODRIVER="x11", LIBGL_ALWAYS_SOFTWARE="1", LP_NUM_THREADS=os.environ.get("LP_NUM_THREADS", "1"))
             env.pop("EGL_PLATFORM", None)
-            command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
-        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res, r_sampleShading=args.sample_shading,
-                                r_ext_multisample=msaa, r_normalMapping=1,
-                                r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0,
-                                com_maxfps=10, r_mode=-1, r_customwidth=args.width,
-                                r_customheight=args.height, cg_fov=args.fov).items():
-            command += ["+set", name, str(value)]
-        command += ["+exec", fixture]
-        if args.hardware:
-            command += ["+wait", "10", "+quit"]
-            log = case / "console.log"
-            with log.open("w") as stream:
-                subprocess.run(command, env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
-        else:
-            subprocess.run(command, env=env, check=True)
-            log, = case.glob("t2_wedge.*/console.log")
+            command += ["xvfb-run", "-a", "-s", f"-screen 0 {args.width}x{args.height}x24"]
+        command += ["bash", str(package / "launch-sp.sh"), os.environ.get("OJK_ASSETS", str(root / "GameData")),
+                    "+devmap", "t2_wedge", "+exec", fixture, "+wait", "10", "+quit"]
+        log = case / "console.log"
+        with log.open("w") as stream:
+            subprocess.run(command, env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
         text = log.read_text(errors="replace")
+        if args.geometry_validate:
+            check("geometry reference", bool(re.search(r"Ghoul2 cache validated: vertices=[1-9]\d* tangents=[1-9]\d*", text)), log)
         check("renderer identity", "----- rdsp-rend2 -----" in text and
               "trying to load fallback renderer" not in text, "Rend2 without fallback")
         if args.hardware:
             gpu = re.findall(r"GL_RENDERER: (.*)", text)
             check("hardware renderer", bool(gpu) and not re.search(r"llvmpipe|softpipe", gpu[-1], re.I), gpu)
         check("fixture and GL", "OJK_WEAPON_AO_DONE" in text and not re.search(
-            r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]|GL_INVALID_|Cheats are not enabled", text), log)
+            r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]|GL_INVALID_|ERROR:|Unknown command|Cheats are not enabled", text), log)
         images = log.parent / "profile/OpenJK/screenshots"
         data = {name: pixels(images / f"{name}.png", args.width, args.height) for name in (
             "weapon_mask", "weapon_ao", "weapon_plain", "weapon_shaded", "world_with_weapon",

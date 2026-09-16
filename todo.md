@@ -172,6 +172,10 @@ and test commands.
 
 ## Rend2 Performance
 
+- [x] Add an exact-pose Ghoul2 geometry cache with an 8 MiB data budget and reference validation. Test animation, weapons, restart, save/load, map changes, and stencil shadows.
+- [x] Skip empty GTAO filter pixels, simplify accepted-sample normalization, and use single-channel GTAO colour buffers. Check storage equivalence and retain the legacy format fallback.
+- [x] Measure the second pass in regular first/third-person views and a front-facing character view. Results range from 7% to 36% on the P630. See `docs/benchmark-sp.md`.
+
 - [x] Reduce capsule shader work with conservative receiver rejection and precomputed segment reciprocals. Measure the default-feature scene on the P630 at 720p and 1080p. See `docs/benchmark-sp.md`.
 - [x] Add instant enhancement toggles and a same-frame 50/50 comparison. Check split halves, custom settings, humanoids, save/load, and renderer restart. See `docs/graphics-comparison.md`.
 - [ ] Repeat performance measurements on the GTX 1080 Ti. Profile CPU skinning, submission, and remaining GPU passes before choosing a Vulkan port.

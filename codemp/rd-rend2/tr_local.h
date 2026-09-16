@@ -160,6 +160,13 @@ extern cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 extern cvar_t *r_capsuleShadowDebug;
 extern cvar_t *r_torchShadows, *r_torchShadowMapSize;
 extern cvar_t *r_compareEnhancements;
+#ifdef REND2_SP
+void R_ReportGhoul2Work();
+void R_ClearGhoul2GeometryCache();
+#endif
+extern cvar_t *r_g2GeometryCache;
+extern cvar_t *r_g2GeometryValidate;
+extern cvar_t *r_compactAO;
 extern cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
@@ -2360,6 +2367,7 @@ typedef struct {
 	int maxUniformBufferBindings;
 
 	qboolean immutableTextures;
+	qboolean textureSwizzle;
 	qboolean immutableBuffers;
 
 	qboolean debugContext;
@@ -2950,7 +2958,7 @@ bool R_IsPostRenderEntity ( const trRefEntity_t *refEntity );
 
 void R_CalcMikkTSpaceBSPSurface(int numSurfaces, packedVertex_t *vertices, glIndex_t *indices);
 void R_CalcMikkTSpaceMD3Surface(int numSurfaces, mdvVertex_t *verts, uint32_t *tangents, mdvSt_t *texcoords, glIndex_t *indices);
-void R_CalcMikkTSpaceGlmSurface(int numSurfaces, mdxmVertex_t *vertices, mdxmVertexTexCoord_t *textureCoordinates, uint32_t *tangents, glIndex_t *indices);
+void R_CalcMikkTSpaceGlmSurface(int numSurfaces, const mdxmVertex_t *vertices, const mdxmVertexTexCoord_t *textureCoordinates, uint32_t *tangents, const glIndex_t *indices);
 
 void R_CalcTexDirs(vec3_t sdir, vec3_t tdir, const vec3_t v1, const vec3_t v2,
 					const vec3_t v3, const vec2_t w1, const vec2_t w2, const vec2_t w3);

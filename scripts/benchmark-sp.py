@@ -135,6 +135,7 @@ def run(args, suite, index, settings):
         samples = []
         gpu_samples = {}
         capsule_cpu = []
+        ghoul2_cpu = []
         deadline = begin + args.seconds
         stopping = False
         while True:
@@ -156,6 +157,9 @@ def run(args, suite, index, settings):
             capsule = re.search(r"Capsule CPU: total=(\d+) prepare=(\d+) actors=(\d+)", line)
             if capsule:
                 capsule_cpu.append(tuple(map(int, capsule.groups())))
+            ghoul2 = re.search(r"Ghoul2 CPU: skin=(\d+) tangent=(\d+) surfaces=(\d+) vertices=(\d+) cached_skin=(\d+) cached_tangent=(\d+) bytes=(\d+)", line)
+            if ghoul2:
+                ghoul2_cpu.append(tuple(map(int, ghoul2.groups())))
             match = FRAME.match(line)
             if match:
                 samples.append(tuple(map(int, match.groups())))
@@ -170,6 +174,8 @@ def run(args, suite, index, settings):
                                  for name, values in gpu_samples.items()}
         result["capsule_cpu"] = {name: percentiles([row[i] for row in capsule_cpu])
                                  for i, name in enumerate(("total_ms", "prepare_ms", "actors"))} if capsule_cpu else {}
+        result["ghoul2_cpu"] = {name: percentiles([row[i] for row in ghoul2_cpu])
+                                for i, name in enumerate(("skin_ms", "tangent_ms", "surfaces", "vertices", "cached_skin", "cached_tangent", "bytes"))} if ghoul2_cpu else {}
         send("screenshot_png benchmark_end")
         wait_for("Wrote screenshots/benchmark_end.png")
         check_weapon = args.weapon is not None and args.renderer == "rdsp-rend2" and int(settings["r_ssao"])

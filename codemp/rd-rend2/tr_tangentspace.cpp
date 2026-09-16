@@ -212,10 +212,10 @@ void R_CalcMikkTSpaceMD3Surface(int numSurfaces, mdvVertex_t *verts, uint32_t *t
 struct GlmMeshData
 {
 	int numSurfaces;
-	mdxmVertex_t *vertices;
-	mdxmVertexTexCoord_t *tcs;
+	const mdxmVertex_t *vertices;
+	const mdxmVertexTexCoord_t *tcs;
 	uint32_t *tangents;
-	glIndex_t *indices;
+	const glIndex_t *indices;
 };
 
 void R_GetGlmPosition(const SMikkTSpaceContext * pContext, float *fvPosOut, const int iFace, const int iVert)
@@ -223,7 +223,7 @@ void R_GetGlmPosition(const SMikkTSpaceContext * pContext, float *fvPosOut, cons
 	GlmMeshData *meshData = (GlmMeshData *)pContext->m_pUserData;
 	const int vert_index = R_FixMikktVertIndex(iVert);
 	glIndex_t index = meshData->indices[iFace * 3 + vert_index];
-	mdxmVertex_t& vertex = meshData->vertices[index];
+	const mdxmVertex_t& vertex = meshData->vertices[index];
 	fvPosOut[0] = vertex.vertCoords[0];
 	fvPosOut[1] = vertex.vertCoords[1];
 	fvPosOut[2] = vertex.vertCoords[2];
@@ -234,7 +234,7 @@ void R_GetNormalGlmSurface(const SMikkTSpaceContext * pContext, float *fvNormOut
 	GlmMeshData *meshData = (GlmMeshData *)pContext->m_pUserData;
 	const int vert_index = R_FixMikktVertIndex(iVert);
 	glIndex_t index = meshData->indices[iFace * 3 + vert_index];
-	mdxmVertex_t& vertex = meshData->vertices[index];
+	const mdxmVertex_t& vertex = meshData->vertices[index];
 
 	fvNormOut[0] = vertex.normal[0];
 	fvNormOut[1] = vertex.normal[1];
@@ -246,7 +246,7 @@ void R_GetGlmTexCoord(const SMikkTSpaceContext * pContext, float *fvTexcOut, con
 	GlmMeshData *meshData = (GlmMeshData *)pContext->m_pUserData;
 	const int vert_index = R_FixMikktVertIndex(iVert);
 	glIndex_t index = meshData->indices[iFace * 3 + vert_index];
-	mdxmVertexTexCoord_t& tcs = meshData->tcs[index];
+	const mdxmVertexTexCoord_t& tcs = meshData->tcs[index];
 	fvTexcOut[0] = tcs.texCoords[0];
 	fvTexcOut[1] = tcs.texCoords[1];
 }
@@ -264,7 +264,7 @@ void R_SetGlmTSpaceBasic(const SMikkTSpaceContext * pContext, const float *fvTan
 		| (((uint32_t)(fvTangent[0] * 511.5f + 512.0f)));
 }
 
-void R_CalcMikkTSpaceGlmSurface(int numSurfaces, mdxmVertex_t *vertices, mdxmVertexTexCoord_t *textureCoordinates, uint32_t *tangents, glIndex_t *indices)
+void R_CalcMikkTSpaceGlmSurface(int numSurfaces, const mdxmVertex_t *vertices, const mdxmVertexTexCoord_t *textureCoordinates, uint32_t *tangents, const glIndex_t *indices)
 {
 	SMikkTSpaceInterface tangentSpaceInterface;
 

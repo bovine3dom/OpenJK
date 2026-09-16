@@ -140,6 +140,9 @@ cvar_t *r_capsuleShadows, *r_capsuleShadowStrength;
 cvar_t *r_capsuleShadowDebug;
 cvar_t *r_torchShadows, *r_torchShadowMapSize;
 cvar_t *r_compareEnhancements;
+cvar_t *r_g2GeometryCache;
+cvar_t *r_g2GeometryValidate;
+cvar_t *r_compactAO;
 cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
 cvar_t *r_sssDebugGain;
 cvar_t  *r_ssaoAmbientOnly;
@@ -1538,6 +1541,9 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_softParticleDistance, 0, 64, qfalse);
 	r_smaa = ri.Cvar_Get("r_smaa", "1", CVAR_ARCHIVE, "Enable SMAA 1x before UI rendering.");
 	r_compareEnhancements = ri.Cvar_Get("r_compareEnhancements", "0", 0, "Live comparison: 0 enhanced, 1 base lighting, 2 base left/enhanced right.");
+	r_g2GeometryCache = ri.Cvar_Get("r_g2GeometryCache", "1", CVAR_ARCHIVE, "Reuse SP Ghoul2 geometry for identical evaluated bone poses.");
+	ri.Cvar_CheckRange(r_g2GeometryCache, 0, 1, qtrue);
+	r_g2GeometryValidate = ri.Cvar_Get("r_g2GeometryValidate", "0", 0, "Compare cached SP geometry with uncached skinning and MikkTSpace.");
 	ri.Cvar_CheckRange(r_compareEnhancements, 0, 2, qtrue);
 	r_smaaDebug = ri.Cvar_Get("r_smaaDebug", "0", 0, "SMAA debug: 0 scene, 1 edges, 2 weights.");
 	r_sss = ri.Cvar_Get("r_sss", "1", CVAR_ARCHIVE, "Skin diffusion strength; values above 1 exaggerate the correction.");
@@ -1566,6 +1572,8 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_capsuleShadowRadius, 0.25f, 2, qfalse);
 	ri.Cvar_CheckRange(r_capsuleShadowRange, 8, 128, qfalse);
 	r_ssao = ri.Cvar_Get( "r_ssao", "1", CVAR_LATCH | CVAR_ARCHIVE, "" );
+	r_compactAO = ri.Cvar_Get("r_compactAO", "1", CVAR_LATCH | CVAR_ARCHIVE, "Store scalar AO in single-channel images when texture swizzle is available.");
+	ri.Cvar_CheckRange(r_compactAO, 0, 1, qtrue);
 	r_sampleShading = ri.Cvar_Get("r_sampleShading", "0", CVAR_ARCHIVE, "Minimum shaded sample fraction for multisample scene rendering.");
 	ri.Cvar_CheckRange(r_sampleShading, 0, 1, qfalse);
 	r_ssaoMethod = ri.Cvar_Get("r_ssaoMethod", "1", CVAR_ARCHIVE | CVAR_LATCH, "AO method: 0 legacy SSAO, 1 spatial GTAO.");
@@ -2208,6 +2216,7 @@ void RE_Shutdown( qboolean destroyWindow, qboolean restarting ) {
 	}
 	else if (glConfig.vidWidth)
 		GLSL_ShutdownGPUShaders(destroyWindow);
+	R_ClearGhoul2GeometryCache();
 	R_ShutdownFonts();
 	RE_TempRawImage_CleanUp();
 	RE_HunkClearCrap();

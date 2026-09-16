@@ -27,6 +27,7 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | Control | Values and effect |
 | --- | --- |
 | `r_ssao` | Default `1`: enable screen-space AO. `0` disables it. Use `vid_restart` after a change. |
+| `r_compactAO` | Default `1`: store GTAO colour buffers in R8 when texture swizzle is available. `0` uses RGBA8. Requires `vid_restart`. Legacy SSAO keeps RGBA8. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
 | `r_ssaoMethod` | Default `1`: spatial GTAO. `0`: legacy SSAO. Use `vid_restart` after a change. |
@@ -156,6 +157,23 @@ Fine contact detail can be lost, especially with a small weapon radius.
 The world radius default remains `1`; the weapon radius default is `0.05`.
 Existing profiles retain saved values. Set `r_ssaoViewModelRadius 0.05` explicitly
 to apply the new default to an existing profile.
+
+GTAO colour buffers now store one 8-bit channel instead of four. Texture swizzle
+replicates that value for filters and debug images. This reduces colour-buffer
+storage by 75%; depth-buffer storage is unchanged. The channel precision, AO
+resolution, and sample counts stay the same. Legacy SSAO and hardware without
+texture swizzle retain RGBA8.
+
+The GTAO filter also skips empty background pixels after calculating derivatives.
+Its existing depth checks reject foreground/background mixing. Horizon sampling
+rejects out-of-range samples before normalization and shares a reciprocal square
+root for accepted samples.
+
+Run `python3 scripts/test-ao-storage.py` to compare R8 with the RGBA8 reference.
+Use `--method 0` to check the legacy fallback. The controlled GTAO image had a
+mean difference of about 0.008 on the 0–255 scale. The RGBA8 round trip and the
+legacy fallback had zero error. Hardware weapon checks passed with MSAA off and
+at 4x, including firing, switching, hiding, restart, and save/load.
 
 ```sh
 python3 scripts/test-modern-rendering.py --half-res 1

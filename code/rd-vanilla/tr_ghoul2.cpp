@@ -36,6 +36,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #ifdef REND2_SP
 #include "../../codemp/rd-rend2/tr_cache.h"
 #include <deque>
+#include <unordered_map>
 #else
 #include "tr_common.h"
 #endif
@@ -2850,6 +2851,141 @@ void G2_ConstructGhoulSkeleton( CGhoul2Info_v &ghoul2,const int frameNum,bool ch
 RB_SurfaceGhoul
 ==============
 */
+#ifdef REND2_SP
+static int g2SkinMsec, g2TangentMsec, g2Surfaces, g2Vertices;
+static int g2CachedSkins, g2CachedTangents;
+static int g2ValidatedVertices, g2ValidatedTangents;
+struct G2Geometry
+{
+	std::vector<mdxaBone_t> bones;
+	std::vector<int> usedBones;
+	std::vector<mdxmVertex_t> vertices;
+	std::vector<uint32_t> normals, fallbackTangents, tangents;
+	bool ready = false, tangentsReady = false;
+	size_t bytes = 0;
+	unsigned frame = 0;
+};
+using G2GeometryKey = std::pair<const mdxmSurface_t *, CBoneCache *>;
+struct G2GeometryHash
+{
+	size_t operator()(const G2GeometryKey &key) const
+	{
+		return std::hash<const void *>()(key.first) ^ (std::hash<const void *>()(key.second) << 1);
+	}
+};
+static std::unordered_map<G2GeometryKey, G2Geometry, G2GeometryHash> g2Geometry;
+static size_t g2GeometryBytes;
+
+void R_ClearGhoul2GeometryCache()
+{
+	g2Geometry.clear();
+	g2GeometryBytes = 0;
+}
+
+static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, const int *references,
+	const mdxaBone_t *pose, vec3_t position, vec3_t normal)
+{
+	VectorClear(position);
+	VectorClear(normal);
+	const int numWeights = G2_GetVertWeights(vertex);
+	float totalWeight = 0.0f;
+	for (int k = 0; k < numWeights; ++k)
+	{
+		const float weight = G2_GetVertBoneWeight(vertex, k, totalWeight, numWeights);
+		const int index = G2_GetVertBoneIndex(vertex, k);
+#ifdef JK2_MODE
+		const mdxaBone_t &bone = pose ? pose[index] : bones->Eval(references[index]);
+#else
+		const mdxaBone_t &bone = pose ? pose[index] : bones->EvalRender(references[index]);
+#endif
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			position[axis] += weight * (DotProduct(bone.matrix[axis], vertex->vertCoords) + bone.matrix[axis][3]);
+			normal[axis] += weight * DotProduct(bone.matrix[axis], vertex->normal);
+		}
+	}
+	if (!VectorNormalize(normal)) VectorSet(normal, 0.0f, 0.0f, 1.0f);
+}
+
+static G2Geometry *R_GhoulGeometry(CRenderableSurface *surf, const mdxmVertex_t *vertices, const int *references)
+{
+	if (!r_g2GeometryCache->integer) return nullptr;
+	const mdxmSurface_t *surface = surf->surfaceData;
+	const G2GeometryKey key = {surface, surf->boneCache};
+	if (g2Geometry.find(key) == g2Geometry.end())
+	{
+		const size_t bytes = surface->numVerts * (sizeof(mdxmVertex_t) + 3*sizeof(uint32_t)) +
+			surface->numBoneReferences * (sizeof(mdxaBone_t) + sizeof(int));
+		const size_t limit = 8*1024*1024;
+		if (bytes > limit) return nullptr;
+		// Keep current-frame entries for later passes. Evict only older entries.
+		for (auto it = g2Geometry.begin(); g2GeometryBytes + bytes > limit && it != g2Geometry.end(); )
+		{
+			if (it->second.frame == backEndData->realFrameNumber) { ++it; continue; }
+			g2GeometryBytes -= it->second.bytes;
+			it = g2Geometry.erase(it);
+		}
+		if (g2GeometryBytes + bytes > limit) return nullptr;
+		g2GeometryBytes += bytes;
+		G2Geometry &entry = g2Geometry[key];
+		entry.bytes = bytes;
+		entry.vertices.assign(vertices, vertices + surface->numVerts);
+		entry.normals.resize(surface->numVerts);
+		entry.fallbackTangents.resize(surface->numVerts);
+		entry.tangents.resize(surface->numVerts);
+		entry.bones.resize(surface->numBoneReferences);
+		entry.usedBones.reserve(surface->numBoneReferences);
+		std::vector<bool> used(surface->numBoneReferences, false);
+		// Preserve the original first-use bone evaluation order.
+		for (int j = 0; j < surface->numVerts; ++j)
+			for (int k = 0; k < G2_GetVertWeights(&vertices[j]); ++k)
+			{
+				int index = G2_GetVertBoneIndex(&vertices[j], k);
+				if (!used[index]) { used[index] = true; entry.usedBones.push_back(index); }
+			}
+	}
+	G2Geometry &entry = g2Geometry[key];
+	entry.frame = backEndData->realFrameNumber;
+	bool same = entry.ready;
+	for (int index : entry.usedBones)
+	{
+#ifdef JK2_MODE
+		const mdxaBone_t &bone = surf->boneCache->Eval(references[index]);
+#else
+		const mdxaBone_t &bone = surf->boneCache->EvalRender(references[index]);
+#endif
+		same = same && !memcmp(&entry.bones[index], &bone, sizeof(bone));
+		entry.bones[index] = bone;
+	}
+	if (same) { ++g2CachedSkins; return &entry; }
+	for (int j = 0; j < surface->numVerts; ++j)
+	{
+		auto &vertex = entry.vertices[j];
+		R_SkinGhoulVertex(&vertices[j], surf->boneCache, references, entry.bones.data(), vertex.vertCoords, vertex.normal);
+		entry.normals[j] = R_VboPackNormal(vertex.normal);
+		vec4_t tangent;
+		PerpendicularVector(tangent, vertex.normal);
+		tangent[3] = 1.0f;
+		entry.fallbackTangents[j] = R_VboPackTangent(tangent);
+	}
+	entry.ready = true;
+	entry.tangentsReady = false;
+	return &entry;
+}
+
+void R_ReportGhoul2Work()
+{
+	if (r_speeds->integer == 100)
+		ri.Printf(PRINT_ALL, "Ghoul2 CPU: skin=%d tangent=%d surfaces=%d vertices=%d cached_skin=%d cached_tangent=%d bytes=%zu\n",
+			g2SkinMsec, g2TangentMsec, g2Surfaces, g2Vertices, g2CachedSkins, g2CachedTangents, g2GeometryBytes);
+	g2SkinMsec = g2TangentMsec = g2Surfaces = g2Vertices = 0;
+	g2CachedSkins = g2CachedTangents = 0;
+	if (g2ValidatedVertices)
+		ri.Printf(PRINT_ALL, "Ghoul2 cache validated: vertices=%d tangents=%d\n", g2ValidatedVertices, g2ValidatedTangents);
+	g2ValidatedVertices = g2ValidatedTangents = 0;
+}
+#endif
+
 void RB_SurfaceGhoul( CRenderableSurface *surf )
 {
 #ifdef REND2_SP
@@ -2906,6 +3042,8 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 	const int baseIndex = tess.numIndexes;
 	mdxmVertex_t skinnedVertices[SHADER_MAX_VERTEXES];
 	mdxmVertexTexCoord_t skinnedTexCoords[SHADER_MAX_VERTEXES];
+	const bool timed = r_speeds->integer == 100;
+	const int skinStart = timed ? ri.Milliseconds() : 0;
 	bool needsTangents = (tess.shader->vertexAttribs & ATTR_TANGENT) &&
 		!backEnd.depthFill && tess.shader != tr.shadowShader && !glState.genShadows &&
 		(r_normalMapping->integer || r_externalGLSL->integer);
@@ -2926,32 +3064,30 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 		}
 	}
 
+	G2Geometry *cached = sourceVerts ? nullptr : R_GhoulGeometry(surf, vertices, boneReferences);
+	const bool validate = cached && r_g2GeometryValidate->integer;
 	for (int j = 0; j < numVerts; ++j)
 	{
 		const int source = sourceVerts ? sourceVerts[j] : j;
 		assert(source >= 0 && source < surface->numVerts);
 		const mdxmVertex_t *vertex = &vertices[source];
-		const int numWeights = G2_GetVertWeights(vertex);
-		vec3_t position = {0.0f, 0.0f, 0.0f};
-		vec3_t normal = {0.0f, 0.0f, 0.0f};
-		float totalWeight = 0.0f;
-		for (int k = 0; k < numWeights; ++k)
+		vec3_t position, normal;
+		if (cached)
 		{
-			const float weight = G2_GetVertBoneWeight(vertex, k, totalWeight, numWeights);
-#ifdef JK2_MODE
-			const mdxaBone_t &bone = surf->boneCache->Eval(boneReferences[G2_GetVertBoneIndex(vertex, k)]);
-#else
-			const mdxaBone_t &bone = surf->boneCache->EvalRender(boneReferences[G2_GetVertBoneIndex(vertex, k)]);
-#endif
-			for (int axis = 0; axis < 3; ++axis)
+			VectorCopy(cached->vertices[j].vertCoords, position);
+			VectorCopy(cached->vertices[j].normal, normal);
+			if (validate)
 			{
-				position[axis] += weight * (DotProduct(bone.matrix[axis], vertex->vertCoords) + bone.matrix[axis][3]);
-				normal[axis] += weight * DotProduct(bone.matrix[axis], vertex->normal);
+				vec3_t referencePosition, referenceNormal;
+				R_SkinGhoulVertex(vertex, surf->boneCache, boneReferences, nullptr, referencePosition, referenceNormal);
+				if (memcmp(position, referencePosition, sizeof(vec3_t)) || memcmp(normal, referenceNormal, sizeof(vec3_t)))
+					ri.Error(ERR_DROP, "Ghoul2 geometry cache skin mismatch");
+				++g2ValidatedVertices;
 			}
 		}
-		if (!VectorNormalize(normal))
-			VectorSet(normal, 0.0f, 0.0f, 1.0f);
-		if (needsTangents)
+		else
+			R_SkinGhoulVertex(vertex, surf->boneCache, boneReferences, nullptr, position, normal);
+		if (needsTangents && (!cached || validate))
 		{
 			VectorCopy(position, skinnedVertices[j].vertCoords);
 			VectorCopy(normal, skinnedVertices[j].normal);
@@ -2959,11 +3095,16 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 		const int out = baseVertex + j;
 		VectorCopy(position, tess.xyz[out]);
 		tess.xyz[out][3] = 1.0f;
-		tess.normal[out] = R_VboPackNormal(normal);
-		vec4_t tangent;
-		PerpendicularVector(tangent, normal);
-		tangent[3] = 1.0f;
-		tess.tangent[out] = R_VboPackTangent(tangent);
+		tess.normal[out] = cached ? cached->normals[j] : R_VboPackNormal(normal);
+		if (cached)
+			tess.tangent[out] = cached->fallbackTangents[j];
+		else
+		{
+			vec4_t tangent;
+			PerpendicularVector(tangent, normal);
+			tangent[3] = 1.0f;
+			tess.tangent[out] = R_VboPackTangent(tangent);
+		}
 		tess.lightdir[out] = tess.normal[out];
 		memset(tess.texCoords[out], 0, sizeof(tess.texCoords[out]));
 		VectorCopy2(texCoords[source].texCoords, tess.texCoords[out][0]);
@@ -2977,7 +3118,7 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 				tess.texCoords[out][0][axis] = (goreTexCoords[2 * j + axis] - 0.5f) * surf->scale + 0.5f;
 		}
 #endif
-		if (needsTangents)
+		if (needsTangents && (!cached || validate))
 			VectorCopy2(tess.texCoords[out][0], skinnedTexCoords[j].texCoords);
 		VectorCopy4(color, tess.vertexColors[out]);
 		for (int axis = 0; axis < 4; ++axis)
@@ -2989,10 +3130,40 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 		assert(triangles[j] >= 0 && triangles[j] < numVerts);
 		tess.indexes[baseIndex + j] = baseVertex + triangles[j];
 	}
+	if (timed)
+	{
+		g2SkinMsec += ri.Milliseconds() - skinStart;
+		++g2Surfaces;
+		g2Vertices += numVerts;
+	}
 	if (needsTangents)
 	{
-		R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords,
-			tess.tangent + baseVertex, (glIndex_t *)triangles);
+		const int tangentStart = timed ? ri.Milliseconds() : 0;
+		if (cached)
+		{
+			if (!cached->tangentsReady)
+			{
+				cached->tangents = cached->fallbackTangents;
+				R_CalcMikkTSpaceGlmSurface(numIndexes / 3, cached->vertices.data(), texCoords,
+					cached->tangents.data(), (const glIndex_t *)triangles);
+				cached->tangentsReady = true;
+			}
+			else
+				++g2CachedTangents;
+			memcpy(tess.tangent + baseVertex, cached->tangents.data(), numVerts * sizeof(uint32_t));
+			if (validate)
+			{
+				std::vector<uint32_t> reference = cached->fallbackTangents;
+				R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords, reference.data(), (const glIndex_t *)triangles);
+				if (memcmp(reference.data(), cached->tangents.data(), numVerts * sizeof(uint32_t)))
+					ri.Error(ERR_DROP, "Ghoul2 geometry cache tangent mismatch");
+				g2ValidatedTangents += numVerts;
+			}
+		}
+		else
+			R_CalcMikkTSpaceGlmSurface(numIndexes / 3, skinnedVertices, skinnedTexCoords,
+				tess.tangent + baseVertex, (const glIndex_t *)triangles);
+		if (timed) g2TangentMsec += ri.Milliseconds() - tangentStart;
 	}
 	tess.numIndexes += numIndexes;
 	tess.numVertexes += numVerts;

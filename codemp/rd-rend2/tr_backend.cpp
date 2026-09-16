@@ -3117,6 +3117,9 @@ static const void	*RB_SwapBuffers( const void *data ) {
 	}
 
 	ResetGhoul2RenderableSurfaceHeap();
+#ifdef REND2_SP
+	R_ReportGhoul2Work();
+#endif
 
 	// texture swapping test
 	if ( r_showImages->integer ) {

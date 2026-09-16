@@ -533,6 +533,10 @@ void GLimp_InitExtensions()
 	qglMinSampleShading = nullptr;
 	GLint majorVersion = 0;
 	qglGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
+	GLint minorVersion = 0;
+	qglGetIntegerv(GL_MINOR_VERSION, &minorVersion);
+	glRefConfig.textureSwizzle = majorVersion > 3 || (majorVersion == 3 && minorVersion >= 3) ||
+		GLimp_HaveExtension("GL_ARB_texture_swizzle") ? qtrue : qfalse;
 	if (majorVersion >= 4 || GLimp_HaveExtension("GL_ARB_sample_shading"))
 	{
 		GetGLFunction(qglMinSampleShading, "glMinSampleShading", qfalse);
