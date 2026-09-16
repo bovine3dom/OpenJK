@@ -38,6 +38,8 @@ struct BalanceStatus {
 	unsigned firstHandContact = 0, firstHeadContact = 0;
 	bool gripping = false;
 	float gripForce = 0, shock = 0;
+	unsigned gripStruggles = 0;
+	float shockPushUsed = 0;
 };
 class CollisionScene {
 	struct Impl;
@@ -73,7 +75,7 @@ public:
 	void SetRegionalControl(const RegionalControl& control);
 	void Grip(const Part* pose, const float* target, bool lift);
 	void ReleaseGrip();
-	void Electrocute(float intensity);
+	void Electrocute(float intensity, const float* pushDirection = nullptr, float pushSpeed = 0);
 	bool Awake() const;
 	float TrunkSpeed() const;
 	void PrepareRecovery(const Transform* bones, float seconds);

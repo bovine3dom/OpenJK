@@ -302,6 +302,8 @@ struct FallSimulation::Impl {
 	JPH::Vec3 gripTarget = JPH::Vec3::sZero(), gripGoal = JPH::Vec3::sZero();
 	bool gripLift = false;
 	float gripAge = 0, shockRemaining = 0, shockTarget = 0, shockAge = 0;
+	float nextGripStruggle = .45f, shockPushLimit = 0;
+	JPH::Vec3 shockPushDirection = JPH::Vec3::sZero();
 	int swing = 0;
 	JPH::Vec3 desiredVelocity = JPH::Vec3::sZero(), reactionAxis = JPH::Vec3::sAxisY();
 	JPH::Vec3 stepStart = JPH::Vec3::sZero(), stepGoal = JPH::Vec3::sZero(), planted = JPH::Vec3::sZero();
@@ -413,6 +415,11 @@ struct FallSimulation::Impl {
 		shockRemaining = std::max(0.0f, shockRemaining-Step);
 		balance.shock += std::clamp((shockRemaining > 0 ? shockTarget : 0)-balance.shock, -Step*4, Step*8);
 		shockAge += Step;
+		if (shockRemaining > 0 && balance.phase != ControlPhase::Dead) {
+			const float push = std::min(std::max(0.0f, shockPushLimit-balance.shockPushUsed), shockPushLimit*Step/.25f);
+			if (push > 0) for (auto id : bodies) world.GetBodyInterface().AddLinearVelocity(id, shockPushDirection*push);
+			balance.shockPushUsed += push;
+		}
 		if (balance.phase != ControlPhase::Dead || std::any_of(body, body+PartCount, [](const JPH::Body* b) { return b->IsActive(); })) {
 			trunkGrace = trunkContact || (handContacts && (supported[0] || supported[1])) ? .12f : std::max(0.0f, trunkGrace-Step);
 			balance.supportedTrunk = trunkGrace > 0;
@@ -448,10 +455,19 @@ struct FallSimulation::Impl {
 			if (gripLift) {
 				const auto forward = (goals[11].GetAxisY()*JPH::Vec3(1,1,0)).NormalizedOr(JPH::Vec3::sAxisX());
 				const auto axis = JPH::Vec3::sAxisZ().Cross(forward);
-				for (int i = 7; i < 11; ++i) {
-					const float cycle = gripAge*3.7f+(i >= 9 ? 2.0f : 0);
-					const auto flex = JPH::Quat::sRotation(axis, i % 2 ? .1f*std::sin(cycle) : .18f+.12f*std::sin(cycle+1.2f));
-					goals[i] = JPH::Mat44::sRotationTranslation(flex*goals[i].GetQuaternion(), goals[i].GetTranslation());
+				for (int side = 0; side < 2; ++side) {
+					const int upper = side ? 9 : 7;
+					const auto hip = (api.GetWorldTransform(bodies[upper])*offsets[upper]).GetTranslation();
+					const float length = endLocal[upper].Length()*2 + endLocal[upper+1].Length()*2;
+					LegTargets(goals, side, hip-JPH::Vec3(0,0,length*.97f), &hip);
+				}
+				if (gripAge >= nextGripStruggle) {
+					const int upper = balance.gripStruggles % 2 ? 9 : 7;
+					const auto impulse = axis*(.45f*(mass[upper]/8)*(.8f+.2f*std::sin(balance.gripStruggles*2.1f)));
+					api.AddAngularImpulse(bodies[upper], impulse);
+					api.AddAngularImpulse(bodies[parent[upper]], -impulse);
+					++balance.gripStruggles;
+					nextGripStruggle = gripAge+.75f+.15f*std::sin(balance.gripStruggles*1.7f);
 				}
 			}
 		}
@@ -636,12 +652,12 @@ struct FallSimulation::Impl {
 		for (int i = 1; i < PartCount; ++i) {
 			auto desired = goals[i].GetQuaternion();
 			if (balance.shock > 0) {
-				const float amplitude = balance.shock*(i == 2 ? .025f : i >= 7 ? .055f : .10f);
+				const float amplitude = balance.shock*(i == 2 ? .04f : i >= 7 ? .09f : .18f);
 				const float pulse = std::sin(shockAge*31+i*.8f) + .35f*std::sin(shockAge*17+i);
 				desired = JPH::Quat::sRotation(goals[0].GetAxisX(), amplitude*pulse)*desired;
 			}
 			const bool injured = (i == 7 || i == 8 || i == 11) ? withdraw[0] : (i == 9 || i == 10 || i == 12) && withdraw[1];
-			const bool worldHip = (i == 7 || i == 9) && (balance.phase == ControlPhase::Stepping || (balance.phase == ControlPhase::Tracking && injured));
+			const bool worldHip = (i == 7 || i == 9) && ((balance.gripping && gripLift) || balance.phase == ControlPhase::Stepping || (balance.phase == ControlPhase::Tracking && injured));
 			const bool bracing = i >= 3 && i <= 6 && (balance.braceMask & (1u << ((i-3)/2)));
 			const bool worldArm = bracing && (i == 3 || i == 5);
 			const auto q = balance.phase == ControlPhase::Tracking && plantedPose && i >= 7 && !injured ? stanceFrom[i].SLERP(stanceJoint[i], std::min(1.0f, landedAge/.35f)) :
@@ -649,8 +665,9 @@ struct FallSimulation::Impl {
 			joints[i]->SetTargetOrientationBS(q);
 			const bool stepping = balance.phase == ControlPhase::Stepping || landedAge < .25f;
 			const float strength = MuscleStrength(i);
+			const float motorStrength = std::max(balance.strength, balance.shock*(i < 7 ? .55f : .18f));
 			const float torque = bracing ? (preparing ? 25 : 65)*strength :
-				(i >= 11 ? (stepping ? 150.0f : 400.0f) : i >= 7 ? (stepping ? 250.0f : 900.0f) : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f) * balance.strength * strength;
+				(i >= 11 ? (stepping ? 150.0f : 400.0f) : i >= 7 ? (stepping ? 250.0f : 900.0f) : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f) * motorStrength * strength;
 			joints[i]->GetSwingMotorSettings().SetTorqueLimit(torque);
 			joints[i]->GetTwistMotorSettings().SetTorqueLimit(torque);
 			if (i >= 3 && i <= 6) {
@@ -964,6 +981,7 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 	auto& s = *impl;
 	if (!s.balance.gripping) {
 		s.gripAge = 0;
+		s.nextGripStruggle = .45f; s.balance.gripStruggles = 0;
 		s.gripGoal = s.world.GetBodyInterface().GetWorldTransform(s.bodies[1])*s.endLocal[1];
 	}
 	s.balance.gripping = true; s.gripLift = lift; s.gripTarget = Vector(target);
@@ -979,9 +997,16 @@ void FallSimulation::ReleaseGrip() {
 	if (impl->gripLift && impl->balance.phase != ControlPhase::Dead) ReleaseControl();
 	impl->gripLift = false;
 }
-void FallSimulation::Electrocute(float intensity) {
+void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushSpeed) {
 	if (!std::isfinite(intensity) || impl->balance.phase == ControlPhase::Dead) return;
-	if (impl->shockRemaining <= 0) impl->shockAge = 0;
+	if (impl->shockRemaining <= 0) {
+		impl->shockAge = 0;
+		impl->shockPushLimit = impl->balance.shockPushUsed = 0;
+	}
+	if (pushDirection && std::isfinite(pushSpeed) && pushSpeed > 0 && !Vector(pushDirection).IsNaN()) {
+		impl->shockPushLimit = std::max(impl->shockPushLimit, std::min(20.0f, pushSpeed));
+		impl->shockPushDirection = Vector(pushDirection).NormalizedOr(JPH::Vec3::sZero());
+	}
 	impl->shockTarget = std::clamp(intensity, .1f, 1.0f);
 	impl->shockRemaining = .3f;
 }

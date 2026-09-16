@@ -37,6 +37,7 @@ cvar_t* enabled = nullptr;
 cvar_t* debug = nullptr;
 cvar_t* reactionPose = nullptr;
 cvar_t* bodyBudget = nullptr;
+cvar_t* lightningPushScale = nullptr;
 std::map<int, std::vector<float>> collision;
 std::unique_ptr<JoltReaction::CollisionScene> collisionScene;
 bool collisionLoaded = false;
@@ -49,6 +50,7 @@ void Settings() {
 	if (!debug) debug = gi.cvar("g_joltDebug", "0", CVAR_CHEAT);
 	if (!reactionPose) reactionPose = gi.cvar("g_joltReactionPose", "1", CVAR_CHEAT);
 	if (!bodyBudget) bodyBudget = gi.cvar("g_joltMaxBodies", "10", CVAR_ARCHIVE);
+	if (!lightningPushScale) lightningPushScale = gi.cvar("g_joltLightningPushScale", "0.5", CVAR_ARCHIVE);
 }
 bool Projectile(int mod) {
 	switch (mod) {
@@ -120,7 +122,7 @@ struct Actor {
 	bool Active(gentity_t* ent);
 	void Reset(bool restoreOrigin);
 	void Frame();
-	void Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc);
+	void Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc, const gentity_t* attacker, float lightningKnockback);
 	void BoneAngles(gentity_t* ent, int bone, int time, float* angles);
 	bool Render(gentity_t* ent, int time, const float* origin, float* angles, bool display);
 	void UpdatePhysicalHull(gentity_t* ent);
@@ -755,7 +757,7 @@ void Actor::Frame() {
 		VectorCopy(a, b); a[0] -= 8; b[0] += 8; G_DebugLine(a, b, 150, 0x00ff00, qtrue);
 	}
 }
-void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
+void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc, const gentity_t* attacker, float lightningKnockback) {
 	if (!ent || ent->s.number != actor || !simulation || !enabled->integer || !Humanoid(ent) || !direction || !point || damage <= 0 ||
 		(!Projectile(mod) && !G_JoltExplosion(mod) && mod != MOD_FORCE_LIGHTNING)) return;
 	const bool blast = G_JoltExplosion(mod);
@@ -773,7 +775,19 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 		Engage(ent);
 		fall->SetVitality(float(std::max(0, ent->health)) / std::max(1, ent->client->ps.stats[STAT_MAX_HEALTH]));
 		if (lightning) {
-			fall->Electrocute(std::min(1.0f, .25f+damage*.1f));
+			const int power = attacker && attacker->client ? std::max(1, std::min(3, attacker->client->ps.forcePowerLevel[FP_LIGHTNING])) : 1;
+			float push = 0;
+			vec3_t horizontal = {direction[0], direction[1], 0};
+			if (lightningKnockback > 0 && attacker && VectorNormalize(horizontal) > 0) {
+				// Match the ordinary Force Push distance, level, mass, and gravity scaling.
+				const float knockback = std::max(100.0f, 200-Distance(ent->currentOrigin, attacker->currentOrigin))/(power == 1 ? 3 : 1);
+				const float mass = ent->physicsBounce > 0 ? ent->physicsBounce : 200;
+				push = knockback*g_knockback->value/mass*(g_gravity->value > 0 ? .8f : 1)*MetresPerUnit*
+					std::max(0.0f, std::min(1.0f, lightningPushScale->value));
+				// Partially resisted hits retain a reduced shove.
+				push *= std::min(1.0f, lightningKnockback/(power == 3 ? 4.0f : 2.0f));
+			}
+			fall->Electrocute(std::min(1.0f, .45f+.18f*(power-1)+std::min(.15f, damage*.025f)), horizontal, push);
 		} else if (blast) {
 			// Native damage already supplied distance-scaled knockback. Do not add it twice.
 			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
@@ -863,7 +877,7 @@ void Actor::Status() {
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
-	gi.Printf("jolt effects grip=%d grip_force=%.2f shock=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.shock,
+	gi.Printf("jolt effects grip=%d grip_force=%.2f shock=%.3f grip_struggles=%u shock_push=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.shock, balance.gripStruggles, balance.shockPushUsed,
 		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
@@ -1150,11 +1164,15 @@ void G_JoltBeginFrame() {
 		}
 	}
 }
-void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
+bool G_JoltLightningTarget(gentity_t* ent) {
+	Settings();
+	return enabled->integer && reactionPose->integer && Humanoid(ent) && !ent->client->dismembered && !ExternalPoseOwner(ent);
+}
+void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc, const gentity_t* attacker, float lightningKnockback) {
 	if (damage <= 0 || (!Projectile(mod) && !G_JoltExplosion(mod) && mod != MOD_FORCE_LIGHTNING) || !direction || !point) return;
 	for (int i = 0; i < 3; ++i) if (!std::isfinite(direction[i]) || !std::isfinite(point[i])) return;
 	if (VectorLengthSquared(direction) < .0001f) return;
-	if (auto* state = Acquire(ent, ent && (ent->health <= 0 || G_JoltExplosion(mod) || mod == MOD_FORCE_LIGHTNING))) state->Hit(ent, direction, point, damage, mod, hitLoc);
+	if (auto* state = Acquire(ent, ent && (ent->health <= 0 || G_JoltExplosion(mod) || mod == MOD_FORCE_LIGHTNING))) state->Hit(ent, direction, point, damage, mod, hitLoc, attacker, lightningKnockback);
 }
 bool G_JoltExplosion(int mod) {
 	switch (mod) {
@@ -1197,8 +1215,8 @@ bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* he
 	JoltReaction::RegionalControl profile;
 	profile.strength[int(JoltReaction::Region::Torso)] = .7f;
 	profile.strength[int(JoltReaction::Region::Head)] = .6f;
-	profile.strength[int(JoltReaction::Region::Legs)] = powerLevel > 1 ? .18f : 1;
-	profile.strength[int(JoltReaction::Region::Feet)] = powerLevel > 1 ? .1f : 1;
+	profile.strength[int(JoltReaction::Region::Legs)] = powerLevel > 1 ? .04f : 1;
+	profile.strength[int(JoltReaction::Region::Feet)] = powerLevel > 1 ? .025f : 1;
 	state->fall->SetRegionalControl(profile);
 	state->fall->Sample(state->fallPose);
 	vec3_t anchor;

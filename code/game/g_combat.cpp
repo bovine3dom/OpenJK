@@ -6059,7 +6059,9 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 		}
 	}
 	// figure momentum add, even if the damage won't be taken
-	if ( knockback && !(dflags&DAMAGE_DEATH_KNOCKBACK) ) //&& targ->client
+	// Physical Lightning supplies a bounded push after accepted damage instead.
+	const bool physicalLightning = mod == MOD_FORCE_LIGHTNING && G_JoltLightningTarget(targ);
+	if ( knockback && !(dflags&DAMAGE_DEATH_KNOCKBACK) && !physicalLightning ) //&& targ->client
 	{
 		G_ApplyKnockback( targ, newDir, knockback );
 		G_CheckKnockdown( targ, attacker, newDir, dflags, mod );
@@ -6716,7 +6718,13 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 		}
 
 		if (healthBeforeDamage > 0 || G_JoltDead(targ))
-			G_JoltHit(targ, dir, point, healthBeforeDamage > 0 ? healthBeforeDamage-targ->health : take, mod, hitLoc);
+			G_JoltHit(targ, dir, point, healthBeforeDamage > 0 ? healthBeforeDamage-targ->health : take, mod, hitLoc, attacker,
+				physicalLightning && (!(dflags&DAMAGE_DEATH_KNOCKBACK) || targ->health <= 0) ? knockback : 0);
+		// Restore native knockback if the physical rig could not be acquired.
+		if (physicalLightning && knockback && !(dflags&DAMAGE_DEATH_KNOCKBACK) && !G_JoltOwns(targ)) {
+			G_ApplyKnockback(targ, newDir, knockback);
+			G_CheckKnockdown(targ, attacker, newDir, dflags, mod);
+		}
 		if ( targ->health <= 0 )
 		{
 			if ( knockback && (dflags&DAMAGE_DEATH_KNOCKBACK) && (!G_JoltOwns(targ) || G_JoltExplosion(mod)) )//&& targ->client

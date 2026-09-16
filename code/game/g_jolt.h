@@ -5,7 +5,9 @@ void G_JoltReset();
 void G_JoltForget(const gentity_t* ent);
 void G_JoltFrame();
 void G_JoltBeginFrame();
-void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc);
+void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc,
+	const gentity_t* attacker = nullptr, float lightningKnockback = 0);
+bool G_JoltLightningTarget(gentity_t* ent);
 void G_JoltBoneAngles(gentity_t* ent, int bone, int time, float* angles);
 void G_JoltSelect_f();
 void G_JoltStatus_f();
@@ -42,7 +44,8 @@ inline void G_JoltReset() {}
 inline void G_JoltForget(const gentity_t*) {}
 inline void G_JoltFrame() {}
 inline void G_JoltBeginFrame() {}
-inline void G_JoltHit(gentity_t*, const float*, const float*, int, int, int) {}
+inline void G_JoltHit(gentity_t*, const float*, const float*, int, int, int, const gentity_t* = nullptr, float = 0) {}
+inline bool G_JoltLightningTarget(gentity_t*) { return false; }
 inline void G_JoltBoneAngles(gentity_t*, int, int, float*) {}
 inline bool G_JoltOwns(const gentity_t*) { return false; }
 inline bool G_JoltOnGround(const gentity_t*) { return false; }

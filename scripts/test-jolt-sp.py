@@ -166,25 +166,30 @@ def main():
                         assert max(s["grip_force"] for s in samples) == 0, samples
                     else:
                         assert max(s["grip_force"] for s in samples) > 100, samples
+                        assert max(s["grip_struggles"] for s in samples) > 0, samples
                     if power == 2:
                         assert max(s["pelvis_z"] for s in samples) > before["pelvis_z"]+12, samples[-1]
                     print(f"PASS: {args.renderer}: Grip level {power} and release", flush=True)
-                start = len(log.read_text(errors="replace"))
-                cmd("jolt_demo idle")
-                wait_for("Jolt demo finished: idle", start)
-                before = status("jolt_demo_actor")
-                cmd("setforcelightning 3; give force; +force_lightning", 0)
-                samples = []
-                for _ in range(8):
-                    samples.append(status("jolt_demo_actor"))
-                    cmd("wait 1", 0)
-                cmd("-force_lightning; wait 20")
-                stopped = status("jolt_demo_actor")
-                results["lightning"] = samples
-                (run / "force-results.json").write_text(json.dumps(results, indent=2))
-                assert any(s["shock"] > 0 and s["hits"] > 0 for s in samples), samples[:3]
-                assert stopped["health"] < before["health"] and stopped["shock"] == 0, stopped
-                print(f"PASS: {args.renderer}: Lightning damage, sustained reaction, and fade", flush=True)
+                for power in (1, 2, 3):
+                    start = len(log.read_text(errors="replace"))
+                    cmd("jolt_demo idle")
+                    wait_for("Jolt demo finished: idle", start)
+                    before = status("jolt_demo_actor")
+                    cmd(f"setforcelightning {power}; set g_joltLightningPushScale .5; give force; +force_lightning", 0)
+                    samples = []
+                    for _ in range(12):
+                        samples.append(status("jolt_demo_actor"))
+                        cmd("wait 1", 0)
+                    cmd("-force_lightning; wait 20")
+                    stopped = status("jolt_demo_actor")
+                    results[f"lightning{power}"] = samples
+                    (run / "force-results.json").write_text(json.dumps(results, indent=2))
+                    assert any(s["shock"] > 0 and s["hits"] > 0 for s in samples), samples[:3]
+                    assert stopped["health"] < before["health"] and stopped["shock"] == 0, stopped
+                    limit = 5.08/(3 if power == 1 else 1)
+                    assert 0 < max(s["shock_push"] for s in samples) <= limit+.01, samples[-1]
+                    assert max(s["pelvis_z"] for s in samples) < before["pelvis_z"]+16, samples[-1]
+                    print(f"PASS: {args.renderer}: Lightning {power}, bounded push, contractions, and fade", flush=True)
                 start = len(log.read_text(errors="replace"))
                 cmd("jolt_demo idle")
                 wait_for("Jolt demo finished: idle", start)

@@ -9,15 +9,23 @@ their results. See [Performance Check](jolt-performance.md) for measurements.
 
 Grip uses the native targeting, resistance, damage, and release rules.
 Level 1 keeps ground support. Levels 2 and 3 suspend the body through a bounded
-force at the upper torso. The hands follow a choking pose. The legs use weaker
-motors with separate hip and knee targets. Level 3 follows the native carry
+force at the upper torso. The hands follow a choking pose. Weak leg motors use
+downward targets. Small, intermittent thigh impulses make the legs struggle
+without holding a raised pose. Level 3 follows the native carry
 target. Release preserves physical velocity and applies the native speed limit.
 The controller waits for the native recovery delay before a get-up.
 
 Lightning reactions start only after accepted health damage. Repeated hits
-refresh one exposure state. Small joint-target changes produce contractions.
-Standing support decreases during exposure. The effect fades when hits stop.
-Native damage and knockback remain in use. Death ends the contractions and
+refresh one exposure state. Contractions become stronger at higher power levels
+and retain motor strength during a fall. The effect fades when hits stop.
+Native damage remains in use. Physical targets receive one horizontal push
+allowance per continuous exposure, without repeated upward kicks. The default
+`g_joltLightningPushScale 0.5` sets this allowance to half the nominal horizontal
+Force Push strength at the same level, distance, and target mass. Weak or
+partially resisted hits reduce it further. Values from
+zero to one allow further tuning. A gap of 0.3 seconds without accepted hits
+starts a new exposure. Unsupported targets retain native knockback.
+Death ends the contractions and
 muscle control. A Grip attachment remains active while the native power holds
 the corpse. Release then lets the passive body fall.
 

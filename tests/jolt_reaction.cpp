@@ -371,8 +371,8 @@ int main() {
 		Check(held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().phase == JoltReaction::ControlPhase::Tracking,
 			"level one Grip keeps ground support without lift");
 		JoltReaction::RegionalControl profile;
-		profile.strength[int(JoltReaction::Region::Legs)] = .18f;
-		profile.strength[int(JoltReaction::Region::Feet)] = .1f;
+		profile.strength[int(JoltReaction::Region::Legs)] = .04f;
+		profile.strength[int(JoltReaction::Region::Feet)] = .025f;
 		held.SetRegionalControl(profile); held.Grip(parts, target, true);
 		for (int i = 0; i < 360; ++i) {
 			if (i % 12 == 0) held.Electrocute(.6f);
@@ -383,6 +383,12 @@ int main() {
 		held.Sample(pose);
 		std::printf("Grip: neck=%.3f target=%.3f force=%.1f shock=%.2f\n", pose[2].matrix[2][3], target[2], held.Balance().gripForce, held.Balance().shock);
 		Check(std::abs(pose[2].matrix[2][3]-target[2]) < .2f, "Grip lifts the body to its suspension target");
+		Check(held.Balance().gripStruggles >= 3, "suspended legs receive intermittent struggle impulses");
+		for (int side = 0; side < 2; ++side) {
+			const int hip = side ? 9 : 7, foot = side ? 12 : 11;
+			const float dx = pose[foot].matrix[0][3]-pose[hip].matrix[0][3], dy = pose[foot].matrix[1][3]-pose[hip].matrix[1][3];
+			Check(std::sqrt(dx*dx+dy*dy) < .25f, "suspended legs hang below the hips rather than holding a leg raise");
+		}
 		float before[3], after[3]; held.RootVelocity(before);
 		held.ReleaseGrip(); held.SetRegionalControl(JoltReaction::RegionalControl{}); held.RootVelocity(after);
 		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "Grip release preserves velocity");
@@ -391,8 +397,32 @@ int main() {
 			"Grip releases and Lightning expires without a continuing force");
 		held.Grip(parts, target, true); held.Electrocute(1); held.Kill();
 		Check(held.Balance().gripping && held.Balance().shock == 0 && held.Balance().strength == 0, "death ends muscle control but preserves external Grip");
+		const auto struggles = held.Balance().gripStruggles;
+		held.Advance(.2f);
+		Check(held.Balance().gripStruggles == struggles, "a held corpse does not struggle");
 		held.ReleaseGrip();
 		Check(!held.Balance().gripping && held.Balance().phase == JoltReaction::ControlPhase::Dead, "releasing a held corpse does not revive its controller");
+	}
+	{
+		const float movingVelocity[] = {4,0,-1};
+		JoltReaction::FallSimulation shocked(parts, movingVelocity, 0), unpushed(parts, movingVelocity, 0);
+		shocked.Follow(parts, 0); shocked.Engage(); unpushed.Follow(parts, 0); unpushed.Engage();
+		for (int frame = 0; frame < 60; ++frame) {
+			shocked.Electrocute(.9f, forward, 2);
+			unpushed.Electrocute(.9f); unpushed.Advance(.05f);
+			Check(shocked.Advance(.05f), "continuous Lightning step");
+			Check(shocked.Balance().shockPushUsed <= 2.001f, "damage ticks share one push allowance");
+		}
+		float v[3], baseline[3]; shocked.RootVelocity(v); unpushed.RootVelocity(baseline);
+		std::printf("Lightning: velocity=%.3f,%.3f,%.3f push=%.3f\n", v[0], v[1], v[2], shocked.Balance().shockPushUsed);
+		Check(v[0]-baseline[0] > 1.5f && v[0]-baseline[0] <= 2.05f && std::abs(v[2]-baseline[2]) < .2f,
+			"Lightning adds bounded horizontal motion without repeated upward kicks");
+		Check(shocked.Balance().shock > .8f, "contractions continue after the push allowance is spent");
+		for (int i = 0; i < 20; ++i) shocked.Advance(.05f);
+		Check(shocked.Balance().shock == 0, "strong contractions fade after exposure");
+		shocked.RootVelocity(baseline);
+		shocked.Electrocute(.9f, forward, 2); shocked.Advance(.25f); shocked.RootVelocity(v);
+		Check(v[0] > baseline[0]+1, "a separate Lightning exposure can supply another bounded shove");
 	}
 	{
 		JoltReaction::FallSimulation corpse(parts, stopped);
