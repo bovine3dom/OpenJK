@@ -161,6 +161,7 @@ extern cvar_t *r_capsuleShadowDebug;
 extern cvar_t *r_torchShadows, *r_torchShadowMapSize;
 extern cvar_t *r_compareEnhancements;
 extern cvar_t *r_seamlessSky;
+extern cvar_t *r_highResSkies;
 #ifdef REND2_SP
 void R_ReportGhoul2Work();
 void R_ClearGhoul2GeometryCache();
@@ -992,6 +993,7 @@ typedef struct {
 	float		cloudHeight;
 	image_t		*outerbox[6];
 	image_t		*cubemap;
+	image_t		*highResCube;
 } skyParms_t;
 
 typedef struct {
@@ -3952,6 +3954,7 @@ qhandle_t RE_RegisterShaderNoMip( const char *name );
 const char		*RE_ShaderNameFromIndex(int index);
 image_t *R_CreateImage( const char *name, byte *pic, int width, int height, imgType_t type, int flags, int internalFormat );
 image_t *R_CreateSkyCube(const char *name, image_t *const faces[6]);
+image_t *R_LoadHighResSkyCube(const char *name, int flags);
 
 float ProjectRadius( float r, vec3_t location );
 void RE_RegisterModels_StoreShaderRequest(const char *psModelFileName, const char *psShaderName, int *piShaderIndexPoke);

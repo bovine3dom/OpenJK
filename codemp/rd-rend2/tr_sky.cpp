@@ -558,8 +558,10 @@ static void DrawSkyBox( shader_t *shader )
 			}
 		}
 
-		DrawSkySide( r_seamlessSky->integer && !backEnd.comparisonBaseline && shader->sky.cubemap
-					 ? shader->sky.cubemap : shader->sky.outerbox[i],
+		image_t *cube = r_highResSkies->integer && shader->sky.highResCube
+			? shader->sky.highResCube : shader->sky.cubemap;
+		DrawSkySide( r_seamlessSky->integer && !backEnd.comparisonBaseline && cube
+					 ? cube : shader->sky.outerbox[i],
 			         sky_mins_subd,
 					 sky_maxs_subd );
 	}
@@ -867,7 +869,6 @@ void RB_StageIteratorSky( void ) {
 	// note that sky was drawn so we will draw a sun later
 	backEnd.skyRenderedThisView = qtrue;
 }
-
 
 
 

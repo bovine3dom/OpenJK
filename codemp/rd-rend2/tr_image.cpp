@@ -2943,6 +2943,57 @@ Finds or loads the given image.
 Returns NULL if it fails, not a default image.
 ==============
 */
+static void R_OrientSkyFace(const byte *source, byte *target, int size, int stride, int face)
+{
+	// Convert MakeSkyVec's rt/lf/bk/ft/up/dn convention to GL cube axes.
+	for (int y = 0; y < size; ++y)
+		for (int x = 0; x < size; ++x)
+		{
+			int sx = y, sy = x;
+			if (face == 1) { sx = size - 1 - y; sy = size - 1 - x; }
+			if (face == 2) { sx = x; sy = size - 1 - y; }
+			if (face == 3) { sx = size - 1 - x; sy = y; }
+			memcpy(target + stride * (y * size + x), source + stride * (sy * size + sx), stride);
+		}
+}
+
+image_t *R_LoadHighResSkyCube(const char *name, int flags)
+{
+	if (image_t *cached = R_GetLoadedImage(name, IMGFLAG_CUBEMAP | IMGFLAG_MIPMAP))
+		return cached;
+	static const char *suffix[6] = {"rt", "lf", "bk", "ft", "up", "dn"};
+	byte *faces[6] = {};
+	bool complete = true;
+	for (int face = 0; face < 6; ++face)
+	{
+		int width = 0, height = 0;
+		R_LoadImage(va("%s_%s.png", name, suffix[face]), &faces[face], &width, &height);
+		if (!faces[face] || width != 2048 || height != 2048)
+			complete = false;
+	}
+	image_t *cube = nullptr;
+	if (complete)
+	{
+		cube = R_CreateImage(name, nullptr, 2048, 2048, IMGTYPE_COLORALPHA,
+			IMGFLAG_CUBEMAP | IMGFLAG_MIPMAP, flags & IMGFLAG_SRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8);
+		byte *target = (byte *)Z_Malloc(2048 * 2048 * 4, TAG_TEMP_WORKSPACE, qfalse);
+		for (int face = 0; face < 6; ++face)
+		{
+			if (!(flags & IMGFLAG_NOLIGHTSCALE))
+				R_LightScaleTexture(faces[face], 2048, 2048, qfalse);
+			R_OrientSkyFace(faces[face], target, 2048, 4, face);
+			qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0,
+				2048, 2048, GL_RGBA, GL_UNSIGNED_BYTE, target);
+		}
+		qglGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+		Z_Free(target);
+		ri.Printf(PRINT_DEVELOPER, "Sky cube: %s (2048)\n", name);
+	}
+	for (byte *face : faces)
+		if (face) Z_Free(face);
+	return cube;
+}
+
 image_t *R_CreateSkyCube(const char *name, image_t *const faces[6])
 {
 	const int size = faces[0]->uploadWidth;
@@ -2972,16 +3023,7 @@ image_t *R_CreateSkyCube(const char *name, image_t *const faces[6])
 	{
 		GL_Bind(faces[face]);
 		qglGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, source);
-		// Convert MakeSkyVec's rt/lf/bk/ft/up/dn convention to GL cube axes.
-		for (int y = 0; y < size; ++y)
-			for (int x = 0; x < size; ++x)
-			{
-				int sx = y, sy = x;
-				if (face == 1) { sx = size - 1 - y; sy = size - 1 - x; }
-				if (face == 2) { sx = x; sy = size - 1 - y; }
-				if (face == 3) { sx = size - 1 - x; sy = y; }
-				memcpy(target + 4 * (y * size + x), source + 4 * (sy * size + sx), sizeof(vec4_t));
-			}
+		R_OrientSkyFace((byte *)source, (byte *)target, size, sizeof(vec4_t), face);
 		GL_Bind(cube);
 		qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0,
 			size, size, GL_RGBA, GL_FLOAT, target);

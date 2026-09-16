@@ -2397,7 +2397,15 @@ static void ParseSkyParms( const char **text ) {
 
 	// cloudheight
 	if (completeSky && shader.sky.outerbox[0])
+	{
 		shader.sky.cubemap = R_CreateSkyCube(token, shader.sky.outerbox);
+		if (!Q_stricmp(token, "textures/skies/wedge") || !Q_stricmp(token, "textures/skies/yavin"))
+		{
+			char hdName[MAX_QPATH];
+			Com_sprintf(hdName, sizeof(hdName), "textures/sky_hd/%s", token + strlen("textures/skies/"));
+			shader.sky.highResCube = R_LoadHighResSkyCube(hdName, imgFlags);
+		}
+	}
 
 	token = COM_ParseExt( text, qfalse );
 	if ( token[0] == 0 ) {
