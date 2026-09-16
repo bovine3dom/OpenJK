@@ -13046,6 +13046,7 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 				gripEnt->s.loopSound = 0;
 				if ( gripEnt->client )
 				{
+					int physicalHoldTime = 0;
 					gripEnt->client->ps.eFlags &= ~EF_FORCE_GRIPPED;
 					if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
 					{//sanity-cap the velocity
@@ -13084,6 +13085,7 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 							holdTime = self->client->ps.forcePowerLevel[FP_GRIP]*500;
 						}
 						//stop the anims soon, keep them locked in place for a bit
+						physicalHoldTime = holdTime;
 						if ( gripEnt->client->ps.torsoAnim == BOTH_CHOKE1 || gripEnt->client->ps.torsoAnim == BOTH_CHOKE3 )
 						{//stop choking anim on torso
 							if ( gripEnt->client->ps.torsoAnimTimer > holdTime )
@@ -13122,6 +13124,7 @@ void WP_ForcePowerStop( gentity_t *self, forcePowers_t forcePower )
 							}
 						}
 					}
+					G_JoltEndGrip(gripEnt, physicalHoldTime);
 				}
 				else
 				{
@@ -13529,6 +13532,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 			if ( self->client->ps.forcePowerLevel[FP_GRIP] == FORCE_LEVEL_1
 				&& gripEnt->client
 				&& gripEnt->client->ps.groundEntityNum == ENTITYNUM_NONE
+				&& !G_JoltSupported(gripEnt)
 				&& gripEnt->client->moveType != MT_FLYSWIM )
 			{
 				WP_ForcePowerStop( self, FP_GRIP );
@@ -13655,7 +13659,9 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 				//now move them
 				if ( gripEnt->client )
 				{
-					if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
+					const bool physicalGrip = G_JoltGrip(gripEnt, self->s.number, gripOrg, gripEntOrg, self->client->ps.forcePowerLevel[FP_GRIP]);
+					if (!physicalGrip && G_JoltDead(gripEnt)) { WP_ForcePowerStop(self, FP_GRIP); return; }
+					if ( !physicalGrip && self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
 					{//level 1 just holds them
  						VectorSubtract( gripOrg, gripEntOrg, gripEnt->client->ps.velocity );
 						if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_2
@@ -13695,7 +13701,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 							gripEnt->NPC->desiredPitch = -angles[PITCH];
 							SaveNPCGlobals();
 							SetNPCGlobals( gripEnt );
-							NPC_UpdateAngles( qtrue, qtrue );
+							if ( !physicalGrip ) NPC_UpdateAngles( qtrue, qtrue );
 							gripEnt->NPC->last_ucmd.angles[0] = ucmd.angles[0];
 							gripEnt->NPC->last_ucmd.angles[1] = ucmd.angles[1];
 							gripEnt->NPC->last_ucmd.angles[2] = ucmd.angles[2];
@@ -13835,7 +13841,7 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 						}
 					}
 				}
-				if ( gripEnt->client && gripEnt->health > 0 )
+				if ( gripEnt->client && gripEnt->health > 0 && !G_JoltGripping(gripEnt) )
 				{
 					int anim = BOTH_CHOKE3; //left-handed choke
 					if ( gripEnt->client->ps.weapon == WP_NONE || gripEnt->client->ps.weapon == WP_MELEE )

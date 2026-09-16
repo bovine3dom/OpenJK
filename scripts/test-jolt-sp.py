@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
     parser.add_argument("--floor-combat", action="store_true", help="Test movement over fallen NPCs and the saber floor finisher")
     parser.add_argument("--collapse", action="store_true", help="Test and record the motor fade during a standing death")
+    parser.add_argument("--force-effects", action="store_true", help="Test native Grip and Lightning with physical reactions")
     parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
     parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
@@ -106,6 +107,9 @@ def main():
             ownership = re.findall(r"jolt ownership ([^\r\n]+)", text)
             if ownership:
                 line += " " + ownership[-1]
+            effects = re.findall(r"jolt effects ([^\r\n]+)", text)
+            if effects:
+                line += " " + effects[-1]
             combat = re.findall(r"jolt combat ([^\r\n]+)", text)
             if combat:
                 line += " " + combat[-1]
@@ -126,6 +130,71 @@ def main():
                     "-f", "x11grab", "-framerate", "30", "-video_size", "960x720", "-i", env["DISPLAY"],
                     "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "22",
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
+            if args.force_effects:
+                results = {}
+                for power in (1, 2, 3):
+                    start = len(log.read_text(errors="replace"))
+                    cmd("jolt_demo idle")
+                    wait_for("Jolt demo finished: idle", start)
+                    before = status("jolt_demo_actor")
+                    cmd(f"setforcegrip {power}; give force; campaign_status; +force_grip", 0)
+                    samples = []
+                    for _ in range(12):
+                        samples.append(status("jolt_demo_actor"))
+                        cmd("wait 1", 0)
+                    if power == 3:
+                        x, y, z = samples[-1]["player_origin"]
+                        cmd(f"give force; setviewpos {x} {y} {z+25} 105; wait 10")
+                        carried = status("jolt_demo_actor")
+                        assert carried["grip"] == 3 and abs(carried["origin"][0]-samples[-1]["origin"][0]) > 5, carried
+                        cmd("set g_joltReactions 0; wait 4")
+                        assert status("jolt_demo_actor")["grip"] == 0
+                        cmd("set g_joltReactions 1; give force; wait 6")
+                        assert status("jolt_demo_actor")["grip"] == 3
+                        cmd("save jolt_grip; load jolt_grip; wait 10; give force")
+                        assert status("jolt_demo_actor")["grip"] == 3
+                        cmd("npc kill jolt_demo_actor; wait 4")
+                        dead = status("jolt_demo_actor")
+                        assert dead["corpse"] and dead["grip"] == 3 and dead["engaged"], dead
+                    cmd(f"-force_grip; wait {70 if power == 1 else 4}")
+                    released = status("jolt_demo_actor")
+                    results[f"grip{power}"] = samples
+                    (run / "force-results.json").write_text(json.dumps(results, indent=2))
+                    assert any(s["grip"] == power for s in samples), samples[:3]
+                    assert released["grip"] == 0, released
+                    if power == 1:
+                        assert max(s["grip_force"] for s in samples) == 0, samples
+                    else:
+                        assert max(s["grip_force"] for s in samples) > 100, samples
+                    if power == 2:
+                        assert max(s["pelvis_z"] for s in samples) > before["pelvis_z"]+12, samples[-1]
+                    print(f"PASS: {args.renderer}: Grip level {power} and release", flush=True)
+                start = len(log.read_text(errors="replace"))
+                cmd("jolt_demo idle")
+                wait_for("Jolt demo finished: idle", start)
+                before = status("jolt_demo_actor")
+                cmd("setforcelightning 3; give force; +force_lightning", 0)
+                samples = []
+                for _ in range(8):
+                    samples.append(status("jolt_demo_actor"))
+                    cmd("wait 1", 0)
+                cmd("-force_lightning; wait 20")
+                stopped = status("jolt_demo_actor")
+                results["lightning"] = samples
+                (run / "force-results.json").write_text(json.dumps(results, indent=2))
+                assert any(s["shock"] > 0 and s["hits"] > 0 for s in samples), samples[:3]
+                assert stopped["health"] < before["health"] and stopped["shock"] == 0, stopped
+                print(f"PASS: {args.renderer}: Lightning damage, sustained reaction, and fade", flush=True)
+                start = len(log.read_text(errors="replace"))
+                cmd("jolt_demo idle")
+                wait_for("Jolt demo finished: idle", start)
+                cmd("nav memory jolt_demo_actor protect; give force; +force_lightning; wait 15; -force_lightning; wait 8")
+                protected = status("jolt_demo_actor")
+                assert protected["health"] == 500 and protected["hits"] == 0 and protected["shock"] == 0, protected
+                print(f"PASS: {args.renderer}: protected targets do not acquire a Lightning reaction", flush=True)
+                stdin.write("quit\n"); stdin.flush()
+                assert process.wait(timeout=30) == 0
+                return 0
             if args.collapse:
                 start = len(log.read_text(errors="replace"))
                 cmd("jolt_demo idle")

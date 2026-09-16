@@ -337,7 +337,8 @@ constraints, but it does not remove the need to test campaign progression.
 - consider looking at https://github.com/taysta/TaystJK for features to cherry-pick
 - modern sound engine with attenuation etc through walls?
 - better glass materials? still visible as glass, but less ... ugly and white? (started in glass_test, but it looks bad; refraction looks terrible and the reflections are too white and shiny. do more research on how games make glass visibly glass)
-- make jolt apply to pull/push force powers. consider how to integrate jolt with lightsabers?
+- Jolt handles Force push and pull. Regional control, physical Grip, and Lightning reactions are implemented; review their motion in normal play.
+- Defer saber reactions until the regional controller is established. See [Physical Melee Reactions](docs/jolt-melee-plan.md).
 - what are the tradeoffs/benefits from porting rend2 to vulkan?
 - animation: get the first physics-based ragdoll for a live stormtrooper working
 - jedi outcast: what's the current status of it and how plausible is it to make one kind of grand unified game that unifies the UI, logic, AI, weapons, force powers etc. etc... between JA and JO?

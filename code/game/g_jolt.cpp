@@ -67,7 +67,7 @@ bool Eligible(const gentity_t* ent);
 bool Humanoid(const gentity_t* ent);
 bool SavedCorpse(const gentity_t* ent);
 int ActiveBodies();
-bool ExternalPoseOwner(gentity_t* ent);
+bool ExternalPoseOwner(gentity_t* ent, bool allowGrip = false);
 bool AnimationOwnsPose(gentity_t* ent);
 bool BoltPosition(gentity_t* ent, int bolt, vec3_t position);
 void LocalVector(gentity_t* ent, const vec3_t world, vec3_t local);
@@ -106,6 +106,8 @@ struct Actor {
 	bool engaged = false;
 	bool dead = false;
 	bool sleepingPose = false;
+	int gripLevel = 0, gripCaster = -1;
+	JoltReaction::Part gripPose[JoltReaction::PartCount];
 	int riseStart = 0;
 	float handoffError = 0;
 	vec3_t displayedMins, displayedMaxs;
@@ -375,7 +377,7 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		vec3_t desired;
 		VectorSubtract(ent->currentOrigin, lastOrigin, desired);
 		const auto& command = ent->NPC->last_ucmd;
-		const bool moving = phase == JoltReaction::ControlPhase::Tracking &&
+		const bool moving = !gripLevel && phase == JoltReaction::ControlPhase::Tracking &&
 			(command.forwardmove || command.rightmove) && !gi.Cvar_VariableIntegerValue("d_npcfreeze");
 		if (moving && seconds > 0) {
 			VectorAdd(navigationOrigin, desired, navigationOrigin);
@@ -426,7 +428,7 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else VectorClear(ent->client->ps.velocity);
 	Render(ent, level.time, origin, ent->currentAngles, false);
 	UpdatePhysicalHull(ent);
-	if (dead) return;
+	if (dead || gripLevel || balance.shock > .05f) return;
 	if (prepareStart) {
 		if (level.time-prepareStart >= prepareTime && (fall->TrunkSpeed() < .75f || level.time-prepareStart >= prepareTime+250)) {
 			if (!Recover(ent)) { prepareStart = 0; fall->ReleaseControl(); }
@@ -654,11 +656,12 @@ bool SavedCorpse(const gentity_t* ent) {
 	for (const auto& bone : ent->ghoul2[0].mBlist) if (bone.flags & BONE_ANGLES_PHYSICS) return true;
 	return false;
 }
-bool ExternalPoseOwner(gentity_t* ent) {
+bool ExternalPoseOwner(gentity_t* ent, bool allowGrip) {
 	return (in_camera && ent->health > 0) || (ent->flags & (FL_NO_ANGLES | FL_DISINTEGRATED)) || ent->s.weapon == WP_EMPLACED_GUN || ent->client->ps.saberLockTime > level.time ||
 		ent->client->ps.ikStatus || ent->client->ps.heldByBolt || G_IsRidingVehicle(ent) ||
 		(ent->s.weapon == WP_THERMAL && ent->client->fireDelay > 0) ||
-		(ent->client->ps.eFlags & (EF_FORCE_GRIPPED | EF_FORCE_DRAINED | EF_HELD_BY_RANCOR | EF_HELD_BY_WAMPA)) ||
+		((ent->client->ps.eFlags & EF_FORCE_GRIPPED) && ent->health > 0 && !allowGrip && !G_JoltGripping(ent)) ||
+		(ent->client->ps.eFlags & (EF_FORCE_DRAINED | EF_HELD_BY_RANCOR | EF_HELD_BY_WAMPA)) ||
 		ent->next_roff_time > level.time || Q3_TaskIDPending(ent, TID_ANIM_BOTH) ||
 		Q3_TaskIDPending(ent, TID_ANIM_UPPER) || Q3_TaskIDPending(ent, TID_ANIM_LOWER);
 }
@@ -698,6 +701,7 @@ void Actor::Reset(bool restoreOrigin) {
 	fall.reset();
 	engaged = false;
 	sleepingPose = false;
+	gripLevel = 0; gripCaster = -1;
 	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
@@ -711,8 +715,19 @@ void Actor::Reset(bool restoreOrigin) {
 void Actor::Frame() {
 	if (!simulation) return;
 	gentity_t* ent = &g_entities[actor];
-	if (!dead && ent->inuse && ent->health <= 0 && engaged) Die(ent);
-	if (!enabled->integer && !dead) { Reset(true); return; }
+	if (!ent->inuse || !ent->client) { Reset(false); return; }
+	if (!dead && ent->health <= 0 && engaged) Die(ent);
+	if (gripLevel && (!(ent->client->ps.eFlags & EF_FORCE_GRIPPED) || gripCaster < 0 || !g_entities[gripCaster].inuse ||
+		!g_entities[gripCaster].client || g_entities[gripCaster].client->ps.forceGripEntityNum != actor ||
+		!(g_entities[gripCaster].client->ps.forcePowersActive & (1 << FP_GRIP)))) G_JoltEndGrip(ent, 0);
+	if (!enabled->integer && !dead) {
+		if (gripLevel) {
+			fall->RootVelocity(ent->client->ps.velocity);
+			VectorScale(ent->client->ps.velocity, 1/MetresPerUnit, ent->client->ps.velocity);
+			Reset(false);
+		} else Reset(true);
+		return;
+	}
 	if (!(dead ? Humanoid(ent) : Eligible(ent))) { Reset(false); return; }
 	if (ent->health <= 0 && !dead) Die(ent);
 	const int elapsed = level.time - lastTime;
@@ -742,21 +757,24 @@ void Actor::Frame() {
 }
 void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
 	if (!ent || ent->s.number != actor || !simulation || !enabled->integer || !Humanoid(ent) || !direction || !point || damage <= 0 ||
-		(!Projectile(mod) && !G_JoltExplosion(mod))) return;
+		(!Projectile(mod) && !G_JoltExplosion(mod) && mod != MOD_FORCE_LIGHTNING)) return;
 	const bool blast = G_JoltExplosion(mod);
+	const bool lightning = mod == MOD_FORCE_LIGHTNING;
 	if (dead && fall && !fall->Awake() && !BodyRoom(this)) return;
 	const int part = hitLoc == HL_HEAD ? 2 : hitLoc == HL_ARM_LT || hitLoc == HL_HAND_LT ? 3 :
 		hitLoc == HL_ARM_RT || hitLoc == HL_HAND_RT ? 5 : hitLoc == HL_LEG_LT || hitLoc == HL_FOOT_LT ? 7 :
 		hitLoc == HL_LEG_RT || hitLoc == HL_FOOT_RT ? 9 : 1;
-	if (!engaged && (ExternalPoseOwner(ent) || (ent->health > 0 && !blast && !Active(ent)))) return;
+	if (!engaged && (ExternalPoseOwner(ent) || (ent->health > 0 && !blast && !lightning && !Active(ent)))) return;
 	if (recoverStart) CancelRecovery(ent);
 	if (prepareStart) { prepareStart = 0; fall->ReleaseControl(); nextRecoverAttempt = level.time+500; }
 	lastHit = level.time; lastHitMod = mod;
 	if (!reactionPose->integer && !engaged) { ++hits; return; }
-	if ((ent->s.weapon != WP_SABER || engaged || blast || ent->health <= 0) && PrepareRig(ent)) {
+	if ((ent->s.weapon != WP_SABER || engaged || blast || lightning || ent->health <= 0) && PrepareRig(ent)) {
 		Engage(ent);
 		fall->SetVitality(float(std::max(0, ent->health)) / std::max(1, ent->client->ps.stats[STAT_MAX_HEALTH]));
-		if (blast) {
+		if (lightning) {
+			fall->Electrocute(std::min(1.0f, .25f+damage*.1f));
+		} else if (blast) {
 			// Native damage already supplied distance-scaled knockback. Do not add it twice.
 			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
 			VectorClear(ent->client->ps.velocity);
@@ -845,6 +863,8 @@ void Actor::Status() {
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
+	gi.Printf("jolt effects grip=%d grip_force=%.2f shock=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.shock,
+		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
 		const auto& player = g_entities[0];
@@ -968,12 +988,12 @@ Actor* Find(int number) {
 	auto found = actors.find(number);
 	return found != actors.end() ? found->second.get() : nullptr;
 }
-Actor* Acquire(gentity_t* ent, bool dying = false) {
+Actor* Acquire(gentity_t* ent, bool dying = false, bool allowGrip = false) {
 	Settings();
 	if (!enabled->integer || !(dying ? Humanoid(ent) : Eligible(ent))) return nullptr;
 	if (auto* state = Find(ent->s.number)) return state;
 	if (retryRigAfter[ent->s.number] > level.time) return nullptr;
-	if (actors.size() >= MaxActors || ExternalPoseOwner(ent) || (!dying && AnimationOwnsPose(ent))) return nullptr;
+	if (actors.size() >= MaxActors || ExternalPoseOwner(ent, allowGrip) || (!dying && AnimationOwnsPose(ent))) return nullptr;
 	std::unique_ptr<Actor> state(new Actor(ent->s.number));
 	if (!state->Initialize(ent)) { retryRigAfter[ent->s.number] = level.time+1000; return nullptr; }
 	Actor* result = state.get();
@@ -1131,10 +1151,10 @@ void G_JoltBeginFrame() {
 	}
 }
 void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
-	if (damage <= 0 || (!Projectile(mod) && !G_JoltExplosion(mod)) || !direction || !point) return;
+	if (damage <= 0 || (!Projectile(mod) && !G_JoltExplosion(mod) && mod != MOD_FORCE_LIGHTNING) || !direction || !point) return;
 	for (int i = 0; i < 3; ++i) if (!std::isfinite(direction[i]) || !std::isfinite(point[i])) return;
 	if (VectorLengthSquared(direction) < .0001f) return;
-	if (auto* state = Acquire(ent, ent && (ent->health <= 0 || G_JoltExplosion(mod)))) state->Hit(ent, direction, point, damage, mod, hitLoc);
+	if (auto* state = Acquire(ent, ent && (ent->health <= 0 || G_JoltExplosion(mod) || mod == MOD_FORCE_LIGHTNING))) state->Hit(ent, direction, point, damage, mod, hitLoc);
 }
 bool G_JoltExplosion(int mod) {
 	switch (mod) {
@@ -1143,6 +1163,62 @@ bool G_JoltExplosion(int mod) {
 	case MOD_REPEATER_ALT: case MOD_FLECHETTE_ALT: case MOD_CONC: return true;
 	default: return false;
 	}
+}
+bool G_JoltGripping(const gentity_t* ent) {
+	const auto* state = ent ? Find(ent->s.number) : nullptr;
+	return state && state->engaged && state->gripLevel > 0;
+}
+bool G_JoltSupported(const gentity_t* ent) {
+	const auto* state = ent ? Find(ent->s.number) : nullptr;
+	return state && state->engaged && state->fall && (state->fall->Balance().contacts || state->fall->Balance().supportedTrunk);
+}
+bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* head, int powerLevel) {
+	if (!Humanoid(ent) || ent->client->dismembered || ExternalPoseOwner(ent, true) || caster < 0 || caster >= ENTITYNUM_WORLD || powerLevel < 1 || powerLevel > 3) return false;
+	for (int r = 0; r < 3; ++r) if (!std::isfinite(target[r]) || !std::isfinite(head[r])) return false;
+	auto* state = Acquire(ent, true, true);
+	if (!state || !state->PrepareRig(ent)) return false;
+	if (ent->health <= 0 && !state->dead) { state->Engage(ent); state->Die(ent); }
+	if (state->dead && !state->fall->Awake() && powerLevel > 1 && !BodyRoom(state)) return false;
+	if (!state->gripLevel && !state->dead) {
+		const int file = ent->client->clientInfo.animFileIndex;
+		if (file < 0 || file >= level.numKnownAnimFileSets) return false;
+		const int anim = ent->s.weapon == WP_NONE || ent->s.weapon == WP_MELEE ? BOTH_CHOKE1 : BOTH_CHOKE3;
+		auto clip = level.knownAnimFileSets[file].animations[anim];
+		if (clip.numFrames < 2 || clip.frameLerp <= 0) return false;
+		clip.firstFrame += clip.numFrames/2; clip.numFrames = 1;
+		PoseModel sample(ent);
+		if (!sample.models.size() || !SetPoseClip(sample.models, clip, true, state->rigBones[1]) ||
+			!state->ReadParts(ent, state->gripPose, sample.models)) return false;
+		state->CancelRecovery(ent);
+		state->Engage(ent);
+	}
+	state->gripLevel = powerLevel; state->gripCaster = caster;
+	state->lastHit = level.time;
+	JoltReaction::RegionalControl profile;
+	profile.strength[int(JoltReaction::Region::Torso)] = .7f;
+	profile.strength[int(JoltReaction::Region::Head)] = .6f;
+	profile.strength[int(JoltReaction::Region::Legs)] = powerLevel > 1 ? .18f : 1;
+	profile.strength[int(JoltReaction::Region::Feet)] = powerLevel > 1 ? .1f : 1;
+	state->fall->SetRegionalControl(profile);
+	state->fall->Sample(state->fallPose);
+	vec3_t anchor;
+	for (int r = 0; r < 3; ++r) anchor[r] = (target[r]-head[r])*MetresPerUnit+state->fallPose[2].matrix[r][3];
+	state->fall->Grip(state->dead ? state->reference : state->gripPose, anchor, powerLevel > 1);
+	VectorClear(ent->client->ps.velocity);
+	return true;
+}
+void G_JoltEndGrip(gentity_t* ent, int holdTime) {
+	auto* state = ent ? Find(ent->s.number) : nullptr;
+	if (!state || !state->gripLevel || !state->fall) return;
+	state->fall->ReleaseGrip();
+	state->fall->SetRegionalControl(JoltReaction::RegionalControl{});
+	state->gripLevel = 0; state->gripCaster = -1;
+	state->fallStart = level.time;
+	state->nextRecoverAttempt = level.time+std::max(0, holdTime);
+	vec3_t velocity; state->fall->RootVelocity(velocity);
+	const float speed = VectorLength(velocity), limit = 500*MetresPerUnit;
+	if (speed > limit) { VectorScale(velocity, limit/speed, velocity); state->fall->SetRootVelocity(velocity); }
+	VectorClear(ent->client->ps.velocity);
 }
 bool G_JoltDead(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
@@ -1202,7 +1278,7 @@ void G_JoltMovementTrace(trace_t* result, const vec3_t start, const vec3_t mins,
 }
 bool G_JoltBlocksAI(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && !state->dead && state->engaged && (state->recoverStart || state->fall->Balance().phase != JoltReaction::ControlPhase::Tracking);
+	return state && !state->dead && state->engaged && (state->gripLevel || state->recoverStart || state->fall->Balance().phase != JoltReaction::ControlPhase::Tracking);
 }
 bool G_JoltPhysicsRoot(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
@@ -1240,6 +1316,12 @@ void G_JoltBeforeSave() {
 		if (it->second->dead) { it->second->StoreCorpse(); ++it; }
 		else if (it->second->engaged) {
 			if (selectedActor == it->first) selectedActor = -1;
+			if (it->second->gripLevel) {
+				auto* ent = &g_entities[it->first];
+				it->second->fall->RootVelocity(ent->client->ps.velocity);
+				VectorScale(ent->client->ps.velocity, 1/MetresPerUnit, ent->client->ps.velocity);
+				it->second->Reset(false);
+			}
 			it = actors.erase(it);
 		} else ++it;
 	}

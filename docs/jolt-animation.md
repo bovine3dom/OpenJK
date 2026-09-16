@@ -5,6 +5,32 @@ messages and skeleton lines are disabled by default (`g_joltDebug 0`).
 Use `g_joltDebug 1` to enable diagnostics. Explicit status commands still print
 their results. See [Performance Check](jolt-performance.md) for measurements.
 
+## Force Effects
+
+Grip uses the native targeting, resistance, damage, and release rules.
+Level 1 keeps ground support. Levels 2 and 3 suspend the body through a bounded
+force at the upper torso. The hands follow a choking pose. The legs use weaker
+motors with separate hip and knee targets. Level 3 follows the native carry
+target. Release preserves physical velocity and applies the native speed limit.
+The controller waits for the native recovery delay before a get-up.
+
+Lightning reactions start only after accepted health damage. Repeated hits
+refresh one exposure state. Small joint-target changes produce contractions.
+Standing support decreases during exposure. The effect fades when hits stop.
+Native damage and knockback remain in use. Death ends the contractions and
+muscle control. A Grip attachment remains active while the native power holds
+the corpse. Release then lets the passive body fall.
+
+The controller has separate strength settings for torso, head, arms, legs, and
+feet. Strength changes are gradual. Grip and Lightning use the same rig and the
+existing active-body budget. Unsupported actors use native behaviour.
+
+Run `scripts/test-jolt-sp.py --force-effects --record` to check the native powers
+and record their motion. The test covers Grip levels, carrying, release,
+disable/re-enable, save/load, death, Lightning expiry, and protected targets.
+
+Saber reactions remain deferred. See [Physical Melee Reactions](jolt-melee-plan.md).
+
 ## Start the Demonstration
 
 On the configured desktop, run:
