@@ -26,6 +26,10 @@ constexpr size_t MaxActors = 16;
 constexpr int RecoveryBlendTime = 180;
 const mdxaBone_t identityAngles = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}}};
 int selectedActor = -1, fallOwner = -1;
+const char* demoCases[] = {"idle", "hit", "step", "leg", "run", "fall"};
+int demoCase = 0, demoStage = 0, demoDue = 0;
+bool demoCycle = false;
+vec3_t demoOrigin;
 cvar_t* enabled = nullptr;
 cvar_t* debug = nullptr;
 cvar_t* reactionPose = nullptr;
@@ -105,6 +109,7 @@ struct Actor {
 	void Engage(gentity_t* ent);
 	void UpdateRig(gentity_t* ent, float seconds);
 	bool Recover(gentity_t* ent);
+	void ReturnToAnimation(gentity_t* ent);
 	void FinishRecovery(gentity_t* ent);
 	void Status();
 	void HitCommand();
@@ -146,7 +151,7 @@ struct PoseModel {
 	}
 	~PoseModel() { gi.G2API_CleanGhoul2Models(models); }
 };
-bool SetGetupClip(CGhoul2Info_v& models, const animation_t& clip, bool firstFrame) {
+bool SetPoseClip(CGhoul2Info_v& models, const animation_t& clip, bool firstFrame) {
 	const int end = firstFrame ? clip.firstFrame + 1 : clip.firstFrame + clip.numFrames;
 	for (const char* bone : {"model_root", "lower_lumbar"})
 		if (!gi.G2API_SetBoneAnim(&models[0], bone, clip.firstFrame, end, BONE_ANIM_OVERRIDE_FREEZE,
@@ -180,6 +185,7 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 	vec3_t hit; VectorScale(point, MetresPerUnit, hit);
 	fall->Impulse(hitPart, direction, hit, strength);
 	fall->ReleaseControl();
+	VectorClear(ent->client->ps.velocity); // The rig already carries the native velocity.
 	fallStart = level.time;
 	if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
 	gi.Printf("Jolt: released control actor=%d launch_speed=%.1f\n", actor, launchSpeed);
@@ -187,7 +193,11 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 }
 bool Actor::PrepareRig(gentity_t* ent) {
 	if (fall) return true;
-	if (fallOwner >= 0) return false;
+	if (fallOwner >= 0) {
+		auto& owner = *actors.at(fallOwner);
+		if (owner.engaged) return false;
+		owner.fall.reset(); fallOwner = -1;
+	}
 	if (!collisionLoaded) {
 		collisionLoaded = true;
 		if (!gi.PhysicsSurfaces(MASK_NPCSOLID, ExportSurface, nullptr)) gi.Printf("Jolt: unsupported collision format; using small reactions\n");
@@ -201,8 +211,6 @@ bool Actor::PrepareRig(gentity_t* ent) {
 	if (!collisionScene || !ReadParts(ent, reference, ent->ghoul2)) return false;
 	vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
 	fall.reset(new JoltReaction::FallSimulation(reference, velocity, g_gravity->value * MetresPerUnit));
-	if (debug->integer) for (int i = 0; i < JoltReaction::PartCount; ++i) gi.Printf("Jolt rig %s: %.2f %.2f %.2f -> %.2f %.2f %.2f\n", bones[i],
-		reference[i].bone.matrix[0][3],reference[i].bone.matrix[1][3],reference[i].bone.matrix[2][3],reference[i].end[0],reference[i].end[1],reference[i].end[2]);
 	if (!fall->UseScene(*collisionScene)) { fall.reset(); return false; }
 	MoveColliders(0);
 	fallOwner = actor;
@@ -248,6 +256,12 @@ bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& 
 void Actor::Engage(gentity_t* ent) {
 	if (engaged) return;
 	if (ReadParts(ent, reference, ent->ghoul2)) {
+		if (debug->integer > 1) for (const auto& part : reference) {
+			gi.Printf("Jolt reference {");
+			for (const auto& row : part.bone.matrix) for (float v : row) gi.Printf("%.6ff,", v);
+			for (float v : part.end) gi.Printf("%.6ff,", v);
+			gi.Printf("%.6ff,%.6ff},\n", part.radius, part.mass);
+		}
 		const float elapsed = std::max(0, level.time-lastTime)*.001f;
 		fall->Follow(reference, elapsed); lastTime = level.time;
 		vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
@@ -264,12 +278,13 @@ void Actor::Engage(gentity_t* ent) {
 	fallYaw = ent->client->renderInfo.legsYaw; fallStart = 0;
 	fallMicroseconds = 0; fallSteps = 0;
 	settledSince = recoverStart = nextRecoverAttempt = 0;
-	gi.Printf("Jolt: active control actor=%d speed=%.1f\n", actor, launchSpeed);
+	gi.Printf("Jolt: active control actor=%d speed=%.1f gap=%.3f angle=%.1f\n", actor, launchSpeed, fall->Balance().handoffGap, fall->Balance().handoffAngle);
 }
 
 void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	if (ExternalPoseOwner(ent)) { Reset(false); return; }
 	if (!engaged) {
+		suspended = AnimationOwnsPose(ent);
 		if (!ReadParts(ent, reference, ent->ghoul2)) { Reset(false); return; }
 		MoveColliders(std::max(seconds, .001f));
 		fall->Follow(reference, seconds);
@@ -310,9 +325,10 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		fall->AddVelocity(pushed);
 	}
 	const auto start = std::chrono::steady_clock::now();
+	const unsigned before = fall->Steps();
 	if (!fall->Advance(seconds)) { Reset(true); return; }
 	fallMicroseconds += std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count();
-	fallSteps = fall->Steps();
+	fallSteps += fall->Steps()-before;
 	const auto balance = fall->Balance();
 	if (balance.phase == JoltReaction::ControlPhase::Falling && !fallStart) {
 		fallStart = level.time;
@@ -340,7 +356,35 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		if (fall->Speed() < .25f) { if (!settledSince) settledSince = level.time; }
 		else settledSince = 0;
 		if (settledSince && level.time - settledSince > 600 && level.time - fallStart > 1200 && level.time >= nextRecoverAttempt) Recover(ent);
+	} else if (actor != selectedActor && balance.phase == JoltReaction::ControlPhase::Tracking &&
+		level.time-lastHit > 1500 && balance.error < .06f && fall->Speed() < .35f) {
+		if (!settledSince) settledSince = level.time;
+		if (level.time-settledSince > 500) ReturnToAnimation(ent);
+	} else settledSince = 0;
+}
+
+void Actor::ReturnToAnimation(gentity_t* ent) {
+	PoseModel sample(ent, false);
+	JoltReaction::Part native[JoltReaction::PartCount];
+	if (!sample.models.size() || !ReadParts(ent, native, sample.models)) return;
+	vec3_t start, end;
+	VectorCopy(ent->currentOrigin, start); VectorCopy(start, end);
+	start[2] += 8; end[2] -= 16;
+	trace_t trace;
+	gi.trace(&trace, start, savedMins, savedMaxs, end, actor, MASK_NPCSOLID, (EG2_Collision)0, 0);
+	if (trace.startsolid || trace.allsolid || trace.fraction == 1 || trace.plane.normal[2] < .7f || fabsf(trace.endpos[2]-ent->currentOrigin[2]) > 8) return;
+	const float lift = (trace.endpos[2]-ent->currentOrigin[2])*MetresPerUnit;
+	if (fabsf(native[0].bone.matrix[2][3]+lift-fallPose[0].matrix[2][3]) > 8*MetresPerUnit) return;
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		reference[i] = native[i];
+		reference[i].bone.matrix[2][3] += lift; reference[i].end[2] += lift;
+		recoveryPose[i] = reference[i].bone;
 	}
+	G_SetOrigin(ent, trace.endpos); VectorCopy(trace.endpos, ent->client->ps.origin); VectorCopy(trace.endpos, lastOrigin);
+	ent->s.groundEntityNum = ent->client->ps.groundEntityNum = trace.entityNum;
+	VectorClear(ent->client->ps.velocity);
+	recoveryAnim = -1; recoverStart = level.time;
+	UpdatePhysicalHull(ent);
 }
 
 bool Actor::Recover(gentity_t* ent) {
@@ -355,7 +399,7 @@ bool Actor::Recover(gentity_t* ent) {
 	for (int r = 0; r < 3; ++r) pelvis[r] = fallPose[0].matrix[r][3] / MetresPerUnit;
 	for (int anim : {BOTH_GETUP1, BOTH_GETUP2, BOTH_GETUP3, BOTH_GETUP4, BOTH_GETUP5}) {
 		const auto& clip = level.knownAnimFileSets[file].animations[anim];
-		if (clip.numFrames < 2 || clip.frameLerp <= 0 || !SetGetupClip(sample.models, clip, true)) continue;
+		if (clip.numFrames < 2 || clip.frameLerp <= 0 || !SetPoseClip(sample.models, clip, true)) continue;
 		JoltReaction::Transform local[JoltReaction::PartCount], target[JoltReaction::PartCount];
 		bool valid = true;
 		for (int i = 0; i < JoltReaction::PartCount; ++i) {
@@ -422,12 +466,18 @@ bool Actor::Recover(gentity_t* ent) {
 
 void Actor::FinishRecovery(gentity_t* ent) {
 	ClearPhysicalBones(ent);
+	if (recoveryAnim < 0) {
+		engaged = false; recoverStart = settledSince = 0;
+		fall->Follow(reference, 0); simulation->Reset();
+		VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs); gi.linkentity(ent);
+		return;
+	}
 	vec3_t angles = {0, fallYaw, 0};
 	G_SetAngles(ent, angles); SetClientViewAngle(ent, angles);
 	ent->client->renderInfo.legsYaw = ent->NPC->desiredYaw = fallYaw;
 	NPC_SetAnim(ent, SETANIM_BOTH, recoveryAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
 	const auto& clip = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations[recoveryAnim];
-	SetGetupClip(ent->ghoul2, clip, false);
+	SetPoseClip(ent->ghoul2, clip, false);
 	fall.reset(); fallOwner = -1; engaged = false; recoverStart = 0; simulation->Reset(); instability = 0;
 	VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs); gi.linkentity(ent);
 }
@@ -595,6 +645,7 @@ void Actor::Status() {
 		fall ? fallPose[0].matrix[2][3] / MetresPerUnit : 0, actor >= 0 && PM_PainAnim(g_entities[actor].client->ps.torsoAnim),
 		actor >= 0 ? VectorLength(g_entities[actor].client->ps.velocity) : 0, fallSteps, fallSteps ? fallMicroseconds / fallSteps : 0,
 		actors.size(), recoveryAnim, recoveryLift, engaged, int(balance.phase), balance.corrections, balance.strength, balance.error, balance.targetChange);
+	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 }
 void Actor::HitCommand() {
 	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active stormtrooper first\n"); return; }
@@ -602,16 +653,22 @@ void Actor::HitCommand() {
 	vec3_t pivot, direction, point, angles = {0, ent->client->renderInfo.legsYaw, 0};
 	if (!BoltPosition(ent, pelvisBolt, pivot)) return;
 	const char* side = gi.argc() > 1 ? gi.argv(1) : "front";
+	const int damage = gi.argc() > 2 ? atoi(gi.argv(2)) : 5;
+	if (damage < 1 || damage > 50) { gi.Printf("jolt_hit damage must be 1..50\n"); return; }
 	if (!Q_stricmp(side, "left")) angles[YAW] += 90;
 	else if (!Q_stricmp(side, "right")) angles[YAW] -= 90;
 	else if (!Q_stricmp(side, "back")) angles[YAW] += 180;
-	else if (Q_stricmp(side, "front") && Q_stricmp(side, "head")) { gi.Printf("jolt_hit front|back|left|right|head\n"); return; }
+	else if (Q_stricmp(side, "front") && Q_stricmp(side, "head") && Q_stricmp(side, "legleft") && Q_stricmp(side, "legright")) {
+		gi.Printf("jolt_hit front|back|left|right|head|legleft|legright\n"); return;
+	}
 	AngleVectors(angles, direction, nullptr, nullptr);
 	const bool head = !Q_stricmp(side, "head");
 	VectorMA(pivot, -4, direction, point);
 	point[2] += (dimensions.torsoLength * (head ? 1.2f : 0.75f)) / MetresPerUnit;
-	G_Damage(ent, &g_entities[0], &g_entities[0], direction, point, 5,
-		DAMAGE_NO_ARMOR | DAMAGE_NO_KNOCKBACK, MOD_BLASTER, head ? HL_HEAD : HL_CHEST);
+	const int leg = !Q_stricmp(side, "legleft") ? 7 : !Q_stricmp(side, "legright") ? 9 : -1;
+	if (leg >= 0 && fall) for (int r = 0; r < 3; ++r) point[r] = (engaged ? fallPose[leg] : reference[leg].bone).matrix[r][3]/MetresPerUnit;
+	G_Damage(ent, &g_entities[0], &g_entities[0], direction, point, damage,
+		DAMAGE_NO_ARMOR | DAMAGE_NO_KNOCKBACK, MOD_BLASTER, head ? HL_HEAD : leg == 7 ? HL_LEG_LT : leg == 9 ? HL_LEG_RT : HL_CHEST);
 }
 
 void Actor::KnockdownCommand() {
@@ -714,9 +771,97 @@ Actor* Acquire(gentity_t* ent) {
 	actors.emplace(ent->s.number, std::move(state));
 	return result;
 }
+bool DemoGround() {
+	const vec3_t mins = {-16,-16,-24}, maxs = {16,16,40};
+	const int offsets[][2] = {{0,0},{-1,-1},{-1,0},{-1,1},{0,-1},{0,1},{1,-1},{1,0},{1,1}};
+	float best = 1e30f;
+	for (int x = -768; x <= 768; x += 64) for (int y = -768; y <= 768; y += 64) {
+		const float distance = float(x*x+y*y);
+		if (distance >= best) continue;
+		vec3_t center = {}; bool clear = true;
+		for (const auto& offset : offsets) {
+			vec3_t start = {5504.0f+x+offset[0]*160, -4520.0f+y+offset[1]*160, 256}, end = {start[0],start[1],-256};
+			trace_t trace;
+			gi.trace(&trace, start, mins, maxs, end, 0, MASK_NPCSOLID, (EG2_Collision)0, 0);
+			if (trace.startsolid || trace.allsolid || trace.fraction == 1 || trace.plane.normal[2] < .99f) { clear = false; break; }
+			if (!offset[0] && !offset[1]) VectorCopy(trace.endpos, center);
+			else if (fabsf(trace.endpos[2]-center[2]) > 2) { clear = false; break; }
+			VectorCopy(trace.endpos, end);
+			gi.trace(&trace, center, mins, maxs, end, 0, MASK_NPCSOLID, (EG2_Collision)0, 0);
+			if (trace.startsolid || trace.allsolid || trace.fraction < 1) { clear = false; break; }
+		}
+		if (clear) { best = distance; VectorCopy(center, demoOrigin); }
+	}
+	return best < 1e30f;
+}
+void StartDemo(int which) {
+	Settings(); gi.cvar_set("g_joltReactions", "1");
+	if (in_camera) {
+		demoStage = 5; demoCase = which; demoDue = 0;
+		if (!gi.Cvar_VariableIntegerValue("g_skippingcin")) gi.SendConsoleCommand("exitview\n");
+		return;
+	}
+	G_ClearViewEntity(&g_entities[0]);
+	if (auto* ent = G_Find(nullptr, FOFS(targetname), "jolt_demo_actor")) G_FreeEntity(ent);
+	if (!DemoGround()) { gi.Printf("Jolt demo failed: no clear test area\n"); demoStage = 0; return; }
+	demoCase = which; demoStage = 1; demoDue = level.time + 2000;
+	gi.SendConsoleCommand(va("-forward; give weaponnum 3; give ammo; set d_npcfreeze 1; set cg_thirdPerson 0; set cg_drawGun 0; setviewpos %.1f %.1f %.1f 0; wait 10; weapon 3; npc spawn stormtrooper jolt_demo_actor\n", demoOrigin[0]-64, demoOrigin[1], demoOrigin[2]));
+	gi.Printf("Jolt demo: %s at %.0f %.0f %.0f\n", demoCases[which], demoOrigin[0],demoOrigin[1],demoOrigin[2]);
+	gi.SendServerCommand(0, "cp \"Jolt: %s\nF5 hit  F6 step  F7 leg  F8 run  F9 fall\nF10 reset  F11 slow  F12 stop\"", demoCases[which]);
+}
+void DemoFrame() {
+	if (!demoStage || level.time < demoDue) return;
+	if (demoStage == 5) { if (!in_camera) StartDemo(demoCase); return; }
+	auto* ent = G_Find(nullptr, FOFS(targetname), "jolt_demo_actor");
+	if (!Eligible(ent)) { gi.Printf("Jolt demo failed: actor unavailable; use jolt_demo reset\n"); demoStage = 0; return; }
+	auto* state = Acquire(ent);
+	if (!state) { gi.Printf("Jolt demo failed: no reaction record available\n"); demoStage = 0; return; }
+	if (demoStage == 1) {
+		ent->health = ent->client->ps.stats[STAT_HEALTH] = 500;
+		selectedActor = ent->s.number;
+		if (!state->PrepareRig(ent)) { gi.Printf("Jolt demo failed: no physical rig available\n"); demoStage = 0; return; }
+		if (demoCase != 4) {
+			NPC_SetAnim(ent, SETANIM_BOTH, BOTH_STAND3, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+			const auto& clip = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations[BOTH_STAND3];
+			SetPoseClip(ent->ghoul2, clip, true);
+		}
+		gi.SendConsoleCommand(va("setviewpos %.1f %.1f %.1f 90\n", demoOrigin[0]+(demoCase == 4 ? 80 : 0), demoOrigin[1]-(demoCase == 4 ? 192 : 128), demoOrigin[2]));
+		demoStage = 6; demoDue = level.time + 500;
+	} else if (demoStage == 6) {
+		if (demoCase != 4) {
+			for (size_t i = 0; i < ent->ghoul2[0].mBlist.size(); ++i) if (ent->ghoul2[0].mBlist[i].boneNumber >= 0)
+				gi.G2API_SetBoneAnglesMatrixIndex(&ent->ghoul2[0], int(i), identityAngles, BONE_ANGLES_POSTMULT, nullptr, 0, level.time);
+			state->Engage(ent);
+		}
+		demoStage = 2; demoDue = level.time + 1000;
+	} else if (demoStage == 2) {
+		gi.SendServerCommand(0, "cp \"\"");
+		if (demoCase == 1) gi.SendConsoleCommand("jolt_hit front\n");
+		if (demoCase == 2) gi.SendConsoleCommand(va("jolt_push front %.2f\n", gi.cvar("g_joltDemoPush", "1.3", CVAR_CHEAT)->value));
+		if (demoCase == 3) gi.SendConsoleCommand("jolt_hit legleft 15\n");
+		if (demoCase == 5) state->KnockdownCommand();
+		if (demoCase == 4) {
+			gi.cvar_set("d_npcfreeze", "0");
+			state->ControlCommand();
+			gi.SendConsoleCommand("set cg_thirdPerson 1; set cg_thirdPersonRange 160; set cg_thirdPersonAngle 30; +forward\n");
+		}
+		demoStage = demoCase == 4 ? 3 : 4;
+		demoDue = level.time + (demoCase == 4 ? 400 : 7000);
+	} else if (demoStage == 3) {
+		gi.SendConsoleCommand("-forward; jolt_hit legleft 15; exitview; set cg_thirdPerson 0\n");
+		demoStage = 4; demoDue = level.time + 7000;
+	} else {
+		state->Status();
+		gi.Printf("Jolt demo finished: %s\n", demoCases[demoCase]);
+		if (demoCycle) StartDemo(demoCase == 5 ? 1 : demoCase + 1);
+		else demoStage = 0;
+	}
+}
 } // namespace
 
 void G_JoltReset() {
+	if (demoStage) gi.SendConsoleCommand("-forward\n");
+	demoStage = 0; demoCycle = false;
 	actors.clear(); selectedActor = fallOwner = -1;
 	collision.clear(); collisionScene.reset(); collisionLoaded = false;
 }
@@ -729,7 +874,7 @@ void G_JoltForget(const gentity_t* ent) {
 void G_JoltFrame() {
 	Settings();
 	if (!enabled->integer) { G_JoltReset(); return; }
-	if (fallOwner < 0) {
+	if (fallOwner < 0 || !Find(fallOwner)->engaged) {
 		gentity_t* nearest = nullptr; float distance = 512*512;
 		for (int i = 1; i < globals.num_entities; ++i) if (Eligible(&g_entities[i]) && !AnimationOwnsPose(&g_entities[i])) {
 			const float d = DistanceSquared(g_entities[0].currentOrigin, g_entities[i].currentOrigin);
@@ -745,6 +890,7 @@ void G_JoltFrame() {
 			it = actors.erase(it);
 		} else ++it;
 	}
+	DemoFrame();
 }
 void G_JoltBeginFrame() {
 	for (auto& entry : actors) if (entry.second->engaged) {
@@ -808,6 +954,7 @@ void G_JoltBeforeSave() {
 void G_JoltSelect_f() {
 	Settings();
 	if (!enabled->integer) { gi.Printf("Set g_joltReactions 1 first\n"); return; }
+	if (gi.argc() == 2 && !Q_stricmp(gi.argv(1), "none")) { selectedActor = -1; return; }
 	gentity_t* ent = nullptr;
 	if (gi.argc() == 2 && !Q_stricmp(gi.argv(1), "nearest")) {
 		float distance = 512 * 512;
@@ -858,6 +1005,39 @@ void G_JoltBalance_f() {
 		auto* ent = &g_entities[selectedActor];
 		if (state->PrepareRig(ent)) state->Engage(ent);
 	}
+}
+
+void G_JoltPush_f() {
+	auto* state = Find(selectedActor);
+	if (!state || state->recoverStart) return;
+	auto* ent = &g_entities[selectedActor];
+	const char* side = gi.argc() > 1 ? gi.argv(1) : "front";
+	const float speed = gi.argc() > 2 ? atof(gi.argv(2)) : 1.0f;
+	vec3_t angles = {0, ent->client->renderInfo.legsYaw, 0}, velocity;
+	if (!Q_stricmp(side, "left")) angles[YAW] += 90;
+	else if (!Q_stricmp(side, "right")) angles[YAW] -= 90;
+	else if (!Q_stricmp(side, "back")) angles[YAW] += 180;
+	else if (Q_stricmp(side, "front")) { gi.Printf("jolt_push front|back|left|right [metres/second: 0.1..2]\n"); return; }
+	if (!std::isfinite(speed) || speed < .1f || speed > 2 || !state->PrepareRig(ent)) return;
+	state->Engage(ent);
+	AngleVectors(angles, velocity, nullptr, nullptr); VectorScale(velocity, speed, velocity);
+	state->fall->AddVelocity(velocity);
+	gi.Printf("Jolt push: velocity=%.2f,%.2f,%.2f\n", velocity[0], velocity[1], velocity[2]);
+}
+
+void G_JoltDemo_f() {
+	const char* mode = gi.argc() > 1 ? gi.argv(1) : "all";
+	if (!Q_stricmp(mode, "stop")) {
+		demoStage = 0; demoCycle = false;
+		gi.SendConsoleCommand("-forward; exitview; set d_npcfreeze 1; set cg_thirdPerson 0; set timescale 1\n");
+		return;
+	}
+	if (Q_stricmp(level.mapname, "t1_sour")) { gi.Printf("Use exec jolt-demo.cfg to load the demonstration map\n"); return; }
+	demoCycle = !Q_stricmp(mode, "all");
+	if (demoCycle) { StartDemo(1); return; }
+	if (!Q_stricmp(mode, "reset")) { StartDemo(0); return; }
+	for (int i = 0; i < 6; ++i) if (!Q_stricmp(mode, demoCases[i])) { StartDemo(i); return; }
+	gi.Printf("jolt_demo all|idle|hit|step|leg|run|fall|reset|stop\n");
 }
 
 void G_JoltShoot_f() {

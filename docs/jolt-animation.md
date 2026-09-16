@@ -1,240 +1,193 @@
-# Jolt Animation Prototype
+# Jolt Reactive Animation
 
-## Scope
+## Start the Demonstration
 
-Projectile hits now create Jolt reactions automatically for validated stock
-stormtrooper rigs. `stormtrooper2` and other NPC definitions that use the same
-class and model are eligible. Manual selection is a debug tool, not a gameplay
-requirement. The goal is a visible impact, loss of balance, physical fall, and
-return to animation.
+On the configured desktop, run:
 
-Small hits drive torso and head motors. An accepted Jolt hit replaces the
-normal pain clip. Pain chances, voice events, debounce timing, damage, armour,
-and combat callbacks still use the game code. Running speed, leg hits, and repeated
-impacts increase an instability value. When this value reaches its limit,
-eleven bodies take control of the pose. They retain the actor's velocity and
-fall under gravity. Eligible game knockdown requests also start a physical
-fall. After the body settles, a clear-space check permits a get-up blend.
+```sh
+openjk-play --worktree rmlui --desktop --jolt-demo
+```
 
-The instability rule is a first controller. It does not yet include balance
-steps, bracing, or autonomous muscle control during the fall. Jolt 5.3.0
-supplies the rigid-body solver; it does not supply those behaviours.
+This command downloads the published package. It starts `t1_sour` with a separate
+`jolt-demo` profile. The demonstration finds a clear area, places a stormtrooper,
+and sets a side view. It repeats five cases: a small hit, a corrective step,
+a leg hit, a running fall, and a standing fall with a get-up.
 
-## Use
+From the source worktree, use the local package:
 
-`g_joltReactions` defaults to `1`, is saved in the configuration, and does not
-require cheats. Shoot an eligible stormtrooper during normal play. Use
-`set g_joltReactions 0` to restore the normal reaction path.
+```sh
+bash scripts/jolt-demo.sh --desktop
+```
 
-Supported direct-hit types are blaster primary/alternate fire, Bryar
-primary/charged fire, bowcaster bolts, repeater primary fire, flechette primary
-fire, emplaced bolts, and seeker bolts. Only accepted nonfatal health damage
-starts a reaction. God mode, blocked damage, fatal hits, unsupported rigs,
-explosions, electric effects, and melee keep their existing handling. Eligible
-game knockdown requests can still use the physical fall path.
+Set `OJK_ASSETS` if the Academy assets are not in `GameData`. Set `OJK_PACKAGE`
+to use a package other than `build/ready`. The package also contains
+`jolt-demo.sh`. The script uses the same separate demonstration profile.
 
-There are up to 16 independent reaction records and one full-body fall at a
-time. Other actors can still react while that fall is active. Idle reaction
-records expire after six seconds unless selected for debugging. The normal
-pain path remains available when the budget is full or a rig cannot initialize.
+| Key | Action |
+| --- | --- |
+| F5 | Repeat the small-hit case |
+| F6 | Repeat the step case |
+| F7 | Repeat the leg-hit case |
+| F8 | Repeat the running-fall case |
+| F9 | Repeat the standing-fall case |
+| F10 | Reset to a standing actor |
+| F11 | Switch between normal speed and quarter speed |
+| F12 | Stop the sequence and release movement control |
 
-For manual tests, load a cheat-enabled map, such as `devmap t1_sour`. Wait for
-the opening scene to finish. Stand on clear ground, then enter:
+Each case starts with a new actor. The test actor has 500 health. Standing
+cases use a fixed weapon-idle frame so that you can compare repeated runs.
+The running case uses normal NPC movement and a nonfatal leg hit before the
+physical fall.
+
+To start the same test from the game console, enter `exec jolt-demo.cfg`.
+This loads the map and sets the keys above in the current profile. Use the
+launcher option for a separate profile. On the loaded map, use
+`jolt_demo all`, or select `idle`, `hit`, `step`, `leg`, `run`, `fall`, `reset`,
+or `stop`.
+
+### What to Check
+
+- The idle actor must remain on its feet.
+- The small hit must produce clear recoil without a launch.
+- The step case must lift a foot, place it on the floor, and settle into a
+  supported stance. A step attempt alone is not a successful recovery.
+- The leg case must show leg withdrawal or a support correction. A failed
+  correction can become a fall.
+- The running actor must carry its movement into the fall.
+- During a fall, the arms must move toward a protective pose as motor strength
+  decreases. The body must settle on the floor.
+- The get-up must start from the grounded pose. The body must not move to a
+  distant standing point or rise before the get-up clip starts.
+
+Use `jolt_status` for measurements. `corrections` counts step attempts;
+`landings` counts confirmed foot placements. `phase` is 0 for animation
+tracking, 1 for active balance, 2 for a step, and 3 for a fall. `engaged` shows
+whether physics controls the pose. `recovery_lift` is the initial get-up
+correction in game units. Its limit is eight units.
+
+## Normal Play and Manual Controls
+
+`g_joltReactions` defaults to `1` and is saved in the configuration. Accepted
+nonfatal projectile damage starts reactions on stock stormtrooper rigs.
+`stormtrooper2` is also eligible. Manual selection is not required.
+Set `g_joltReactions 0` to use the normal reaction path.
+
+Supported projectiles are blaster, Bryar, bowcaster, repeater primary,
+flechette primary, emplaced, and seeker bolts. Damage, armour, pain sounds,
+combat callbacks, and fatal hits retain their game rules. Unsupported rigs,
+explosions, electric effects, and melee retain their normal handling.
+
+Cheat-enabled maps also provide these commands:
 
 ```text
-set g_joltReactions 1
-npc spawn stormtrooper jolt_demo
-wait 20
 jolt_select nearest
-jolt_status
-```
-
-Use `jolt_knockdown` first. The arms, legs, torso, and pelvis should move as
-physical bodies. This command now starts a Jolt fall, not a normal knockdown
-clip. Use `set g_joltDebug 1` to show the selected-actor marker and green
-physical-joint lines.
-
-Starting a fall constructs its collision meshes and can cause a brief pause.
-Caching these meshes is a later step.
-
-`jolt_select` without an argument selects the actor under the crosshair.
-`jolt_select nearest` selects the nearest eligible actor within 512 game units.
-`jolt_select <targetname>` selects a uniquely named actor. Selection resets
-that actor's record and keeps it available for the debug commands. Other
-actors keep their own reactions.
-
-Shoot the selected actor with a blaster or Bryar pistol. For repeatable tests:
-
-```text
-jolt_impulse left
-jolt_impulse right
+jolt_balance
+jolt_hit front
+jolt_hit legleft
+jolt_push front 1.3
 jolt_knockdown
+jolt_status all
 ```
 
-`jolt_impulse` applies an impulse without health damage. It accepts `left` or
-`right`; its default direction is forward. Repeated impulses can cause a fall.
+- `jolt_select` selects the actor under the crosshair. It also accepts `nearest`
+  or a unique NPC target name. Selection resets that actor's reaction record.
+  Use `jolt_select none` to release the debug selection and permit a normal
+  return to animation.
+- `jolt_balance` starts active control without an impact.
+- `jolt_hit` accepts `front`, `back`, `left`, `right`, `head`, `legleft`, or
+  `legright`, followed by an optional damage value from 1 to 50. The default
+  is five points of blaster damage through `G_Damage`. The leg demonstration
+  uses 15. Location multipliers apply. These hits can kill a normal actor.
+- `jolt_impulse left` starts a hit response without health damage. It also
+  accepts `right`; the default direction is forward.
+- `jolt_push` changes body velocity without health damage. It accepts `front`,
+  `back`, `left`, or `right`, and a speed change from 0.1 to 2 metres per second.
+  Set `g_joltDemoPush` to change the push used by the demonstration. Its default
+  is 1.3. A stronger push can cause a fall.
+- `jolt_control` lets the movement keys control the selected NPC for 30 seconds.
+  Use `exitview` to release it. A fall also releases control.
+- `jolt_shoot <targetname> [alt]` fires a real blaster missile toward the actor.
+  Walls, other actors, and normal damage rules apply.
+- `g_joltDebug 1` shows physical joint lines. Value `2` also prints the captured
+  rig. `g_joltReactionPose 0` suppresses hit presentation before full-body
+  engagement for an animation-only comparison.
 
-`jolt_hit` applies actual damage and accepts `front`, `back`, `left`, `right`,
-or `head`. Directions use
-the actor's local axes. Each command applies five points of blaster damage
-through `G_Damage`. Existing location multipliers apply; head hits can do more
-damage. These commands can kill the actor.
+## Controller and Ownership
 
-For a moving test, bind an unused key to `jolt_impulse left`, then enter
-`jolt_control`. The normal movement keys control the selected actor for up to
-30 seconds. Press the impulse key while moving across clear ground. Control
-returns to the player when the actor falls. `exitview` also releases control.
+The full-body rig has eleven capsules and two foot boxes. It follows the
+animation before engagement. The same bodies then perform recoil, balance
+corrections, and falls. Engagement retains their velocities. The controller
+fits joint anchors and limit frames to the current pose before it enables
+motors. It does not add a second launch impulse when balance fails.
 
-For an animation-only comparison, set `g_joltReactionPose 0`, then use a
-single `jolt_impulse left` while the actor stands still. Repeat with
-`g_joltReactionPose 1` after the first impulse settles. This switch affects
-the small additive reaction only; full-body falls always show their physical
-pose.
+The step solver retains the knee bend direction and leg twist from the
+reference pose. It updates the landing point during the swing. After foot
+contact, it blends toward a balanced stance and permits time for load transfer.
+Foot boxes sit below the ankle, at the sole. A short contact delay prevents a
+single missed contact report from starting a new step.
 
-`jolt_status all` lists the current records. `jolt_status <targetname>` reports
-one actor, including an actor that has no Jolt record. For a real projectile
-test, use `jolt_shoot <targetname>` or `jolt_shoot <targetname> alt`. These
-cheat commands fire the normal blaster missile toward the actor. Walls,
-intervening actors, and normal damage rules still apply.
+The controller still uses bounded external assistance: up to **220 N of
+horizontal root force** and **80 N m of root torque**. Actual foot contact is
+required. The assistance stops during a fall and never supplies upward root
+force. `assist_force` and `assist_torque` report the current values. This is a
+controller aid, not a claim of fully muscle-driven balance.
 
-Disabling Jolt removes all records. No reaction state or debug selection is
-stored in a save.
+There are 16 reaction records and one active full-body slot. Other actors use
+the smaller torso/head reaction while the slot is occupied. An unselected
+actor can blend back to animation after it settles. A new actor can take an
+unused animation-tracking slot. Selected actors retain active control for tests.
 
-## Rig and Ownership
+Jolt uses game gravity and 120 Hz simulation steps. A bounded pose history
+retains complete server intervals. The display samples one server interval
+behind the simulation. Gameplay restores the authoritative pose before its
+queries. Both SP renderers use the same full bone transforms.
 
-The small-reaction rig has a fixed pelvis anchor, a 28 kg torso, and a 5 kg
-head. It runs in local space with X forward, Y left, and Z up. Its motors
-return additive rotation toward zero. One game unit is 0.0254 metres.
+Collision includes BSP brushes, patches, and moving brush models. Collision
+shapes are cached. Other characters, dynamic non-brush props, limb self-collision,
+and Sub-BSP terrain are not included. Joint limits still need anatomical
+calibration. General locomotion, obstacles, stairs, ledges, and contact-driven
+get-ups need further work.
 
-Initial lengths come from the `lower_lumbar`, `cervical`, and `cranium` bone
-positions. Torso radius comes from the actor's collision bounds. The console
-prints the generated dimensions when an actor is selected. These are initial
-estimates, not measured anatomical data.
+Recovery requires low body speed, ground, and standing clearance. The system
+fits the first frame of one of five get-up clips to the settled pelvis. A
+180 ms blend connects to that fixed frame before the authored rise starts.
+If no valid fit exists, the actor stays down and retries. A normal standing
+return uses the same blend duration and reports `recovery_clip=-1`.
 
-| Parameter | Torso | Head |
-| --- | --- | --- |
-| Swing limit | 16 degrees | 12 degrees |
-| Twist limit | ±8 degrees | ±8 degrees |
-| Motor frequency | 1.8 Hz | 1.8 Hz |
-| Damping ratio | 0.8 | 0.8 |
-| Maximum motor torque | 120 N m | 25 N m |
+Death, removal, loading, restart, external pose control, and disabling the
+feature release the transient rig. A save during a fall restores a normal
+navigation pose and hull before the save is written.
 
-Impact direction and position set the impulse and lever arm. Impulses are
-limited to 8 N s. Torso rotation is added at `lower_lumbar`; relative head
-rotation is added at `cervical`. The existing Ghoul2 bone-angle path writes
-both changes to the shared model. Skeletal hit tests use that same model.
-The actor's navigation hull, health rules, weapon state, and root position
-remain under game control.
+## Build and Automated Tests
 
-The fall rig replaces that local-space rig with eleven world-space capsules:
-pelvis, torso, head, upper arms, forearms, thighs, and lower legs. Their masses
-are 12, 24, 5, 3, 2, 8, and 4 kg respectively; limb masses apply per side.
-Joint limits are relative to the captured pose: 35-degree torso/head swing,
-65-degree limb swing, and ±25-degree twist. These limits still need anatomical
-calibration. Limb-to-limb self-collision is disabled.
-
-The engine exports solid and clip-brush faces and its collision-patch facets.
-Inline brush models use kinematic mesh bodies. Doors and platforms follow
-their game transforms; removed or non-solid models stop colliding. Sub-BSP
-terrain maps are not supported by this bridge. Other characters and dynamic
-non-brush props are not yet part of the Jolt collision scene.
-
-During a fall, Jolt owns the root and bone transforms. NPC movement and firing
-pause. The game updates the actor's broad-phase bounds around the physical
-pose. Both renderers use the complete bone transforms, including translation
-and model scale. Extra Ghoul2 smoothing is disabled for these transforms.
-Native mover pushes yield to the kinematic collision bodies during the fall.
-Normal platform carry resumes during the get-up blend.
-
-Recovery requires low body speed for 600 ms and at least 1.2 seconds of fall
-time. The game samples the first frame of five existing get-up clips on a
-temporary model. It fits yaw and root position to the settled pelvis and
-scores both bone positions and orientations. This permits different clips
-for front and back falls.
-
-The chosen root must have ground and standing clearance. The initial pelvis
-height correction cannot exceed eight game units. If no grounded fit is
-available, the actor stays down and retries twice per second. It does not
-move to a distant free standing position.
-
-A 180 ms blend connects the physical pose to the fixed, grounded first frame.
-The full get-up clip then starts from that frame. The blend no longer follows
-an advancing upright pose, which caused the previous lifting effect. This is
-still an animation handoff; crawling, bracing, and contact-driven recovery
-remain future work.
-
-The solver uses fixed 1/120-second steps in game time. Display poses use
-quaternion interpolation between steps. A time jump above 250 ms resets the
-rig. Slow time changes simulation time through the normal game clock. Fall
-gravity uses the game gravity value at the start of the fall.
-
-The standing reaction yields during cinematics, scripted animation tasks,
-airborne motion, get-ups, IK, held-character states, and vehicle use. Saber and
-emplaced-weapon use also suspend reactions. Death, dismemberment, entity
-removal, loading, map changes, and client initialization remove the rig.
-Death returns control to the existing death system. A reset during a live
-fall restores the last navigation position and original hull. Saving during
-a fall performs this reset before writing the save. No physical pose flags
-or temporary hull are left in the save. Teleportation resets small reactions.
-An external pose owner or teleport ends a physical fall without restoring the
-old navigation position.
-
-## Build and Tests
-
-The default SP build includes the prototype. `-DUseJoltReactions=OFF` removes
-the dependency and game hooks. Jolt and its adapter use C++17 and static
-linking. Jolt uses the MIT license. Its license is included in the package.
-The dependency archive and SHA-256 are pinned in
-`cmake/Modules/JoltDependencies.cmake`.
-
-Use matching binaries from one package: the game API is 11 and the SP
-renderer API is 22.
-
-Build all targets with one job:
+Use one build job and matching engine, game, and renderer modules:
 
 ```sh
 bash scripts/build-sp.sh
 cmake --build build/sp --target jolt-reaction-test --parallel 1
 build/sp/jolt-reaction-test
-python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-vanilla
-python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-rend2
-python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-vanilla --projectiles
-python3 scripts/test-jolt-sp.py --package build/ready --renderer rdsp-rend2 --projectiles
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --control
+python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --control
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --demo
+python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --demo --fps 120
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --demo --fps 144
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --projectiles
+python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --projectiles
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla
+python3 scripts/test-jolt-sp.py --renderer rdsp-rend2
 ```
 
-The solver test checks impact direction, joint limits, return to the neutral
-pose, pause, reset, invalid input, and different frame intervals. It also checks
-full-body falls and moving or disabled platform colliders. The game test
-checks actual damage, pain-clip isolation, animation-only comparison,
-physical falls, movement-triggered falls, recovery, slow time, disable,
-saving during a fall, loading, renderer restart, actor removal, and shutdown.
-The projectile test uses actual blaster missiles. It compares enabled and
-disabled damage, checks independent reactions on two unselected actors,
-checks a fatal alternate-fire hit, and checks protected and unsupported targets.
-Captures and logs are stored under `build/jolt-tests/`.
+The game tests use an isolated profile and Xvfb. Logs, screenshots, and demo
+measurements are under `build/jolt-tests/`. Use `--demo-case step` to test one
+case, `--push-speed 1.3` to set its push, or `--debug` to show the skeleton.
+Add `--launcher` to test the packaged launcher and configuration. Add `--record`
+to save an Xvfb recording as `motion.mp4`; this option requires `ffmpeg`.
+The frame-rate options set display limits; software rendering can run below
+those limits. Solver tests compare all bone transforms at 60, 120, and 144 Hz
+with a 120 Hz reference and a 20 Hz server update schedule.
 
-`jolt_status` reports the selected entity, active state, hit count, bone-update
-count, fixed-step count, peak angle, current angles, health, and mean solver
-microseconds per step for the small reaction. `fall_steps` and `fall_us` report
-the full-body solver's step count and mean microseconds per step. Timings
-exclude animation, drawing, and collision-mesh construction. `launch`
-reports game velocity carried into a fall. `pose_error` is the largest
-position error across the eleven controlled bones when debug drawing is on.
-`tracked` is the number of reaction records. `recovery_clip` identifies the
-chosen get-up animation; `recovery_lift` records its initial pelvis correction
-in game units.
-
-## Next Stage
-
-Add balance steps and bracing before the instability limit releases the root.
-Calibrate anatomical joint limits and add self-collision. Improve recovery
-with support-aware motion and obstacle handling. Cache collision
-shapes before combat to remove construction pauses. Validate doors,
-slopes, stairs, ledges, Force powers, and dismemberment across campaign maps
-before increasing the full-body fall budget or enabling other rigs.
-
-## Sources
-
-- [Jolt 5.3.0 source](https://github.com/jrouwe/JoltPhysics/tree/v5.3.0)
-- [Swing-twist constraints and motors](https://github.com/jrouwe/JoltPhysics/blob/v5.3.0/Jolt/Physics/Constraints/SwingTwistConstraint.h)
-- [Jolt ragdoll interface](https://jrouwe.github.io/JoltPhysics/class_ragdoll.html)
+Jolt 5.3.0 is pinned, linked statically, and packaged with its MIT licence.
+`-DUseJoltReactions=OFF` removes the dependency and game hooks. The SP game API
+is 11 and the renderer API is 22. See
+[Reactive Character Control](reactive-animation-research.md) for the research
+and the remaining validation work.

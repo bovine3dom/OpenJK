@@ -36,14 +36,14 @@ if [[ $campaign == jo ]]; then
     campaign_args=(+set com_outcast 1)
     start_map=kejim_post
 fi
-mkdir -p -- "$profile"
-profile=$(realpath -- "$profile")
 display=()
-if [[ ! -f "$profile/OpenJK/openjk_sp.cfg" && ! -f "$profile/base/openjk_sp.cfg" ]]; then
-    display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
-fi
 while [[ $# -gt 0 ]]; do
 case $1 in
+    --jolt-demo)
+        profile="${profile%/}/jolt-demo"
+        campaign_args+=(+exec jolt-demo.cfg)
+        shift
+        ;;
     --new-game)
         campaign_args+=(+map "$start_map")
         shift
@@ -69,6 +69,11 @@ case $1 in
     *) break ;;
 esac
 done
+if [[ ${#display[@]} == 0 && ! -f "$profile/OpenJK/openjk_sp.cfg" && ! -f "$profile/base/openjk_sp.cfg" ]]; then
+    display=(+set r_mode -2 +set r_fullscreen 1 +set cg_fovAspectAdjust 1)
+fi
+mkdir -p -- "$profile"
+profile=$(realpath -- "$profile")
 printf 'Package: %s\nProfile: %s\n' "$package" "$profile"
 if [[ -f "$package/build-id.txt" ]]; then
     cat -- "$package/build-id.txt"

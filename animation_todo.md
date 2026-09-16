@@ -4,15 +4,18 @@
 
 The next work follows [Reactive Character Control](docs/reactive-animation-research.md).
 The previous threshold-and-launch design does not meet the motion target.
-Correct pose timing first, then add motor-driven balance and corrective steps.
+Pose history, motor-driven balance, and corrective steps are now implemented.
 
 Jolt projectile reactions are enabled for validated stock stormtroopers without
 manual selection. Each actor has an independent reaction record; one actor can
 use full-body physics at a time. The system uses the existing mesh, skeleton, skin weights, and animation
 clips. See [Jolt Animation Prototype](docs/jolt-animation.md) for controls,
-rig parameters, tests, and limits. The prototype now supports eleven-body
-falls, retained running momentum, and a checked get-up blend. Balance steps
-and bracing remain pending.
+rig parameters, tests, and limits. The prototype uses thirteen bodies and
+includes foot contacts, corrective steps, protective arm targets, retained
+running momentum, and a checked get-up blend. Use
+`openjk-play --worktree rmlui --desktop --jolt-demo` for the test sequence.
+Balance still uses bounded root assistance. General locomotion and obstacle
+handling need further work.
 
 ### First Prototype
 
@@ -26,10 +29,12 @@ and bracing remain pending.
 - [x] Clear transient state during loading, restart, removal, and shutdown.
 - [x] Add brush and patch collision, kinematic brush models, and full-body falls.
 - [x] Add a non-damaging impulse, pose comparison, and debug joint drawing.
-- [x] Use movement and impact location to increase instability.
+- [x] Replace the old instability threshold with continuous motor control and foot support checks.
 - [x] Replace handled projectile pain clips while retaining normal damage and combat callbacks.
 - [x] Match a grounded first-frame get-up pose before playing the authored rise.
-- [ ] Add balance steps, bracing, and pose-specific recovery.
+- [x] Add corrective step attempts and confirmed landings on clear ground.
+- [x] Add protective arm targets during a controlled fall.
+- [ ] Extend recovery and stepping to obstacles and uneven ground.
 
 Euphoria combines physical simulation with motor control, balance, stepping,
 bracing, and recovery. A ragdoll solver alone does not supply those behaviours.

@@ -16,8 +16,15 @@ enum class ControlPhase { Shadow, Tracking, Stepping, Falling };
 struct BalanceStatus {
 	ControlPhase phase = ControlPhase::Falling;
 	float error = 0, strength = 0, pelvisHeight = 0;
-	unsigned corrections = 0;
+	float peakError = 0;
+	unsigned rejectedSteps = 0;
+	unsigned corrections = 0, landings = 0;
+	float footError = 0;
+	unsigned contacts = 0;
 	float targetChange = 0;
+	float handoffGap = 0, handoffAngle = 0;
+	float assistForce = 0, assistTorque = 0;
+	float peakLegLift = 0;
 };
 class CollisionScene {
 	struct Impl;

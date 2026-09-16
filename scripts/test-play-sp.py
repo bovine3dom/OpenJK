@@ -305,6 +305,16 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertEqual(Path(self.env["OJK_DESKTOP_CONFIG"]).read_bytes(), configuration)
         self.assertFalse((self.root / "unused environment").exists())
 
+    def test_jolt_demo_has_a_separate_worktree_profile(self):
+        self.worktree("rmlui")
+        self.run_play("--worktree", "rmlui", "--desktop", "--jolt-demo")
+        args = json.loads(self.launch.read_text())
+        profile = Path(self.env["OJK_PROFILE"]) / "worktrees/openjk-rmlui/jolt-demo"
+        self.assertEqual(args[args.index("fs_homepath") + 1], str(profile))
+        self.assertEqual(args[args.index("+exec") + 1], "jolt-demo.cfg")
+        self.assertEqual(args[args.index("r_fullscreen") + 1], "1")
+        self.assertNotIn("--jolt-demo", args)
+
     def test_worktree_uses_resolved_remote_root(self):
         self.worktree("rend2-perf")
         alias = self.root / "aliases/main"

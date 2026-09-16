@@ -15,6 +15,8 @@ void G_JoltImpulse_f();
 void G_JoltControl_f();
 void G_JoltShoot_f();
 void G_JoltBalance_f();
+void G_JoltPush_f();
+void G_JoltDemo_f();
 bool G_JoltOwns(const gentity_t* ent);
 bool G_JoltBlocksAI(const gentity_t* ent);
 bool G_JoltPhysicsRoot(const gentity_t* ent);

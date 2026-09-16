@@ -6,6 +6,7 @@
 #include <limits>
 #include <algorithm>
 #include <initializer_list>
+#include "jolt_stormtrooper_pose.h"
 
 static void Check(bool condition, const char* message) {
 	if (!condition) { std::fprintf(stderr, "FAIL: %s\n", message); std::exit(1); }
@@ -64,6 +65,8 @@ int main() {
 	for (int fps : {60, 120, 144}) {
 		JoltReaction::FallSimulation history(parts, velocity, 0);
 		JoltReaction::FallSimulation reference(parts, velocity, 0);
+		history.Impulse(1, side, starts[2], 2);
+		reference.Impulse(1, side, starts[2], 2);
 		JoltReaction::Transform sampled[JoltReaction::PartCount], expected[JoltReaction::PartCount];
 		double server = 0, referenceTime = 0;
 		float previous = 0;
@@ -76,6 +79,8 @@ int main() {
 			reference.Sample(expected, float(query - referenceTime));
 			const float x = sampled[0].matrix[0][3];
 			Check(std::abs(x - expected[0].matrix[0][3]) < .001f, "sample retains intermediate substeps across server interval");
+			for (int p = 0; p < JoltReaction::PartCount; ++p) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+				Check(std::abs(sampled[p].matrix[r][c]-expected[p].matrix[r][c]) < .001f, "timestamped limb rotation and position match the reference");
 			if (query > .02) Check(x > previous + .001f, "no held poses between server ticks");
 			previous = x;
 		}
@@ -137,6 +142,30 @@ int main() {
 	}
 	std::printf("Shove: phase=%d height=%.3f error=%.3f steps=%u\n", int(controlled.Balance().phase), controlled.Balance().pelvisHeight, controlled.Balance().error, controlled.Balance().corrections);
 	Check(controlled.Balance().corrections > 0, "leg disturbance starts a corrective step attempt");
+	Check(controlled.Balance().phase == JoltReaction::ControlPhase::Falling, "severe leg weakness permits a fall");
+	for (float speed : {.4f, .8f, 1.0f}) {
+		JoltReaction::FallSimulation pushed(parts, stopped);
+		pushed.AddMesh(0, floor, 6); pushed.Follow(parts, 0); pushed.Engage();
+		for (int i = 0; i < 240; ++i) {
+			if (i%6 == 0) pushed.Drive(parts, stopped, .05f);
+			Check(pushed.Advance(1.0f/120), "pre-push standing step");
+		}
+		const float push[] = {speed,0,0}; pushed.AddVelocity(push);
+		for (int i = 0; i < 600; ++i) {
+			if (i%6 == 0) pushed.Drive(parts, stopped, .05f);
+			Check(pushed.Advance(1.0f/120), "balance recovery step");
+			Check(pushed.Balance().phase != JoltReaction::ControlPhase::Falling, "moderate push remains recoverable");
+		}
+		std::printf("Push %.2f: phase=%d steps=%u landed=%u error=%.3f height=%.3f\n", speed, int(pushed.Balance().phase), pushed.Balance().corrections, pushed.Balance().landings, pushed.Balance().error, pushed.Balance().pelvisHeight);
+		Check(pushed.Balance().phase == JoltReaction::ControlPhase::Tracking && pushed.Balance().error < .10f, "push settles into a balanced stance");
+		if (speed >= 1.0f) Check(pushed.Balance().landings > 0, "corrective step lands before balance recovery");
+		float before[3], after[3]; pushed.RootVelocity(before); pushed.Sample(pose);
+		pushed.ReleaseControl(); pushed.RootVelocity(after);
+		JoltReaction::Transform released[JoltReaction::PartCount]; pushed.Sample(released);
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "release adds no root velocity");
+		for (int p = 0; p < JoltReaction::PartCount; ++p) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(pose[p].matrix[r][c] == released[p].matrix[r][c], "release preserves every bone pose");
+	}
 	const float stormStart[][3] = {{0,0,.81f},{0,-.02f,.95f},{.04f,.02f,1.34f},{-.09f,.11f,1.29f},{0,.20f,1.04f},{.12f,-.11f,1.29f},{.15f,-.23f,1.04f},{-.01f,.09f,.82f},{.07f,.17f,.46f},{.04f,-.08f,.80f},{.12f,-.10f,.43f},{.06f,.23f,.10f},{-.04f,-.10f,.10f}};
 	const float stormEnd[][3] = {{0,-.02f,.95f},{.04f,.02f,1.34f},{.06f,.04f,1.48f},{0,.20f,1.04f},{.22f,.20f,1.01f},{.15f,-.23f,1.04f},{.21f,-.02f,1.01f},{.07f,.17f,.46f},{.06f,.23f,.10f},{.12f,-.10f,.43f},{-.04f,-.10f,.10f},{.16f,.33f,.10f},{.06f,0,.10f}};
 	const float stormMass[] = {12,24,5,3,2,3,2,8,4,8,4,1.5f,1.5f};
@@ -145,11 +174,59 @@ int main() {
 		for (int r = 0; r < 3; ++r) { parts[i].bone.matrix[r][3] = stormStart[i][r]; parts[i].end[r] = stormEnd[i][r]; }
 		parts[i].mass = stormMass[i]; parts[i].radius = stormRadius[i];
 	}
+	JoltReaction::Part walking[JoltReaction::PartCount];
+	std::copy(parts, parts + JoltReaction::PartCount, walking);
+	JoltReaction::FallSimulation moving(parts, stopped, 0);
+	moving.Follow(parts, 0);
+	for (int frame = 0; frame < 20; ++frame) {
+		for (auto& part : walking) { part.bone.matrix[0][3] += .05f; part.end[0] += .05f; }
+		moving.Follow(walking, .05f);
+	}
+	float before[3], after[3]; moving.RootVelocity(before); moving.Sample(pose);
+	moving.Engage(); moving.RootVelocity(after);
+	Check(std::abs(before[0]-1) < .001f, "shadow rig carries animation root velocity");
+	for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "engagement preserves moving root velocity");
+	moving.ReleaseControl(); Check(moving.Advance(1.0f/120), "moving release step");
+	JoltReaction::Transform carried[JoltReaction::PartCount]; moving.Sample(carried);
+	Check(carried[0].matrix[0][3] > pose[0].matrix[0][3]+.005f, "momentum continues through the moving fall handoff");
 	JoltReaction::FallSimulation storm(parts, stopped);
 	storm.AddMesh(0, floor, 6); storm.Follow(parts, 0); storm.Engage();
 	for (int i = 0; i < 600; ++i) { if (i % 6 == 0) storm.Drive(parts, stopped, .05f); storm.Advance(1.0f/120); }
 	std::printf("Storm: phase=%d error=%.3f steps=%u height=%.3f\n", int(storm.Balance().phase), storm.Balance().error, storm.Balance().corrections, storm.Balance().pelvisHeight);
 	Check(storm.Balance().phase != JoltReaction::ControlPhase::Falling, "stock-proportioned rig remains balanced without a hit");
+	const float diagonal[] = {.7071068f,.7071068f,0};
+	storm.React(1, diagonal, stormEnd[1], .6f, .125f);
+	for (int i = 0; i < 1200; ++i) {
+		if (i%6 == 0) storm.Drive(parts, stopped, .05f);
+		Check(storm.Advance(1.0f/120), "stock-proportioned recoil step");
+		Check(storm.Balance().phase != JoltReaction::ControlPhase::Falling, "stock-proportioned mild hit stays balanced for ten seconds");
+	}
 	std::puts("PASS: full-body gravity, momentum, floor contacts, finite poses, and settling");
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c) parts[i].bone.matrix[r][c] = StockPose[i][r*4+c];
+		for (int r = 0; r < 3; ++r) parts[i].end[r] = StockPose[i][12+r];
+		parts[i].radius = StockPose[i][15]; parts[i].mass = StockPose[i][16];
+	}
+	const float largeFloor[] = {-200,-200,0, 200,-200,0, 200,200,0, -200,-200,0, 200,200,0, -200,200,0};
+	for (int delay : {90, 120, 150}) {
+		JoltReaction::FallSimulation captured(parts, stopped);
+		captured.AddMesh(0, largeFloor, 6); captured.Follow(parts, 0); captured.Engage();
+		for (int i = 0; i < delay; ++i) {
+			if (i%6 == 0) captured.Drive(parts, stopped, .05f);
+			Check(captured.Advance(1.0f/120), "captured standing step");
+		}
+		const float shove[] = {1.3f,0,0}; captured.AddVelocity(shove);
+		for (int i = 0; i < 840; ++i) {
+			if (i%6 == 0) captured.Drive(parts, stopped, .05f);
+			Check(captured.Advance(1.0f/120), "captured stance control step");
+			const auto b = captured.Balance();
+			Check(b.phase != JoltReaction::ControlPhase::Falling, "captured stance stays upright through the correction");
+			Check(b.assistForce <= 220.01f && b.assistTorque <= 80.01f, "root assistance remains bounded");
+			if (!b.contacts) Check(b.assistForce == 0 && b.assistTorque == 0, "root assistance needs actual foot contact");
+		}
+		std::printf("Captured: phase=%d steps=%u landed=%u error=%.3f\n", int(captured.Balance().phase), captured.Balance().corrections, captured.Balance().landings, captured.Balance().error);
+		Check(captured.Balance().phase == JoltReaction::ControlPhase::Tracking && captured.Balance().landings > 0, "captured stock stance recovers after a push");
+		Check(captured.Balance().error < .1f, "captured stance settles over its foot support");
+	}
 	std::puts("PASS: Jolt reaction direction, joint limits, settling, reset, pause, invalid input, and fixed stepping");
 }
