@@ -217,6 +217,9 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
+	if (Cvar_VariableIntegerValue("cl_joStatsState") == 1)
+		Cvar_Set("cl_paused", "0");
+	Cvar_Set("cl_joStatsState", "0");
 	CL_ResetAutomap();
 	CL_CancelHudReveal();
 #ifdef USE_RMLUI
@@ -400,8 +403,8 @@ void CL_Vid_Restart_f( void ) {
 
 	CL_StartHunkUsers();
 
-	// unpause so the cgame definately gets a snapshot and renders a frame
-	Cvar_Set( "cl_paused", "0" );
+	// Resume rendering unless completion statistics still need confirmation.
+	Cvar_Set( "cl_paused", Cvar_VariableIntegerValue("cl_joStatsState") == 1 ? "1" : "0" );
 }
 
 /*

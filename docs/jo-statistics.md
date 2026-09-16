@@ -2,6 +2,8 @@
 
 JO now shows completion statistics on its loading screen. The panel uses the
 shared statistics counters, fonts, and renderer interface.
+After loading, the panel waits for a click or Enter. The next map stays paused
+until you continue. Holding a movement or attack button does not dismiss the panel.
 
 ## Display Rules
 
@@ -10,7 +12,7 @@ shared statistics counters, fonts, and renderer interface.
   for the same bit.
 - `SET_MISSION_STATUS_SCREEN` enables the panel for a scripted transition.
 - A new game, direct map command, or save load clears the display flag.
-- The first-map loading screen does not show completion statistics.
+- A new game's first loading screen does not show completion statistics.
 
 The game copies the completed mission's counters to UI variables before the
 transition. It refreshes this snapshot during game shutdown when the display
@@ -44,6 +46,8 @@ transition. A local map override sets `clearstats=0` for the carry check.
 Further cases check counter reset, save loading, zero shots, an unarmed map,
 direct map loading, and the retail Valley `HIDEINFO` exit. Captures come from
 the actual loading screen. Logs, captures, and result data are in `build/jo-stats/`.
+The check waits on the completed panel and confirms that the next map's clock stops.
+It checks both Enter and mouse-click continuation.
 The test does not complete the missions through normal play.
 
 Use `missionstats_status` to inspect live counters and the last UI snapshot.

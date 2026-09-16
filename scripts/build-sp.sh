@@ -129,6 +129,8 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     for renderer in rdsp-vanilla rdsp-rend2; do
         python3 scripts/test-jo-stats.py --package "$package" --renderer "$renderer" \
             | tee "$package/jo-stats-$renderer-result.txt"
+        python3 scripts/test-jo-sp.py --package "$package" --bouncers --renderer "$renderer" \
+            | tee "$package/jo-bouncers-$renderer-result.txt"
         python3 scripts/test-jo-sp.py --package "$package" --puzzle --renderer "$renderer" \
             | tee "$package/jo-puzzle-$renderer-result.txt"
         OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \

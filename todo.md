@@ -15,6 +15,13 @@ The next milestone is JO progression through Artus and Yavin training, followed
 by the known armoured Galak and world-collision gaps. Manual campaign results
 remain in `human_todo.md`.
 
+### Statistics, Bouncers, and Mission Preparation
+
+- [x] Keep JO completion statistics visible until a click or Enter. Pause the next map while the player reads them.
+- [x] Restore the vestless Rodian back panel. Check native bar bouncers and save/load in both renderers.
+- [ ] Add weapon selection, including JA-only weapons, at true mission boundaries. Keep internal map transitions uninterrupted.
+- [ ] Add Force-point spending after the story unlocks Force powers. Confirm which powers remain controlled by the story.
+
 ### 1. Whole-Campaign Compatibility Report
 
 - [x] Audit all 26 JO single-player maps for missing entity handlers and empty stubs.

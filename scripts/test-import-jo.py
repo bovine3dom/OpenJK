@@ -45,8 +45,8 @@ class ImportTests(unittest.TestCase):
                 b'INDEX 1\n{\n REFERENCE TITLE\n TEXT_LANGUAGE1 "Level stats"\n}\n')
         self.assertEqual(jo.strings(data), [("SECRETAREAS_OF", "of"), ("TITLE", "Level stats")])
 
-    def test_prisoner_alternate_head_surfaces_remain_distinct(self):
-        names = (b"head", b"head_off", b"head_face", b"head_face_off", b"head_cap_torso_off")
+    def test_alternate_character_surfaces_remain_distinct(self):
+        names = (b"head", b"head_off", b"head_face", b"head_face_off", b"head_cap_torso_off", b"torso_augment_off", b"head_fins_off")
         model = bytearray(164)
         struct.pack_into("<ii", model, 152, len(names), 164)
         for name in names:
@@ -54,7 +54,7 @@ class ImportTests(unittest.TestCase):
                          + bytes(76))
         converted = jo.convert_model(model)
         actual = [converted[164 + i * 144:228 + i * 144].rstrip(b"\0") for i in range(len(names))]
-        self.assertEqual(actual, [b"head", b"head_alt", b"head_face", b"head_face_alt", b"head_cap_torso_off"])
+        self.assertEqual(actual, [b"head", b"head_alt", b"head_face", b"head_face_alt", b"head_cap_torso_off", b"torso_augment_alt", b"head_fins_alt"])
         for i in range(len(names)):
             self.assertEqual(converted[228 + i * 144:308 + i * 144], model[228 + i * 144:308 + i * 144])
         skin = b"head,head_01\nhead_off,head_02\nhead_cap_torso_off,caps\n"
@@ -62,6 +62,8 @@ class ImportTests(unittest.TestCase):
         npc = 'Prisoner2\n{\nsurfOff "head head_face"\nsurfOn "head_off head_face_off"\n}\n'
         self.assertIn('surfOn "head_alt head_face_alt"', jo.convert_npcs(npc))
         self.assertIn('surfOff "head head_face"', jo.convert_npcs(npc))
+        self.assertIn('surfOn "torso_augment_alt"', jo.convert_npcs('Rodian2\n{\nsurfOn "torso_augment_off"\n}\n'))
+        self.assertEqual(jo.convert_skin(b"torso_augment_off,back\nhead_fins_off,fins\n"), b"torso_augment_alt,back\nhead_fins_alt,fins\n")
 
     def test_shader_parser_handles_comments_and_nested_stages(self):
         text = b'// ignored {\n"gfx/example" { /* } */ { map "a{b}.tga" } }\nworld/test { { map rock } }'

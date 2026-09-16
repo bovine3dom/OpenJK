@@ -72,6 +72,18 @@ python3 scripts/test-jo-sp.py --prisoners --renderer rdsp-vanilla
 python3 scripts/test-jo-sp.py --prisoners --renderer rdsp-rend2
 ```
 
+## Nar Shaddaa Bouncer Surfaces
+
+The Rodian without a vest uses `torso_augment_off` for its back panel. JA's `_off`
+name handling prevented the NPC definition from enabling this surface. The importer
+now uses `torso_augment_alt` in the mesh, skin, and NPC definition. It also keeps
+the two Rodian fin surfaces distinct. Dismemberment cap names retain their existing names.
+Loading an older save enables the back panel on a living `Rodian2` actor.
+
+Run `python3 scripts/test-jo-sp.py --bouncers` to check the two native bar bouncers.
+The check activates their retail spawner, checks surface flags, captures both actors,
+and checks save/load. It passes in vanilla and Rend2.
+
 ## Artus Topside Handoff
 
 Desann uses scripted noclip movement to reach his dialogue position. JA's newer

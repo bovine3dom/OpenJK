@@ -113,13 +113,21 @@ def main():
             start = len(log.read_text(errors="replace"))
             send(action)
             if visible:
-                wait(r"jo_stats draw .*stage=[3-9]", start)
+                wait("JO statistics: waiting for Continue", start)
+                paused = parse(cmd("missionstats_status"), "live")
+                time.sleep(2)
+                if name == "early_stats":
+                    cmd("vid_restart; wait 30")
+                assert parse(cmd("missionstats_status"), "live")["time"] == paused["time"], "Next mission ran behind the statistics screen"
                 image = run / (name + ".png")
                 subprocess.run(["ffmpeg", "-v", "error", "-f", "x11grab", "-video_size", "640x480", "-draw_mouse", "0",
                                 "-i", os.environ["DISPLAY"], "-frames:v", "1", str(image)], check=True, timeout=30)
                 pixels = subprocess.check_output(["ffmpeg", "-v", "error", "-i", str(image), "-vf", "crop=540:130:50:55",
                                                   "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"])
                 assert sum(p > 150 for p in pixels) > 150, ("Statistics text is absent", image)
+                window = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--name", "."], text=True).splitlines()[-1]
+                action = ["mousemove", "--window", window, "320", "420", "click", "1"] if name == "zero_stats" else ["key", "Return"]
+                subprocess.run(["xdotool", "windowfocus", window, *action], check=True, timeout=10)
             else:
                 wait(r"CM_LoadMap\( maps/" + destination + r"\.bsp", start)
             text = ready(destination)
@@ -156,6 +164,9 @@ def main():
             assert parse(result, "snapshot")["saber"] == "0", result
             assert parse(result, "snapshot")["favorite"] == "18", result
             assert parse(result, "live")["shots"] == before["shots"], "clearstats=0 lost carried counters"
+            restarted = cmd("vid_restart; wait 60; missionstats_status")
+            assert "JO statistics: waiting for Continue" not in restarted, "Renderer restart reopened acknowledged statistics"
+            assert int(parse(restarted, "live")["time"]) > int(parse(result, "live")["time"]), "Renderer restart left gameplay paused"
             cmd("exitview; wait 100; helpusobi 1; set d_npcfreeze 1; setviewpos 320 792 64 180; wait 40; setForceAll 3; weapon 1; setviewpos 416 792 80 180; wait 30")
             cmd("+attack; wait 10; -attack; wait 50; +altattack; wait 40; -altattack; wait 100; force_throw; wait 50")
             state = cmd("campaign_status; missionstats_status")

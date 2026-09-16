@@ -2387,6 +2387,12 @@ void NPC_RestoreOutcastEntities(gentity_t *self)
 		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head_alt", 0);
 		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "head_face_alt", 0);
 	}
+	if (self->NPC_type && !Q_stricmp(self->NPC_type, "Rodian2") && self->health > 0
+		&& self->playerModel >= 0 && self->playerModel < self->ghoul2.size())
+	{
+		// Older imports could not enable the vestless torso's back panel.
+		gi.G2API_SetSurfaceOnOff(&self->ghoul2[self->playerModel], "torso_augment_alt", 0);
+	}
 	if (!self->targetname) return;
 	if (!Q_stricmp(level.mapname, "artus_mine") && !Q_stricmp(self->targetname, "cinematic4_kyle")
 		&& self->NPC && self->client && self->NPC->behaviorState == BS_CINEMATIC)

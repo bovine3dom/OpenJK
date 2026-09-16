@@ -1245,6 +1245,17 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	// Completion statistics require a fresh confirmation key.
+	if (Cvar_VariableIntegerValue("cl_joStatsState") == 1 && !Key_GetCatcher())
+	{
+		if ((key == A_ENTER || key == A_MOUSE1) && kg.keys[keynames[key].upper].repeats == 1)
+		{
+			Cvar_Set("cl_joStatsState", "2");
+			Cvar_Set("cl_paused", "0");
+			cl.newSnapshots = qtrue;
+		}
+		return;
+	}
 	// keys can still be used for bound actions
 #ifdef USE_RMLUI
 	if (CL_AtmosphereEditorKey(key, true)) return;

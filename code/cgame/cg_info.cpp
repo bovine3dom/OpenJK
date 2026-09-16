@@ -831,10 +831,11 @@ static void CG_DrawOutcastMissionStats(void)
 {
 	char map[MAX_QPATH], title[256];
 	gi.Cvar_VariableStringBuffer("ui_stats_map", map, sizeof(map));
-	if (!gi.Cvar_VariableIntegerValue("cg_missionstatusscreen") || !map[0]) return;
+	if (!gi.Cvar_VariableIntegerValue("cg_missionstatusscreen") || !map[0]
+		|| gi.Cvar_VariableIntegerValue("cl_joStatsState") == 2) return;
 	CG_GameTextScope textScope(true);
 	const vec4_t background = {0.0f, 0.0f, 0.0f, 0.85f};
-	CG_FillRect(40, 48, 560, 360, background);
+	CG_FillRect(40, 48, 560, 400, background);
 	cgi_SP_GetStringTextString("SP_INGAME_MISSIONCOMPLETION", title, sizeof(title));
 	const int width = cgi_R_Font_StrLenPixels(title, cgs.media.qhFontMedium, 1.0f);
 	cgi_R_Font_DrawString(320 - width / 2, 58, title, colorTable[CT_WHITE], cgs.media.qhFontMedium, -1, 1.0f);
@@ -867,6 +868,12 @@ static void CG_DrawOutcastMissionStats(void)
 		gi.Printf("jo_stats draw source=%s shots=%d hits=%d saber=%d stage=%d\n", map,
 			gi.Cvar_VariableIntegerValue("ui_stats_shots"), gi.Cvar_VariableIntegerValue("ui_stats_hits"),
 			gi.Cvar_VariableIntegerValue("ui_stats_saber"), cg.loadLCARSStage);
+	if (gi.Cvar_VariableIntegerValue("cl_joStatsState") == 1)
+	{
+		const char *prompt = "Click or press Enter to continue";
+		const int promptWidth = cgi_R_Font_StrLenPixels(prompt, cgs.media.qhFontSmall, 0.8f);
+		cgi_R_Font_DrawString(320 - promptWidth / 2, 416, prompt, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+	}
 }
 
 void CG_DrawInformation( void ) {
@@ -902,8 +909,9 @@ void CG_DrawInformation( void ) {
 		// JO's retail levelshots include empty placeholders; use its loading artwork.
 		cgi_R_SetColor(NULL);
 		CG_DrawPic(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgi_R_RegisterShaderNoMip("menu/art/unknownmap"));
-		if (g_eSavedGameJustLoaded != eFULL && strcmp(s, "kejim_post"))
+		if (g_eSavedGameJustLoaded != eFULL || gi.Cvar_VariableIntegerValue("cl_joStatsState") == 1)
 			CG_DrawOutcastMissionStats();
+		if (gi.Cvar_VariableIntegerValue("cl_joStatsState") == 1) return;
 	}
 	else if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"yavin1") )//special case for first map!
 	{

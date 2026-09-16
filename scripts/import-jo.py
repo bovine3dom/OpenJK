@@ -105,7 +105,7 @@ def outcast_force_defaults(cls, rank):
 
 def surface_names(text):
     # JA strips _off from mesh and skin names. JO uses it for distinct surfaces.
-    return re.sub(r'\b(head(?:_face|_eyes_mouth)?)_off\b', r'\1_alt', text)
+    return re.sub(r'\b(head(?:_face|_eyes_mouth|_fins)?|torso_augment)_off\b', r'\1_alt', text)
 
 
 def convert_model(data):

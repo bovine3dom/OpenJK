@@ -825,9 +825,9 @@ static void Svcmd_MissionStatsStatus_f(void)
 {
 	if (!level.clients) return;
 	const auto &s = level.clients[0].sess.missionStats;
-	gi.Printf("missionstats live map=%s kills=%d secrets=%d total=%d shots=%d hits=%d push=%d jump=%d thrown=%d blocks=%d\n",
+	gi.Printf("missionstats live map=%s kills=%d secrets=%d total=%d shots=%d hits=%d push=%d jump=%d thrown=%d blocks=%d time=%d\n",
 		level.mapname, s.enemiesKilled, s.secretsFound, s.totalSecrets, s.shotsFired, s.hits,
-		s.forceUsed[FP_PUSH], s.forceUsed[FP_LEVITATION], s.saberThrownCnt, s.saberBlocksCnt);
+		s.forceUsed[FP_PUSH], s.forceUsed[FP_LEVITATION], s.saberThrownCnt, s.saberBlocksCnt, level.time);
 	char map[MAX_QPATH], favorite[256], secrets[128], accuracy[64];
 	gi.Cvar_VariableStringBuffer("ui_stats_map", map, sizeof(map));
 	gi.Cvar_VariableStringBuffer("ui_stats_fave", favorite, sizeof(favorite));

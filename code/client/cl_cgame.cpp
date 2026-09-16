@@ -1640,6 +1640,20 @@ CL_FirstSnapshot
 ==================
 */
 void CL_FirstSnapshot( void ) {
+	// Per gamestate: 0 = loading, 1 = waiting, 2 = ready to play.
+	cvar_t *stats = Cvar_Get("cl_joStatsState", "0", CVAR_ROM);
+	if (Cvar_VariableIntegerValue("com_outcast") && Cvar_VariableIntegerValue("cg_missionstatusscreen")
+		&& !stats->integer)
+	{
+		Cvar_Set("cl_joStatsState", "1");
+		Com_Printf("JO statistics: waiting for Continue\n");
+	}
+	if (stats->integer == 1)
+	{
+		Cvar_Set("cl_paused", "1");
+		return;
+	}
+	Cvar_Set("cl_joStatsState", "2");
 
 	re.RegisterMedia_LevelLoadEnd();
 

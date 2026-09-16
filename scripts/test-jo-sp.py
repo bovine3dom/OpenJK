@@ -28,6 +28,7 @@ def main():
     mode.add_argument("--galak", action="store_true", help="Test the native armoured Galak spawn and damage phases")
     mode.add_argument("--world", action="store_true", help="Test JO's nonsolid opaque water boundary")
     mode.add_argument("--puzzle", action="store_true", help="Test the Yavin Trial water, floating bridge, and grate")
+    mode.add_argument("--bouncers", action="store_true", help="Test the bar bouncers' alternate torso surfaces and saves")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.sss and args.renderer != "rdsp-rend2":
@@ -57,11 +58,18 @@ def main():
         assert process.stdin is not None
         stdin = process.stdin
         serial = 0
+        continued = -1
 
         def wait_for(marker, start=0):
+            nonlocal continued
             deadline = time.monotonic() + 180
             while time.monotonic() < deadline:
                 text = log.read_text(errors="replace")[start:]
+                prompt = text.rfind("JO statistics: waiting for Continue")
+                if prompt >= 0 and start + prompt > continued:
+                    window = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--name", "."], text=True).splitlines()[-1]
+                    subprocess.run(["xdotool", "windowfocus", window, "key", "Return"], check=True, timeout=10)
+                    continued = start + prompt
                 if "ERROR: Failed to load jagame" in text:
                     raise RuntimeError(f"Game module did not load: {log}")
                 if marker in text:
@@ -264,6 +272,26 @@ def main():
             text = log.read_text(errors="replace")
             assert not re.search(r"ERROR:|Error:|Unknown command|Duplicate shader entry|Couldn't find image for shader gfx/(?:menus|hud)", text), log
             print(f"PASS: JO weapon cycle, datapad, turret health, goggles, panels, and generator pipe material ({args.renderer})")
+
+        def check_bouncers():
+            cmd("helpusobi 1; map ns_streets; wait 300; exitview; wait 100; god; notarget; use bnc; wait 50; set d_npcfreeze 1")
+            def surfaces():
+                for actor in ("bouncer_main1", "bouncer_main2"):
+                    text = cmd(f"surface_status {actor} torso torso_vest torso_augment_alt")
+                    for surface, flags in (("torso", 0), ("torso_vest", 2), ("torso_augment_alt", 0)):
+                        assert re.search(r"surface=" + surface + rf" index=\d+ flags={flags}\b", text), text
+            surfaces()
+            cmd("noclip; setviewpos 304 -440 -214 35; wait 30")
+            capture("bouncer_back_1")
+            cmd("setviewpos 544 -440 -214 145; wait 30")
+            capture("bouncer_back_2")
+            cmd("noclip; setviewpos 424 -260 -208 270; wait 20; save bouncer_surfaces; load bouncer_surfaces; wait 100")
+            surfaces()
+            stdin.write("quit\n")
+            stdin.flush()
+            assert process.wait(timeout=30) == 0
+            assert not re.search(r"ERROR:|Error:|Unknown command", log.read_text(errors="replace")), log
+            print(f"PASS: Native bar bouncer torso surfaces and save/load ({args.renderer})")
 
         def check_puzzle():
             def mover_at(name, height):
@@ -516,6 +544,9 @@ def main():
                 return 0
             if args.puzzle:
                 check_puzzle()
+                return 0
+            if args.bouncers:
+                check_bouncers()
                 return 0
             cmd("toggleconsole; wait 20")
             if args.renderer == "rdsp-rend2":
