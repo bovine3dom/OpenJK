@@ -40,6 +40,7 @@ cp docs/materials-sp.md "$package/"
 cp docs/debrief-sp.md "$package/"
 cp docs/jo-campaign.md "$package/"
 cp docs/jo-compatibility.md "$package/"
+cp docs/jo-cinematics.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp docs/torch-sp.md "$package/"
 cp docs/hud-reveal-sp.md "$package/"
@@ -88,6 +89,8 @@ OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
 if [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     python3 scripts/audit-jo.py --academy "${OJK_ASSETS:-$root/GameData}" \
         --outcast "${OJK_JO_ASSETS:-$root/GameData_JO}" | tee "$package/jo-audit-result.txt"
+    python3 scripts/audit-jo-cinematics.py --academy "${OJK_ASSETS:-$root/GameData}" \
+        --outcast "${OJK_JO_ASSETS:-$root/GameData_JO}" --check | tee "$package/jo-animation-audit-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} OJK_SMOKE_CAMPAIGN=jo \
         bash scripts/smoke-sp.sh "$package" kejim_post | tee "$package/smoke-jo-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \

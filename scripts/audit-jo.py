@@ -95,8 +95,8 @@ def audit(academy, outcast):
         old_items = set(re.findall(r'(?m)^\s*classname\s+"?(\w+)',
                                   uncomment(jo.read(assets, "ext_data/items.dat").decode("cp1252"))))
         anim_names = set(re.findall(r'\b(?:BOTH|TORSO|LEGS)_\w+', jo.read(ja, "models/players/_humanoid/animation.cfg").decode()))
-        translated = set(re.findall(r'\bBOTH_COCKPIT_\w+', jo.read(assets, "models/players/_humanoid/animation.cfg").decode()))
-        translated.update(name.decode() for name in jo.CINEMATIC_GESTURES)
+        translated = set(re.findall(r'\b(?:BOTH|TORSO|LEGS)_\w+', jo.read(assets, "models/players/_humanoid/animation.cfg").decode()))
+        translated.update(name.rstrip(b"\0").decode() for name in jo.SCRIPT_ANIMATION_REPLACEMENTS)
         translated.update(name.decode() for name in jo.GALAK_ANIMATIONS)
         npc_text = jo.convert_npcs(jo.read(assets, "ext_data/npcs.cfg").decode("cp1252"))
         npcs = {}

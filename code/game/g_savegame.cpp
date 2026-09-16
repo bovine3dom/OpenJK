@@ -1346,6 +1346,7 @@ void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition)
 	/////////////
 
 	ReadGEntities(qbAutosave);
+	if (saved_game.get_version() < 4) NPC_ReloadOutcastAnimationSets();
 	Quake3Game()->VariableLoad();
 	G_LoadSave_ReadMiscData();
 	if ( !qbAutosave )

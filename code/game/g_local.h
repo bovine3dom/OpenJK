@@ -36,6 +36,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 bool G_IsOutcast();
 void NPC_RestoreOutcastClass(gentity_t *ent);
+const char *NPC_OutcastCinematicParms(const char *name, char *buffer, int size);
+void NPC_ReloadOutcastAnimationSets(void);
+void G_RestoreOutcastCinematicModel(gentity_t *ent);
 void NPC_RestoreOutcastEntities(gentity_t *ent);
 
 //==================================================================
@@ -116,7 +119,14 @@ public:
 		ojk::SavedGameHelper& saved_game)
 	{
 		saved_game.read<int8_t>(filename);
-		saved_game.read<>(animations);
+		const int count = saved_game.get_version() < 4 ? BOTH_CIN_50 + 1 : MAX_ANIMATIONS;
+		saved_game.read<>(animations, count);
+		for (int i = count; i < MAX_ANIMATIONS; ++i)
+		{
+			animations[i] = animation_t{};
+			animations[i].loopFrames = -1;
+			animations[i].frameLerp = 100;
+		}
 		saved_game.read<>(torsoAnimEvents);
 		saved_game.read<>(legsAnimEvents);
 		saved_game.read<uint8_t>(torsoAnimEventCount);

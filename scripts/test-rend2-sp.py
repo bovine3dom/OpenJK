@@ -56,7 +56,7 @@ def main():
 
     phases = {"before": "CM_LoadMap( maps/t2_wedge.bsp, 1 )",
               "restart": "----- finished R_Init -----",
-              "loaded": "Loaded saved game format 3",
+              "loaded": "Loaded saved game format 4",
               "transition": "CM_LoadMap( maps/t1_sour.bsp, 1 )"}
     images = {}
     start = 0

@@ -1993,8 +1993,24 @@ Q3_SetAnimUpper
 Sets the upper animation of an entity
 =============
 */
+static qboolean Q3_HasScriptAnimation(int entID, int animID, const char *name)
+{
+	gentity_t *ent = &g_entities[entID];
+	const qboolean supported = PM_HasAnimation(ent, animID);
+	if (gi.Cvar_VariableIntegerValue("d_cinematicAnimations"))
+	{
+		const int index = ent->client ? ent->client->clientInfo.animFileIndex : -1;
+		const animFileSet_t *set = index >= 0 && index < level.numKnownAnimFileSets ? &level.knownAnimFileSets[index] : NULL;
+		gi.Printf("cinematic_animation actor=%s animation=%s supported=%d profile=%s first=%d frames=%d\n",
+			ent->targetname ? ent->targetname : "unnamed", name, supported, set ? set->filename : "none",
+			set ? set->animations[animID].firstFrame : 0, set ? set->animations[animID].numFrames : 0);
+	}
+	return supported;
+}
+
 static qboolean Q3_SetAnimUpper( int entID, const char *anim_name )
 {
+	if (!Q_stricmp(anim_name, "-1")) return qfalse;
 	int			animID = 0;
 
 	animID = GetIDForString( animTable, anim_name );
@@ -2005,7 +2021,7 @@ static qboolean Q3_SetAnimUpper( int entID, const char *anim_name )
 		return qfalse;
 	}
 
-	if ( !PM_HasAnimation( &g_entities[entID], animID ) )
+	if ( !Q3_HasScriptAnimation( entID, animID, anim_name ) )
 	{
 		return qfalse;
 	}
@@ -2024,6 +2040,7 @@ Sets the lower animation of an entity
 */
 static qboolean Q3_SetAnimLower( int entID, const char *anim_name )
 {
+	if (!Q_stricmp(anim_name, "-1")) return qfalse;
 	int			animID = 0;
 
 	//FIXME: Setting duck anim does not actually duck!
@@ -2036,7 +2053,7 @@ static qboolean Q3_SetAnimLower( int entID, const char *anim_name )
 		return qfalse;
 	}
 
-	if ( !PM_HasAnimation( &g_entities[entID], animID ) )
+	if ( !Q3_HasScriptAnimation( entID, animID, anim_name ) )
 	{
 		return qfalse;
 	}

@@ -1810,6 +1810,10 @@ typedef enum //# animNumber_e
 	BOTH_CIN_49,		//# Level specific cinematic
 	BOTH_CIN_50,		//# Level specific cinematic
 
+#define JO_ANIM(name) name,
+#include "jo_anims.h"
+#undef JO_ANIM
+
 	//# #eol
 	MAX_ANIMATIONS,
 	MAX_TOTALANIMATIONS,

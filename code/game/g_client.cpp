@@ -1739,6 +1739,49 @@ qboolean G_SetG2PlayerModelInfo( gentity_t *ent, const char *modelName, const ch
 	return qtrue;
 }
 
+void G_RestoreOutcastCinematicModel(gentity_t *ent)
+{
+	if (!G_IsOutcast() || !ent->NPC || !ent->client || ent->health <= 0 || ent->playerModel != 0 || ent->ghoul2.size() == 0)
+		return;
+	if (!(ent->spawnflags & 32) && (!ent->targetname || Q_stricmpn(ent->targetname, "cinematic", 9))) return;
+	const CGhoul2Info &old = ent->ghoul2[0];
+	if (Q_stricmpn(old.mFileName, "models/players/", 15) || strstr(old.mFileName, "/jo_cinematic_")) return;
+	char model[MAX_QPATH], profile[MAX_QPATH], path[MAX_QPATH];
+	Q_strncpyz(model, old.mFileName + 15, sizeof(model));
+	char *slash = strchr(model, '/');
+	if (!slash) return;
+	*slash = 0;
+	Com_sprintf(profile, sizeof(profile), "jo_cinematic_%s", model);
+	Com_sprintf(path, sizeof(path), "models/players/%s/model.glm", profile);
+	if (gi.FS_ReadFile(path, NULL) <= 0) return;
+	const int skin = old.mCustomSkin, shader = old.mCustomShader, lod = old.mLodBias, flags = old.mFlags;
+	const surfaceInfo_v surfaces = old.mSlist;
+	const int weapons[2] = {ent->weaponModel[0], ent->weaponModel[1]};
+	const int prop = ent->cinematicModel;
+	const bool leftProp = prop >= 0 && prop < ent->ghoul2.size() && ent->ghoul2[prop].mModelBoltLink == ent->handLBolt;
+	const int legsTimer = ent->client->ps.legsAnimTimer, torsoTimer = ent->client->ps.torsoAnimTimer;
+	gi.G2API_RemoveGhoul2Model(ent->ghoul2, 0);
+	if (gi.G2API_InitGhoul2Model(ent->ghoul2, path, 0, skin, shader, 0, lod) != 0)
+		gi.Error(ERR_DROP, "Could not restore cinematic model %s", path);
+	ent->ghoul2[0].mFlags = flags;
+	ent->ghoul2[0].mSlist = surfaces;
+	G_SetG2PlayerModelInfo(ent, profile, NULL, NULL, NULL);
+	for (int i = 0; i < 2; ++i)
+	{
+		ent->weaponModel[i] = weapons[i];
+		if (weapons[i] >= 0 && weapons[i] != ent->playerModel && weapons[i] < ent->ghoul2.size()
+			&& ent->ghoul2[weapons[i]].mModelindex >= 0)
+			gi.G2API_AttachG2Model(&ent->ghoul2[weapons[i]], &ent->ghoul2[0], i ? ent->handLBolt : ent->handRBolt, 0);
+	}
+	if (prop >= 0 && prop < ent->ghoul2.size() && prop != ent->playerModel && ent->ghoul2[prop].mModelindex >= 0)
+		gi.G2API_AttachG2Model(&ent->ghoul2[prop], &ent->ghoul2[0], leftProp ? ent->handLBolt : ent->handRBolt, 0);
+	NPC_SetAnim(ent, SETANIM_LEGS, ent->client->ps.legsAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_RESTART);
+	NPC_SetAnim(ent, SETANIM_TORSO, ent->client->ps.torsoAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_RESTART);
+	ent->client->ps.legsAnimTimer = legsTimer;
+	ent->client->ps.torsoAnimTimer = torsoTimer;
+	gi.Printf("JO save: restored cinematic model actor=%s model=%s\n", ent->targetname, path);
+}
+
 void G_SetG2PlayerModel( gentity_t * const ent, const char *modelName, const char *customSkin, const char *surfOff, const char *surfOn )
 {
 	char	skinName[MAX_QPATH];

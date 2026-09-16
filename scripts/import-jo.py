@@ -13,11 +13,12 @@ import zipfile
 
 UI_PREFIXES = ("gfx/menus/", "gfx/hud/", "gfx/2d/")
 NPC_CLASSES = {"GALAK_MECH": "GALAKMECH", "MORGAN": "MORGANKATARN"}
-CINEMATIC_ACTORS = ("kyle", "jan", "galak")
 CINEMATIC_GESTURES = (b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2")
 # Slots 45-50 are shared with the Galak controller in codeJK2/game/AI_GalakMech.cpp.
 GALAK_ANIMATIONS = (b"BOTH_ALERT1", b"TORSO_RAISEWEAP2", b"TORSO_DROPWEAP2",
                     b"BOTH_TRIUMPHANT1START", b"BOTH_TRIUMPHANT1STARTGESTURE", b"BOTH_TRIUMPHANT1STOP")
+# These two retail script names have no clips in the supplied animation sets.
+SCRIPT_ANIMATION_REPLACEMENTS = {b"BOTH_SCARED1\0": b"BOTH_CROUCH3\0", b"BOTH_DEADFORWARD1\0": b"BOTH_DEAD1\0"}
 
 
 def index_assets(root, stack):
@@ -76,6 +77,57 @@ def convert_model(data):
 def convert_skin(data):
     return re.sub(rb'(?m)^([^,\r\n]+),',
                   lambda m: surface_names(m[1].decode("ascii")).encode() + b",", data)
+
+
+def script_aliases(jo_anims):
+    cockpit = sorted(set(re.findall(rb"BOTH_COCKPIT_\w+", jo_anims)))
+    cinematic = cockpit + list(CINEMATIC_GESTURES)
+    if len(cinematic) > 44:
+        raise ValueError("Too many legacy cinematic aliases")
+    aliases = {name + b"\0": f"BOTH_CIN_{i + 1}".encode() + b"\0" for i, name in enumerate(cinematic)}
+    aliases.update({name + b"\0": f"BOTH_CIN_{i + 45}".encode() + b"\0" for i, name in enumerate(GALAK_ANIMATIONS)})
+    aliases.update(SCRIPT_ANIMATION_REPLACEMENTS)
+    return aliases
+
+
+def cinematic_animation_config(data, aliases):
+    # Keep every original name, plus aliases used by earlier imports and the boss controller.
+    extra = []
+    for line in data.splitlines():
+        fields = line.split(maxsplit=1)
+        if len(fields) == 2 and fields[0] + b"\0" in aliases:
+            extra.append(aliases[fields[0] + b"\0"][:-1] + b" " + fields[1])
+    return data.rstrip() + b"\n" + b"\n".join(extra) + (b"\n" if extra else b"")
+
+
+def write_cinematic_npcs(dest, outcast, npcs):
+    models = set()
+    clones = []
+    for definition in re.finditer(r'(?im)^\s*(\w+)\s*\{([^}]+)\}', npcs):
+        actor, body = definition.groups()
+        field = re.search(r'(?im)^\s*playerModel\s+"?(\w+)', body)
+        if not field:
+            continue
+        model = field[1].lower()
+        path = f"models/players/{model}/model.glm"
+        if path not in outcast:
+            continue
+        original = read(outcast, path)
+        if original[72:136].split(b"\0", 1)[0] != b"models/players/_humanoid/_humanoid":
+            continue
+        clone = "jo_cinematic_" + model
+        if model not in models:
+            models.add(model)
+            mesh = convert_model(original)
+            mesh[72:136] = b"models/players/jo_cinematic/jo_cinematic".ljust(64, b"\0")
+            dest.writestr(f"models/players/{clone}/model.glm", mesh)
+            for skin in sorted(outcast):
+                if skin.startswith(f"models/players/{model}/") and skin.endswith(".skin"):
+                    dest.writestr(skin.replace(f"/{model}/", f"/{clone}/", 1), convert_skin(read(outcast, skin)))
+        body = re.sub(r'(?im)^(\s*playerModel\s+)"?' + re.escape(field[1]) + r'"?',
+                      lambda m: m[1] + clone, body)
+        clones.append(f"\njo_cinematic_{actor.lower()}\n{{{body}}}\n")
+    return npcs + "".join(clones)
 
 
 def shader_definitions(data):
@@ -154,20 +206,7 @@ def build_overlay(ja, jo, output):
         humanoid = "models/players/_humanoid/"
         ja_anims = read(academy, humanoid + "animation.cfg")
         jo_anims = read(outcast, humanoid + "animation.cfg")
-        # Cinematic actors use JO's 72-bone skeleton. Gameplay actors use JA's
-        # skeleton and the renderer's existing JO mesh conversion.
-        cockpit = sorted(set(re.findall(rb"BOTH_COCKPIT_\w+", jo_anims)))
-        # Append aliases so existing cockpit slot numbers remain stable.
-        cinematic_anims = cockpit + list(CINEMATIC_GESTURES)
-        if len(cinematic_anims) > 44:
-            raise ValueError("Too many cinematic animations")
-        aliases = {name + b"\0": f"BOTH_CIN_{i + 1}".encode() + b"\0"
-                   for i, name in enumerate(cinematic_anims)}
-        aliases.update({name + b"\0": f"BOTH_CIN_{i + 45}".encode() + b"\0"
-                        for i, name in enumerate(GALAK_ANIMATIONS)})
-        cinematic_cfg = jo_anims
-        for old, new in aliases.items():
-            cinematic_cfg = re.sub(rb"\b" + old[:-1] + rb"\b", new[:-1], cinematic_cfg)
+        aliases = script_aliases(jo_anims)
 
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as dest:
             # Keep JA UI, weapon definitions, and humanoid gameplay animations.
@@ -187,49 +226,19 @@ def build_overlay(ja, jo, output):
                 elif name.endswith(".skin"):
                     data = convert_skin(data)
                 elif name.endswith("/animation.cfg"):
-                    for old, new in aliases.items():
-                        data = re.sub(rb"\b" + old[:-1] + rb"\b", new[:-1], data)
+                    data = cinematic_animation_config(data, aliases)
                 dest.writestr(name, data)
 
             write_shaders(dest, academy, outcast)
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
 
             npcs = convert_npcs(read(outcast, "ext_data/npcs.cfg").decode("cp1252"))
-            for actor in CINEMATIC_ACTORS:
-                model = convert_model(read(outcast, f"models/players/{actor}/model.glm"))
-                animation = b"models/players/jo_cinematic/jo_cinematic"
-                model[72:136] = animation.ljust(64, b"\0")
-                dest.writestr(f"models/players/jo_cinematic_{actor}/model.glm", model)
-                dest.writestr(f"models/players/jo_cinematic_{actor}/model_default.skin",
-                              convert_skin(read(outcast, f"models/players/{actor}/model_default.skin")))
-                definition = re.search(r"(?im)^\s*" + actor + r"\s*\{[^}]*\}", npcs)
-                if not definition:
-                    raise ValueError(f"Missing NPC definition: {actor}")
-                clone = re.sub(r"(?i)\b" + actor + r"\b", f"jo_cinematic_{actor}",
-                               definition[0], count=1)
-                clone = re.sub(r"(?i)(playerModel\s+)" + actor + r"\b",
-                               rf"\g<1>jo_cinematic_{actor}", clone)
-                npcs += "\n" + clone
+            npcs = write_cinematic_npcs(dest, outcast, npcs)
             dest.writestr("ext_data/jo/npcs.cfg", npcs.encode("cp1252"))
             cinematic_gla = bytearray(read(outcast, humanoid + "_humanoid.gla"))
             cinematic_gla[8:72] = b"models/players/jo_cinematic/jo_cinematic.gla".ljust(64, b"\0")
             dest.writestr("models/players/jo_cinematic/jo_cinematic.gla", cinematic_gla)
-            dest.writestr("models/players/jo_cinematic/animation.cfg", cinematic_cfg)
-
-            bsp = read(outcast, "maps/kejim_post.bsp")
-            start, size = struct.unpack_from("<ii", bsp, 8)
-            entities = bsp[start:start + size].rstrip(b"\0").decode("cp1252")
-            def cinematic_actor(match):
-                entity = match[0]
-                actor = re.search(r'"NPC_targetname"\s+"cinematic1_(kyle|jan)"', entity)
-                if actor:
-                    entity = re.sub(r'"classname"\s+"NPC_[^"]+"',
-                                    '"classname" "NPC_spawner"', entity)
-                    entity = re.sub(r'"NPC_type"\s+"[^"]+"', "", entity, flags=re.I)
-                    entity = entity[:-1] + f'"NPC_type" "jo_cinematic_{actor[1]}"\n}}'
-                return entity
-            entities = re.sub(r"\{[^}]*\}", cinematic_actor, entities)
-            dest.writestr("maps/kejim_post.ent", entities.encode("cp1252"))
+            dest.writestr("models/players/jo_cinematic/animation.cfg", cinematic_animation_config(jo_anims, aliases))
 
             for name in sorted(outcast):
                 if not name.startswith("strip/") or not name.endswith(".sp"):

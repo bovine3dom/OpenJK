@@ -318,7 +318,7 @@ void SG_TestSave(void);
 #define iSAVEGAME_VERSION 1
 #else
 // Jedi Academy squad tactics add serialized NPC and group fields.
-#define iSAVEGAME_VERSION 3
+#define iSAVEGAME_VERSION 4
 #endif
 int SG_Version(void);	// call this to know what version number a successfully-opened savegame file was
 //

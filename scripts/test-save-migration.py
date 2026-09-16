@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Verify project-v1 or v2 saves migrate to v3 without changing the source files."""
+"""Verify project-v1, v2, or v3 saves migrate to v4 without changing the source files."""
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -53,13 +54,23 @@ def main():
         if not module.is_file() or not module.stat().st_size:
             raise RuntimeError(f"Missing renderer module: {module}")
         profile.mkdir(parents=True, exist_ok=True)
+        game = profile / "OpenJK"
+        game.mkdir(exist_ok=True)
+        # A config file avoids the engine's startup-command count limit.
+        lines = []
+        for arg in commands:
+            if arg.startswith("+"):
+                lines.append(arg[1:])
+            else:
+                lines[-1] += " " + json.dumps(arg)
+        (game / "migration-test.cfg").write_text("\n".join(lines) + "\nwait 4\nquit\n")
         command = ["timeout", "--kill-after=5s", "600s" if renderer == "rdsp-rend2" else "180s",
                    "xvfb-run", "-a", "-s", "-screen 0 640x480x24",
                    "bash", str(package.resolve() / "launch-sp.sh"), str(root / "GameData"),
                    "+safe", "+set", "cl_renderer", renderer,
                    "+set", "r_fullscreen", "0", "+set", "r_mode", "3", "+set", "s_initsound", "0",
                    "+set", "developer", "1", "+set", "com_maxfps", "10", "+set", "sv_compress_saved_games", "0",
-                   *commands, "+wait", "4", "+quit"]
+                   "+exec", "migration-test.cfg"]
         with (suite / f"{name}.log").open("w") as log:
             result = subprocess.run(command, env=dict(os.environ, OJK_PROFILE=str(profile), LIBGL_ALWAYS_SOFTWARE="1",
                                                      LP_NUM_THREADS="1", SDL_AUDIODRIVER="dummy"), stdout=log, stderr=subprocess.STDOUT)
@@ -73,7 +84,11 @@ def main():
         return text
 
     old = run("legacy-create", args.old_package, old_profile,
-              ["+devmap", "t2_wedge", "+exec", "ai-memory-switch.cfg", "+d_npcfreeze", "1",
+              ["+devmap", "t1_sour", "+wait", "50", "+exitview", "+wait", "150", "+god", "+d_npcfreeze", "1",
+               "+setviewpos", "5760", "-4888", "64", "180", "+npc", "spawn", "stormtrooper", "_memory_a", "+wait", "10",
+               "+setviewpos", "5760", "-5016", "64", "180", "+npc", "spawn", "stormtrooper", "_memory_b", "+wait", "10",
+               "+setviewpos", "5632", "-4888", "64", "180", "+npc", "spawn", "rebel", "_memory_c", "+wait", "10",
+               "+nav", "memory", "_memory_a", "enemy", "_memory_c", "+nav", "memory", "_memory_b", "enemy", "_memory_c",
                "+give", "health", "77", "+give", "armor", "33", "+give", "weaponnum", "4",
                "+give", "ammo", "23", "+setForceJump", "3", "+wait", "4", "+save", "migration_v1",
                "+nav", "memory", "_memory_a", "+nav", "memory", "_memory_b", "+nav", "memory", "_memory_c"],
@@ -81,8 +96,8 @@ def main():
     source = old_profile / "OpenJK/saves/migration_v1.sav"
     old_chunks = chunks(source)
     old_version = struct.unpack("<i", old_chunks[0][1])[0]
-    if old_version not in (1, 2):
-        raise RuntimeError("The supplied old package did not write v1 or v2")
+    if old_version not in (1, 2, 3):
+        raise RuntimeError("The supplied old package did not write v1, v2, or v3")
     source_hash = hashlib.sha256(source.read_bytes()).digest()
     destination = new_profile / "OpenJK/saves"
     destination.mkdir(parents=True)
@@ -90,8 +105,8 @@ def main():
     shutil.copy2(source, copied)
     checks = ["+wait", "40", "+nav", "player", "+nav", "memory", "_memory_a",
               "+nav", "memory", "_memory_b", "+nav", "memory", "_memory_c"]
-    loaded = run("legacy-load-v3-save", args.package, new_profile,
-                 ["+set", "d_npcfreeze", "1", "+load", "migration_v1", "+helpusobi", "1", "+d_npcfreeze", "1", *checks, "+save", "migration_v3"])
+    loaded = run("legacy-load-v4-save", args.package, new_profile,
+                 ["+set", "d_npcfreeze", "1", "+load", "migration_v1", "+helpusobi", "1", "+d_npcfreeze", "1", *checks, "+save", "migration_v4"])
     if f"Loaded saved game format {old_version}" not in loaded:
         raise RuntimeError("Legacy importer did not finish")
     before, after = samples(old), samples(loaded)
@@ -104,22 +119,22 @@ def main():
     player = re.search(r"playerstate health=(\d+) armor=(\d+) weapons=(\d+) ammo_blaster=(\d+) jump=(\d+)", loaded)
     if not player or tuple(map(int, (player[1], player[2], player[4], player[5]))) != (77, 33, 23, 3) or not int(player[3]) & (1 << 4):
         raise RuntimeError("Player state was not preserved")
-    converted = destination / "migration_v3.sav"
+    converted = destination / "migration_v4.sav"
     new_chunks = chunks(converted)
-    if struct.unpack("<i", new_chunks[0][1])[0] != 3:
-        raise RuntimeError("Writer did not produce v3")
+    if struct.unpack("<i", new_chunks[0][1])[0] != 4:
+        raise RuntimeError("Writer did not produce v4")
     if [p for tag, p in old_chunks if tag == "OBJT"] != [p for tag, p in new_chunks if tag == "OBJT"]:
         raise RuntimeError("Mission objectives changed")
-    reloaded = run("v3-reload", args.package, new_profile, ["+set", "d_npcfreeze", "1", "+load", "migration_v3", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
-    if "Loaded saved game format 3" not in reloaded or set(samples(reloaded)) != set(after):
+    reloaded = run("v4-reload", args.package, new_profile, ["+set", "d_npcfreeze", "1", "+load", "migration_v4", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
+    if "Loaded saved game format 4" not in reloaded or set(samples(reloaded)) != set(after):
         raise RuntimeError("Converted save did not reload")
     for name, expected in after.items():
         actual = samples(reloaded)[name]
         for key in ("enemy", "pos", "seen_time", "seen", "group", "shared", "role", "cp"):
             if actual[key] != expected[key]:
-                raise RuntimeError(f"V3 round trip changed {name}.{key}")
+                raise RuntimeError(f"V4 round trip changed {name}.{key}")
     # _VER is a four-byte uncompressed chunk; update its normal MD4 XOR checksum.
-    for version in (0, 4):
+    for version in (0, 5):
         invalid = bytearray(source.read_bytes())
         payload = struct.pack("<i", version)
         digest = subprocess.run(["openssl", "dgst", "-provider", "legacy", "-md4", "-binary"],
@@ -129,13 +144,13 @@ def main():
         invalid[12:16] = struct.pack("<I", words[0] ^ words[1] ^ words[2] ^ words[3])
         (destination / f"invalid_{version}.sav").write_bytes(invalid)
         rejected = run(f"reject-{version}", args.package, new_profile,
-                       ["+load", f"invalid_{version}", "+load", "migration_v3", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
-        if f"version # {version}" not in rejected or "Loaded saved game format 3" not in rejected:
+                       ["+load", f"invalid_{version}", "+load", "migration_v4", "+helpusobi", "1", "+d_npcfreeze", "1", *checks])
+        if f"version # {version}" not in rejected or "Loaded saved game format 4" not in rejected:
             raise RuntimeError("Unsupported version was not rejected or poisoned the next load")
     for path in (source, copied):
         if hashlib.sha256(path.read_bytes()).digest() != source_hash:
             raise RuntimeError("Original save was modified")
-    print(f"PASS: v{old_version} migration, v3 round trip, state preservation, unchanged originals. Results: {suite}")
+    print(f"PASS: v{old_version} migration, v4 round trip, state preservation, unchanged originals. Results: {suite}")
 
 
 if __name__ == "__main__":

@@ -121,7 +121,8 @@ def main():
             before = {}
             for _ in range(80):
                 before = npc()
-                if before["enemy"] == "0" and before["scripted"] == "0" and before["group"] != "-1":
+                if (before["enemy"] == "0" and before["scripted"] == "0" and before["group"] != "-1"
+                        and not int(before["script_flags"]) & 0x200):  # SCF_NO_COMBAT_TALK: opening dialogue still owns speech.
                     break
                 cmd("wait 10")
             else:
@@ -462,7 +463,7 @@ def main():
             stdin.flush()
             assert process.wait(timeout=30) == 0
             text = log.read_text(errors="replace")
-            assert "Loaded saved game format 3" in text
+            assert "Loaded saved game format 4" in text
             assert not re.search(r"ERROR:|Error:|Unknown command|trying to load fallback renderer", text), log
             assert not re.search(r"Unable to find entry for|couldn't open music file|"
                                  r"could not find 'menu/new/title'|Can't find levelshots/kejim_\w+\.jpg", text), log

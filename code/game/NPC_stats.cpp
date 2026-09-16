@@ -4077,6 +4077,22 @@ Ghoul2 Insert End
 	return qtrue;
 }
 
+void NPC_ReloadOutcastAnimationSets(void)
+{
+	if (!G_IsOutcast()) return;
+	for (int i = 0; i < level.numKnownAnimFileSets; ++i)
+		if (Q_stricmp(level.knownAnimFileSets[i].filename, "_humanoid"))
+			G_ParseAnimationFile(0, level.knownAnimFileSets[i].filename, i);
+}
+
+const char *NPC_OutcastCinematicParms(const char *name, char *buffer, int size)
+{
+	if (!G_IsOutcast() || !name) return name;
+	Com_sprintf(buffer, size, "jo_cinematic_%s", name);
+	Q_strlwr(buffer);
+	return strstr(NPCParms, va("\n%s\n", buffer)) ? buffer : name;
+}
+
 void NPC_RestoreOutcastClass(gentity_t *ent)
 {
 	if (!G_IsOutcast() || !ent->NPC || !ent->client || ent->client->NPC_class != -1 || !ent->NPC_type)

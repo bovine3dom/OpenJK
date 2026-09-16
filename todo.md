@@ -52,6 +52,16 @@ separate manual checks; record any diagnostic trigger activation in automated te
 - [ ] Consolidate the remaining startup character and equipment overrides when further campaign profiles are needed.
 - [x] Run focused JA and JO regression checks, document limits, and publish a tested desktop package. The package `20260915T225923812721918-783a0e8f` passed all publication checks.
 
+## Complete JO Cinematic Animation Sets
+
+- [x] Audit 869 animation commands, 247 distinct values, and nine hand-prop references across all retail scripts. No unresolved animation names or identified-actor frame gaps remain.
+- [x] Check shared names for different JO and JA poses. Use the original JO skeleton and frame data for staged actors.
+- [x] Fix the Artus Topside restraint poses and the Kejim office gem and chair scene. Check both from older saves with Rend2.
+- [x] Add all 314 JO-only engine animation names. Import complete cinematic sets and all skin variants. Keep the shared gameplay animation set intact.
+- [x] Check the Desann fight handoff, Jan's return as a gameplay escort, and format-3 to format-4 migration. Preserve existing actor state and attachments during model migration.
+- [x] Add a strict static audit and six full cutscene cases. Check the office, restraint, bartender, and reunion scenes in both renderers. Record remaining manual scene checks.
+- [x] Publish the passing package `20260916T020444391132401-8d0e9087` after all required checks.
+
 ## Verified Prerequisites
 
 - [x] Confirm that this server runs x86-64 Arch Linux.

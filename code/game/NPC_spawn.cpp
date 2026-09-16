@@ -1655,7 +1655,11 @@ gentity_t *NPC_Spawn_Do( gentity_t *ent, qboolean fullSpawnNow )
 	VectorCopy(ent->s.origin, newent->currentOrigin);
 	G_SetOrigin(newent, ent->s.origin);//just to be sure!
 	//NOTE: on vehicles, anything in the .npc file will STOMP data on the NPC that's set by the vehicle
-	if ( !NPC_ParseParms( ent->NPC_type, newent ) )
+	char cinematicType[MAX_QPATH];
+	const char *parms = ((ent->spawnflags & SFB_CINEMATIC)
+		|| (ent->NPC_targetname && !Q_stricmpn(ent->NPC_targetname, "cinematic", 9)))
+		? NPC_OutcastCinematicParms(ent->NPC_type, cinematicType, sizeof(cinematicType)) : ent->NPC_type;
+	if ( !NPC_ParseParms( parms, newent ) )
 	{
 		gi.Printf ( S_COLOR_RED "ERROR: Couldn't spawn NPC %s\n", ent->NPC_type );
 		if ( !Q_stricmp( ent->classname, "NPC_routetest" ) )
@@ -2365,14 +2369,13 @@ void SP_NPC_Galak( gentity_t *self)
 {
 	self->NPC_type = "Galak";
 	if (self->spawnflags & 1) self->NPC_type = "Galak_Mech";
-	if (G_IsOutcast() && !(self->spawnflags & 1) && (self->spawnflags & SFB_CINEMATIC))
-		self->NPC_type = "jo_cinematic_galak";
 	SP_NPC_spawner(self);
 }
 
 void NPC_RestoreOutcastEntities(gentity_t *self)
 {
 	if (!G_IsOutcast()) return;
+	G_RestoreOutcastCinematicModel(self);
 	if (self->item && self->item->giType == IT_WEAPON && self->item->giTag == WP_SABER && !self->NPC_type)
 		self->NPC_type = G_NewString("player");
 	if (self->NPC_type && !Q_stricmp(self->NPC_type, "Prisoner2") && self->health > 0

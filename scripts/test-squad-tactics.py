@@ -479,7 +479,7 @@ def main():
         elif case in ("peek-save", "save-outward", "save-withdrawal"):
             before, after = (samples[p]["_memory_a"] for p in ("SAVE", "RESTORED"))
             check(before["role"] in ("1", "2") and point(before, "anchor") != (0, 0, 0), str(before))
-            check("Loaded saved game format 3" in text, "Wrong save version")
+            check("Loaded saved game format 4" in text, "Wrong save version")
             if case != "peek-save":
                 check(before["role"] == "1" and before["peek"] == ("1" if case == "save-outward" else "0"), "Captured the wrong movement phase")
             check(math.dist(point(before), point(after)) < 4, "Loaded actor moved away from cover")

@@ -927,6 +927,18 @@ static void Svcmd_CinematicStatus_f(void)
 			GetStringForID(animTable, ps.legsAnim), GetStringForID(animTable, ps.torsoAnim), ps.legsAnimTimer, ps.torsoAnimTimer,
 			Q3_TaskIDPending(ent, TID_MOVE_NAV), Q3_TaskIDPending(ent, TID_ANIM_LOWER), Q3_TaskIDPending(ent, TID_ANIM_UPPER),
 			Q3_TaskIDPending(ent, TID_ANIM_BOTH), Q3_TaskIDPending(ent, TID_CHAN_VOICE), ent->NPC->behaviorState, ent->client->noclip);
+		const int setIndex = ent->client->clientInfo.animFileIndex;
+		if (setIndex >= 0 && setIndex < level.numKnownAnimFileSets && ps.legsAnim >= 0 && ps.legsAnim < MAX_ANIMATIONS
+			&& ps.torsoAnim >= 0 && ps.torsoAnim < MAX_ANIMATIONS)
+		{
+			const animFileSet_t &set = level.knownAnimFileSets[setIndex];
+			gi.Printf("cinematic_set name=%s profile=%s legs_first=%d legs_frames=%d torso_first=%d torso_frames=%d\n",
+				ent->targetname, set.filename, set.animations[ps.legsAnim].firstFrame, set.animations[ps.legsAnim].numFrames,
+				set.animations[ps.torsoAnim].firstFrame, set.animations[ps.torsoAnim].numFrames);
+		}
+		for (int i = 0; i < ent->ghoul2.size(); ++i)
+			if (i != ent->playerModel && ent->ghoul2[i].mModelindex >= 0)
+				gi.Printf("cinematic_prop name=%s slot=%d model=%s\n", ent->targetname, i, ent->ghoul2[i].mFileName);
 		return;
 	}
 	gi.Printf("cinematic name=%s time=%d camera=%d absent=1\n", gi.argv(1), level.time, in_camera);

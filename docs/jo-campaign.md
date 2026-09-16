@@ -139,12 +139,12 @@ generated asset archive after the game exits. The launcher can regenerate it.
   include the Bryar pistol and stun baton when owned and usable.
 - The JO loading screen uses the supplied title artwork and the shared progress
   bar. Some retail level previews are empty placeholders.
-- The cockpit actors and cinematic Galak use a separate JO skeleton. Their
-  script animation names map to JA's existing cinematic animation slots. New
-  gesture aliases follow the existing cockpit slots to preserve their indices.
-  Other JO-specific cinematic animations still need review.
+- Staged humanoid actors use the complete JO skeleton and animation set.
+  The engine includes all JO animation names. Existing cinematic-slot aliases
+  remain available. See `jo-cinematics.md` for the full audit and scene checks.
 - JO NPC definitions and objective names load as campaign data. Objective slot
-  zero stays reserved for JA's light-side state. The save layout is unchanged.
+  zero stays reserved for JA's light-side state. Format 4 stores the larger
+  animation tables and retains readers for this project's older formats.
 - JO NPC class names convert to JA names. Earlier MVP saves repair invalid NPC
   classes on load. See `encounter-kejim.md` for pressure tests and remaining limits.
 - English STRIP text converts to StringEd text. Other JO text languages are not

@@ -98,12 +98,15 @@ class ImportTests(unittest.TestCase):
                     archive.writestr(name, data)
                 for mapname in ("kejim_post", "kejim_base"):
                     archive.writestr(f"maps/{mapname}.bsp", bsp)
-                archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\nclass kyle\n}\nJan\n{\nplayerModel jan\nclass jan\n}\nGalak\n{\nplayerModel galak\nclass galak\n}\n")
+                archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\nclass kyle\n}\nJan\n{\nplayerModel jan\nclass jan\n}\nGalak\n{\nplayerModel galak\nclass galak\n}\nTavion\n{\nplayerModel tavion\nclass tavion\ncustomSkin red\n}\n")
                 archive.writestr(human + "animation.cfg", b"BOTH_COCKPIT_SIT 30 5 0 20\nBOTH_TALKGESTURE11START 50 33 -1 20\nBOTH_TALKGESTURE11STOP 83 16 -1 20\nBOTH_TALKGESTURE2 99 39 -1 20\n")
                 archive.writestr(human + "_humanoid.gla", bytes(100))
-                for actor in ("kyle", "jan", "galak"):
-                    archive.writestr(f"models/players/{actor}/model.glm", bytes(164))
+                for actor in ("kyle", "jan", "galak", "tavion"):
+                    mesh = bytearray(164)
+                    mesh[72:136] = b"models/players/_humanoid/_humanoid".ljust(64, b"\0")
+                    archive.writestr(f"models/players/{actor}/model.glm", mesh)
                     archive.writestr(f"models/players/{actor}/model_default.skin", b"torso,texture")
+                archive.writestr("models/players/tavion/model_red.skin", b"torso,red_texture")
                 archive.writestr("scripts/cinematics/cinematic1.ibi", script(b"BOTH_COCKPIT_SIT\0"))
                 archive.writestr("scripts/cinematics/cinematic2.ibi", script(b"BOTH_TALKGESTURE2\0"))
                 archive.writestr("models/players/galak_mech/animation.cfg",
@@ -134,17 +137,21 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual(archive.read(human + "animation.cfg"), b"BOTH_STAND1 10 2 0 20\n")
                 self.assertNotIn(human + "_humanoid.gla", names)
                 self.assertEqual(archive.read("models/players/jo_cinematic/animation.cfg"),
+                                 b"BOTH_COCKPIT_SIT 30 5 0 20\nBOTH_TALKGESTURE11START 50 33 -1 20\nBOTH_TALKGESTURE11STOP 83 16 -1 20\nBOTH_TALKGESTURE2 99 39 -1 20\n"
                                  b"BOTH_CIN_1 30 5 0 20\nBOTH_CIN_2 50 33 -1 20\nBOTH_CIN_3 83 16 -1 20\nBOTH_CIN_4 99 39 -1 20\n")
                 glm = archive.read("models/players/jo_cinematic_kyle/model.glm")
                 gla = archive.read("models/players/jo_cinematic/jo_cinematic.gla")
                 self.assertEqual(glm[72:136].rstrip(b"\0") + b".gla", gla[8:72].rstrip(b"\0"))
-                self.assertIn(b'"NPC_type" "jo_cinematic_kyle"', archive.read("maps/kejim_post.ent"))
+                self.assertNotIn("maps/kejim_post.ent", names)
                 self.assertIn(b"playerModel jo_cinematic_kyle", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertIn(b"class CLASS_KYLE", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertIn(b"playerModel jo_cinematic_galak", archive.read("ext_data/jo/npcs.cfg"))
+                self.assertIn(b"\njo_cinematic_tavion\n", archive.read("ext_data/jo/npcs.cfg"))
+                self.assertEqual(archive.read("models/players/jo_cinematic_tavion/model_red.skin"), b"torso,red_texture")
                 self.assertEqual(archive.read("scripts/cinematics/cinematic1.ibi"), script(b"BOTH_CIN_1\0"))
                 self.assertEqual(archive.read("scripts/cinematics/cinematic2.ibi"), script(b"BOTH_CIN_4\0"))
                 self.assertEqual(archive.read("models/players/galak_mech/animation.cfg"),
+                                 b"BOTH_ALERT1 10 20 -1 20\nBOTH_TRIUMPHANT1STOP 30 10 -1 20\n"
                                  b"BOTH_CIN_45 10 20 -1 20\nBOTH_CIN_50 30 10 -1 20\n")
                 self.assertIn(b"Keep this JA label", archive.read("strings/english/sp_ingame.str"))
                 self.assertEqual(archive.read("ext_data/jo/objectives.dat"), b"KEJIM_POST_OBJ1\n")

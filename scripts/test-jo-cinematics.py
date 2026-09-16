@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the Kejim CCTV sequence and the Artus opening without cinematic skipping."""
+"""Check JO cinematic completion, original poses, and attached props headlessly."""
 
 import argparse
 import math
@@ -13,6 +13,12 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+MAPS = {"cctv": "kejim_base", "artus": "artus_mine", "topside": "artus_topside",
+        "office": "kejim_base", "bar": "ns_streets", "rescue": "doom_detention"}
+ACTORS = {"cctv": ("cinematic2_kyle", "cinematic_galak"), "artus": ("cinematic4_kyle",),
+          "topside": ("cinematic9_tavion", "cinematic9_jan", "cinematic9_desann", "cinematic9_kyle"),
+          "office": ("cinematic3_kyle", "cinematic3_jan", "cinematic3_mon_mothma"),
+          "bar": ("cinematic15_kyle", "cinematic15_bartender"), "rescue": ("cinematic29_kyle", "cinematic29_jan")}
 
 
 def run_case(package, case, renderer, saved):
@@ -25,13 +31,14 @@ def run_case(package, case, renderer, saved):
         saves.mkdir(parents=True)
         shutil.copyfile(saved, saves / "cinematic_test.sav")
     log = run / "console.log"
-    mapname = {"cctv": "kejim_base", "artus": "artus_mine", "topside": "artus_topside"}[case]
+    mapname = MAPS[case]
     env = dict(os.environ, OJK_PROFILE=str(profile), LIBGL_ALWAYS_SOFTWARE="1", LP_NUM_THREADS="1",
                SDL_AUDIODRIVER="dummy", OJK_JO_ASSETS=os.environ.get("OJK_JO_ASSETS", str(ROOT / "GameData_JO")))
     command = ["bash", str(package / "launch-sp.sh"), os.environ.get("OJK_ASSETS", str(ROOT / "GameData")),
                "--campaign", "jo", "+safe", "+set", "cl_renderer", renderer,
                "+set", "r_fullscreen", "0", "+set", "r_mode", "3", "+set", "s_initsound", "1",
-               "+set", "g_subtitles", "2", "+set", "developer", "1", "+set", "logfile", "2",
+                "+set", "g_subtitles", "2", "+set", "developer", "1", "+set", "logfile", "2",
+                "+set", "d_cinematicAnimations", "1", "+set", "con_notifytime", "-1",
                "+set", "com_maxfps", "20",
                *(["+load", "cinematic_test"] if saved else ["+map", mapname]),
                "+wait", "1", "+echo", "CINEMATIC_READY"]
@@ -87,22 +94,31 @@ def run_case(package, case, renderer, saved):
                     cmd("helpusobi 1; wait 300; use tom_spawn; wait 20; save before_topside")
                 if "camera=0" in cmd("campaign_status"):
                     cmd("helpusobi 1; use cinematic9_spawner")
+            elif case == "office":
+                cmd("helpusobi 1; wait 150; use cinematic3_script")
+            elif case == "bar":
+                cmd("helpusobi 1; wait 300; exitview; wait 100; use cinematic15_start")
+            elif case == "rescue":
+                cmd("helpusobi 1; wait 150; use jan_jail_door")
             history = []
             captured = False
-            deadline = time.monotonic() + 180
+            seen_camera = False
+            query = f"wait {1 if case == 'artus' else 10}; " + "; ".join("cinematic_status " + actor for actor in ACTORS[case])
+            deadline = time.monotonic() + 300
             while time.monotonic() < deadline:
-                if case == "cctv":
-                    current = samples(cmd("wait 10; cinematic_status cinematic2_kyle; cinematic_status cinematic_galak"))
-                elif case == "topside":
-                    current = samples(cmd("wait 10; cinematic_status cinematic9_tavion; cinematic_status cinematic9_desann; cinematic_status cinematic9_kyle"))
-                else:
-                    current = samples(cmd("wait 1; cinematic_status cinematic4_kyle"))
+                current = samples(cmd(query))
                 history.extend(current)
+                seen_camera |= any(s.get("camera") == "1" for s in current)
+                if case in ("bar", "rescue") and seen_camera and current and all(s.get("camera") == "0" for s in current):
+                    break
                 if case == "topside" and any(s.get("camera") == "0" and s.get("behavior") == "0" for s in current):
                     break
                 if not captured and any(s.get("legs", "").startswith("BOTH_CIN_") if case == "cctv"
+                                        else s.get("legs") == "BOTH_EXAMINE2" if case == "office"
+                                        else s.get("legs", "").startswith("BOTH_BARTENDER_") if case == "bar"
+                                        else s.get("legs", "").startswith("BOTH_HUG") if case == "rescue"
                                         else s.get("nav") == "1" for s in current):
-                    capture("galak" if case == "cctv" else "walking")
+                    capture({"cctv": "galak", "office": "crystal", "bar": "bartender", "rescue": "hug"}.get(case, "walking"))
                     captured = True
                 if current and all(s.get("absent") == "1" for s in current):
                     break
@@ -120,15 +136,35 @@ def run_case(package, case, renderer, saved):
                 assert moving and all(s["noclip"] == "0" and s["legs"] == "BOTH_WALK1" for s in moving), moving
                 assert any(s["ground"] != "1023" for s in moving), "Kyle never touched the ground"
                 assert history[-1]["camera"] == "0", history[-1]
-            else:
+            elif case == "topside":
                 desann = [s for s in history if s["name"] == "cinematic9_desann"]
                 assert any(s.get("voice") == "1" for s in desann), "Desann never spoke after Tavion's handoff"
                 assert any(s.get("camera") == "0" and s.get("behavior") == "0" for s in desann), "Desann fight did not start"
+                assert any(s.get("legs") == "BOTH_CONSTRAINER1STAND" for s in history), "Missing Tavion restraint pose"
+                assert any(s.get("legs") == "BOTH_CONSTRAINEE1STAND" for s in history), "Missing Jan restraint pose"
+            elif case == "office":
+                assert captured and any(s.get("legs") == "BOTH_SIT1" for s in history), "Missing office sitting or crystal pose"
+                assert any(s["name"] == "cinematic3_jan" and s.get("legs", "").startswith("BOTH_CIN_") for s in history), "Jan did not sit in her chair"
+                props = log.read_text(errors="replace")
+                for actor in ("cinematic3_kyle", "cinematic3_mon_mothma"):
+                    assert re.search(r"cinematic_prop name=" + actor + r" slot=\d+ model=models/map_objects/cinematics/crystal\.glm", props), (actor, "Missing crystal attachment")
+            elif case == "bar":
+                assert captured, "Missing bartender animations"
+            elif case == "rescue":
+                assert captured and "animation=BOTH_HUGGERSTOP2 supported=1" in log.read_text(errors="replace"), "Missing reunion poses"
+                returned = cmd("wait 20; cinematic_status jan; campaign_status")
+                assert "cinematic_set name=jan profile=_humanoid" in returned, returned
+                assert "objective=DOOM_DETENTION_OBJ1 status=1" in returned, returned
             capture("completed")
             stdin.write("quit\n")
             stdin.flush()
             assert process.wait(timeout=30) == 0
             text = log.read_text(errors="replace")
+            traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
+                      for line in text.splitlines() if "cinematic_animation actor=" in line]
+            staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
+            assert staged and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)
         finally:
@@ -143,7 +179,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
-    parser.add_argument("--case", choices=("cctv", "artus", "topside"))
+    parser.add_argument("--case", choices=tuple(MAPS))
     parser.add_argument("--save", type=Path, help="Load a save from before the selected cinematic")
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -152,7 +188,7 @@ def main():
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
                                 __file__, *sys.argv[1:], "--inside"])
-    for case in ([args.case] if args.case else ("cctv", "artus", "topside")):
+    for case in ([args.case] if args.case else MAPS):
         run_case(args.package.resolve(), case, args.renderer, args.save)
     return 0
 

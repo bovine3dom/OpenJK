@@ -150,6 +150,8 @@ See `docs/jo-campaign.md` for setup and renderer options.
 - [ ] Watch the Artus Mine opening (`artus_mine`). Kyle must walk across the terrain, complete the conversation, and return player control.
 - [ ] Load an earlier Artus save and check both prisoner head variants from the back and sides.
 - [ ] Replay the Artus Topside handoff. Desann must enter after Tavion's line, answer her, and start the fight. Check a save from the reported hang if one is available. Test skipping separately.
+- [ ] Replay the Kejim office scene. Check Jan's seated pose and the crystal inspection and handover. Compare the body poses and prop placement in both renderers.
+- [ ] Check the later bartender, reunion, kiss, and handshake scenes through normal play. Watch paired poses, feet, hand props, and transitions back to gameplay. The static animation audit and representative scene checks are described in `docs/jo-cinematics.md`.
 - [ ] Supply a save or screenshot of the passage with missing flames, before turning the pipes off. The generator pipe material and sampled walkway flame effects render in the diagnostic checks; the exact reported failure remains unconfirmed.
 - [ ] Save during combat and during a scripted task. Load each save and check that the encounter or task continues.
 - [ ] Die and reload. Check that objectives, equipment, and required NPCs remain correct.
