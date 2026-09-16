@@ -321,4 +321,9 @@ constraints, but it does not remove the need to test campaign progression.
 
 ---
 
-- autosaves every few minutes with i guess grandfather-father-son
+- autosaves every few minutes with i guess grandfather-father-son - need to make them off the main thread / async so they don't cause stutter
+- skybox improvements, i guess depth of field? volumetric fog? the problem is that screens are much higher resolution now than when they were first designed, so we can see every imperfection including seams. maybe volumetric fog?
+- have lightsabers cast shadows like the torch, but less distance?
+- check https://github.com/JKSunny/EternalJK for an already in-progress vulkan port
+- consider looking at https://github.com/taysta/TaystJK for features to cherry-pick
+- modern sound engine with attenuation etc through walls?
