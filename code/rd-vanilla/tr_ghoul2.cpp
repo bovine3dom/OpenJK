@@ -243,6 +243,7 @@ public:
 
 	// for render smoothing
 	bool			mSmoothingActive;
+	bool            mPhysicsPose;
 	bool			mUnsquash;
 	float			mSmoothFactor;
 //	int				mWraithID; // this is just used for debug prints, can use it for any int of interest in JK2
@@ -254,6 +255,7 @@ public:
 		assert(amod);
 		assert(aheader);
 		mSmoothingActive=false;
+		mPhysicsPose=false;
 		mUnsquash=false;
 		mSmoothFactor=0.0f;
 
@@ -1935,7 +1937,14 @@ void G2_TransformGhoulBones(boneInfo_v &rootBoneList,mdxaBone_t &rootMatrix, CGh
 	float val=r_Ghoul2AnimSmooth->value;
 #ifdef BONE_ANGLES_PHYSICS
 	// The physics pose already has fixed-step interpolation.
-	for (const auto& bone : rootBoneList) if (bone.flags & BONE_ANGLES_PHYSICS) { val = 0; break; }
+	bool physicsPose = false;
+	for (const auto& bone : rootBoneList) if (bone.flags & BONE_ANGLES_PHYSICS) { physicsPose = true; break; }
+	if (physicsPose != ghoul2.mBoneCache->mPhysicsPose) {
+		// EvalUnsmooth must not return a pose cached before physics took ownership.
+		for (int i = 0; i < ghoul2.mBoneCache->mNumBones; ++i) ghoul2.mBoneCache->mSmoothBones[i].touch = 0;
+		ghoul2.mBoneCache->mPhysicsPose = physicsPose;
+	}
+	if (physicsPose) val = 0;
 #endif
 	if (smooth&&val>0.0f&&val<1.0f)
 	{

@@ -15,7 +15,7 @@ struct Part {
 	float radius, mass;
 	int parent;
 };
-enum class ControlPhase { Shadow, Tracking, Stepping, Falling, Preparing };
+enum class ControlPhase { Shadow, Tracking, Stepping, Falling, Preparing, Dead };
 struct BalanceStatus {
 	ControlPhase phase = ControlPhase::Falling;
 	float error = 0, strength = 0, pelvisHeight = 0;
@@ -30,6 +30,8 @@ struct BalanceStatus {
 	float peakLegLift = 0;
 	unsigned braceMask = 0, handContacts = 0, handContactsSeen = 0;
 	float preparationError = 0;
+	bool supportedTrunk = false;
+	unsigned firstHandContact = 0, firstHeadContact = 0;
 };
 class CollisionScene {
 	struct Impl;
@@ -60,6 +62,9 @@ public:
 	void Drive(const Part* pose, const float* desiredVelocity, float seconds);
 	void React(int part, const float* direction, const float* point, float impulse, float weakness);
 	void ReleaseControl();
+	void Kill();
+	bool Awake() const;
+	float TrunkSpeed() const;
 	void PrepareRecovery(const Transform* bones, float seconds);
 	bool RecoveryPathClear(const Transform* bones) const;
 	BalanceStatus Balance() const;

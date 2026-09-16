@@ -178,6 +178,28 @@ velocity while the NPC was running. Engagement now matches the native
 locomotion velocity and brush-mover carry velocity. A common velocity change
 preserves the relative movement of the limbs.
 
+## Gameplay Integration
+
+The active-rig budget now defaults to ten. Sleeping corpses keep their physical
+poses and do not occupy active slots. Worlds share solver scratch memory and
+collision geometry. Rig admission checks humanoid skeletons and landmarks,
+with aliases for alternate thigh, torso, and hand names.
+
+Death now stops the active motors while retaining the physical pose and
+momentum. Native death callbacks still handle scripts, scoring, and inventory.
+Thermal and other explosive damage uses native radius, cover, and knockback
+calculations. Knockback is transferred once to a controlled body.
+
+The get-up flash was traced to stale Ghoul2 smoothing data. Bone queries could
+return a pre-physics pose as control passed back to animation. Both renderers
+now invalidate that history at ownership changes. The handoff also replaces
+old pelvis and Motion animation tracks and checks the initial pose error.
+
+Bracing targets now lead the head rather than the chest. Elbow stiffness and
+torque are higher during impact absorption. The forward-fall solver test checks
+that a hand contacts the surface before the head. Recovery starts from stable
+torso contact instead of waiting for all limb motion to finish.
+
 ## Sources
 
 - [NaturalMotion interview, 2006](https://www.psu.com/news/psu-interviews-naturalmotion/)

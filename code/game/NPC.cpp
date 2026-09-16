@@ -30,6 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "say.h"
 #include "Q3_Interface.h"
 #include "g_vehicles.h"
+#include "g_jolt.h"
 
 extern vec3_t playerMins;
 extern vec3_t playerMaxs;
@@ -96,7 +97,7 @@ void CorpsePhysics( gentity_t *self )
 {
 	// run the bot through the server like it was a real client
 	memset( &ucmd, 0, sizeof( ucmd ) );
-	ClientThink( self->s.number, &ucmd );
+	if (!G_JoltOwns(self)) ClientThink( self->s.number, &ucmd );
 	VectorCopy( self->s.origin, self->s.origin2 );
 	if (self->client->NPC_class == CLASS_GALAKMECH)
 	{
@@ -105,7 +106,7 @@ void CorpsePhysics( gentity_t *self )
 	}
 
 	//FIXME: match my pitch and roll for the slope of my groundPlane
-	if ( self->client->ps.groundEntityNum != ENTITYNUM_NONE && !(self->flags&FL_DISINTEGRATED) )
+	if ( !G_JoltOwns(self) && self->client->ps.groundEntityNum != ENTITYNUM_NONE && !(self->flags&FL_DISINTEGRATED) )
 	{//on the ground
 		//FIXME: check 4 corners
 		pitch_roll_for_slope( self );

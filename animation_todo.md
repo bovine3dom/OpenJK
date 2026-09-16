@@ -6,9 +6,9 @@ The next work follows [Reactive Character Control](docs/reactive-animation-resea
 The previous threshold-and-launch design does not meet the motion target.
 Pose history, motor-driven balance, and corrective steps are now implemented.
 
-Jolt projectile reactions are enabled for validated stock stormtroopers without
-manual selection. Each actor has an independent reaction record; one actor can
-use full-body physics at a time. The system uses the existing mesh, skeleton, skin weights, and animation
+Jolt projectile and explosion reactions are enabled for validated humanoid NPCs
+without manual selection. The default active-rig budget is ten. Corpses retain
+their physical poses and can sleep. The system uses the existing mesh, skeleton, skin weights, and animation
 clips. See [Jolt Animation Prototype](docs/jolt-animation.md) for controls,
 rig parameters, tests, and limits. The prototype uses thirteen bodies and
 includes foot contacts, corrective steps, protective arm targets, retained
@@ -34,6 +34,8 @@ handling need further work.
 - [x] Match a grounded first-frame get-up pose before playing the authored rise.
 - [x] Add corrective step attempts and confirmed landings on clear ground.
 - [x] Add protective arm targets during a controlled fall.
+- [x] Preserve physical continuity on death and restore corpse poses after loading.
+- [x] Add explosion handling and concurrent humanoid rigs.
 - [ ] Extend recovery and stepping to obstacles and uneven ground.
 
 Euphoria combines physical simulation with motor control, balance, stepping,

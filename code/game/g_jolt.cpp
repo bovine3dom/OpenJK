@@ -19,13 +19,15 @@ extern void G_Knockdown(gentity_t* self, gentity_t* attacker, const vec3_t direc
 extern void G_SetViewEntity(gentity_t* self, gentity_t* target);
 extern qboolean G_ClearViewEntity(gentity_t* ent);
 extern void WP_FireBlasterMissile(gentity_t* ent, vec3_t start, vec3_t direction, qboolean altFire);
+extern qboolean G_StandardHumanoid(gentity_t* ent);
+extern void thermalDetonatorExplode(gentity_t* ent);
 
 namespace {
 constexpr float MetresPerUnit = 0.0254f;
-constexpr size_t MaxActors = 16;
+constexpr size_t MaxActors = 64;
 constexpr int RecoveryBlendTime = 180;
 const mdxaBone_t identityAngles = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}}};
-int selectedActor = -1, fallOwner = -1;
+int selectedActor = -1;
 const char* demoCases[] = {"idle", "hit", "step", "leg", "run", "fall"};
 int demoCase = 0, demoStage = 0, demoDue = 0;
 bool demoCycle = false;
@@ -33,6 +35,7 @@ vec3_t demoOrigin;
 cvar_t* enabled = nullptr;
 cvar_t* debug = nullptr;
 cvar_t* reactionPose = nullptr;
+cvar_t* bodyBudget = nullptr;
 std::map<int, std::vector<float>> collision;
 std::unique_ptr<JoltReaction::CollisionScene> collisionScene;
 bool collisionLoaded = false;
@@ -44,6 +47,7 @@ void Settings() {
 	if (!enabled) enabled = gi.cvar("g_joltReactions", "1", CVAR_ARCHIVE);
 	if (!debug) debug = gi.cvar("g_joltDebug", "0", CVAR_CHEAT);
 	if (!reactionPose) reactionPose = gi.cvar("g_joltReactionPose", "1", CVAR_CHEAT);
+	if (!bodyBudget) bodyBudget = gi.cvar("g_joltMaxBodies", "10", CVAR_ARCHIVE);
 }
 bool Projectile(int mod) {
 	switch (mod) {
@@ -59,6 +63,9 @@ int PresentationTime(int time) {
 	return time - 1000 / fps;
 }
 bool Eligible(const gentity_t* ent);
+bool Humanoid(const gentity_t* ent);
+bool SavedCorpse(const gentity_t* ent);
+int ActiveBodies();
 bool ExternalPoseOwner(gentity_t* ent);
 bool AnimationOwnsPose(gentity_t* ent);
 bool BoltPosition(gentity_t* ent, int bolt, vec3_t position);
@@ -76,6 +83,9 @@ struct Actor {
 	vec3_t lastOrigin;
 	std::unique_ptr<JoltReaction::FallSimulation> fall;
 	int bolts[JoltReaction::PartCount], endBolts[JoltReaction::PartCount];
+	const char* rigBones[JoltReaction::PartCount];
+	const char* rigEnds[JoltReaction::PartCount];
+	bool rigidHelmet = false;
 	JoltReaction::Transform fallPose[JoltReaction::PartCount];
 	JoltReaction::Transform recoveryPose[JoltReaction::PartCount];
 	JoltReaction::Transform recoveryFrom[JoltReaction::PartCount];
@@ -93,8 +103,14 @@ struct Actor {
 	vec3_t navigationOrigin = {};
 	JoltReaction::Part reference[JoltReaction::PartCount];
 	bool engaged = false;
+	bool dead = false;
+	int riseStart = 0;
+	float handoffError = 0;
 	vec3_t displayedMins, displayedMaxs;
-	explicit Actor(int number) : actor(number) {}
+	explicit Actor(int number) : actor(number) {
+		std::copy(bones, bones+JoltReaction::PartCount, rigBones);
+		std::copy(ends, ends+JoltReaction::PartCount, rigEnds);
+	}
 	~Actor() { Reset(true); }
 	bool Initialize(gentity_t* ent);
 	bool Active(gentity_t* ent);
@@ -113,6 +129,9 @@ struct Actor {
 	bool Recover(gentity_t* ent);
 	void ReturnToAnimation(gentity_t* ent);
 	void FinishRecovery(gentity_t* ent);
+	void Die(gentity_t* ent);
+	void StoreCorpse();
+	void CancelRecovery(gentity_t* ent);
 	void Status();
 	void HitCommand();
 	void KnockdownCommand();
@@ -120,6 +139,21 @@ struct Actor {
 	void ControlCommand();
 };
 std::map<int, std::unique_ptr<Actor>> actors;
+std::map<int, int> retryRigAfter;
+int ActiveBodies() {
+	int count = 0;
+	for (const auto& entry : actors) if (entry.second->fall && (!entry.second->dead || entry.second->fall->Awake())) ++count;
+	return count;
+}
+bool BodyRoom(const Actor* requester) {
+	const int limit = std::max(1, std::min(16, bodyBudget->integer));
+	if (ActiveBodies() < limit) return true;
+	for (auto& entry : actors) if (entry.second.get() != requester && entry.second->fall && !entry.second->engaged) {
+		entry.second->fall.reset();
+		if (ActiveBodies() < limit) return true;
+	}
+	return false;
+}
 
 void Actor::UpdatePhysicalHull(gentity_t* ent) {
 	vec3_t mins, maxs;
@@ -153,11 +187,13 @@ struct PoseModel {
 	}
 	~PoseModel() { gi.G2API_CleanGhoul2Models(models); }
 };
-bool SetPoseClip(CGhoul2Info_v& models, const animation_t& clip, bool firstFrame) {
+bool SetPoseClip(CGhoul2Info_v& models, const animation_t& clip, bool firstFrame, const char* torso = "lower_lumbar") {
 	const int end = firstFrame ? clip.firstFrame + 1 : clip.firstFrame + clip.numFrames;
-	for (const char* bone : {"model_root", "lower_lumbar"})
+	for (const char* bone : {"model_root", torso})
 		if (!gi.G2API_SetBoneAnim(&models[0], bone, clip.firstFrame, end, BONE_ANIM_OVERRIDE_FREEZE,
 			50.0f / clip.frameLerp, level.time, float(clip.firstFrame), 0)) return false;
+	if (gi.G2API_GetBoneIndex(&models[0], "Motion", qfalse) >= 0)
+		gi.G2API_SetBoneAnim(&models[0], "Motion", clip.firstFrame, end, BONE_ANIM_OVERRIDE_FREEZE, 50.0f/clip.frameLerp, level.time, float(clip.firstFrame), 0);
 	return true;
 }
 void ExportSurface(int model, int count, const float* points, void*) {
@@ -195,11 +231,7 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 }
 bool Actor::PrepareRig(gentity_t* ent) {
 	if (fall) return true;
-	if (fallOwner >= 0) {
-		auto& owner = *actors.at(fallOwner);
-		if (owner.engaged) return false;
-		owner.fall.reset(); fallOwner = -1;
-	}
+	if (!BodyRoom(this)) return false;
 	if (!collisionLoaded) {
 		collisionLoaded = true;
 		if (!gi.PhysicsSurfaces(MASK_NPCSOLID, ExportSurface, nullptr)) gi.Printf("Jolt: unsupported collision format; using small reactions\n");
@@ -215,7 +247,6 @@ bool Actor::PrepareRig(gentity_t* ent) {
 	fall.reset(new JoltReaction::FallSimulation(reference, velocity, g_gravity->value * MetresPerUnit));
 	if (!fall->UseScene(*collisionScene)) { fall.reset(); return false; }
 	MoveColliders(0);
-	fallOwner = actor;
 	fall->Follow(reference, 0);
 	VectorCopy(ent->mins, savedMins); VectorCopy(ent->maxs, savedMaxs);
 	vec3_t offset;
@@ -228,12 +259,12 @@ bool Actor::PrepareRig(gentity_t* ent) {
 bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& models) {
 	const float masses[] = {12, 24, 5, 3, 2, 3, 2, 8, 4, 8, 4, 1.5f, 1.5f};
 	const float radii[] = {.12f, .14f, .075f, .055f, .045f, .055f, .045f, .085f, .06f, .085f, .06f, .06f, .06f};
-	vec3_t angles = {0, engaged ? fallYaw : ent->client->renderInfo.legsYaw, 0}, forward;
+	vec3_t angles = {0, engaged || dead ? fallYaw : ent->client->renderInfo.legsYaw, 0}, forward;
 	AngleVectors(angles, forward, nullptr, nullptr);
 	for (int i = 0; i < JoltReaction::PartCount; ++i) {
 		if (!fall) {
-			bolts[i] = gi.G2API_AddBolt(&models[0], bones[i]);
-			endBolts[i] = gi.G2API_AddBolt(&models[0], ends[i]);
+			bolts[i] = gi.G2API_AddBolt(&models[0], rigBones[i]);
+			endBolts[i] = gi.G2API_AddBolt(&models[0], rigEnds[i]);
 		}
 		mdxaBone_t bone, end;
 		if (bolts[i] < 0 || endBolts[i] < 0 || !gi.G2API_GetBoltMatrix(models, 0, bolts[i], &bone, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale) ||
@@ -242,16 +273,31 @@ bool Actor::ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& 
 		}
 		for (int r = 0; r < 3; ++r) {
 			for (int c = 0; c < 4; ++c) parts[i].bone.matrix[r][c] = bone.matrix[r][c] * (c == 3 ? MetresPerUnit : 1);
-			parts[i].end[r] = (i == 2 ? 2 * end.matrix[r][3] - bone.matrix[r][3] : end.matrix[r][3]) * MetresPerUnit;
+			parts[i].end[r] = (i == 2 && !rigidHelmet ? 2 * end.matrix[r][3] - bone.matrix[r][3] : end.matrix[r][3]) * MetresPerUnit;
 			if (i >= 11) parts[i].end[r] = parts[i].bone.matrix[r][3] + forward[r]*.14f;
 		}
 		vec3_t delta;
 		for (int r = 0; r < 3; ++r) delta[r] = parts[i].end[r] - parts[i].bone.matrix[r][3];
-		const float length = VectorLength(delta);
+		float length = VectorLength(delta);
+		if (i == 0 && length < .015f) {
+			// Some armoured rigs put pelvis and lower spine at the same point.
+			mdxaBone_t upper;
+			const int upperBolt = gi.G2API_AddBolt(&models[0], rigBones[2]);
+			if (upperBolt < 0 || !gi.G2API_GetBoltMatrix(models, 0, upperBolt, &upper, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale)) return false;
+			for (int r = 0; r < 3; ++r) delta[r] = upper.matrix[r][3]-bone.matrix[r][3];
+			if (VectorNormalize(delta) < .1f) return false;
+			length = .12f;
+			for (int r = 0; r < 3; ++r) parts[i].end[r] = parts[i].bone.matrix[r][3]+delta[r]*length;
+		}
 		if (!std::isfinite(length) || length < 0.015f || length > 1) { gi.Printf("Jolt: invalid segment %s %.3f\n", bones[i], length); return false; }
 		parts[i].radius = std::min(radii[i], length * .45f);
 		parts[i].mass = masses[i];
 		parts[i].parent = parents[i];
+		if (rigidHelmet) {
+			if (i == 1) parts[i].mass = 13;
+			if (i == 2) { parts[i].mass = 16; parts[i].radius = std::min(.14f, length*.45f); }
+			if (i == 3 || i == 5) parts[i].parent = 2;
+		}
 	}
 	return true;
 }
@@ -290,6 +336,7 @@ void Actor::Engage(gentity_t* ent) {
 	fallYaw = ent->client->renderInfo.legsYaw; fallStart = 0;
 	fallMicroseconds = 0; fallSteps = 0;
 	settledSince = recoverStart = prepareStart = nextRecoverAttempt = 0;
+	riseStart = 0;
 	vec3_t carried; fall->RootVelocity(carried);
 	gi.Printf("Jolt: active control actor=%d speed=%.1f carried=%.3f,%.3f,%.3f gap=%.3f angle=%.1f\n", actor, launchSpeed, carried[0], carried[1], carried[2], fall->Balance().handoffGap, fall->Balance().handoffAngle);
 }
@@ -301,6 +348,7 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		if (!ReadParts(ent, reference, ent->ghoul2)) { Reset(false); return; }
 		MoveColliders(std::max(seconds, .001f));
 		fall->Follow(reference, seconds);
+		if (riseStart && !PM_InGetUp(&ent->client->ps)) riseStart = 0;
 		return;
 	}
 	if (!recoverStart && DistanceSquared(ent->currentOrigin, lastOrigin) > 128 * 128) { Reset(false); return; }
@@ -343,7 +391,7 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else {
 		vec3_t pushed; VectorScale(ent->client->ps.velocity, MetresPerUnit, pushed);
 		if (prepareStart && VectorLengthSquared(pushed) > .01f) { prepareStart = 0; fall->ReleaseControl(); }
-		fall->AddVelocity(pushed);
+		if (!dead) fall->AddVelocity(pushed);
 	}
 	const auto start = std::chrono::steady_clock::now();
 	const unsigned before = fall->Steps();
@@ -373,14 +421,15 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else VectorClear(ent->client->ps.velocity);
 	Render(ent, level.time, origin, ent->currentAngles, false);
 	UpdatePhysicalHull(ent);
+	if (dead) return;
 	if (prepareStart) {
-		if (level.time-prepareStart >= prepareTime && (fall->Speed() < .65f || level.time-prepareStart >= prepareTime+700)) {
+		if (level.time-prepareStart >= prepareTime && (fall->TrunkSpeed() < .75f || level.time-prepareStart >= prepareTime+250)) {
 			if (!Recover(ent)) { prepareStart = 0; fall->ReleaseControl(); }
 		}
 	} else if (balance.phase == JoltReaction::ControlPhase::Falling) {
-		if (fall->Speed() < .25f) { if (!settledSince) settledSince = level.time; }
+		if (balance.supportedTrunk && fall->TrunkSpeed() < .55f) { if (!settledSince) settledSince = level.time; }
 		else settledSince = 0;
-		if (settledSince && level.time - settledSince > 600 && level.time - fallStart > 1200 && level.time >= nextRecoverAttempt) Recover(ent);
+		if (settledSince && level.time - settledSince >= 180 && level.time - fallStart >= 650 && level.time >= nextRecoverAttempt) Recover(ent);
 	} else if (actor != selectedActor && balance.phase == JoltReaction::ControlPhase::Tracking &&
 		level.time-lastHit > 1500 && balance.error < .06f && fall->Speed() < .35f) {
 		if (!settledSince) settledSince = level.time;
@@ -415,7 +464,7 @@ void Actor::ReturnToAnimation(gentity_t* ent) {
 }
 
 bool Actor::Recover(gentity_t* ent) {
-	nextRecoverAttempt = level.time + 500;
+	nextRecoverAttempt = level.time + 250;
 	const int file = ent->client->clientInfo.animFileIndex;
 	if (file < 0 || file >= level.numKnownAnimFileSets) return false;
 	PoseModel sample(ent);
@@ -426,7 +475,7 @@ bool Actor::Recover(gentity_t* ent) {
 	for (int r = 0; r < 3; ++r) pelvis[r] = fallPose[0].matrix[r][3] / MetresPerUnit;
 	for (int anim : {BOTH_GETUP1, BOTH_GETUP2, BOTH_GETUP3, BOTH_GETUP4, BOTH_GETUP5}) {
 		const auto& clip = level.knownAnimFileSets[file].animations[anim];
-		if (clip.numFrames < 2 || clip.frameLerp <= 0 || !SetPoseClip(sample.models, clip, true)) continue;
+		if (clip.numFrames < 2 || clip.frameLerp <= 0 || !SetPoseClip(sample.models, clip, true, rigBones[1])) continue;
 		JoltReaction::Transform local[JoltReaction::PartCount], target[JoltReaction::PartCount];
 		bool valid = true;
 		for (int i = 0; i < JoltReaction::PartCount; ++i) {
@@ -482,7 +531,7 @@ bool Actor::Recover(gentity_t* ent) {
 	if (ground == ENTITYNUM_NONE) return false;
 	if (!prepareStart) {
 		prepareStart = level.time;
-		prepareTime = int(1000*std::max(.5f, std::min(1.2f, JoltReaction::RecoveryDuration(fallPose, recoveryPose, JoltReaction::PartCount))));
+		prepareTime = int(1000*std::max(.25f, std::min(.65f, JoltReaction::RecoveryDuration(fallPose, recoveryPose, JoltReaction::PartCount))));
 		fall->PrepareRecovery(recoveryPose, prepareTime*.001f);
 		return true;
 	}
@@ -504,31 +553,100 @@ bool Actor::Recover(gentity_t* ent) {
 }
 
 void Actor::FinishRecovery(gentity_t* ent) {
-	ClearPhysicalBones(ent);
 	if (recoveryAnim < 0) {
+		ClearPhysicalBones(ent);
 		engaged = false; recoverStart = settledSince = 0;
 		fall->Follow(reference, 0); simulation->Reset();
 		VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs); gi.linkentity(ent);
 		return;
 	}
+	// The sampled target had no procedural or per-bone animation overrides. Match it
+	// exactly, including Motion and old pelvis turn clips, before releasing physics.
+	for (size_t i = 0; i < ent->ghoul2[0].mBlist.size(); ++i) {
+		if (ent->ghoul2[0].mBlist[i].boneNumber < 0) continue;
+		ent->ghoul2[0].mBlist[i].flags &= ~BONE_ANIM_TOTAL;
+		gi.G2API_SetBoneAnglesMatrixIndex(&ent->ghoul2[0], int(i), identityAngles, BONE_ANGLES_POSTMULT, nullptr, 0, level.time);
+	}
 	vec3_t angles = {0, fallYaw, 0};
 	G_SetAngles(ent, angles); SetClientViewAngle(ent, angles);
 	ent->client->renderInfo.legsYaw = ent->NPC->desiredYaw = fallYaw;
-	NPC_SetAnim(ent, SETANIM_BOTH, recoveryAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART);
+	ent->client->ps.legsAnimTimer = ent->client->ps.torsoAnimTimer = 0;
+	NPC_SetAnim(ent, SETANIM_BOTH, recoveryAnim, SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD | SETANIM_FLAG_RESTART, 0);
 	const auto& clip = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations[recoveryAnim];
-	SetPoseClip(ent->ghoul2, clip, false);
-	fall.reset(); fallOwner = -1; engaged = false; recoverStart = 0; simulation->Reset(); instability = 0;
+	SetPoseClip(ent->ghoul2, clip, false, rigBones[1]);
+	handoffError = 0;
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		mdxaBone_t actual;
+		gi.G2API_GetBoltMatrix(ent->ghoul2, 0, bolts[i], &actual, angles, ent->currentOrigin, level.time, nullptr, ent->s.modelScale);
+		vec3_t delta;
+		for (int r = 0; r < 3; ++r) delta[r] = actual.matrix[r][3]-recoveryPose[i].matrix[r][3]/MetresPerUnit;
+		handoffError = std::max(handoffError, VectorLength(delta));
+	}
+	fall.reset(); engaged = false; recoverStart = 0; simulation->Reset(); instability = 0;
+	riseStart = level.time;
 	VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs); gi.linkentity(ent);
 }
 
+void Actor::CancelRecovery(gentity_t* ent) {
+	if (recoverStart && fall) {
+		// Resume at the displayed handoff pose, including its limb velocities.
+		for (int frame = 0; frame < 2; ++frame) {
+			JoltReaction::Transform pose[JoltReaction::PartCount];
+			std::copy(recoveryPose, recoveryPose+JoltReaction::PartCount, pose);
+			const float alpha = (level.time-recoverStart-(frame ? 0 : 1000.0f/120))/recoveryTime;
+			if (recoveryAnim < 0) JoltReaction::BlendTransforms(recoveryFrom, pose, JoltReaction::PartCount, alpha);
+			else JoltReaction::BlendRecovery(recoveryFrom, pose, JoltReaction::PartCount, alpha);
+			JoltReaction::Part parts[JoltReaction::PartCount];
+			for (int i = 0; i < JoltReaction::PartCount; ++i) {
+				parts[i] = reference[i]; parts[i].bone = pose[i];
+				float local[3] = {};
+				for (int c = 0; c < 3; ++c) for (int r = 0; r < 3; ++r)
+					local[c] += reference[i].bone.matrix[r][c]*(reference[i].end[r]-reference[i].bone.matrix[r][3]);
+				for (int r = 0; r < 3; ++r) {
+					parts[i].end[r] = pose[i].matrix[r][3];
+					for (int c = 0; c < 3; ++c) parts[i].end[r] += pose[i].matrix[r][c]*local[c];
+				}
+			}
+			fall->Follow(parts, frame ? 1.0f/120 : 0);
+		}
+		fall->Engage(); fall->Sample(fallPose);
+	}
+	if (prepareStart || recoverStart) {
+		fall->ReleaseControl(); prepareStart = recoverStart = 0; nextRecoverAttempt = level.time+250;
+	}
+}
+void Actor::Die(gentity_t* ent) {
+	if (dead || !engaged || !fall) return;
+	CancelRecovery(ent);
+	dead = true; riseStart = 0;
+	fall->Kill();
+	fall->Sample(fallPose);
+	Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
+}
+void Actor::StoreCorpse() {
+	auto* ent = &g_entities[actor];
+	if (!ent->inuse || !ent->client || !fall || !engaged) return;
+	fall->Sample(fallPose);
+	Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
+	ent->client->renderInfo.legsYaw = ent->currentAngles[YAW] = fallYaw;
+	fall->RootVelocity(ent->client->ps.velocity);
+	VectorScale(ent->client->ps.velocity, 1/MetresPerUnit, ent->client->ps.velocity);
+}
+
+bool Humanoid(const gentity_t* ent) {
+	return ent && ent->inuse && ent->s.number > 0 && ent->client && ent->NPC && ent->playerModel == 0 && ent->ghoul2.size() &&
+		G_StandardHumanoid(const_cast<gentity_t*>(ent));
+}
 bool Eligible(const gentity_t* ent) {
-	return ent && ent->inuse && ent->client && ent->NPC && ent->health > 0 &&
-		ent->client->NPC_class == CLASS_STORMTROOPER && ent->ghoul2.size() &&
-		!Q_stricmp(ent->ghoul2[0].mFileName, "models/players/stormtrooper/model.glm") &&
-		ent->lowerLumbarBone >= 0 && ent->cervicalBone >= 0 && !ent->client->dismembered;
+	return Humanoid(ent) && ent->health > 0 && !ent->client->dismembered;
+}
+bool SavedCorpse(const gentity_t* ent) {
+	if (!ent || !ent->inuse || !ent->client || !ent->NPC || ent->health > 0 || !ent->ghoul2.size()) return false;
+	for (const auto& bone : ent->ghoul2[0].mBlist) if (bone.flags & BONE_ANGLES_PHYSICS) return true;
+	return false;
 }
 bool ExternalPoseOwner(gentity_t* ent) {
-	return in_camera || (ent->flags & FL_NO_ANGLES) || ent->s.weapon == WP_SABER || ent->s.weapon == WP_EMPLACED_GUN ||
+	return (in_camera && ent->health > 0) || (ent->flags & (FL_NO_ANGLES | FL_DISINTEGRATED)) || ent->s.weapon == WP_EMPLACED_GUN || ent->client->ps.saberLockTime > level.time ||
 		ent->client->ps.ikStatus || ent->client->ps.heldByBolt || G_IsRidingVehicle(ent) ||
 		(ent->s.weapon == WP_THERMAL && ent->client->fireDelay > 0) ||
 		(ent->client->ps.eFlags & (EF_FORCE_GRIPPED | EF_FORCE_DRAINED | EF_HELD_BY_RANCOR | EF_HELD_BY_WAMPA)) ||
@@ -568,10 +686,9 @@ void Actor::Reset(bool restoreOrigin) {
 		if (restoreOrigin && !recoverStart && ent->health > 0) { G_SetOrigin(ent, safeOrigin); VectorCopy(safeOrigin, ent->client->ps.origin); }
 		gi.linkentity(ent);
 	}
-	if (fallOwner == actor) fallOwner = -1;
 	fall.reset();
 	engaged = false;
-	recoverStart = prepareStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
+	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
 	pelvisBolt = -1;
@@ -584,8 +701,10 @@ void Actor::Reset(bool restoreOrigin) {
 void Actor::Frame() {
 	if (!simulation) return;
 	gentity_t* ent = &g_entities[actor];
-	if (!enabled->integer) { Reset(true); return; }
-	if (!Eligible(ent)) { Reset(false); return; }
+	if (!dead && ent->inuse && ent->health <= 0 && engaged) Die(ent);
+	if (!enabled->integer && !dead) { Reset(true); return; }
+	if (!(dead ? Humanoid(ent) : Eligible(ent))) { Reset(false); return; }
+	if (ent->health <= 0 && !dead) Die(ent);
 	const int elapsed = level.time - lastTime;
 	lastTime = level.time;
 	if (fall) {
@@ -612,20 +731,32 @@ void Actor::Frame() {
 	}
 }
 void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
-	if (!ent || ent->s.number != actor || !simulation || !enabled->integer || !Eligible(ent) || !direction || !point || damage <= 0 ||
-		!Projectile(mod)) return;
+	if (!ent || ent->s.number != actor || !simulation || !enabled->integer || !Humanoid(ent) || !direction || !point || damage <= 0 ||
+		(!Projectile(mod) && !G_JoltExplosion(mod))) return;
+	const bool blast = G_JoltExplosion(mod);
+	if (dead && fall && !fall->Awake() && !BodyRoom(this)) return;
 	const int part = hitLoc == HL_HEAD ? 2 : hitLoc == HL_ARM_LT || hitLoc == HL_HAND_LT ? 3 :
 		hitLoc == HL_ARM_RT || hitLoc == HL_HAND_RT ? 5 : hitLoc == HL_LEG_LT || hitLoc == HL_FOOT_LT ? 7 :
 		hitLoc == HL_LEG_RT || hitLoc == HL_FOOT_RT ? 9 : 1;
-	if ((!engaged && !Active(ent)) || recoverStart) return;
+	if (!engaged && (ExternalPoseOwner(ent) || (ent->health > 0 && !blast && !Active(ent)))) return;
+	if (recoverStart) CancelRecovery(ent);
 	if (prepareStart) { prepareStart = 0; fall->ReleaseControl(); nextRecoverAttempt = level.time+500; }
 	lastHit = level.time; lastHitMod = mod;
 	if (!reactionPose->integer && !engaged) { ++hits; return; }
-	if (PrepareRig(ent)) {
+	if ((ent->s.weapon != WP_SABER || engaged || blast || ent->health <= 0) && PrepareRig(ent)) {
 		Engage(ent);
-		vec3_t hit; VectorScale(point, MetresPerUnit, hit);
-		const float injury = part >= 7 ? std::min(.99f, .8f + damage*.01f) : std::min(.75f, damage*.025f);
-		fall->React(part, direction, hit, std::min(3.0f, damage*.12f), injury);
+		if (blast) {
+			// Native damage already supplied distance-scaled knockback. Do not add it twice.
+			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
+			VectorClear(ent->client->ps.velocity);
+		} else {
+			vec3_t hit; VectorScale(point, MetresPerUnit, hit);
+			if (dead) fall->Impulse(part, direction, hit, std::min(2.0f, damage*.08f));
+			else {
+				const float injury = part >= 7 ? std::min(.99f, .8f + damage*.01f) : std::min(.75f, damage*.025f);
+				fall->React(part, direction, hit, std::min(3.0f, damage*.12f), injury);
+			}
+		}
 		++hits;
 		return;
 	}
@@ -653,18 +784,33 @@ void Actor::BoneAngles(gentity_t* ent, int bone, int time, float* angles) {
 	++poses;
 }
 bool Actor::Initialize(gentity_t* ent) {
-	pelvisBolt = gi.G2API_AddBolt(&ent->ghoul2[0], "lower_lumbar");
-	const int neck = gi.G2API_AddBolt(&ent->ghoul2[0], "cervical");
-	const int head = gi.G2API_AddBolt(&ent->ghoul2[0], "cranium");
+	auto choose = [&](const char* primary, const char* alternate, const char* third = nullptr) {
+		if (gi.G2API_AddBolt(&ent->ghoul2[0], primary) >= 0) return primary;
+		if (!third || gi.G2API_AddBolt(&ent->ghoul2[0], alternate) >= 0) return alternate;
+		return third;
+	};
+	rigBones[1] = choose("lower_lumbar", "thoracic");
+	rigBones[2] = choose("cervical", "upper_lumbar");
+	rigidHelmet = !Q_stricmp(rigBones[2], "upper_lumbar");
+	rigBones[7] = choose("lfemurYZ", "lfemur", "Left_Thigh_Bone");
+	rigBones[9] = choose("rfemurYZ", "rfemur", "Right_Thigh_Bone");
+	rigEnds[0] = rigBones[1]; rigEnds[1] = rigBones[2];
+	rigEnds[2] = choose("cranium", "*head_eyes");
+	rigEnds[4] = choose("lhand", "*l_hand"); rigEnds[6] = choose("rhand", "*r_hand");
+	JoltReaction::Part validated[JoltReaction::PartCount];
+	if (!ReadParts(ent, validated, ent->ghoul2)) return false;
+	pelvisBolt = bolts[1];
+	const int neck = bolts[2];
+	const int head = endBolts[2];
 	vec3_t pelvisPosition, neckPosition, headPosition;
 	if (!BoltPosition(ent, pelvisBolt, pelvisPosition) || !BoltPosition(ent, neck, neckPosition) ||
 		!BoltPosition(ent, head, headPosition)) { gi.Printf("Jolt: missing humanoid rig landmarks\n"); return false; }
 	dimensions.torsoLength = Distance(pelvisPosition, neckPosition) * MetresPerUnit;
-	dimensions.headLength = Distance(neckPosition, headPosition) * MetresPerUnit * 2;
-	dimensions.torsoRadius = (ent->maxs[0] - ent->mins[0]) * MetresPerUnit * 0.20f;
+	dimensions.headLength = Distance(neckPosition, headPosition) * MetresPerUnit * (rigidHelmet ? 1 : 2);
+	dimensions.torsoRadius = std::max(.06f, std::min(.18f, dimensions.torsoLength*.4f));
 	dimensions.headRadius = dimensions.headLength * 0.40f;
 	if (dimensions.torsoLength < 0.15f || dimensions.torsoLength > 0.8f ||
-		dimensions.headLength < 0.08f || dimensions.headLength > 0.4f ||
+		dimensions.headLength < 0.04f || dimensions.headLength > (rigidHelmet ? .8f : .4f) ||
 		dimensions.torsoRadius < 0.05f || dimensions.torsoRadius > 0.3f) {
 		gi.Printf("Jolt: rig dimensions outside prototype limits (torso %.3f head %.3f radius %.3f)\n",
 			dimensions.torsoLength, dimensions.headLength, dimensions.torsoRadius); return false;
@@ -687,9 +833,10 @@ void Actor::Status() {
 		actors.size(), recoveryAnim, recoveryLift, engaged, int(balance.phase), balance.corrections, balance.strength, balance.error, balance.targetChange);
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
+	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
 }
 void Actor::HitCommand() {
-	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active stormtrooper first\n"); return; }
+	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active humanoid first\n"); return; }
 	gentity_t* ent = &g_entities[actor];
 	vec3_t pivot, direction, point, angles = {0, ent->client->renderInfo.legsYaw, 0};
 	if (!BoltPosition(ent, pelvisBolt, pivot)) return;
@@ -743,14 +890,14 @@ bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles,
 			matrix.matrix[0][col] = c*x+s*y; matrix.matrix[1][col] = -s*x+c*y;
 		}
 		for (int r = 0; r < 3; ++r) if (ent->s.modelScale[r]) matrix.matrix[r][3] /= ent->s.modelScale[r];
-		gi.G2API_SetBoneAnglesMatrix(&ent->ghoul2[0], bones[i], matrix, BONE_ANGLES_PHYSICS, nullptr, 0, time);
+		gi.G2API_SetBoneAnglesMatrix(&ent->ghoul2[0], rigBones[i], matrix, BONE_ANGLES_PHYSICS, nullptr, 0, time);
 		++poses;
 		if (display && debug && debug->integer && i) {
 			refEntity_t line = {};
 			line.reType = RT_LINE; line.renderfx = RF_DEPTHHACK; line.radius = .75f;
 			line.customShader = cgs.media.whiteShader;
 			line.shaderRGBA[1] = line.shaderRGBA[3] = 255;
-			for (int r = 0; r < 3; ++r) { line.origin[r] = pose[parents[i]].matrix[r][3] / MetresPerUnit; line.oldorigin[r] = pose[i].matrix[r][3] / MetresPerUnit; }
+			for (int r = 0; r < 3; ++r) { line.origin[r] = pose[reference[i].parent].matrix[r][3] / MetresPerUnit; line.oldorigin[r] = pose[i].matrix[r][3] / MetresPerUnit; }
 			cgi_R_AddRefEntityToScene(&line);
 		}
 	}
@@ -799,13 +946,14 @@ Actor* Find(int number) {
 	auto found = actors.find(number);
 	return found != actors.end() ? found->second.get() : nullptr;
 }
-Actor* Acquire(gentity_t* ent) {
+Actor* Acquire(gentity_t* ent, bool dying = false) {
 	Settings();
-	if (!enabled->integer || !Eligible(ent)) return nullptr;
+	if (!enabled->integer || !(dying ? Humanoid(ent) : Eligible(ent))) return nullptr;
 	if (auto* state = Find(ent->s.number)) return state;
-	if (actors.size() >= MaxActors || AnimationOwnsPose(ent)) return nullptr;
+	if (retryRigAfter[ent->s.number] > level.time) return nullptr;
+	if (actors.size() >= MaxActors || ExternalPoseOwner(ent) || (!dying && AnimationOwnsPose(ent))) return nullptr;
 	std::unique_ptr<Actor> state(new Actor(ent->s.number));
-	if (!state->Initialize(ent)) return nullptr;
+	if (!state->Initialize(ent)) { retryRigAfter[ent->s.number] = level.time+1000; return nullptr; }
 	Actor* result = state.get();
 	actors.emplace(ent->s.number, std::move(state));
 	return result;
@@ -844,7 +992,7 @@ void StartDemo(int which) {
 	if (auto* ent = G_Find(nullptr, FOFS(targetname), "jolt_demo_actor")) G_FreeEntity(ent);
 	if (!DemoGround()) { gi.Printf("Jolt demo failed: no clear test area\n"); demoStage = 0; return; }
 	demoCase = which; demoStage = 1; demoDue = level.time + 2000;
-	gi.SendConsoleCommand(va("-forward; give weaponnum 3; give ammo; set d_npcfreeze 1; set cg_thirdPerson 0; set cg_drawGun 0; setviewpos %.1f %.1f %.1f 0; wait 10; weapon 3; npc spawn stormtrooper jolt_demo_actor\n", demoOrigin[0]-64, demoOrigin[1], demoOrigin[2]));
+	gi.SendConsoleCommand(va("-forward; give weaponnum 3; give ammo; set d_npcfreeze 1; set cg_thirdPerson 0; set cg_drawGun 0; setviewpos %.1f %.1f %.1f 0; wait 10; weapon 3; npc spawn stormtrooper jolt_demo_actor\n", demoOrigin[0]-64, demoOrigin[1], demoOrigin[2]+40));
 	gi.Printf("Jolt demo: %s at %.0f %.0f %.0f\n", demoCases[which], demoOrigin[0],demoOrigin[1],demoOrigin[2]);
 	gi.SendServerCommand(0, "cp \"Jolt: %s\nF5 hit  F6 step  F7 leg  F8 run  F9 fall\nF10 reset  F11 slow  F12 stop\"", demoCases[which]);
 }
@@ -864,7 +1012,7 @@ void DemoFrame() {
 			const auto& clip = level.knownAnimFileSets[ent->client->clientInfo.animFileIndex].animations[BOTH_STAND3];
 			SetPoseClip(ent->ghoul2, clip, true);
 		}
-		gi.SendConsoleCommand(va("setviewpos %.1f %.1f %.1f 90\n", demoOrigin[0]+(demoCase == 4 ? 80 : 0), demoOrigin[1]-(demoCase == 4 ? 192 : 128), demoOrigin[2]));
+		gi.SendConsoleCommand(va("setviewpos %.1f %.1f %.1f 90\n", demoOrigin[0]+(demoCase == 4 ? 80 : 0), demoOrigin[1]-(demoCase == 4 ? 192 : 128), demoOrigin[2]+25));
 		demoStage = 6; demoDue = level.time + 500;
 	} else if (demoStage == 6) {
 		if (demoCase != 4) {
@@ -901,21 +1049,22 @@ void DemoFrame() {
 void G_JoltReset() {
 	if (demoStage) gi.SendConsoleCommand("-forward\n");
 	demoStage = 0; demoCycle = false;
-	actors.clear(); selectedActor = fallOwner = -1;
+	for (auto& entry : actors) if (entry.second->dead) { entry.second->StoreCorpse(); entry.second->engaged = false; }
+	actors.clear(); retryRigAfter.clear(); selectedActor = -1;
 	collision.clear(); collisionScene.reset(); collisionLoaded = false;
 }
 void G_JoltForget(const gentity_t* ent) {
 	if (!ent) return;
 	if (auto* state = Find(ent->s.number)) state->Reset(false);
 	actors.erase(ent->s.number);
+	retryRigAfter.erase(ent->s.number);
 	if (selectedActor == ent->s.number) selectedActor = -1;
 }
 void G_JoltFrame() {
 	Settings();
-	if (!enabled->integer) { G_JoltReset(); return; }
-	if (fallOwner < 0 || !Find(fallOwner)->engaged) {
+	if (enabled->integer && ActiveBodies() < std::max(1, std::min(16, bodyBudget->integer))) {
 		gentity_t* nearest = nullptr; float distance = 512*512;
-		for (int i = 1; i < globals.num_entities; ++i) if (Eligible(&g_entities[i]) && !AnimationOwnsPose(&g_entities[i])) {
+		for (int i = 1; i < globals.num_entities; ++i) if (Eligible(&g_entities[i]) && !AnimationOwnsPose(&g_entities[i]) && (!Find(i) || !Find(i)->fall)) {
 			const float d = DistanceSquared(g_entities[0].currentOrigin, g_entities[i].currentOrigin);
 			if (d < distance && gi.inPVS(g_entities[0].currentOrigin, g_entities[i].currentOrigin)) { nearest = &g_entities[i]; distance = d; }
 		}
@@ -932,9 +1081,22 @@ void G_JoltFrame() {
 	DemoFrame();
 }
 void G_JoltBeginFrame() {
+	Settings();
+	// Corpse poses use the existing Ghoul2 save data; no solver pointers are saved.
+	for (int i = 1; i < globals.num_entities; ++i) if (SavedCorpse(&g_entities[i]) && !Find(i) && actors.size() < MaxActors) {
+		auto* ent = &g_entities[i];
+		std::unique_ptr<Actor> state(new Actor(i));
+		state->dead = true; state->fallYaw = ent->currentAngles[YAW];
+		if (state->Initialize(ent) && state->PrepareRig(ent)) {
+			state->fall->Engage(); state->fall->Kill(); state->engaged = true;
+			state->fall->Sample(state->fallPose);
+			VectorCopy(ent->currentOrigin, state->lastOrigin);
+			actors.emplace(i, std::move(state));
+		}
+	}
 	for (auto& entry : actors) if (entry.second->engaged) {
 		auto* ent = &g_entities[entry.first];
-		if (Eligible(ent)) {
+		if (entry.second->dead ? Humanoid(ent) : Eligible(ent)) {
 			auto& state = *entry.second;
 			state.Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
 			if (state.fall->Balance().phase == JoltReaction::ControlPhase::Tracking) {
@@ -947,21 +1109,55 @@ void G_JoltBeginFrame() {
 	}
 }
 void G_JoltHit(gentity_t* ent, const float* direction, const float* point, int damage, int mod, int hitLoc) {
-	if (damage <= 0 || !Projectile(mod) || !direction || !point) return;
+	if (damage <= 0 || (!Projectile(mod) && !G_JoltExplosion(mod)) || !direction || !point) return;
 	for (int i = 0; i < 3; ++i) if (!std::isfinite(direction[i]) || !std::isfinite(point[i])) return;
 	if (VectorLengthSquared(direction) < .0001f) return;
-	if (auto* state = Acquire(ent)) state->Hit(ent, direction, point, damage, mod, hitLoc);
+	if (auto* state = Acquire(ent, ent && (ent->health <= 0 || G_JoltExplosion(mod)))) state->Hit(ent, direction, point, damage, mod, hitLoc);
+}
+bool G_JoltExplosion(int mod) {
+	switch (mod) {
+	case MOD_THERMAL: case MOD_THERMAL_ALT: case MOD_ROCKET: case MOD_ROCKET_ALT:
+	case MOD_EXPLOSIVE: case MOD_EXPLOSIVE_SPLASH: case MOD_DETPACK: case MOD_LASERTRIP: case MOD_LASERTRIP_ALT:
+	case MOD_REPEATER_ALT: case MOD_FLECHETTE_ALT: case MOD_CONC: return true;
+	default: return false;
+	}
+}
+bool G_JoltDead(const gentity_t* ent) {
+	const auto* state = ent ? Find(ent->s.number) : nullptr;
+	return (state && state->dead && state->engaged) || SavedCorpse(ent);
+}
+void G_JoltDeath(gentity_t* ent) {
+	if (auto* state = ent ? Find(ent->s.number) : nullptr) if (state->engaged) state->Die(ent);
+}
+void G_JoltAfterDeath(gentity_t* ent) {
+	if (auto* state = ent ? Find(ent->s.number) : nullptr) if (state->dead && ent->inuse) {
+		if (ExternalPoseOwner(ent)) { state->Reset(false); return; }
+		VectorClear(ent->client->ps.velocity);
+		state->Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
+		state->UpdatePhysicalHull(ent);
+	}
+}
+bool G_JoltKnockback(gentity_t* ent, const float* velocity) {
+	auto* state = ent ? Find(ent->s.number) : nullptr;
+	if (!state || !state->engaged || !state->fall) return false;
+	if (state->dead && !state->fall->Awake() && !BodyRoom(state)) return true;
+	state->CancelRecovery(ent);
+	vec3_t impulse; VectorScale(velocity, MetresPerUnit, impulse);
+	const float speed = VectorLength(impulse);
+	if (speed > 8) VectorScale(impulse, 8/speed, impulse);
+	state->fall->AddVelocity(impulse);
+	return true;
 }
 void G_JoltBoneAngles(gentity_t* ent, int bone, int time, float* angles) {
 	if (ent) if (auto* state = Find(ent->s.number)) state->BoneAngles(ent, bone, time, angles);
 }
 bool G_JoltOwns(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && state->fall && state->engaged;
+	return (state && state->fall && state->engaged) || SavedCorpse(ent);
 }
 bool G_JoltBlocksAI(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && state->engaged && (state->recoverStart || state->fall->Balance().phase != JoltReaction::ControlPhase::Tracking);
+	return state && !state->dead && state->engaged && (state->recoverStart || state->fall->Balance().phase != JoltReaction::ControlPhase::Tracking);
 }
 bool G_JoltPhysicsRoot(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
@@ -969,6 +1165,7 @@ bool G_JoltPhysicsRoot(const gentity_t* ent) {
 }
 bool G_JoltRender(gentity_t* ent, int time, const float* origin, float* angles) {
 	if (ent) if (auto* state = Find(ent->s.number)) return state->Render(ent, time, origin, angles, true);
+	if (SavedCorpse(ent)) { VectorSet(angles, 0, ent->currentAngles[YAW], 0); return true; }
 	return false;
 }
 bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength) {
@@ -977,17 +1174,20 @@ bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength) {
 	auto* state = Acquire(ent);
 	if (!state || (!state->Active(ent) && !state->engaged)) return false;
 	vec3_t point; VectorCopy(ent->currentOrigin, point); point[2] += 20;
-	return state->StartFall(ent, direction, point, std::min(12.0f, strength * .02f));
+	const bool inherited = ent->client->ps.pm_time > 0 && (ent->client->ps.pm_flags & PMF_TIME_KNOCKBACK);
+	return state->StartFall(ent, direction, point, inherited ? 0 : std::min(12.0f, strength * .02f));
 }
 bool G_JoltSuppressPain(const gentity_t* ent, int mod) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
 	return state && enabled->integer && state->lastHit == level.time && state->lastHitMod == mod;
 }
 void G_JoltBeforeSave() {
-	if (fallOwner >= 0 && Find(fallOwner)->engaged) {
-		const int number = fallOwner;
-		actors.erase(number);
-		if (selectedActor == number) selectedActor = -1;
+	for (auto it = actors.begin(); it != actors.end();) {
+		if (it->second->dead) { it->second->StoreCorpse(); ++it; }
+		else if (it->second->engaged) {
+			if (selectedActor == it->first) selectedActor = -1;
+			it = actors.erase(it);
+		} else ++it;
 	}
 }
 void G_JoltSelect_f() {
@@ -1013,14 +1213,14 @@ void G_JoltSelect_f() {
 		gi.trace(&trace, start, nullptr, nullptr, end, 0, MASK_SHOT, (EG2_Collision)0, 0);
 		if (trace.entityNum > 0 && trace.entityNum < globals.num_entities) ent = &g_entities[trace.entityNum];
 	}
-	if (!Eligible(ent)) { gi.Printf("Aim at a stock stormtrooper and use jolt_select, or use jolt_select nearest\n"); return; }
+	if (!Eligible(ent)) { gi.Printf("Aim at a supported humanoid and use jolt_select, or use jolt_select nearest\n"); return; }
 	actors.erase(ent->s.number);
-	if (auto* state = Acquire(ent)) {
+	if (auto* state = Acquire(ent, true)) {
 		selectedActor = ent->s.number;
 		state->PrepareRig(ent);
-		gi.Printf("Jolt: selected stormtrooper %d; torso=%.3fm head=%.3fm radius=%.3fm\n", selectedActor,
+		gi.Printf("Jolt: selected humanoid %d; torso=%.3fm head=%.3fm radius=%.3fm\n", selectedActor,
 			state->dimensions.torsoLength, state->dimensions.headLength, state->dimensions.torsoRadius);
-	}
+	} else gi.Printf("Jolt: selection unavailable for %d (pose_owner=%d ground=%d records=%zu)\n", ent->s.number, ExternalPoseOwner(ent), ent->client->ps.groundEntityNum, actors.size());
 }
 void G_JoltStatus_f() {
 	if (gi.argc() > 1 && Q_stricmp(gi.argv(1), "all")) {
@@ -1042,7 +1242,7 @@ void G_JoltKnockdown_f() { if (auto* state = Find(selectedActor)) state->Knockdo
 void G_JoltBalance_f() {
 	if (auto* state = Find(selectedActor)) {
 		auto* ent = &g_entities[selectedActor];
-		if (state->PrepareRig(ent)) state->Engage(ent);
+		if (state->PrepareRig(ent)) { state->Engage(ent); state->lastHit = level.time; }
 	}
 }
 
@@ -1088,9 +1288,23 @@ void G_JoltShoot_f() {
 	}
 	vec3_t start, point, direction;
 	VectorCopy(g_entities[0].client->renderInfo.eyePoint, start);
-	VectorCopy(target->currentOrigin, point); point[2] += 12;
+	VectorCopy(target->currentOrigin, point); point[2] += (target->mins[2] + target->maxs[2]) * .5f;
 	VectorSubtract(point, start, direction);
 	if (VectorNormalize(direction) > 2048) return;
 	WP_FireBlasterMissile(&g_entities[0], start, direction, gi.argc() == 3 ? qtrue : qfalse);
 	gi.Printf("Jolt test projectile: target=%d alt=%d\n", target->s.number, gi.argc() == 3);
+}
+void G_JoltBlast_f() {
+	auto* target = gi.argc() == 2 ? G_Find(nullptr, FOFS(targetname), gi.argv(1)) : nullptr;
+	if (!target || !target->client || !target->NPC || G_Find(target, FOFS(targetname), gi.argv(1))) {
+		gi.Printf("jolt_blast <unique NPC targetname>\n"); return;
+	}
+	vec3_t origin, forward, angles = {0, target->currentAngles[YAW], 0};
+	AngleVectors(angles, forward, nullptr, nullptr);
+	VectorMA(target->currentOrigin, -64, forward, origin); origin[2] += 32;
+	auto* grenade = G_Spawn();
+	if (!grenade) return;
+	grenade->owner = &g_entities[0]; grenade->count = 1;
+	G_SetOrigin(grenade, origin);
+	thermalDetonatorExplode(grenade);
 }

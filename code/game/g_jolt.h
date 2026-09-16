@@ -17,12 +17,18 @@ void G_JoltShoot_f();
 void G_JoltBalance_f();
 void G_JoltPush_f();
 void G_JoltDemo_f();
+void G_JoltBlast_f();
 bool G_JoltOwns(const gentity_t* ent);
 bool G_JoltBlocksAI(const gentity_t* ent);
 bool G_JoltPhysicsRoot(const gentity_t* ent);
 bool G_JoltSuppressPain(const gentity_t* ent, int mod);
 bool G_JoltRender(gentity_t* ent, int time, const float* origin, float* angles);
 void G_JoltBeforeSave();
+void G_JoltDeath(gentity_t* ent);
+void G_JoltAfterDeath(gentity_t* ent);
+bool G_JoltDead(const gentity_t* ent);
+bool G_JoltKnockback(gentity_t* ent, const float* velocity);
+bool G_JoltExplosion(int mod);
 bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength);
 #else
 inline void G_JoltReset() {}
@@ -37,5 +43,10 @@ inline bool G_JoltPhysicsRoot(const gentity_t*) { return false; }
 inline bool G_JoltSuppressPain(const gentity_t*, int) { return false; }
 inline bool G_JoltRender(gentity_t*, int, const float*, float*) { return false; }
 inline void G_JoltBeforeSave() {}
+inline void G_JoltDeath(gentity_t*) {}
+inline void G_JoltAfterDeath(gentity_t*) {}
+inline bool G_JoltDead(const gentity_t*) { return false; }
+inline bool G_JoltKnockback(gentity_t*, const float*) { return false; }
+inline bool G_JoltExplosion(int) { return false; }
 inline bool G_JoltKnockdown(gentity_t*, const float*, float) { return false; }
 #endif

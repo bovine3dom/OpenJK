@@ -1468,6 +1468,7 @@ static inline qboolean G_RagWantsHumanoidsOnly( CGhoul2Info *ghlInfo )
 
 qboolean G_RagDoll(gentity_t *ent, vec3_t forcedAngles)
 {
+	if (G_JoltOwns(ent)) return qtrue;
 	vec3_t G2Angles;
 	vec3_t usedOrg;
 	qboolean inSomething = qfalse;

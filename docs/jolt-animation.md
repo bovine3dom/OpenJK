@@ -63,11 +63,15 @@ or `stop`.
 Use `jolt_status` for measurements. `corrections` counts step attempts;
 `landings` counts confirmed foot placements. `phase` is 0 for animation
 tracking, 1 for active balance, 2 for a step, and 3 for a fall. `engaged` shows
-whether physics controls the pose. Phase 4 is physical get-up preparation.
+whether physics controls the pose. Phase 4 is physical get-up preparation;
+phase 5 is a passive corpse.
 `brace_mask` and `hand_contacts` use 1 for the left hand, 2 for the right hand,
 and 3 for both hands. `preparing` reports the preparation stage; `blend_ms` reports the
 duration of the final handoff. `recovery_lift` is the initial get-up
 correction in game units. Its limit is eight units.
+`handoff_error` measures the first native get-up frame against the prepared
+pose, in game units. `corpse`, `sleeping`, `active_bodies`, and `body_limit`
+report physical ownership and the simulation budget.
 
 ## Normal Play and Manual Controls
 
@@ -81,15 +85,29 @@ The JO combat stormtroopers use the validated stormtrooper model path. The
 campaign tests check a real projectile hit and a physical fall on Kejim's
 original `st_guard2`, plus save/load and the transition to `kejim_base`.
 
-`g_joltReactions` defaults to `1` and is saved in the configuration. Accepted
-nonfatal projectile damage starts reactions on stock stormtrooper rigs.
-`stormtrooper2` is also eligible. Manual selection is not required.
-Set `g_joltReactions 0` to use the normal reaction path.
+`g_joltReactions` defaults to `1` and is saved in the configuration. Reactions
+start automatically on validated humanoid NPC rigs in JA and JO. This includes
+troopers, Imperials, Jedi, Reborn, human allies, and humanoid aliens. Bone
+aliases also support armoured troopers and humanoid droids. The rig must have
+the required landmarks and valid dimensions. Vehicles and unrelated creature
+skeletons retain their native handling. The first-person player is not driven
+by this NPC controller.
+
+Set `g_joltReactions 0` to stop new reactions and release living actors.
+Existing physical corpses remain passive until normal corpse removal.
 
 Supported projectiles are blaster, Bryar, bowcaster, repeater primary,
-flechette primary, emplaced, and seeker bolts. Damage, armour, pain sounds,
-combat callbacks, and fatal hits retain their game rules. Unsupported rigs,
-explosions, electric effects, and melee retain their normal handling.
+flechette primary, emplaced, and seeker bolts. Thermal detonators, rockets,
+detpacks, trip mines, explosive alternate fire, and world explosions can cause
+physical falls. Native damage supplies blast distance, cover, armour, team
+protection, and knockback. The controller consumes that knockback once.
+
+Damage, death scripts, kill counts, sounds, and item drops use the game rules.
+A lethal supported hit can start a physical corpse. Killing an actor already
+under physical control disables its motors without changing its pose or adding
+a death-animation kick. Native disintegration retains its special handling.
+Ordinary saber attacks keep their authored movement; saber users can still
+be knocked down by explosions or eligible knockdown requests.
 
 Cheat-enabled maps also provide these commands:
 
@@ -100,6 +118,7 @@ jolt_hit front
 jolt_hit legleft
 jolt_push front 1.3
 jolt_knockdown
+jolt_blast jolt_demo_actor
 jolt_status all
 ```
 
@@ -122,6 +141,8 @@ jolt_status all
   Use `exitview` to release it. A fall also releases control.
 - `jolt_shoot <targetname> [alt]` fires a real blaster missile toward the actor.
   Walls, other actors, and normal damage rules apply.
+- `jolt_blast <targetname>` detonates a thermal near a named NPC. It uses the
+  normal thermal explosion callback, including radius damage and cover checks.
 - `g_joltDebug 1` shows physical joint lines. Value `2` also prints the captured
   rig. `g_joltReactionPose 0` suppresses hit presentation before full-body
   engagement for an animation-only comparison.
@@ -146,10 +167,13 @@ required. The assistance stops during a fall and never supplies upward root
 force. `assist_force` and `assist_torque` report the current values. This is a
 controller aid, not a claim of fully muscle-driven balance.
 
-There are 16 reaction records and one active full-body slot. Other actors use
-the smaller torso/head reaction while the slot is occupied. An unselected
-actor can blend back to animation after it settles. A new actor can take an
-unused animation-tracking slot. Selected actors retain active control for tests.
+The default budget is **10 active rigs**, with up to 64 reaction records.
+Use `set g_joltMaxBodies 5` or `set g_joltMaxBodies 10` to change the budget;
+the accepted range is 1–16. Sleeping corpses do not consume an active slot.
+Unused animation-tracking rigs can yield their slots to new impacts.
+Solver scratch memory and collision shapes are shared across the rigs.
+If the active budget is full, a new actor can use the smaller torso/head
+reaction. Selected actors retain active control for tests.
 
 Jolt uses game gravity and 120 Hz simulation steps. A bounded pose history
 retains complete server intervals. The display samples one server interval
@@ -162,7 +186,10 @@ and Sub-BSP terrain are not included. Joint limits still need anatomical
 calibration. General locomotion, obstacles, stairs, ledges, and contact-driven
 get-ups need further work.
 
-Recovery requires low body speed, ground, and standing clearance. The system
+Recovery uses torso stability and ground contact instead of waiting for every
+limb to stop. A supported body can start preparation after 180 ms of stability,
+at least 650 ms after the fall starts. Standing clearance is still required.
+The system
 fits the first frame of one of five get-up clips to the settled pelvis, with
 extra weight on arm alignment. The arms first move toward their preparation
 positions under motor control. Gravity and collision remain active, and no
@@ -175,18 +202,24 @@ rotation to 150 degrees/s. It lasts at least 350 ms. The authored rise starts
 after this blend. If clearance or alignment is not suitable, the actor stays
 down and retries. The final blend and rise remain animation transitions.
 A normal standing return still uses 180 ms and reports `recovery_clip=-1`.
+The handoff clears old animation tracks and Ghoul2 smoothing history before
+the authored rise. This prevents a cached standing pose from appearing briefly.
 
 Fall bracing uses shoulder motion, gravity, and surface probes to estimate when
-an arm can reach an impact surface. Each arm has a separate target. The reach
+an arm can reach an impact surface. Each arm has a separate target ahead of
+the head's projected impact point. Stiffer elbow motors help absorb the fall.
+The reach
 moves with the falling body until contact. Small palm collision proxies are
 enabled for falls and preparation, with the existing forearm mass and inertia.
 Joint torques and compliant elbows supply the response; no new root impulse
 is added. Bracing can reduce an impact, but does not guarantee that the actor
 will catch itself.
 
-Death, removal, loading, restart, external pose control, and disabling the
-feature release the transient rig. A save during a fall restores a normal
-navigation pose and hull before the save is written.
+Removal and external scripted pose control release the transient rig. A save
+during a living actor's fall restores a normal navigation pose and hull.
+Corpse bone poses use the existing Ghoul2 save data. Loading restores them as
+passive physical bodies; it does not restart a death animation. Native corpse
+cleanup and scripted death callbacks continue to run.
 
 ## Build and Automated Tests
 
@@ -203,6 +236,8 @@ python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --demo --fps 120
 python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --demo --fps 144
 python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --projectiles
 python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --projectiles
+python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla --gameplay
+python3 scripts/test-jolt-sp.py --renderer rdsp-rend2 --gameplay
 python3 scripts/test-jolt-sp.py --renderer rdsp-vanilla
 python3 scripts/test-jolt-sp.py --renderer rdsp-rend2
 python3 scripts/test-jo-sp.py --jolt --renderer rdsp-vanilla
@@ -217,6 +252,9 @@ to save an Xvfb recording as `motion.mp4`; this option requires `ffmpeg`.
 The frame-rate options set display limits; software rendering can run below
 those limits. Solver tests compare all bone transforms at 60, 120, and 144 Hz
 with a 120 Hz reference and a 20 Hz server update schedule.
+The gameplay test covers ten simultaneous rigs, several humanoid families,
+thermal damage parity, death continuity, and corpse save/load. Use `--rig-types`
+with that test to supply another list of NPC types.
 
 Jolt 5.3.0 is pinned, linked statically, and packaged with its MIT licence.
 `-DUseJoltReactions=OFF` removes the dependency and game hooks. The SP game API

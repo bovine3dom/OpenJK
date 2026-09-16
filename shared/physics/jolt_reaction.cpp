@@ -68,12 +68,18 @@ struct Layers final : JPH::BroadPhaseLayerInterface, JPH::ObjectVsBroadPhaseLaye
 };
 
 struct Runtime {
+	// Worlds advance sequentially on the game thread; share scratch memory and jobs.
+	std::unique_ptr<JPH::TempAllocatorImpl> allocator;
+	std::unique_ptr<JPH::JobSystemSingleThreaded> jobs;
 	Runtime() {
 		JPH::RegisterDefaultAllocator();
 		JPH::Factory::sInstance = new JPH::Factory;
 		JPH::RegisterTypes();
+		allocator.reset(new JPH::TempAllocatorImpl(16 * 1024 * 1024));
+		jobs.reset(new JPH::JobSystemSingleThreaded(1024));
 	}
 	~Runtime() {
+		jobs.reset(); allocator.reset();
 		JPH::UnregisterTypes();
 		delete JPH::Factory::sInstance;
 		JPH::Factory::sInstance = nullptr;
@@ -90,8 +96,6 @@ std::shared_ptr<Runtime> AcquireRuntime() {
 struct Simulation::Impl {
 	std::shared_ptr<Runtime> runtime = AcquireRuntime();
 	Layers layers;
-	JPH::TempAllocatorImpl allocator{1024 * 1024};
-	JPH::JobSystemSingleThreaded jobs{128};
 	JPH::PhysicsSystem world;
 	JPH::BodyID bodies[3];
 	JPH::RVec3 positions[3];
@@ -180,7 +184,7 @@ bool Simulation::Advance(float seconds) {
 	auto& s = *impl;
 	s.accumulator += seconds;
 	while (s.accumulator + 0.000001f >= Step) {
-		if (s.world.Update(Step, 1, &s.allocator, &s.jobs) != JPH::EPhysicsUpdateError::None) { Reset(); return false; }
+		if (s.world.Update(Step, 1, s.runtime->allocator.get(), s.runtime->jobs.get()) != JPH::EPhysicsUpdateError::None) { Reset(); return false; }
 		auto& interface = s.world.GetBodyInterface();
 		const auto basis = interface.GetRotation(s.bodies[0]);
 		for (int i = 0; i < 2; ++i) {
@@ -236,6 +240,11 @@ struct FallSimulation::Impl {
 		Impl* owner;
 		explicit FootContacts(Impl* value) : owner(value) {}
 		void Record(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& manifold) {
+			if ((a.GetID() == owner->bodies[2] || b.GetID() == owner->bodies[2]) && !owner->balance.firstHeadContact)
+				owner->balance.firstHeadContact = owner->steps+1;
+			for (int i = 0; i < 2; ++i)
+				if ((a.GetID() == owner->bodies[i] && manifold.mWorldSpaceNormal.GetZ() < -.5f) ||
+					(b.GetID() == owner->bodies[i] && manifold.mWorldSpaceNormal.GetZ() > .5f)) owner->trunkContact = true;
 			for (int side = 0; side < 2; ++side) {
 				const bool first = a.GetID() == owner->bodies[11+side], second = b.GetID() == owner->bodies[11+side];
 				if ((first && manifold.mWorldSpaceNormal.GetZ() < -.5f) || (second && manifold.mWorldSpaceNormal.GetZ() > .5f)) {
@@ -248,7 +257,10 @@ struct FallSimulation::Impl {
 					const auto point = (handFirst ? a : b).GetWorldTransform()*owner->endLocal[hand];
 					for (JPH::uint i = 0; i < manifold.mRelativeContactPointsOn1.size(); ++i)
 						if (((handFirst ? manifold.GetWorldSpaceContactPointOn1(i) : manifold.GetWorldSpaceContactPointOn2(i))-point).LengthSq() < .01f)
+						{
 							owner->handContacts |= 1u << side;
+							if (!owner->balance.firstHandContact) owner->balance.firstHandContact = owner->steps+1;
+						}
 				}
 			}
 		}
@@ -257,11 +269,10 @@ struct FallSimulation::Impl {
 	};
 	std::shared_ptr<Runtime> runtime = AcquireRuntime();
 	FallLayers layers;
-	JPH::TempAllocatorImpl allocator{16 * 1024 * 1024};
-	JPH::JobSystemSingleThreaded jobs{1024};
 	JPH::PhysicsSystem world;
 	FootContacts listener{this};
 	bool supported[2] = {};
+	bool trunkContact = false;
 	float supportHeight[2] = {};
 	float contactGrace[2] = {};
 	unsigned handContacts = 0;
@@ -369,12 +380,13 @@ struct FallSimulation::Impl {
 		}
 	}
 	void Control() {
-		if (balance.phase == ControlPhase::Shadow) return;
+		if (balance.phase == ControlPhase::Shadow || balance.phase == ControlPhase::Dead) return;
 		auto& api = world.GetBodyInterface();
 		targetAge += Step; reactionAge += Step;
 		landedAge += Step;
 		balance.assistForce = balance.assistTorque = 0;
 		balance.handContacts = handContacts;
+		balance.supportedTrunk = trunkContact || (handContacts && (supported[0] || supported[1]));
 		balance.handContactsSeen |= handContacts;
 		const unsigned previousBrace = balance.braceMask;
 		balance.braceMask = 0;
@@ -518,11 +530,21 @@ struct FallSimulation::Impl {
 				// Look ahead along the fall, including downward motion. Each arm has its own probe.
 				auto drift = velocity*JPH::Vec3(1,1,0);
 				drift /= std::max(1.0f, drift.Length());
-				const auto reach = (drift*.55f-JPH::Vec3::sAxisZ()).Normalized()*2.0f;
-				JPH::RRayCast ray(shoulder, reach);
+				// Place the palms ahead of the head, spread to either side. A second
+				// probe catches walls between the shoulder and the projected floor target.
+				const auto head = api.GetWorldTransform(bodies[2])*endLocal[2];
+				const auto lateral = ((api.GetPosition(bodies[3])-api.GetPosition(bodies[5]))*JPH::Vec3(1,1,0)).NormalizedOr(JPH::Vec3::sAxisY());
+				auto probe = head+drift*.20f+lateral*(side ? -.18f : .18f);
+				probe.SetZ(shoulder.GetZ()+.1f);
+				JPH::RRayCast ray(probe, JPH::Vec3(0,0,-2));
 				JPH::RayCastResult hit;
 				if (!world.GetNarrowPhaseQuery().CastRay(ray, hit, {}, JPH::SpecifiedObjectLayerFilter(0))) continue;
-				const auto point = ray.GetPointOnRay(hit.mFraction);
+				auto point = ray.GetPointOnRay(hit.mFraction);
+				const auto reach = point-shoulder;
+				JPH::RayCastResult obstacle;
+				if (world.GetNarrowPhaseQuery().CastRay(JPH::RRayCast(shoulder, reach), obstacle, {}, JPH::SpecifiedObjectLayerFilter(0)) && obstacle.mFraction < .98f) {
+					hit = obstacle; point = shoulder+reach*obstacle.mFraction;
+				}
 				auto normal = api.GetTransformedShape(hit.mBodyID).GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, point);
 				if (normal.Dot(reach) > 0) normal = -normal;
 				goal = point + normal*.065f;
@@ -540,15 +562,16 @@ struct FallSimulation::Impl {
 			else if (!preparing && !(handContacts & (1u << side))) handGoal[side] += shoulder-previousShoulder[side];
 			previousShoulder[side] = shoulder;
 			auto change = goal-handGoal[side];
-			const float limit = Step*(preparing ? .55f : 1.5f);
+			const float limit = Step*(preparing ? .8f : 2.2f);
 			if (change.Length() > limit) change *= limit/change.Length();
 			handGoal[side] += change;
 			goals[upper] = api.GetWorldTransform(bodies[upper]); goals[lower] = api.GetWorldTransform(bodies[lower]);
 			LimbTargets(goals, upper, handGoal[side]);
 			balance.braceMask |= 1u << side;
 			const auto carry = !preparing && !(handContacts & (1u << side)) ? api.GetPointVelocity(bodies[parent[upper]], shoulder) : JPH::Vec3::sZero();
-			auto force = (handGoal[side]-hand)*450-(api.GetPointVelocity(bodies[lower], hand)-carry)*25;
-			if (force.Length() > 100) force *= 100/force.Length();
+			auto force = (handGoal[side]-hand)*(preparing ? 450 : 700)-(api.GetPointVelocity(bodies[lower], hand)-carry)*35;
+			const float forceLimit = preparing ? 100 : 180;
+			if (force.Length() > forceLimit) force *= forceLimit/force.Length();
 			for (int i = upper; i <= lower; ++i) {
 				const auto joint = (api.GetWorldTransform(bodies[i])*offsets[i]).GetTranslation();
 				const auto torque = (hand-joint).Cross(force)*MuscleStrength(i);
@@ -566,10 +589,15 @@ struct FallSimulation::Impl {
 			joints[i]->SetTargetOrientationBS(q);
 			const bool stepping = balance.phase == ControlPhase::Stepping || landedAge < .25f;
 			const float strength = MuscleStrength(i);
-			const float torque = bracing ? (preparing ? 25 : 35)*strength :
+			const float torque = bracing ? (preparing ? 25 : 65)*strength :
 				(i >= 11 ? (stepping ? 150.0f : 400.0f) : i >= 7 ? (stepping ? 250.0f : 900.0f) : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f) * balance.strength * strength;
 			joints[i]->GetSwingMotorSettings().SetTorqueLimit(torque);
 			joints[i]->GetTwistMotorSettings().SetTorqueLimit(torque);
+			if (i >= 3 && i <= 6) {
+				const bool catching = bracing && !preparing;
+				joints[i]->GetSwingMotorSettings().mSpringSettings = joints[i]->GetTwistMotorSettings().mSpringSettings =
+					JPH::SpringSettings(JPH::ESpringMode::StiffnessAndDamping, catching ? 450.0f : 150.0f, catching ? 35.0f : 15.0f);
+			}
 			if (i >= 7 && i < 11) {
 				joints[i]->GetSwingMotorSettings().mSpringSettings = joints[i]->GetTwistMotorSettings().mSpringSettings =
 					JPH::SpringSettings(JPH::ESpringMode::StiffnessAndDamping, 8000*strength, 100*std::sqrt(strength));
@@ -823,6 +851,29 @@ void FallSimulation::ReleaseControl() {
 	impl->balance.phase = ControlPhase::Falling;
 	impl->balance.assistForce = impl->balance.assistTorque = 0;
 }
+void FallSimulation::Kill() {
+	auto& s = *impl;
+	s.balance.phase = ControlPhase::Dead;
+	s.balance.strength = s.balance.assistForce = s.balance.assistTorque = 0;
+	s.balance.braceMask = 0;
+	for (int i = 1; i < PartCount; ++i) {
+		s.joints[i]->SetSwingMotorState(JPH::EMotorState::Off);
+		s.joints[i]->SetTwistMotorState(JPH::EMotorState::Off);
+	}
+	for (auto* body : s.body) body->SetAllowSleeping(true);
+}
+bool FallSimulation::Awake() const {
+	for (auto id : impl->bodies) if (impl->world.GetBodyInterface().IsActive(id)) return true;
+	return false;
+}
+float FallSimulation::TrunkSpeed() const {
+	float speed = 0;
+	for (int i = 0; i < 3; ++i) {
+		const auto& api = impl->world.GetBodyInterface();
+		speed = std::max(speed, api.GetLinearVelocity(impl->bodies[i]).Length() + .2f*api.GetAngularVelocity(impl->bodies[i]).Length());
+	}
+	return speed;
+}
 void FallSimulation::PrepareRecovery(const Transform* bones, float seconds) {
 	auto& s = *impl;
 	s.preparationAge = 0; s.preparationDuration = std::max(.35f, seconds);
@@ -869,7 +920,8 @@ bool FallSimulation::Advance(float seconds) {
 		if (s.balance.strength > 0 || s.balance.phase != ControlPhase::Falling) s.Control();
 		s.supported[0] = s.supported[1] = false;
 		s.handContacts = 0;
-		if (s.world.Update(Step, 1, &s.allocator, &s.jobs) != JPH::EPhysicsUpdateError::None) return false;
+		s.trunkContact = false;
+		if (s.world.Update(Step, 1, s.runtime->allocator.get(), s.runtime->jobs.get()) != JPH::EPhysicsUpdateError::None) return false;
 		for (int i = 0; i < PartCount; ++i) {
 			s.position[i] = s.world.GetBodyInterface().GetPosition(s.bodies[i]);
 			s.rotation[i] = s.world.GetBodyInterface().GetRotation(s.bodies[i]);

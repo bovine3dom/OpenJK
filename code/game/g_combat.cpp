@@ -3616,6 +3616,8 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 	qboolean	specialAnim = qfalse;
 	qboolean	holdingSaber = qfalse;
 	int			cliff_fall = 0;
+	G_JoltDeath(self);
+	const bool physicalDeath = G_JoltDead(self);
 
 	//FIXME: somehow people are sometimes not completely dying???
 	if ( self->client->ps.pm_type == PM_DEAD && (meansOfDeath != MOD_SNIPER || (self->flags & FL_DISINTEGRATED)) )
@@ -3632,7 +3634,7 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 		}
 		else
 		{
-			anim = G_PickDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
+			anim = physicalDeath ? -2 : G_PickDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
 			if ( dflags & DAMAGE_DISMEMBER )
 			{
 				G_DoDismemberment( self, self->pos1, meansOfDeath, damage, hitLoc );
@@ -4225,7 +4227,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			break;
 		}
 		//FIXME: verify we have this anim?
-		NPC_SetAnim( self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
+		if (!physicalDeath) NPC_SetAnim( self, SETANIM_BOTH, anim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 		if ( meansOfDeath == MOD_KNOCKOUT || meansOfDeath == MOD_MELEE )
 		{
 			G_AddEvent( self, EV_JUMP, 0 );
@@ -4251,7 +4253,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 			&& self->client->ps.legsAnim != BOTH_FALLDEATH1INAIR //not already in falling loop
 			&& self->client->ps.torsoAnim != BOTH_FALLDEATH1INAIR )//not already in falling loop
 		{
-			NPC_SetAnim(self, SETANIM_BOTH, BOTH_FALLDEATH1INAIR, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+			if (!physicalDeath) NPC_SetAnim(self, SETANIM_BOTH, BOTH_FALLDEATH1INAIR, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 			if ( !self->NPC )
 			{
 				G_SoundOnEnt( self, CHAN_VOICE, "*falling1.wav" );//CHAN_VOICE_ATTEN
@@ -4290,7 +4292,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 					deathAnim = BOTH_DEATH_FALLING_DN;	//# Death anim when falling on face
 				}
 			}
-			NPC_SetAnim(self, SETANIM_BOTH, deathAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
+			if (!physicalDeath) NPC_SetAnim(self, SETANIM_BOTH, deathAnim, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD);
 			//HMM: check for nodrop?
 			G_SoundOnEnt( self, CHAN_BODY, "sound/player/fallsplat.wav" );
 			if ( gi.VoiceVolume[self->s.number]
@@ -4302,7 +4304,7 @@ extern void RunEmplacedWeapon( gentity_t *ent, usercmd_t **ucmd );
 	}
 	else
 	{// normal death
-		anim = G_CheckSpecialDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
+		anim = physicalDeath ? -2 : G_CheckSpecialDeathAnim( self, self->pos1, damage, meansOfDeath, hitLoc );
 		if ( anim == -1 )
 		{
 			if ( PM_InOnGroundAnim( &self->client->ps ) && PM_HasAnimation( self, BOTH_LYINGDEATH1 ) )
@@ -5200,7 +5202,7 @@ void G_ApplyKnockback( gentity_t *targ, vec3_t newDir, float knockback )
 
 	if ( targ->client )
 	{
-		VectorAdd( targ->client->ps.velocity, kvel, targ->client->ps.velocity );
+		if (!G_JoltKnockback(targ, kvel)) VectorAdd( targ->client->ps.velocity, kvel, targ->client->ps.velocity );
 	}
 	else if ( targ->s.pos.trType != TR_STATIONARY && targ->s.pos.trType != TR_LINEAR_STOP && targ->s.pos.trType != TR_NONLINEAR_STOP )
 	{
@@ -6713,9 +6715,11 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 			}
 		}
 
+		if (healthBeforeDamage > 0 || G_JoltDead(targ))
+			G_JoltHit(targ, dir, point, healthBeforeDamage > 0 ? healthBeforeDamage-targ->health : take, mod, hitLoc);
 		if ( targ->health <= 0 )
 		{
-			if ( knockback && (dflags&DAMAGE_DEATH_KNOCKBACK) )//&& targ->client
+			if ( knockback && (dflags&DAMAGE_DEATH_KNOCKBACK) && (!G_JoltOwns(targ) || G_JoltExplosion(mod)) )//&& targ->client
 			{//only do knockback on death
 				if ( mod == MOD_FLECHETTE )
 				{//special case because this is shotgun-ish damage, we need to multiply the knockback
@@ -6754,11 +6758,12 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 				targ->enemy = attacker;
 			}
 
+			if (mod == MOD_SNIPER) G_JoltForget(targ);
 			GEntity_DieFunc( targ, inflictor, attacker, take, mod, dflags, hitLoc );
+			G_JoltAfterDeath(targ);
 		}
 		else
 		{
-			G_JoltHit(targ, dir, point, healthBeforeDamage - targ->health, mod, hitLoc);
 			GEntity_PainFunc( targ, inflictor, attacker, point, take, mod, hitLoc );
 			if ( targ->s.number == 0 )
 			{//player run painscript

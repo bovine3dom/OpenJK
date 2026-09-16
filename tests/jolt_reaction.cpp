@@ -276,8 +276,9 @@ int main() {
 			const auto b = brace.Balance(); attempts |= b.braceMask; contacts |= b.handContacts;
 			Check(b.assistForce == 0 && b.assistTorque == 0, "bracing does not apply root assistance");
 		}
-		std::printf("Brace: targets=%u contacts=%u speed=%.3f\n", attempts, contacts, brace.Speed());
+		std::printf("Brace: targets=%u contacts=%u speed=%.3f hand=%u head=%u\n", attempts, contacts, brace.Speed(), brace.Balance().firstHandContact, brace.Balance().firstHeadContact);
 		Check(attempts != 0 && contacts != 0, "fall reaches a surface and records hand contact");
+		if (direction == forward) Check(!brace.Balance().firstHeadContact || brace.Balance().firstHandContact <= brace.Balance().firstHeadContact, "forward bracing places a hand before the head strikes");
 		brace.Sample(pose);
 		JoltReaction::Transform target[JoltReaction::PartCount];
 		std::copy(pose, pose+JoltReaction::PartCount, target);
@@ -296,6 +297,13 @@ int main() {
 		brace.ReleaseControl(); brace.RootVelocity(after);
 		Check(brace.Balance().phase == JoltReaction::ControlPhase::Falling, "preparation can be interrupted");
 		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "interrupting preparation preserves momentum");
+		brace.Sample(pose); brace.RootVelocity(before);
+		brace.Kill(); brace.Sample(unchanged); brace.RootVelocity(after);
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(pose[i].matrix[r][c] == unchanged[i].matrix[r][c], "death preserves the current physical pose");
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "death adds no velocity");
+		for (int i = 0; i < 360; ++i) brace.Advance(1.0f/120);
+		Check(brace.Balance().phase == JoltReaction::ControlPhase::Dead && brace.Balance().strength == 0, "corpses remain passive and cannot get up");
 	}
 	std::puts("PASS: contact-aware bracing, physical preparation, and speed-limited get-up transitions");
 }

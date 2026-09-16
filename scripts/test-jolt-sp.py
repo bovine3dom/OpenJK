@@ -2,6 +2,7 @@
 """Test one stormtrooper's Jolt reactions in an isolated headless game."""
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,8 @@ def main():
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-vanilla")
     parser.add_argument("--projectiles", action="store_true", help="Test automatic reactions through real missile collisions")
     parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
+    parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
+    parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
     parser.add_argument("--demo-case", action="append", choices=("idle", "hit", "step", "leg", "run", "fall"))
     parser.add_argument("--push-speed", type=float, default=1.3, help="Demo push velocity change in metres/second")
@@ -77,7 +80,15 @@ def main():
             sequence += 1
             marker = f"JOLT_COMMAND_{sequence}_DONE"
             start = len(log.read_text(errors="replace"))
-            stdin.write(f"{text}; wait {frames}; echo {marker}\n")
+            script = f"{text}; wait {frames}; echo {marker}\n"
+            if len(script) > 200:
+                # Engine stdin has a small line buffer. Execute long atomic batches from a file.
+                folder = profile / ("jolt-demo/OpenJK" if args.launcher else "OpenJK")
+                folder.mkdir(parents=True, exist_ok=True)
+                name = f"jolt_command_{sequence}.cfg"
+                (folder / name).write_text(script)
+                script = f"exec {name}\n"
+            stdin.write(script)
             stdin.flush()
             return re.sub(r"\^[0-9]", "", wait_for(marker, start))
 
@@ -90,6 +101,9 @@ def main():
             recovery = re.findall(r"jolt recovery ([^\r\n]+)", text)
             if recovery:
                 line += " " + recovery[-1]
+            ownership = re.findall(r"jolt ownership ([^\r\n]+)", text)
+            if ownership:
+                line += " " + ownership[-1]
             return {k: tuple(map(float, v.split(","))) if "," in v else float(v)
                     for k, v in (word.split("=") for word in line.split()[1:])}
 
@@ -107,6 +121,61 @@ def main():
                     "-f", "x11grab", "-framerate", "30", "-video_size", "960x720", "-i", env["DISPLAY"],
                     "-c:v", "libx264", "-threads", "1", "-preset", "ultrafast", "-crf", "22",
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
+            if args.gameplay:
+                start = len(log.read_text(errors="replace"))
+                cmd("jolt_demo idle")
+                scene = wait_for("Jolt demo finished: idle", start)
+                location = re.search(r"Jolt demo: idle at ([-\d.]+) ([-\d.]+) ([-\d.]+)", scene)
+                assert location, scene
+                x, y, z = map(float, location.groups())
+                cmd("jolt_select jolt_demo_actor; save jolt_blast_test; set g_joltReactions 0; jolt_blast jolt_demo_actor; wait 8")
+                vanilla_health = status("jolt_demo_actor")["health"]
+                cmd("load jolt_blast_test; wait 40; set g_joltReactions 1; jolt_blast jolt_demo_actor; wait 2")
+                blast = status("jolt_demo_actor")
+                assert blast["health"] == vanilla_health and blast["hits"] == 1 and blast["engaged"] == 1, blast
+                assert blast["falling"] == 1, blast
+                cmd("set g_joltReactions 0; wait 8; npc kill jolt_demo_actor; wait 10")
+                types = args.rig_types or ("stormtrooper", "stormtrooper2", "imperial", "reborn", "jedi",
+                                          "rodian", "weequay", "trandoshan", "jan", "kyle")
+                count = len(types)
+                assert 2 <= count <= 16
+                for i, kind in enumerate(types):
+                    angle = i*360/count
+                    px, py = x+32*math.cos(math.radians(angle)), y+32*math.sin(math.radians(angle))
+                    cmd(f"setviewpos {px} {py} {z+40} {angle}; wait 15; npc spawn {kind} jolt_crowd_{i}; wait 8")
+                    for _ in range(30):
+                        if status(f"jolt_crowd_{i}")["health"] > 0:
+                            break
+                        cmd("wait 5")
+                    else:
+                        cmd(f"nav memory jolt_crowd_{i}; entitylist; nav actors; viewpos; screenshot_png crowd_spawn_failure")
+                        raise AssertionError(f"NPC did not spawn alive: {kind}")
+                cmd(f"set g_joltMaxBodies {count}; set g_joltReactions 1", 0)
+                cmd("; ".join(f"jolt_select jolt_crowd_{i}; jolt_balance" for i in range(count)), 0)
+                for i, kind in enumerate(types):
+                    s = status(f"jolt_crowd_{i}")
+                    assert s["engaged"] == 1 and s["active_bodies"] == count, (kind, s)
+                cmd("screenshot_png crowd", 0)
+                cmd("; ".join(f"jolt_select jolt_crowd_{i}; jolt_push front 2" for i in range(count)), 0)
+                assert all(status(f"jolt_crowd_{i}")["engaged"] for i in range(count))
+                cmd("jolt_select jolt_crowd_0; jolt_knockdown; wait 10")
+                alive = status("jolt_crowd_0")
+                cmd("npc kill jolt_crowd_0", 0)
+                corpse = status("jolt_crowd_0")
+                assert corpse["health"] <= 0 and corpse["corpse"] == 1 and corpse["engaged"] == 1, corpse
+                assert abs(corpse["pelvis_z"]-alive["pelvis_z"]) < 12, (alive, corpse)
+                cmd("wait 20; screenshot_png corpse; save jolt_corpse")
+                saved = status("jolt_crowd_0")
+                cmd("load jolt_corpse; wait 30")
+                loaded = status("jolt_crowd_0")
+                assert loaded["corpse"] == 1 and loaded["engaged"] == 1, loaded
+                assert abs(loaded["pelvis_z"]-saved["pelvis_z"]) < 4, (saved, loaded)
+                cmd("jolt_blast jolt_crowd_1; wait 4")
+                assert status("jolt_crowd_1")["corpse"] == 1
+                stdin.write("quit\n"); stdin.flush()
+                assert process.wait(timeout=30) == 0
+                print(f"PASS: {args.renderer}: {count} humanoid rigs, simultaneous active bodies, thermal blast damage, death continuity, and corpse save/load", flush=True)
+                return 0
             if args.demo:
                 results = {}
                 cmd(f"set timescale 0.5; set g_joltDemoPush {args.push_speed}")
@@ -144,6 +213,7 @@ def main():
                         assert any(s.get("preparing", 0) for s in samples), (case, final)
                         assert final["falling"] == 0 and final["recovering"] == 0 and final["engaged"] == 0 and abs(final["recovery_lift"]) <= 8, final
                         assert final["blend_ms"] >= 350, final
+                        assert final["handoff_error"] < .1, final
                     print(f"PASS: {args.renderer}: demo {case}", flush=True)
                 cmd("jolt_demo stop; set g_joltReactions 0")
                 stdin.write("quit\n"); stdin.flush()
@@ -169,13 +239,13 @@ def main():
                 cmd("setviewpos 5504 -4520 64 45; wait 4; npc spawn stormtrooper jolt_protected; wait 15; nav memory jolt_protected protect; jolt_shoot jolt_protected; wait 4")
                 protected = status("jolt_protected")
                 assert protected["hits"] == 0 and protected["health"] == before["health"], protected
-                cmd("setviewpos 5504 -4520 64 315; wait 4; npc spawn protocol jolt_unsupported; wait 15")
+                cmd("setviewpos 5504 -4520 64 315; wait 4; npc spawn r2d2 jolt_unsupported; wait 15")
                 unsupported = status("jolt_unsupported")
                 cmd("jolt_shoot jolt_unsupported; wait 4")
                 untouched = status("jolt_unsupported")
                 assert untouched["hits"] == 0 and untouched["health"] < unsupported["health"], untouched
                 cmd("set g_joltReactions 0; wait 10")
-                assert status()["tracked"] == 0
+                assert status()["active_bodies"] <= 1  # A passive corpse may still be settling.
                 stdin.write("quit\n")
                 stdin.flush()
                 assert process.wait(timeout=30) == 0
@@ -276,7 +346,7 @@ def main():
             assert status()["engaged"] == 0
             cmd("jolt_select jolt_demo_actor; npc kill jolt_demo_actor; wait 30")
             assert status("jolt_demo_actor")["engaged"] == 0
-            cmd("npc spawn protocol jolt_other_actor; wait 30; jolt_select jolt_other_actor")
+            cmd("npc spawn r2d2 jolt_other_actor; wait 30; jolt_select jolt_other_actor")
             assert status("jolt_other_actor")["active"] == 0
             stdin.write("quit\n")
             stdin.flush()
