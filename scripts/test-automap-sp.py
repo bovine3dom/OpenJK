@@ -97,7 +97,7 @@ def main():
             assert "UI focus: datapadMapMenu;" in cmd("ui_report")
             initial=state("isometric")
             assert initial["valid"]=="1" and int(initial["triangles"])>100 and int(initial["drawn"])>10,initial
-            assert float(initial["slice"])==256,initial
+            assert initial["drawn"]==initial["triangles"],initial
             assert int(initial["lifts"])>0,initial
             iso=capture("isometric")
             before=cmd("campaign_status")
@@ -108,35 +108,21 @@ def main():
             dragged=state("drag_pan");assert dragged["centre"]!=initial["centre"]
             subprocess.run(["xdotool","mousemove_relative","--","20","0"],check=True);cmd("wait 10")
             assert state("released_pan")["centre"]==dragged["centre"]
-            move(310,220)
-            subprocess.run(["xdotool","mousedown","3"],check=True)
-            subprocess.run(["xdotool","mousemove_relative","--","0","-24"],check=True);cmd("wait 10")
-            subprocess.run(["xdotool","mouseup","3"],check=True);cmd("wait 10")
-            assert float(state("drag_height")["height"])==float(initial["height"])+96
             after=cmd("campaign_status")
             beforeOrigin=re.search(r"origin=([^\n]+)",before);afterOrigin=re.search(r"origin=([^\n]+)",after)
             assert beforeOrigin and afterOrigin and beforeOrigin[0]==afterOrigin[0]
-            click(246,48,"map_wider")
-            assert float(state("wider")["slice"])==320
-            click(295,48,"map_narrower")
-            assert float(state("narrower")["slice"])==256
-            key("bracketright");assert float(state("wider_key")["slice"])==320
             key("Home")
             key("t");top=state("top")
             assert top["tilt"]=="0.0"
             flat=capture("top")
             assert sum(abs(a-b) for a,b in zip(iso,flat))/len(iso)>1,"Tilt did not change the map"
-            key("Prior");up=state("raised")
-            assert float(up["height"])==float(top["height"])+64
-            capture("raised")
-            key("Next")
             before=cmd("campaign_status")
             key("Right");pan=state("pan")
             after=cmd("campaign_status")
-            assert pan["centre"]!=up["centre"]
+            assert pan["centre"]!=top["centre"]
             oldOrigin=re.search(r"origin=([^\n]+)",before);newOrigin=re.search(r"origin=([^\n]+)",after)
             assert oldOrigin and newOrigin and oldOrigin[0]==newOrigin[0],"Map input moved the player"
-            click(344,48,"map_tilt")
+            click(289,48,"map_tilt")
             assert state("button_tilt")["tilt"]=="55.0"
             key("Home");key("equal")
             assert float(state("zoom")["span"])<float(initial["span"])
@@ -181,8 +167,9 @@ def main():
             capture("exploded_top")
             key("x")
             assert "exploded=0" in cmd("automap_status")
-            sliced=capture("slice_return")
-            assert sum(abs(a-b) for a,b in zip(expanded,sliced))/len(sliced)>1
+            whole=capture("whole_return")
+            assert sum(abs(a-b) for a,b in zip(expanded,whole))/len(whole)>1
+            assert state("whole")["drawn"]==initial["triangles"]
             # Other tabs use the same evenly spaced bottom row.
             click(270,432,"weapons");assert "datapadWeaponsMenu" in cmd("ui_report")
             click(170,432,"map_tab");assert "datapadMapMenu" in cmd("ui_report")
@@ -193,7 +180,6 @@ def main():
             assert "exploded=0 nav_polygons=0 floors=0" in cmd("automap_status")
             key("Escape");cmd("vid_restart; wait 150; datapad")
             key("F4");assert state("restarted")["valid"]=="1"
-            assert float(state("saved_slice")["slice"])==320
             capture("restarted")
             move(310,220);subprocess.run(["xdotool","mousedown","1"],check=True)
             key("Escape")

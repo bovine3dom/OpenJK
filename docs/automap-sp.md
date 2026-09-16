@@ -10,17 +10,15 @@ It works in the JA runtime with either SP renderer and with JA or JO content.
 | --- | --- |
 | Mouse wheel or + / - | Zoom in or out |
 | Left mouse drag inside the map | Pan; the map follows the cursor |
-| Right mouse drag inside the map | Raise or lower the selected height; drag up to raise it |
 | Arrow keys | Pan the map |
-| Page Up / Page Down | Move the height slice by 64 world units |
-| [ / ] or Slice - / Slice + | Decrease or increase slice thickness by 64 world units |
+| Page Up / Page Down or Floor + / Floor - | Centre on the next floor in the exploded view |
 | Q / E | Rotate the map |
 | T or Tilt button | Switch between top-down and isometric views |
 | Home or Player button | Centre on the player's position and height |
-| Fit button | Fit the level's horizontal bounds |
+| Fit button | Fit the full map bounds |
 | C or Control button | Centre on the next marked control, including its height |
 | L or Lift button | Centre on the next lift |
-| X or Explode button | Switch between slice and exploded views |
+| X or Explode button | Switch between whole-map and exploded views |
 | Escape or the datapad key | Close the datapad |
 
 The map opens centred on the player. Zoom and view orientation are retained
@@ -33,11 +31,11 @@ page ends the drag. Toolbar and tab clicks remain available.
 
 - The cyan arrow is the player. N indicates the map's positive Y direction.
 - Filled areas show floors and slopes. Lines show structural boundaries.
-- Ceilings are omitted. The default slice is 256 units thick, with 128 units
-  above and below the selected height. `ui_automapSliceHeight` stores the full
-  thickness in the profile. Its range is 64 to 4096 units.
+- Ceilings are omitted. The normal view includes all map heights.
+- Vertical structural edges have one-sixth opacity in both views.
+  Floor outlines and route markers keep their usual opacity.
 - Gold squares mark active controls. Grey squares mark inactive controls.
-- The status line reports the selected height and the total control count.
+- The status line reports the view mode and the total control count.
 - Green lift markers and arrows show known travel destinations. Up/down cues
   remain useful in the top-down view. A question mark means that the route is
   unknown. Lift routes can remain visible when the platform is on another level.
@@ -51,7 +49,7 @@ to reduce wireframe clutter. Curved BSP patches use a coarse tessellation.
 
 Press **X** or select **Explode** to build a Recast navigation mesh for the map.
 The first build occurs when you select this view. The mesh stays in memory
-until the level state resets. A build failure keeps the slice view available.
+until the level state resets. A build failure keeps the whole-map view available.
 
 The navmesh supplies height bands for the original BSP map. Large, approximately
 level areas supply the reference elevations. A 48-unit tolerance combines
@@ -79,18 +77,17 @@ or architectural storeys. Small landings can join the nearest main band.
 - Tan lines show navigation-polygon connections across bands.
 - Green lines show possible lift routes. These routes can require a story event.
 - Gold diamonds show active controls. Grey diamonds show inactive controls.
-- **Page Up / Page Down**, or **Height + / Height -**, centres the view on the
+- **Page Up / Page Down**, or **Floor + / Floor -**, centres the view on the
   next band. **Player** returns to the player at a local zoom. **Fit** shows all bands.
 - Drag with the left mouse button to pan. Zoom, rotation, and tilt remain
   available. Rotation and tilt fit the layout again.
-- Slice thickness and right-drag height adjustment apply to the slice view.
 
 This MVP uses static BSP surfaces marked solid. It includes ceilings for
 clearance tests. It does not reconstruct collision brushes, moving geometry,
 or AI-only restrictions. The mesh is for display; it is not an AI route source.
 The build uses 16-unit horizontal cells, 4-unit vertical cells, 56-unit clearance,
 16-unit radius erosion, a 16-unit step limit, and a 45-degree slope limit.
-Input and grid-size limits bound the build. Large levels can use the slice view
+Input and grid-size limits bound the build. Large levels can use the whole-map view
 if they exceed these limits.
 
 The first configuration downloads Recast 1.6.0 at commit
@@ -151,7 +148,7 @@ python3 scripts/test-automap-sp.py --campaign jo
 ```
 
 The UI tests use headless windows and real keyboard/mouse events. They cover
-the Map tab, geometry, height, tilt, pan, zoom, close keys, control markers,
-drag release, slice thickness, lift routes, exploded bounds, save/load, and renderer restart.
+the Map tab, whole-map geometry, tilt, pan, zoom, close keys, control markers,
+drag release, lift routes, exploded bounds, save/load, and renderer restart.
 Use `automap_status` for diagnostic counts and
 marker positions. Logs and images are under `build/smoke/automap.*`.

@@ -25,7 +25,6 @@ int nextControl;
 int nextLift, visibleLifts;
 bool valid;
 bool recenter = true;
-cvar_t *sliceHeight;
 Automap::NavMap nav;
 std::vector<Point> navInput, floorOffsets, floorLow, floorHigh;
 Point navCentre = {};
@@ -164,7 +163,9 @@ struct Batch {
 		const int base = int(vertices.size());
 		for (const auto &p : points) {
 			polyVert_t v = {}; v.xyz[0] = p[0]; v.xyz[1] = p[1];
-			for (int c = 0; c < 4; ++c) v.modulate[c] = color[c];
+			// UI geometry uses premultiplied-alpha blending.
+			for (int c = 0; c < 3; ++c) v.modulate[c] = byte((int(color[c])*color[3]+127)/255);
+			v.modulate[3] = color[3];
 			vertices.push_back(v);
 		}
 		for (int i = 1; i+1 < int(points.size()); ++i) indices.insert(indices.end(), {base,base+i,base+i+1});
@@ -279,14 +280,17 @@ void Centre() {
 	centre = current.player;
 	if (exploded) { navCentre=NavPosition(current.player,nav.FloorAt(current.player)); span=1024; }
 }
+std::array<byte,4> EdgeColor(const Edge &edge) {
+	const bool vertical=std::hypot(edge.b[0]-edge.a[0],edge.b[1]-edge.a[1])<0.01f && std::abs(edge.b[2]-edge.a[2])>0.01f;
+	return {{83,116,129,byte(vertical ? 255/6 : 255)}};
+}
 void Action() {
 	const char *action = Cmd_Argv(1);
-	const float halfSlice = sliceHeight->value * 0.5f;
 	if (!Q_stricmp(action,"explode") && valid) {
 		if (!navAttempted) {
 			navAttempted=true;
 			const int start=Sys_Milliseconds();
-			if (!nav.Build(navInput)) Com_Printf("Automap: navigation mesh unavailable; using slice view.\n");
+			if (!nav.Build(navInput)) Com_Printf("Automap: navigation mesh unavailable; using whole-map view.\n");
 			PartitionMap();
 			Com_Printf("Automap navigation: polygons=%d floors=%d links=%d build_ms=%d\n",int(nav.faces.size()),int(nav.floors.size()),int(nav.links.size()),Sys_Milliseconds()-start);
 		}
@@ -306,18 +310,14 @@ void Action() {
 	}
 	if (!Q_stricmp(action,"zoomin")) span = std::max(128.0f, span/1.25f);
 	else if (!Q_stricmp(action,"zoomout")) span = std::min(exploded ? 262144.0f : 16384.0f, span*1.25f);
-	else if (!Q_stricmp(action,"up")) centre[2] = std::min(maximum[2]+halfSlice, centre[2]+64);
-	else if (!Q_stricmp(action,"down")) centre[2] = std::max(minimum[2]-halfSlice, centre[2]-64);
-	else if (!Q_stricmp(action,"wider")) Cvar_SetValue("ui_automapSliceHeight",std::min(4096.0f,sliceHeight->value+64));
-	else if (!Q_stricmp(action,"narrower")) Cvar_SetValue("ui_automapSliceHeight",std::max(64.0f,sliceHeight->value-64));
+	else if (!Q_stricmp(action,"up") || !Q_stricmp(action,"down")) return; // Floor selection is for the exploded view.
 	else if (!Q_stricmp(action,"drag") && Cmd_Argc()==5 && valid) {
 		const float dx = atof(Cmd_Argv(2)), dy = atof(Cmd_Argv(3));
-		if (!std::isfinite(dx) || !std::isfinite(dy)) return;
+		if (!std::isfinite(dx) || !std::isfinite(dy) || atoi(Cmd_Argv(4))) return;
 		const float aspect = cls.glconfig.vidWidth * 480.0f / (cls.glconfig.vidHeight * 640.0f);
 		if (exploded) {
-			if (!atoi(Cmd_Argv(4))) { navCentre[0]-=dx*2*span/Width; navCentre[1]-=dy*2*span/(Width*aspect); }
+			navCentre[0]-=dx*2*span/Width; navCentre[1]-=dy*2*span/(Width*aspect);
 		}
-		else if (atoi(Cmd_Argv(4))) centre[2] = Com_Clamp(minimum[2]-halfSlice,maximum[2]+halfSlice,centre[2]-dy*4);
 		else {
 			const auto delta = Automap::DragPan(dx,dy,span,yaw,tilt,aspect);
 			centre[0] += delta[0]; centre[1] += delta[1];
@@ -338,10 +338,10 @@ void Action() {
 		nextLift=(nextLift+1)%current.liftCount;
 	}
 	else if (!Q_stricmp(action,"fit")) {
-		for (int i = 0; i < 2; ++i) centre[i] = (minimum[i]+maximum[i])/2;
+		for (int i = 0; i < 3; ++i) centre[i] = (minimum[i]+maximum[i])/2;
 		float x = 0, y = 0;
-		for (int i=0;i<4;++i) {
-			const auto p = Automap::Project({{i&1 ? maximum[0] : minimum[0], i&2 ? maximum[1] : minimum[1], centre[2]}},centre,yaw,tilt);
+		for (int i=0;i<8;++i) {
+			const auto p = Automap::Project({{i&1 ? maximum[0] : minimum[0], i&2 ? maximum[1] : minimum[1], i&4 ? maximum[2] : minimum[2]}},centre,yaw,tilt);
 			x = std::max(x,std::abs(p[0])); y = std::max(y,std::abs(p[1]));
 		}
 		const float aspect = cls.glconfig.vidWidth * 480.0f / (cls.glconfig.vidHeight * 640.0f);
@@ -355,7 +355,7 @@ void Action() {
 		if (!Q_stricmp(action,"pandown")) dy = -step;
 		if (exploded) { navCentre[0]+=dx; navCentre[1]-=dy; }
 		else { centre[0] += std::cos(a)*dx-std::sin(a)*dy; centre[1] += std::sin(a)*dx+std::cos(a)*dy; }
-	} else Com_Printf("automap: explode zoomin zoomout up down wider narrower left right tilt centre fit control lift panleft panright panup pandown\n");
+	} else Com_Printf("automap: explode zoomin zoomout up down left right tilt centre fit control lift panleft panright panup pandown\n");
 	if (exploded && (!Q_stricmp(action,"left") || !Q_stricmp(action,"right") || !Q_stricmp(action,"tilt"))) NavFit();
 }
 void Status() {
@@ -363,9 +363,9 @@ void Status() {
 	Com_Printf("automap bsp_parts=%d bsp_edges=%d\n",int(explodedTriangles.size()),int(explodedEdges.size()));
 	if (exploded) for (size_t i=0;i<nav.floors.size();++i) Com_Printf("automap floor=%d elevation=%.1f bounds=%.1f,%.1f,%.1f,%.1f\n",int(i)+1,nav.floors[i].height,
 		floorLow[i][0]+floorOffsets[i][0],floorLow[i][1]+floorOffsets[i][1],floorHigh[i][0]+floorOffsets[i][0],floorHigh[i][1]+floorOffsets[i][1]);
-	Com_Printf("automap map=%s valid=%d triangles=%d edges=%d drawn=%d markers=%d shown=%d height=%.1f span=%.1f yaw=%.1f tilt=%.1f centre=%.1f,%.1f slice=%.1f lifts=%d lifts_shown=%d\n",
+	Com_Printf("automap map=%s valid=%d triangles=%d edges=%d drawn=%d markers=%d shown=%d height=%.1f span=%.1f yaw=%.1f tilt=%.1f centre=%.1f,%.1f lifts=%d lifts_shown=%d\n",
 		loadedMap.c_str(), valid, int(triangles.size()), int(edges.size()), visibleTriangles, current.count, visibleMarkers,
-		centre[2], span, yaw, tilt, centre[0], centre[1], sliceHeight->value,current.liftCount,visibleLifts);
+		centre[2], span, yaw, tilt, centre[0], centre[1],current.liftCount,visibleLifts);
 	for (int i = 0; i < current.count; ++i) Com_Printf("automap control=%d enabled=%d position=%.1f,%.1f,%.1f\n",
 		current.markers[i].entity, current.markers[i].enabled, current.markers[i].position[0], current.markers[i].position[1], current.markers[i].position[2]);
 	for (int i=0;i<current.liftCount;++i) {
@@ -390,7 +390,7 @@ void DrawExploded(Batch &batch) {
 		batch.Poly({NavScreen(t.p[0],t.floor),NavScreen(t.p[1],t.floor),NavScreen(t.p[2],t.floor)},{{byte(shade*0.6f),shade,byte(shade+16),255}});
 		++visibleTriangles;
 	}
-	for (const auto &edge : explodedEdges) batch.Line(NavScreen(edge.a,edge.floor),NavScreen(edge.b,edge.floor),{{83,116,129,255}});
+	for (const auto &edge : explodedEdges) batch.Line(NavScreen(edge.a,edge.floor),NavScreen(edge.b,edge.floor),EdgeColor(edge));
 	for (const auto &link : nav.links) batch.Line(NavScreen(link.a,link.from),NavScreen(link.b,link.to),{{175,151,90,170}},1);
 	for (int i=0;i<current.liftCount;++i) {
 		const auto &lift=current.lifts[i];
@@ -426,13 +426,11 @@ void DrawExploded(Batch &batch) {
 		if (!overlap) { Label(x,y,va("F%d  Z %.0f",int(i)+1,nav.floors[i].height)); labels.push_back({{x,y,0}}); }
 	}
 	Label(26,379,va("Exploded | %d floors | Player F%d | Tan: surface links  Green: possible lift routes",int(nav.floors.size()),playerFloor+1));
-	Label(26,398,"X: slice view  Drag: pan  Wheel: zoom  PgUp/Dn: floor  Q/E: rotate  T: tilt  Home: player");
+	Label(26,398,"X: whole map  Drag: pan  Wheel: zoom  PgUp/Dn: floor  Q/E: rotate  T: tilt  Home: player");
 }
 }
 
 void CL_InitAutomap() {
-	sliceHeight=Cvar_Get("ui_automapSliceHeight","256",CVAR_ARCHIVE);
-	Cvar_CheckRange(sliceHeight,64,4096,qtrue);
 	Cmd_AddCommand("automap", Action); Cmd_AddCommand("automap_status", Status);
 }
 void CL_ResetAutomap() { loadedMap.clear(); triangles.clear(); edges.clear(); explodedTriangles.clear(); explodedEdges.clear(); navInput.clear(); nav={}; floorOffsets.clear(); floorLow.clear(); floorHigh.clear(); exploded=navAttempted=false; current = {}; valid = false; nextControl = nextLift = 0; recenter = true; }
@@ -445,7 +443,6 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 		loadedMap = current.map; valid = LoadMesh(current.map); Centre(); span=1024; yaw=45; tilt=55; nextControl=nextLift=0;
 	}
 	if (recenter) { Centre(); recenter = false; }
-	const float halfSlice = sliceHeight->value * 0.5f;
 	Batch batch;
 	batch.Poly({{{Left,Top,0}},{{Left+Width,Top,0}},{{Left+Width,Top+Height,0}},{{Left,Top+Height,0}}}, {{8,13,18,255}});
 	visibleTriangles = visibleMarkers = visibleLifts = 0;
@@ -455,28 +452,20 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 	if (valid) {
 		std::vector<std::pair<float,int>> order;
 		for (int i = 0; i < int(triangles.size()); ++i) {
-			const auto &t = triangles[i]; if (t.low > centre[2]+halfSlice || t.high < centre[2]-halfSlice) continue;
+			const auto &t = triangles[i];
 			Point p; for (int j=0;j<3;++j) p[j]=(t.p[0][j]+t.p[1][j]+t.p[2][j])/3;
 			order.emplace_back(Automap::Project(p,centre,yaw,tilt)[2],i);
 		}
 		std::sort(order.rbegin(),order.rend());
 		for (const auto &entry : order) {
 			const auto &t = triangles[entry.second];
-			Automap::Polygon poly = {{t.p[0],t.p[1],t.p[2]},3};
-			poly = Automap::Clip(Automap::Clip(poly,centre[2]-halfSlice,true),centre[2]+halfSlice,false);
-			if (poly.count < 3) continue;
-			std::vector<Point> points; for (int i=0;i<poly.count;++i) points.push_back(Screen(poly.points[i]));
 			const byte shade = byte(Com_Clamp(30,80,55+(t.low-centre[2])*0.25f));
-			batch.Poly(points, {{byte(shade*0.6f),shade,byte(shade+16),255}}); ++visibleTriangles;
+			batch.Poly({Screen(t.p[0]),Screen(t.p[1]),Screen(t.p[2])}, {{byte(shade*0.6f),shade,byte(shade+16),255}}); ++visibleTriangles;
 		}
-		for (const auto &edge : edges) {
-			Point a=edge.a,b=edge.b;
-			if (!Automap::ClipSegment(a,b,centre[2]-halfSlice,centre[2]+halfSlice)) continue;
-			batch.Line(Screen(a),Screen(b),{{83,116,129,255}});
-		}
+		for (const auto &edge : edges) batch.Line(Screen(edge.a),Screen(edge.b),EdgeColor(edge));
 		const float aspect=640.0f*cls.glconfig.vidHeight/(480.0f*cls.glconfig.vidWidth);
 		for (int i=0;i<current.count;++i) {
-			const auto &marker=current.markers[i]; if (std::abs(marker.position[2]-centre[2])>halfSlice) continue;
+			const auto &marker=current.markers[i];
 			const auto p=Screen(marker.position);
 			if (p[0]<Left || p[0]>Left+Width || p[1]<Top || p[1]>Top+Height) continue;
 			const std::array<byte,4> color=marker.enabled ? std::array<byte,4>{{255,193,70,255}} : std::array<byte,4>{{130,135,140,255}};
@@ -486,24 +475,11 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 		for (int i=0;i<current.liftCount;++i) {
 			const auto &lift=current.lifts[i];
 			const int count=Com_Clampi(0,Automap::MaxStops,lift.count);
-			Point anchor=lift.position;
-			bool available=std::abs(anchor[2]-centre[2])<=halfSlice, up=false, down=false;
+			bool up=false, down=false;
 			for (int j=0;j<count;++j) {
 				if (lift.ordered && j==0) continue;
 				Point a=lift.ordered && j>1 ? lift.stops[j-1] : lift.position,b=lift.stops[j];
 				up|=b[2]>lift.position[2]+8; down|=b[2]<lift.position[2]-8;
-				if (std::min(a[2],b[2])>centre[2]+halfSlice || std::max(a[2],b[2])<centre[2]-halfSlice) continue;
-				if (!available && std::abs(b[2]-a[2])>0.01f) {
-					const float t=Com_Clamp(0,1,(centre[2]-a[2])/(b[2]-a[2]));
-					for (int k=0;k<3;++k) anchor[k]=a[k]+t*(b[k]-a[k]);
-					available=true;
-				}
-				const Point start=a,end=b;
-				if (std::abs(b[2]-a[2])>0.01f) {
-					const float t0=Com_Clamp(0,1,(Com_Clamp(centre[2]-halfSlice,centre[2]+halfSlice,a[2])-a[2])/(b[2]-a[2]));
-					const float t1=Com_Clamp(0,1,(Com_Clamp(centre[2]-halfSlice,centre[2]+halfSlice,b[2])-a[2])/(b[2]-a[2]));
-					for (int k=0;k<3;++k) { a[k]=start[k]+t0*(end[k]-start[k]); b[k]=start[k]+t1*(end[k]-start[k]); }
-				}
 				a=Screen(a); b=Screen(b);
 				const std::array<byte,4> green={{75,190,130,255}};
 				batch.Line(a,b,green,1);
@@ -513,8 +489,7 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 					batch.Line(b,{{b[0]-(dx*4+dy*2)/length*aspect,b[1]-(dy*4-dx*2)/length,0}},green,1);
 				}
 			}
-			if (!available) continue;
-			const auto p=Screen(anchor);
+			const auto p=Screen(lift.position);
 			if (p[0]<Left+8 || p[0]>Left+Width-8 || p[1]<Top+12 || p[1]>Top+Height-12) continue;
 			batch.Poly({{{p[0]-5*aspect,p[1],0}},{{p[0],p[1]-5,0}},{{p[0]+5*aspect,p[1],0}},{{p[0],p[1]+5,0}}},{{28,70,48,255}});
 			liftLabels.push_back({p,up,down,count==0}); ++visibleLifts;
@@ -533,6 +508,6 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 		if (label.up) Label(label.p[0]+5*aspect,label.p[1]-13,"^",true);
 		if (label.down) Label(label.p[0]+5*aspect,label.p[1]+2,"v",true);
 	}
-	Label(26,379,valid ? va("Height %.0f | Slice %.0f | %s | Controls %d | Lifts %d | Gold: controls  Green: lifts",centre[2],sliceHeight->value,tilt ? "Isometric" : "Top-down",current.count,current.liftCount) : "Automap unavailable for this level");
-	Label(26,398,"X: exploded  Drag: pan  Right-drag: height  Wheel: zoom  [ ]: slice  Q/E: rotate  T: tilt  Home: player");
+	Label(26,379,valid ? va("Whole map | %s | Controls %d | Lifts %d | Gold: controls  Green: lifts",tilt ? "Isometric" : "Top-down",current.count,current.liftCount) : "Automap unavailable for this level");
+	Label(26,398,"X: exploded  Drag: pan  Wheel: zoom  Q/E: rotate  T: tilt  Home: player");
 }

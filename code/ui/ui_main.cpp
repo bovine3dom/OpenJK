@@ -4066,7 +4066,7 @@ void _UI_KeyEvent( int key, qboolean down )
 {
 #ifndef JK2_MODE
 	if (!UI_AutomapFocused()) UI_CancelAutomapDrag();
-	if (key==A_MOUSE1 || key==A_MOUSE2) {
+	if (key==A_MOUSE1) {
 		if (automapDragButton) {
 			if (!down && key==automapDragButton) UI_CancelAutomapDrag();
 			return;
@@ -4090,8 +4090,6 @@ void _UI_KeyEvent( int key, qboolean down )
 			case A_MWHEELDOWN: case A_KP_MINUS: case '-': action="zoomout"; break;
 			case A_PAGE_UP: action="up"; break;
 			case A_PAGE_DOWN: action="down"; break;
-			case A_OPEN_SQUARE: action="narrower"; break;
-			case A_CLOSE_SQUARE: action="wider"; break;
 			case A_CURSOR_LEFT: action="panleft"; break;
 			case A_CURSOR_RIGHT: action="panright"; break;
 			case A_CURSOR_UP: action="panup"; break;
