@@ -186,7 +186,8 @@ def main():
             else:
                 raise AssertionError(f"JO script still owns the guard: {guard}")
             assert guard["class"] == "48", guard
-            cmd("set d_npcfreeze 1; save jo_jolt")
+            # Drain the opening fight before testing the single full-body slot.
+            cmd("set d_npcfreeze 1; set g_joltReactions 0; wait 10; set g_joltReactions 1; save jo_jolt")
             before = reaction()
             cmd("jolt_shoot st_guard2; wait 2")
             hit = reaction()

@@ -9,6 +9,9 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/TransformedShape.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -26,6 +29,7 @@ namespace JoltReaction {
 namespace {
 constexpr float Step = 1.0f / 120;
 constexpr float AnkleHeight = .095f, SoleHalfHeight = .035f;
+float Ease(float t) { t = std::clamp(t, 0.0f, 1.0f); return t*t*t*(t*(t*6-15)+10); }
 template<size_t N> struct PoseHistory {
 	struct Frame {
 		double time;
@@ -238,6 +242,14 @@ struct FallSimulation::Impl {
 					owner->supported[side] = true;
 					owner->supportHeight[side] = (first ? manifold.GetWorldSpaceContactPointOn2(0) : manifold.GetWorldSpaceContactPointOn1(0)).GetZ();
 				}
+				const int hand = 4+side*2;
+				const bool handFirst = a.GetID() == owner->bodies[hand];
+				if (handFirst || b.GetID() == owner->bodies[hand]) {
+					const auto point = (handFirst ? a : b).GetWorldTransform()*owner->endLocal[hand];
+					for (JPH::uint i = 0; i < manifold.mRelativeContactPointsOn1.size(); ++i)
+						if (((handFirst ? manifold.GetWorldSpaceContactPointOn1(i) : manifold.GetWorldSpaceContactPointOn2(i))-point).LengthSq() < .01f)
+							owner->handContacts |= 1u << side;
+				}
 			}
 		}
 		void OnContactAdded(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& m, JPH::ContactSettings&) override { Record(a,b,m); }
@@ -252,6 +264,13 @@ struct FallSimulation::Impl {
 	bool supported[2] = {};
 	float supportHeight[2] = {};
 	float contactGrace[2] = {};
+	unsigned handContacts = 0;
+	JPH::Vec3 handGoal[2] = {JPH::Vec3::sZero(), JPH::Vec3::sZero()};
+	JPH::Vec3 previousShoulder[2] = {JPH::Vec3::sZero(), JPH::Vec3::sZero()};
+	JPH::Mat44 preparationFrom[PartCount], preparationTarget[PartCount];
+	float preparationAge = 0, preparationDuration = 1;
+	JPH::RefConst<JPH::Shape> forearmShape[2], palmShape[2];
+	bool palmsEnabled = false;
 	JPH::BodyID bodies[PartCount];
 	JPH::Body* body[PartCount];
 	JPH::Mat44 offsets[PartCount];
@@ -277,6 +296,12 @@ struct FallSimulation::Impl {
 	std::map<int, JPH::BodyID> meshes;
 	float accumulator = 0;
 	unsigned steps = 0;
+	void PalmCollision(bool enabled) {
+		if (palmsEnabled == enabled) return;
+		for (int side = 0; side < 2; ++side)
+			world.GetBodyInterface().SetShape(bodies[4+side*2], enabled ? palmShape[side] : forearmShape[side], false, JPH::EActivation::Activate);
+		palmsEnabled = enabled;
+	}
 	void MakeJoint(int i, JPH::Vec3Arg start, JPH::Vec3Arg direction) {
 		JPH::SwingTwistConstraintSettings joint;
 		joint.mPosition1 = joint.mPosition2 = start;
@@ -306,8 +331,8 @@ struct FallSimulation::Impl {
 		const float strength = 1-.98f*weakness[part];
 		return part >= 7 && part < 11 ? strength*strength : strength;
 	}
-	void LegTargets(JPH::Mat44* goals, int side, JPH::Vec3Arg foot, const JPH::Vec3* balancedHip = nullptr) {
-		const int upper = side ? 9 : 7, lower = upper + 1;
+	void LimbTargets(JPH::Mat44* goals, int upper, JPH::Vec3Arg foot, const JPH::Vec3* balancedHip = nullptr) {
+		const int lower = upper + 1;
 		const auto referenceHip = (goals[upper] * offsets[upper]).GetTranslation();
 		const auto hip = balancedHip ? *balancedHip : (world.GetBodyInterface().GetWorldTransform(bodies[upper]) * offsets[upper]).GetTranslation();
 		const auto knee = (goals[lower] * offsets[lower]).GetTranslation() + hip-referenceHip;
@@ -326,6 +351,9 @@ struct FallSimulation::Impl {
 		const auto lowerRotation = JPH::Quat::sFromTo(goals[lower].GetAxisY(), (reachable-joint).Normalized())*goals[lower].GetQuaternion();
 		goals[upper] = JPH::Mat44::sRotationTranslation(upperRotation, (joint+hip)*.5f);
 		goals[lower] = JPH::Mat44::sRotationTranslation(lowerRotation, (joint+reachable)*.5f);
+	}
+	void LegTargets(JPH::Mat44* goals, int side, JPH::Vec3Arg foot, const JPH::Vec3* balancedHip = nullptr) {
+		LimbTargets(goals, side ? 9 : 7, foot, balancedHip);
 		const int shoe = side ? 12 : 11;
 		goals[shoe].SetTranslation(foot - goals[shoe].Multiply3x3(offsets[shoe].GetTranslation()));
 	}
@@ -346,6 +374,10 @@ struct FallSimulation::Impl {
 		targetAge += Step; reactionAge += Step;
 		landedAge += Step;
 		balance.assistForce = balance.assistTorque = 0;
+		balance.handContacts = handContacts;
+		balance.handContactsSeen |= handContacts;
+		const unsigned previousBrace = balance.braceMask;
+		balance.braceMask = 0;
 		JPH::Mat44 goals[PartCount];
 		const float alpha = std::clamp(targetAge / targetDuration, 0.0f, 1.0f);
 		JPH::Vec3 center = JPH::Vec3::sZero(), velocity = JPH::Vec3::sZero();
@@ -358,6 +390,12 @@ struct FallSimulation::Impl {
 			else weakness[i] = std::max(0.0f, weakness[i] - Step * .9f);
 		}
 		center /= totalMass; velocity /= totalMass;
+		const bool preparing = balance.phase == ControlPhase::Preparing;
+		if (preparing) {
+			preparationAge += Step;
+			std::copy(preparationFrom, preparationFrom+PartCount, goals);
+			balance.preparationError = 0;
+		}
 		if (desiredVelocity.LengthSq() > .16f) plantedPose = false;
 		const bool withdraw[] = {balance.phase == ControlPhase::Tracking && weakness[7] > .6f,
 			balance.phase == ControlPhase::Tracking && weakness[9] > .6f};
@@ -388,7 +426,7 @@ struct FallSimulation::Impl {
 		balance.error = error.Length();
 		balance.peakError = std::max(balance.peakError, balance.error);
 		unsupported = contacts[0] || contacts[1] ? 0 : unsupported+Step;
-		if (balance.phase != ControlPhase::Falling) {
+		if (balance.phase == ControlPhase::Tracking || balance.phase == ControlPhase::Stepping) {
 			if (unsupported > .4f || balance.pelvisHeight < standingHeight * .48f) balance.phase = ControlPhase::Falling;
 			if (balance.phase == ControlPhase::Tracking && landedAge > .6f && balance.error > .14f) {
 				const auto forward = (goals[11].GetAxisY()*JPH::Vec3(1,1,0)).NormalizedOr(JPH::Vec3::sAxisX());
@@ -450,7 +488,8 @@ struct FallSimulation::Impl {
 			}
 			if (balance.error > .65f) balance.phase = ControlPhase::Falling;
 		}
-		const float wantedStrength = balance.phase == ControlPhase::Falling ? .12f : 1.0f;
+		const float wantedStrength = balance.phase == ControlPhase::Falling || preparing ? .12f : 1.0f;
+		PalmCollision(balance.phase == ControlPhase::Falling || preparing);
 		balance.strength += std::clamp(wantedStrength-balance.strength, -Step*3, Step*2);
 		const float pulse = reactionAge < .08f ? reactionAge/.08f : std::max(0.0f, 1-(reactionAge-.08f)/.55f);
 		const auto recoil = JPH::Quat::sRotation(reactionAxis, reactionAngle * pulse);
@@ -465,16 +504,70 @@ struct FallSimulation::Impl {
 				goals[i] = JPH::Mat44::sRotationTranslation(JPH::Quat::sRotation(axis, lift)*goals[i].GetQuaternion(), goals[i].GetTranslation());
 			}
 		}
+		if (fallAge > 0 || preparing) for (int side = 0; side < 2; ++side) {
+			const int upper = 3+side*2, lower = upper+1;
+			const auto shoulder = (api.GetWorldTransform(bodies[upper])*offsets[upper]).GetTranslation();
+			const auto hand = api.GetWorldTransform(bodies[lower])*endLocal[lower];
+			JPH::Vec3 goal;
+			if (preparing) {
+				const auto end = preparationTarget[lower]*endLocal[lower];
+				goal = preparationFrom[lower]*endLocal[lower];
+				goal += (end-goal)*Ease(preparationAge/preparationDuration);
+				balance.preparationError = std::max(balance.preparationError, (end-hand).Length());
+			} else {
+				// Look ahead along the fall, including downward motion. Each arm has its own probe.
+				auto drift = velocity*JPH::Vec3(1,1,0);
+				drift /= std::max(1.0f, drift.Length());
+				const auto reach = (drift*.55f-JPH::Vec3::sAxisZ()).Normalized()*2.0f;
+				JPH::RRayCast ray(shoulder, reach);
+				JPH::RayCastResult hit;
+				if (!world.GetNarrowPhaseQuery().CastRay(ray, hit, {}, JPH::SpecifiedObjectLayerFilter(0))) continue;
+				const auto point = ray.GetPointOnRay(hit.mFraction);
+				auto normal = api.GetTransformedShape(hit.mBodyID).GetWorldSpaceSurfaceNormal(hit.mSubShapeID2, point);
+				if (normal.Dot(reach) > 0) normal = -normal;
+				goal = point + normal*.065f;
+				const float length = (endLocal[upper]-offsets[upper].GetTranslation()).Length() +
+					(endLocal[lower]-offsets[lower].GetTranslation()).Length();
+				if ((goal-shoulder).Length() > 2*length+.4f || fallAge > 1.4f) continue;
+				const float gap = std::max(0.0f, (shoulder-point).Dot(normal)-length);
+				const float closing = -api.GetPointVelocity(bodies[parent[upper]], shoulder).Dot(normal);
+				const float gravity = std::max(0.0f, -world.GetGravity().Dot(normal));
+				const float arrival = gap == 0 ? 0 : gravity > .001f ?
+					(std::sqrt(closing*closing+2*gravity*gap)-closing)/gravity : closing > .001f ? gap/closing : 1;
+				if (arrival > .4f) continue;
+			}
+			if (!(previousBrace & (1u << side))) handGoal[side] = hand;
+			else if (!preparing && !(handContacts & (1u << side))) handGoal[side] += shoulder-previousShoulder[side];
+			previousShoulder[side] = shoulder;
+			auto change = goal-handGoal[side];
+			const float limit = Step*(preparing ? .55f : 1.5f);
+			if (change.Length() > limit) change *= limit/change.Length();
+			handGoal[side] += change;
+			goals[upper] = api.GetWorldTransform(bodies[upper]); goals[lower] = api.GetWorldTransform(bodies[lower]);
+			LimbTargets(goals, upper, handGoal[side]);
+			balance.braceMask |= 1u << side;
+			const auto carry = !preparing && !(handContacts & (1u << side)) ? api.GetPointVelocity(bodies[parent[upper]], shoulder) : JPH::Vec3::sZero();
+			auto force = (handGoal[side]-hand)*450-(api.GetPointVelocity(bodies[lower], hand)-carry)*25;
+			if (force.Length() > 100) force *= 100/force.Length();
+			for (int i = upper; i <= lower; ++i) {
+				const auto joint = (api.GetWorldTransform(bodies[i])*offsets[i]).GetTranslation();
+				const auto torque = (hand-joint).Cross(force)*MuscleStrength(i);
+				api.AddTorque(bodies[i], torque); api.AddTorque(bodies[parent[i]], -torque);
+			}
+		}
 		for (int i = 1; i < PartCount; ++i) {
 			auto desired = goals[i].GetQuaternion();
 			const bool injured = (i == 7 || i == 8 || i == 11) ? withdraw[0] : (i == 9 || i == 10 || i == 12) && withdraw[1];
 			const bool worldHip = (i == 7 || i == 9) && (balance.phase == ControlPhase::Stepping || (balance.phase == ControlPhase::Tracking && injured));
+			const bool bracing = i >= 3 && i <= 6 && (balance.braceMask & (1u << ((i-3)/2)));
+			const bool worldArm = bracing && (i == 3 || i == 5);
 			const auto q = balance.phase == ControlPhase::Tracking && plantedPose && i >= 7 && !injured ? stanceFrom[i].SLERP(stanceJoint[i], std::min(1.0f, landedAge/.35f)) :
-				(worldHip ? api.GetRotation(bodies[parent[i]]) : goals[parent[i]].GetQuaternion()).Conjugated()*desired;
+				(worldHip || worldArm ? api.GetRotation(bodies[parent[i]]) : goals[parent[i]].GetQuaternion()).Conjugated()*desired;
 			joints[i]->SetTargetOrientationBS(q);
 			const bool stepping = balance.phase == ControlPhase::Stepping || landedAge < .25f;
 			const float strength = MuscleStrength(i);
-			const float torque = (i >= 11 ? (stepping ? 150.0f : 400.0f) : i >= 7 ? (stepping ? 250.0f : 900.0f) : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f) * balance.strength * strength;
+			const float torque = bracing ? (preparing ? 25 : 35)*strength :
+				(i >= 11 ? (stepping ? 150.0f : 400.0f) : i >= 7 ? (stepping ? 250.0f : 900.0f) : i == 2 ? 45.0f : i == 1 ? 250.0f : 80.0f) * balance.strength * strength;
 			joints[i]->GetSwingMotorSettings().SetTorqueLimit(torque);
 			joints[i]->GetTwistMotorSettings().SetTorqueLimit(torque);
 			if (i >= 7 && i < 11) {
@@ -483,7 +576,7 @@ struct FallSimulation::Impl {
 			}
 		}
 		// Ground contact permits bounded horizontal force and root torque.
-		if (balance.phase != ControlPhase::Falling && (supported[0] || supported[1])) {
+		if ((balance.phase == ControlPhase::Tracking || balance.phase == ControlPhase::Stepping) && (supported[0] || supported[1])) {
 			auto goal = JPH::Vec3::sZero();
 			for (int i = 0; i < PartCount; ++i) goal += goals[i].GetTranslation() * (mass[i]/totalMass);
 			if (balance.phase == ControlPhase::Tracking && desiredVelocity.LengthSq() < .16f) {
@@ -535,6 +628,15 @@ struct FallSimulation::Impl {
 			const auto center = (start + end) * 0.5f - JPH::Vec3(0,0,i >= 11 ? AnkleHeight-SoleHalfHeight : 0);
 			JPH::RefConst<JPH::Shape> shape = i >= 11 ? static_cast<JPH::Shape*>(new JPH::BoxShape(JPH::Vec3(.06f, .12f, SoleHalfHeight), .01f)) :
 				static_cast<JPH::Shape*>(new JPH::CapsuleShape(std::max(0.01f, delta.Length() * 0.5f - parts[i].radius), parts[i].radius));
+			if (i == 4 || i == 6) {
+				const int side = (i-4)/2;
+				forearmShape[side] = shape;
+				JPH::StaticCompoundShapeSettings forearm;
+				forearm.AddShape(JPH::Vec3::sZero(), JPH::Quat::sIdentity(), shape);
+				forearm.AddShape(JPH::Vec3(0,delta.Length()*.5f+.025f,0), JPH::Quat::sIdentity(), new JPH::SphereShape(.045f));
+				const auto compound = forearm.Create().Get();
+				palmShape[side] = new JPH::OffsetCenterOfMassShape(compound, -compound->GetCenterOfMass());
+			}
 			JPH::BodyCreationSettings settings(shape,
 				center, q, JPH::EMotionType::Dynamic, 1);
 			settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
@@ -625,6 +727,16 @@ void FallSimulation::AddVelocity(const float* velocity) {
 	if (v.IsNaN() || v.LengthSq() > 10000 || v.LengthSq() < .000001f) return;
 	for (auto id : impl->bodies) impl->world.GetBodyInterface().AddLinearVelocity(id, v);
 }
+void FallSimulation::SetRootVelocity(const float* velocity) {
+	const auto change = Vector(velocity)-impl->world.GetBodyInterface().GetLinearVelocity(impl->bodies[0]);
+	const float delta[] = {change.GetX(), change.GetY(), change.GetZ()};
+	AddVelocity(delta);
+}
+void FallSimulation::SurfaceVelocity(int model, const float* point, float* velocity) const {
+	const auto found = impl->meshes.find(model);
+	const auto v = found == impl->meshes.end() ? JPH::Vec3::sZero() : impl->world.GetBodyInterface().GetPointVelocity(found->second, Vector(point));
+	for (int i = 0; i < 3; ++i) velocity[i] = v[i];
+}
 void FallSimulation::Impulse(int part, const float* direction, const float* point, float strength) {
 	if (part < 0 || part >= PartCount) return;
 	impl->world.GetBodyInterface().AddImpulse(impl->bodies[part], Vector(direction).NormalizedOr(JPH::Vec3::sAxisX()) * std::clamp(strength, 0.0f, 100.0f), Vector(point));
@@ -642,6 +754,7 @@ void FallSimulation::Drive(const Part* pose, const float* desiredVelocity, float
 }
 void FallSimulation::Follow(const Part* pose, float seconds) {
 	auto& s = *impl;
+	s.PalmCollision(false);
 	if (s.balance.phase != ControlPhase::Shadow) {
 		for (auto id : s.bodies) s.world.GetBodyInterface().SetMotionType(id, JPH::EMotionType::Kinematic, JPH::EActivation::DontActivate);
 		for (int i = 1; i < PartCount; ++i) { s.joints[i]->SetSwingMotorState(JPH::EMotorState::Off); s.joints[i]->SetTwistMotorState(JPH::EMotorState::Off); }
@@ -710,6 +823,39 @@ void FallSimulation::ReleaseControl() {
 	impl->balance.phase = ControlPhase::Falling;
 	impl->balance.assistForce = impl->balance.assistTorque = 0;
 }
+void FallSimulation::PrepareRecovery(const Transform* bones, float seconds) {
+	auto& s = *impl;
+	s.preparationAge = 0; s.preparationDuration = std::max(.35f, seconds);
+	for (int i = 0; i < PartCount; ++i) {
+		s.preparationFrom[i] = s.world.GetBodyInterface().GetWorldTransform(s.bodies[i]);
+		s.preparationTarget[i] = Matrix(bones[i])*s.offsets[i].InversedRotationTranslation();
+	}
+	s.balance.phase = ControlPhase::Preparing;
+	s.balance.braceMask = 0;
+	s.balance.assistForce = s.balance.assistTorque = 0;
+}
+bool FallSimulation::RecoveryPathClear(const Transform* bones) const {
+	Transform from[PartCount], sample[PartCount];
+	Sample(from);
+	JPH::Vec3 previous[4][2];
+	for (int frame = 0; frame <= 16; ++frame) {
+		std::copy(bones, bones+PartCount, sample);
+		BlendRecovery(from, sample, PartCount, frame/16.0f);
+		for (int i = 3; i <= 6; ++i) {
+			const auto body = Matrix(sample[i])*impl->offsets[i].InversedRotationTranslation();
+			const JPH::Vec3 points[] = {Matrix(sample[i]).GetTranslation(), body*impl->endLocal[i]};
+			for (int p = 0; p < 2; ++p) {
+				if (frame) {
+					const auto delta = points[p]-previous[i-3][p];
+					JPH::RayCastResult hit;
+					if (delta.LengthSq() > .000001f && impl->world.GetNarrowPhaseQuery().CastRay(JPH::RRayCast(previous[i-3][p], delta), hit, {}, JPH::SpecifiedObjectLayerFilter(0))) return false;
+				}
+				previous[i-3][p] = points[p];
+			}
+		}
+	}
+	return true;
+}
 BalanceStatus FallSimulation::Balance() const { return impl->balance; }
 void FallSimulation::RootVelocity(float* velocity) const {
 	const auto v = impl->world.GetBodyInterface().GetLinearVelocity(impl->bodies[0]);
@@ -722,6 +868,7 @@ bool FallSimulation::Advance(float seconds) {
 	while (s.accumulator + 0.000001f >= Step) {
 		if (s.balance.strength > 0 || s.balance.phase != ControlPhase::Falling) s.Control();
 		s.supported[0] = s.supported[1] = false;
+		s.handContacts = 0;
 		if (s.world.Update(Step, 1, &s.allocator, &s.jobs) != JPH::EPhysicsUpdateError::None) return false;
 		for (int i = 0; i < PartCount; ++i) {
 			s.position[i] = s.world.GetBodyInterface().GetPosition(s.bodies[i]);
@@ -760,5 +907,18 @@ void BlendTransforms(const Transform* from, Transform* to, int count, float alph
 		Store(JPH::Mat44::sRotationTranslation(a.GetQuaternion().Normalized().SLERP(b.GetQuaternion().Normalized(), alpha),
 			a.GetTranslation() * (1 - alpha) + b.GetTranslation() * alpha), to[i]);
 	}
+}
+float RecoveryDuration(const Transform* from, const Transform* to, int count) {
+	float seconds = .35f;
+	for (int i = 0; i < count; ++i) {
+		const auto a = Matrix(from[i]), b = Matrix(to[i]);
+		const float dot = std::abs(a.GetQuaternion().Normalized().Dot(b.GetQuaternion().Normalized()));
+		const float angle = 2*std::acos(std::min(1.0f, dot));
+		seconds = std::max(seconds, 1.875f*std::max((a.GetTranslation()-b.GetTranslation()).Length()/.75f, angle/JPH::DegreesToRadians(150.0f)));
+	}
+	return seconds;
+}
+void BlendRecovery(const Transform* from, Transform* to, int count, float alpha) {
+	BlendTransforms(from, to, count, Ease(alpha));
 }
 }

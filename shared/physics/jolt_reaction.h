@@ -6,13 +6,16 @@ namespace JoltReaction {
 constexpr int PartCount = 13;
 struct Transform { float matrix[3][4]; };
 void BlendTransforms(const Transform* from, Transform* to, int count, float alpha);
+// Quintic easing with bounded peak bone speeds: 0.75 m/s and 150 degrees/s.
+float RecoveryDuration(const Transform* from, const Transform* to, int count);
+void BlendRecovery(const Transform* from, Transform* to, int count, float alpha);
 struct Part {
 	Transform bone;
 	float end[3];
 	float radius, mass;
 	int parent;
 };
-enum class ControlPhase { Shadow, Tracking, Stepping, Falling };
+enum class ControlPhase { Shadow, Tracking, Stepping, Falling, Preparing };
 struct BalanceStatus {
 	ControlPhase phase = ControlPhase::Falling;
 	float error = 0, strength = 0, pelvisHeight = 0;
@@ -25,6 +28,8 @@ struct BalanceStatus {
 	float handoffGap = 0, handoffAngle = 0;
 	float assistForce = 0, assistTorque = 0;
 	float peakLegLift = 0;
+	unsigned braceMask = 0, handContacts = 0, handContactsSeen = 0;
+	float preparationError = 0;
 };
 class CollisionScene {
 	struct Impl;
@@ -46,6 +51,8 @@ public:
 	void MoveMesh(int model, const Transform& transform, float seconds);
 	void SetMeshEnabled(int model, bool enabled);
 	void AddVelocity(const float* velocity);
+	void SetRootVelocity(const float* velocity);
+	void SurfaceVelocity(int model, const float* point, float* velocity) const;
 	void Impulse(int part, const float* direction, const float* point, float strength);
 	// Keep the same bodies and their velocities when moving from animation to active control.
 	void Follow(const Part* pose, float seconds);
@@ -53,6 +60,8 @@ public:
 	void Drive(const Part* pose, const float* desiredVelocity, float seconds);
 	void React(int part, const float* direction, const float* point, float impulse, float weakness);
 	void ReleaseControl();
+	void PrepareRecovery(const Transform* bones, float seconds);
+	bool RecoveryPathClear(const Transform* bones) const;
 	BalanceStatus Balance() const;
 	void RootVelocity(float* velocity) const;
 	bool Advance(float seconds);

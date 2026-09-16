@@ -54,15 +54,19 @@ or `stop`.
 - The leg case must show leg withdrawal or a support correction. A failed
   correction can become a fall.
 - The running actor must carry its movement into the fall.
-- During a fall, the arms must move toward a protective pose as motor strength
-  decreases. The body must settle on the floor.
+- During a fall, reachable surfaces must produce separate arm reaches. Hand
+  contact must bend the arms as the body settles. If no surface is reachable,
+  the arms use a protective pose.
 - The get-up must start from the grounded pose. The body must not move to a
   distant standing point or rise before the get-up clip starts.
 
 Use `jolt_status` for measurements. `corrections` counts step attempts;
 `landings` counts confirmed foot placements. `phase` is 0 for animation
 tracking, 1 for active balance, 2 for a step, and 3 for a fall. `engaged` shows
-whether physics controls the pose. `recovery_lift` is the initial get-up
+whether physics controls the pose. Phase 4 is physical get-up preparation.
+`brace_mask` and `hand_contacts` use 1 for the left hand, 2 for the right hand,
+and 3 for both hands. `preparing` reports the preparation stage; `blend_ms` reports the
+duration of the final handoff. `recovery_lift` is the initial get-up
 correction in game units. Its limit is eight units.
 
 ## Normal Play and Manual Controls
@@ -159,10 +163,26 @@ calibration. General locomotion, obstacles, stairs, ledges, and contact-driven
 get-ups need further work.
 
 Recovery requires low body speed, ground, and standing clearance. The system
-fits the first frame of one of five get-up clips to the settled pelvis. A
-180 ms blend connects to that fixed frame before the authored rise starts.
-If no valid fit exists, the actor stays down and retries. A normal standing
-return uses the same blend duration and reports `recovery_clip=-1`.
+fits the first frame of one of five get-up clips to the settled pelvis, with
+extra weight on arm alignment. The arms first move toward their preparation
+positions under motor control. Gravity and collision remain active, and no
+root assistance is used. A new hit can interrupt this stage.
+
+The system then fits the clip again and checks the swept arm landmarks against
+world collision. An eased transform blend connects the prepared pose to the
+fixed first frame. Its duration limits peak bone translation to 0.75 m/s and
+rotation to 150 degrees/s. It lasts at least 350 ms. The authored rise starts
+after this blend. If clearance or alignment is not suitable, the actor stays
+down and retries. The final blend and rise remain animation transitions.
+A normal standing return still uses 180 ms and reports `recovery_clip=-1`.
+
+Fall bracing uses shoulder motion, gravity, and surface probes to estimate when
+an arm can reach an impact surface. Each arm has a separate target. The reach
+moves with the falling body until contact. Small palm collision proxies are
+enabled for falls and preparation, with the existing forearm mass and inertia.
+Joint torques and compliant elbows supply the response; no new root impulse
+is added. Bracing can reduce an impact, but does not guarantee that the actor
+will catch itself.
 
 Death, removal, loading, restart, external pose control, and disabling the
 feature release the transient rig. A save during a fall restores a normal

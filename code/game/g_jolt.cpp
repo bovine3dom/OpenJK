@@ -78,6 +78,8 @@ struct Actor {
 	int bolts[JoltReaction::PartCount], endBolts[JoltReaction::PartCount];
 	JoltReaction::Transform fallPose[JoltReaction::PartCount];
 	JoltReaction::Transform recoveryPose[JoltReaction::PartCount];
+	JoltReaction::Transform recoveryFrom[JoltReaction::PartCount];
+	int prepareStart = 0, prepareTime = 0, recoveryTime = RecoveryBlendTime;
 	int recoveryAnim = BOTH_GETUP1, nextRecoverAttempt = 0;
 	float recoveryLift = 0;
 	int fallStart = 0, settledSince = 0, recoverStart = 0, lastHit = -10000;
@@ -269,6 +271,16 @@ void Actor::Engage(gentity_t* ent) {
 	}
 	engaged = true;
 	fall->Engage();
+	// Match locomotion velocity even if the last animation sample had no root displacement.
+	// A common delta retains the relative linear and angular motion of the limbs.
+	vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
+	const int ground = ent->client->ps.groundEntityNum;
+	if (ground > 0 && ground < ENTITYNUM_WORLD && g_entities[ground].inuse && g_entities[ground].bmodel && g_entities[ground].model && g_entities[ground].model[0] == '*') {
+		vec3_t point, carry; VectorScale(ent->currentOrigin, MetresPerUnit, point);
+		fall->SurfaceVelocity(atoi(g_entities[ground].model+1), point, carry);
+		VectorAdd(velocity, carry, velocity);
+	}
+	fall->SetRootVelocity(velocity);
 	launchSpeed = VectorLength(ent->client->ps.velocity);
 	fall->Sample(fallPose, 1);
 	VectorCopy(ent->currentOrigin, safeOrigin);
@@ -277,8 +289,9 @@ void Actor::Engage(gentity_t* ent) {
 	VectorCopy(ent->mins, savedMins); VectorCopy(ent->maxs, savedMaxs);
 	fallYaw = ent->client->renderInfo.legsYaw; fallStart = 0;
 	fallMicroseconds = 0; fallSteps = 0;
-	settledSince = recoverStart = nextRecoverAttempt = 0;
-	gi.Printf("Jolt: active control actor=%d speed=%.1f gap=%.3f angle=%.1f\n", actor, launchSpeed, fall->Balance().handoffGap, fall->Balance().handoffAngle);
+	settledSince = recoverStart = prepareStart = nextRecoverAttempt = 0;
+	vec3_t carried; fall->RootVelocity(carried);
+	gi.Printf("Jolt: active control actor=%d speed=%.1f carried=%.3f,%.3f,%.3f gap=%.3f angle=%.1f\n", actor, launchSpeed, carried[0], carried[1], carried[2], fall->Balance().handoffGap, fall->Balance().handoffAngle);
 }
 
 void Actor::UpdateRig(gentity_t* ent, float seconds) {
@@ -292,14 +305,21 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	}
 	if (!recoverStart && DistanceSquared(ent->currentOrigin, lastOrigin) > 128 * 128) { Reset(false); return; }
 	if (recoverStart) {
+		// Carry both ends of the handoff with a moving platform.
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) {
+			const float movement = (ent->currentOrigin[r]-lastOrigin[r])*MetresPerUnit;
+			recoveryFrom[i].matrix[r][3] += movement; recoveryPose[i].matrix[r][3] += movement;
+			if (recoveryAnim < 0) { reference[i].bone.matrix[r][3] += movement; reference[i].end[r] += movement; }
+		}
+		VectorCopy(ent->currentOrigin, lastOrigin);
 		Render(ent, level.time, ent->currentOrigin, ent->currentAngles, false);
 		UpdatePhysicalHull(ent);
-		if (level.time - recoverStart >= RecoveryBlendTime) FinishRecovery(ent);
+		if (level.time - recoverStart >= recoveryTime) FinishRecovery(ent);
 		return;
 	}
 	const auto phase = fall->Balance().phase;
 	MoveColliders(std::max(.001f, seconds));
-	if (phase != JoltReaction::ControlPhase::Falling) {
+	if (phase == JoltReaction::ControlPhase::Tracking || phase == JoltReaction::ControlPhase::Stepping) {
 		vec3_t desired;
 		VectorSubtract(ent->currentOrigin, lastOrigin, desired);
 		const auto& command = ent->NPC->last_ucmd;
@@ -322,6 +342,7 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		fall->Drive(reference, desired, seconds);
 	} else {
 		vec3_t pushed; VectorScale(ent->client->ps.velocity, MetresPerUnit, pushed);
+		if (prepareStart && VectorLengthSquared(pushed) > .01f) { prepareStart = 0; fall->ReleaseControl(); }
 		fall->AddVelocity(pushed);
 	}
 	const auto start = std::chrono::steady_clock::now();
@@ -352,7 +373,11 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else VectorClear(ent->client->ps.velocity);
 	Render(ent, level.time, origin, ent->currentAngles, false);
 	UpdatePhysicalHull(ent);
-	if (balance.phase == JoltReaction::ControlPhase::Falling) {
+	if (prepareStart) {
+		if (level.time-prepareStart >= prepareTime && (fall->Speed() < .65f || level.time-prepareStart >= prepareTime+700)) {
+			if (!Recover(ent)) { prepareStart = 0; fall->ReleaseControl(); }
+		}
+	} else if (balance.phase == JoltReaction::ControlPhase::Falling) {
 		if (fall->Speed() < .25f) { if (!settledSince) settledSince = level.time; }
 		else settledSince = 0;
 		if (settledSince && level.time - settledSince > 600 && level.time - fallStart > 1200 && level.time >= nextRecoverAttempt) Recover(ent);
@@ -383,6 +408,8 @@ void Actor::ReturnToAnimation(gentity_t* ent) {
 	G_SetOrigin(ent, trace.endpos); VectorCopy(trace.endpos, ent->client->ps.origin); VectorCopy(trace.endpos, lastOrigin);
 	ent->s.groundEntityNum = ent->client->ps.groundEntityNum = trace.entityNum;
 	VectorClear(ent->client->ps.velocity);
+	std::copy(fallPose, fallPose+JoltReaction::PartCount, recoveryFrom);
+	recoveryTime = RecoveryBlendTime;
 	recoveryAnim = -1; recoverStart = level.time;
 	UpdatePhysicalHull(ent);
 }
@@ -429,6 +456,7 @@ bool Actor::Recover(gentity_t* ent) {
 		if (trace.startsolid || trace.allsolid || trace.fraction == 1 || trace.plane.normal[2] < .7f || fabsf(trace.endpos[2] - origin[2]) > 8) continue;
 		float score = 0;
 		for (int i = 0; i < JoltReaction::PartCount; ++i) {
+			const float weight = i >= 3 && i <= 6 ? 3 : 1;
 			for (int col = 0; col < 4; ++col) {
 				target[i].matrix[0][col] = c*local[i].matrix[0][col] - s*local[i].matrix[1][col];
 				target[i].matrix[1][col] = s*local[i].matrix[0][col] + c*local[i].matrix[1][col];
@@ -437,13 +465,14 @@ bool Actor::Recover(gentity_t* ent) {
 			for (int r = 0; r < 3; ++r) {
 				target[i].matrix[r][3] = (target[i].matrix[r][3] + trace.endpos[r]) * MetresPerUnit;
 				const float delta = (target[i].matrix[r][3] - fallPose[i].matrix[r][3]) / MetresPerUnit;
-				score += delta * delta;
+				score += weight * delta * delta;
 				for (int col = 0; col < 3; ++col) {
 					const float rotation = target[i].matrix[r][col] - fallPose[i].matrix[r][col];
-					score += 64 * rotation * rotation;
+					score += weight * 64 * rotation * rotation;
 				}
 			}
 		}
+		if (prepareStart && !fall->RecoveryPathClear(target)) continue;
 		if (score < best) {
 			best = score; bestYaw = yaw * 180 / M_PI; recoveryAnim = anim;
 			ground = trace.entityNum; VectorCopy(trace.endpos, bestOrigin);
@@ -451,6 +480,16 @@ bool Actor::Recover(gentity_t* ent) {
 		}
 	}
 	if (ground == ENTITYNUM_NONE) return false;
+	if (!prepareStart) {
+		prepareStart = level.time;
+		prepareTime = int(1000*std::max(.5f, std::min(1.2f, JoltReaction::RecoveryDuration(fallPose, recoveryPose, JoltReaction::PartCount))));
+		fall->PrepareRecovery(recoveryPose, prepareTime*.001f);
+		return true;
+	}
+	std::copy(fallPose, fallPose+JoltReaction::PartCount, recoveryFrom);
+	recoveryTime = int(std::ceil(1000*JoltReaction::RecoveryDuration(recoveryFrom, recoveryPose, JoltReaction::PartCount)));
+	if (recoveryTime > 3000) return false;
+	prepareStart = 0;
 	recoveryLift = recoveryPose[0].matrix[2][3] / MetresPerUnit - pelvis[2];
 	fallYaw = bestYaw;
 	VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs);
@@ -460,7 +499,7 @@ bool Actor::Recover(gentity_t* ent) {
 	VectorClear(ent->client->ps.velocity);
 	recoverStart = level.time;
 	gi.linkentity(ent);
-	gi.Printf("Jolt: grounded recovery actor=%d clip=%d pelvis_lift=%.2f\n", actor, recoveryAnim, recoveryLift);
+	gi.Printf("Jolt: grounded recovery actor=%d clip=%d pelvis_lift=%.2f blend_ms=%d\n", actor, recoveryAnim, recoveryLift, recoveryTime);
 	return true;
 }
 
@@ -532,7 +571,7 @@ void Actor::Reset(bool restoreOrigin) {
 	if (fallOwner == actor) fallOwner = -1;
 	fall.reset();
 	engaged = false;
-	recoverStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
+	recoverStart = prepareStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
 	pelvisBolt = -1;
@@ -579,6 +618,7 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 		hitLoc == HL_ARM_RT || hitLoc == HL_HAND_RT ? 5 : hitLoc == HL_LEG_LT || hitLoc == HL_FOOT_LT ? 7 :
 		hitLoc == HL_LEG_RT || hitLoc == HL_FOOT_RT ? 9 : 1;
 	if ((!engaged && !Active(ent)) || recoverStart) return;
+	if (prepareStart) { prepareStart = 0; fall->ReleaseControl(); nextRecoverAttempt = level.time+500; }
 	lastHit = level.time; lastHitMod = mod;
 	if (!reactionPose->integer && !engaged) { ++hits; return; }
 	if (PrepareRig(ent)) {
@@ -638,14 +678,15 @@ void Actor::Status() {
 	const auto pose = simulation ? simulation->Sample(1) : JoltReaction::Pose{};
 	const auto balance = fall ? fall->Balance() : JoltReaction::BalanceStatus{};
 	gi.Printf("jolt actor=%d active=%d hits=%d poses=%d steps=%u peak=%.3f torso=%.3f,%.3f,%.3f head=%.3f,%.3f,%.3f health=%d us_per_step=%.2f falling=%d recovering=%d speed=%.2f instability=%.2f launch=%.1f pose_error=%.3f pelvis_z=%.2f painanim=%d movement=%.1f fall_steps=%u fall_us=%.2f tracked=%zu recovery_clip=%d recovery_lift=%.2f engaged=%d phase=%d corrections=%u strength=%.3f balance_error=%.3f target_change=%.2f\n",
-		actor, actor >= 0 && (engaged ? balance.phase != JoltReaction::ControlPhase::Falling && !recoverStart : Active(&g_entities[actor])), hits, poses, fall ? fall->Steps() : simulation ? simulation->Steps() : 0, peak,
+		actor, actor >= 0 && (engaged ? balance.phase != JoltReaction::ControlPhase::Falling && !recoverStart && !prepareStart : Active(&g_entities[actor])), hits, poses, fall ? fall->Steps() : simulation ? simulation->Steps() : 0, peak,
 		pose.angles[0][0], pose.angles[0][1], pose.angles[0][2], pose.angles[1][0], pose.angles[1][1], pose.angles[1][2],
 		actor >= 0 ? g_entities[actor].health : 0, measuredSteps ? stepMicroseconds / measuredSteps : 0,
-		engaged && balance.phase == JoltReaction::ControlPhase::Falling && !recoverStart, recoverStart != 0, fall ? fall->Speed() : 0, instability, launchSpeed, poseError,
+		engaged && balance.phase == JoltReaction::ControlPhase::Falling && !recoverStart, recoverStart != 0 || prepareStart != 0, fall ? fall->Speed() : 0, instability, launchSpeed, poseError,
 		fall ? fallPose[0].matrix[2][3] / MetresPerUnit : 0, actor >= 0 && PM_PainAnim(g_entities[actor].client->ps.torsoAnim),
 		actor >= 0 ? VectorLength(g_entities[actor].client->ps.velocity) : 0, fallSteps, fallSteps ? fallMicroseconds / fallSteps : 0,
 		actors.size(), recoveryAnim, recoveryLift, engaged, int(balance.phase), balance.corrections, balance.strength, balance.error, balance.targetChange);
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
+	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 }
 void Actor::HitCommand() {
 	if (actor < 0 || (!Active(&g_entities[actor]) && !engaged)) { gi.Printf("Select an active stormtrooper first\n"); return; }
@@ -685,13 +726,11 @@ bool Actor::Render(gentity_t* ent, int time, const float* origin, float* angles,
 	angles[1] = fallYaw;
 	JoltReaction::Transform pose[JoltReaction::PartCount];
 	const int poseTime = display ? PresentationTime(time) : lastTime;
-	fall->Sample(pose, (poseTime - lastTime) * .001f);
 	if (recoverStart) {
-		JoltReaction::Transform targets[JoltReaction::PartCount];
-		std::copy(recoveryPose, recoveryPose + JoltReaction::PartCount, targets);
-		JoltReaction::BlendTransforms(pose, targets, JoltReaction::PartCount, float(time - recoverStart) / RecoveryBlendTime);
-		std::copy(targets, targets + JoltReaction::PartCount, pose);
-	}
+		std::copy(recoveryPose, recoveryPose + JoltReaction::PartCount, pose);
+		if (recoveryAnim < 0) JoltReaction::BlendTransforms(recoveryFrom, pose, JoltReaction::PartCount, float(time-recoverStart)/recoveryTime);
+		else JoltReaction::BlendRecovery(recoveryFrom, pose, JoltReaction::PartCount, float(time-recoverStart)/recoveryTime);
+	} else fall->Sample(pose, (poseTime - lastTime) * .001f);
 	const float c = cosf(angles[1] * M_PI / 180), s = sinf(angles[1] * M_PI / 180);
 	for (int i = 0; i < JoltReaction::PartCount; ++i) {
 		mdxaBone_t matrix;
@@ -846,10 +885,10 @@ void DemoFrame() {
 			gi.SendConsoleCommand("set cg_thirdPerson 1; set cg_thirdPersonRange 160; set cg_thirdPersonAngle 30; +forward\n");
 		}
 		demoStage = demoCase == 4 ? 3 : 4;
-		demoDue = level.time + (demoCase == 4 ? 400 : 7000);
+		demoDue = level.time + (demoCase == 4 ? 400 : demoCase >= 3 ? 12000 : 7000);
 	} else if (demoStage == 3) {
-		gi.SendConsoleCommand("-forward; jolt_hit legleft 15; exitview; set cg_thirdPerson 0\n");
-		demoStage = 4; demoDue = level.time + 7000;
+		gi.SendConsoleCommand("jolt_hit legleft 15; -forward; exitview; set cg_thirdPerson 0\n");
+		demoStage = 4; demoDue = level.time + 12000;
 	} else {
 		state->Status();
 		gi.Printf("Jolt demo finished: %s\n", demoCases[demoCase]);

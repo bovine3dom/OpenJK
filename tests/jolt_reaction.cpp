@@ -20,6 +20,21 @@ static float Magnitude(const JoltReaction::Pose& pose) {
 	return result;
 }
 int main() {
+	JoltReaction::Transform startPose = {{{1,0,0,0},{0,1,0,0},{0,0,1,0}}};
+	JoltReaction::Transform endPose = {{{-1,0,0,.6f},{0,-1,0,0},{0,0,1,0}}};
+	const float duration = JoltReaction::RecoveryDuration(&startPose, &endPose, 1);
+	Check(duration > 2, "large get-up corrections receive sufficient time");
+	auto previousPose = startPose;
+	for (int frame = 1; frame <= int(std::ceil(duration*120)); ++frame) {
+		auto pose = endPose;
+		JoltReaction::BlendRecovery(&startPose, &pose, 1, frame/(120*duration));
+		Check(std::abs(pose.matrix[0][3]-previousPose.matrix[0][3])*120 <= .751f, "get-up translation speed is bounded");
+		float trace = 0;
+		for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) trace += pose.matrix[r][c]*previousPose.matrix[r][c];
+		Check(std::acos(std::max(-1.0f, std::min(1.0f, (trace-1)*.5f)))*120 < 2.65f, "get-up angular speed is bounded");
+		previousPose = pose;
+	}
+	Check(previousPose.matrix[0][3] == endPose.matrix[0][3], "get-up blend reaches the fixed first frame");
 	JoltReaction::Simulation sim{JoltReaction::Rig{}};
 	const float forward[] = {1, 0, 0}, side[] = {0, 1, 0}, point[] = {0, 0, 0.32f};
 	Check(Magnitude(sim.Sample()) < 0.001f, "neutral initial pose");
@@ -110,6 +125,8 @@ int main() {
 	}
 	rider.Sample(pose, 1);
 	Check(pose[0].matrix[2][3] > .4f, "kinematic platform supports the rig");
+	float carry[3]; rider.SurfaceVelocity(1, stopped, carry);
+	Check(std::abs(carry[2]-.12f) < .001f, "handoff can retain moving-platform velocity");
 	rider.SetMeshEnabled(1, false);
 	for (int i = 0; i < 120; ++i) rider.Advance(1.0f / 120);
 	rider.Sample(pose, 1);
@@ -186,6 +203,9 @@ int main() {
 	moving.Engage(); moving.RootVelocity(after);
 	Check(std::abs(before[0]-1) < .001f, "shadow rig carries animation root velocity");
 	for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "engagement preserves moving root velocity");
+	const float navigation[] = {2,0,0};
+	moving.SetRootVelocity(navigation); moving.RootVelocity(after);
+	Check(std::abs(after[0]-2) < .001f, "handoff can match authoritative locomotion velocity");
 	moving.ReleaseControl(); Check(moving.Advance(1.0f/120), "moving release step");
 	JoltReaction::Transform carried[JoltReaction::PartCount]; moving.Sample(carried);
 	Check(carried[0].matrix[0][3] > pose[0].matrix[0][3]+.005f, "momentum continues through the moving fall handoff");
@@ -229,4 +249,53 @@ int main() {
 		Check(captured.Balance().error < .1f, "captured stance settles over its foot support");
 	}
 	std::puts("PASS: Jolt reaction direction, joint limits, settling, reset, pause, invalid input, and fixed stepping");
+	JoltReaction::Transform blocked[JoltReaction::PartCount];
+	for (int i = 0; i < JoltReaction::PartCount; ++i) {
+		blocked[i] = parts[i].bone;
+		if (i >= 3 && i <= 6) blocked[i].matrix[0][3] += .4f;
+	}
+	JoltReaction::FallSimulation clearance(parts, stopped);
+	Check(clearance.RecoveryPathClear(blocked), "unobstructed arm handoff is permitted");
+	const float wall[] = {140.15f,-105,0, 140.15f,-102,0, 140.15f,-102,2, 140.15f,-105,0, 140.15f,-102,2, 140.15f,-105,2};
+	clearance.AddMesh(0, wall, 6);
+	Check(!clearance.RecoveryPathClear(blocked), "arm handoff cannot pass through a wall");
+	JoltReaction::FallSimulation airborne(parts, stopped);
+	airborne.Follow(parts, 0); airborne.Engage(); airborne.ReleaseControl();
+	for (int i = 0; i < 120; ++i) {
+		airborne.Advance(1.0f/120);
+		Check(airborne.Balance().braceMask == 0, "bracing needs a sensed surface");
+	}
+	const float back[] = {-1,0,0};
+	for (const auto& direction : {forward, side, back}) {
+		JoltReaction::FallSimulation brace(parts, stopped);
+		brace.AddMesh(0, largeFloor, 6); brace.Follow(parts, 0); brace.Engage();
+		brace.Impulse(1, direction, parts[1].end, 25); brace.ReleaseControl();
+		unsigned attempts = 0, contacts = 0;
+		for (int i = 0; i < 600; ++i) {
+			Check(brace.Advance(1.0f/120), "braced fall solver step");
+			const auto b = brace.Balance(); attempts |= b.braceMask; contacts |= b.handContacts;
+			Check(b.assistForce == 0 && b.assistTorque == 0, "bracing does not apply root assistance");
+		}
+		std::printf("Brace: targets=%u contacts=%u speed=%.3f\n", attempts, contacts, brace.Speed());
+		Check(attempts != 0 && contacts != 0, "fall reaches a surface and records hand contact");
+		brace.Sample(pose);
+		JoltReaction::Transform target[JoltReaction::PartCount];
+		std::copy(pose, pose+JoltReaction::PartCount, target);
+		target[4].matrix[0][3] += .08f; target[6].matrix[0][3] += .08f;
+		brace.PrepareRecovery(target, 1);
+		JoltReaction::Transform unchanged[JoltReaction::PartCount]; brace.Sample(unchanged);
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(pose[i].matrix[r][c] == unchanged[i].matrix[r][c], "preparation does not teleport any bone");
+		const auto steps = brace.Steps();
+		for (int i = 0; i < 180; ++i) {
+			Check(brace.Advance(1.0f/120), "physical get-up preparation step");
+			Check(brace.Balance().assistForce == 0 && brace.Balance().assistTorque == 0, "preparation has no root tether");
+		}
+		Check(brace.Steps() > steps && brace.Balance().phase == JoltReaction::ControlPhase::Preparing, "collision simulation continues during preparation");
+		float before[3], after[3]; brace.RootVelocity(before);
+		brace.ReleaseControl(); brace.RootVelocity(after);
+		Check(brace.Balance().phase == JoltReaction::ControlPhase::Falling, "preparation can be interrupted");
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "interrupting preparation preserves momentum");
+	}
+	std::puts("PASS: contact-aware bracing, physical preparation, and speed-limited get-up transitions");
 }

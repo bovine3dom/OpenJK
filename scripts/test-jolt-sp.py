@@ -87,6 +87,9 @@ def main():
             support = re.findall(r"jolt support ([^\r\n]+)", text)
             if support:
                 line += " " + support[-1]
+            recovery = re.findall(r"jolt recovery ([^\r\n]+)", text)
+            if recovery:
+                line += " " + recovery[-1]
             return {k: tuple(map(float, v.split(","))) if "," in v else float(v)
                     for k, v in (word.split("=") for word in line.split()[1:])}
 
@@ -137,7 +140,10 @@ def main():
                         assert final["hits"] == 1 and final["health"] < 500, final
                     if case in ("run", "fall"):
                         assert any(s["falling"] for s in samples), (case, final)
-                        assert final["falling"] == 0 and abs(final["recovery_lift"]) <= 8, final
+                        assert any(s.get("brace_mask", 0) and s["falling"] for s in samples), (case, final)
+                        assert any(s.get("preparing", 0) for s in samples), (case, final)
+                        assert final["falling"] == 0 and final["recovering"] == 0 and final["engaged"] == 0 and abs(final["recovery_lift"]) <= 8, final
+                        assert final["blend_ms"] >= 350, final
                     print(f"PASS: {args.renderer}: demo {case}", flush=True)
                 cmd("jolt_demo stop; set g_joltReactions 0")
                 stdin.write("quit\n"); stdin.flush()

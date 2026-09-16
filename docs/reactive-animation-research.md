@@ -154,6 +154,30 @@ followed by a grounded get-up. The running camera was moved back and forward
 along the test lane to keep the fall in view. These checks do not establish
 motion quality across the campaign maps.
 
+## Recovery and Bracing After the Development Rebase
+
+The branch now includes the JO campaign and cinematic fixes through
+`50a3e4ec`. The combined game import table uses API 13. Tests on both renderers
+confirm automatic Jolt reactions on Kejim's original `st_guard2`. The build
+checks these reactions before it publishes a JO-capable package.
+
+The fixed 180 ms get-up correction could move an arm through a large angle too
+quickly. Recovery now has a physical arm-preparation stage, followed by a
+speed-limited, eased handoff. The solver keeps gravity and collision during
+preparation. The final handoff checks arm paths and targets a fixed first
+frame. It does not chase an advancing standing pose.
+
+Fall bracing now uses surface probes, shoulder velocity, and gravity. Separate
+hand targets move with the falling body until contact. Palm proxies provide
+collision response without changing the calibrated forearm mass or inertia.
+Tests cover forward, sideways, and backward falls, actual hand contacts,
+missing surfaces, obstructed handoffs, and recovery speed limits.
+
+Motion checks also found that a sampled animation could have little root
+velocity while the NPC was running. Engagement now matches the native
+locomotion velocity and brush-mover carry velocity. A common velocity change
+preserves the relative movement of the limbs.
+
 ## Sources
 
 - [NaturalMotion interview, 2006](https://www.psu.com/news/psu-interviews-naturalmotion/)
