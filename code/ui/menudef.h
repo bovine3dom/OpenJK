@@ -157,3 +157,4 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define UI_PREVIEWCINEMATIC		254
 #define UI_STARTMAPCINEMATIC	255
 #define UI_MAPS_SELECTION		256
+#define UI_DATAPAD_MAP           257

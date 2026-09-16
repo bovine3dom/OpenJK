@@ -144,6 +144,9 @@ Ghoul2 Insert Start
 /*
 Ghoul2 Insert End
 */
+	case CG_DRAW_DATAPAD_MAP:
+		if (cg.snap) CG_DrawDataPadMap();
+		return 0;
 	case CG_DRAW_DATAPAD_HUD:
 		if (cg.snap)
 		{

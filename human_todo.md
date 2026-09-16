@@ -16,6 +16,10 @@ visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
 ## Prepare
 
+- [ ] Open the datapad Map tab in JA and JO. Check stairs, shafts, stacked corridors, and the height controls in both map views.
+- [ ] Check the explicit control markers and the Control button. Trigger-backed panels are outside this MVP's marker coverage.
+- [ ] Check map readability and responsiveness at desktop resolution. Check that panning and rotating the map do not move the player.
+
 - [ ] Hold V during normal JA and JO play. Check the status panels, resource rings, and compass. Release V and check that the normal HUD returns.
 - [ ] Follow allies around corners and between floors. Check the cyan bearings, behind-camera arrows, and height cues. Check readability at desktop resolution.
 

@@ -26,6 +26,27 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "cg_media.h"
 #include "../game/objectives.h"
 
+void CG_DrawDataPadMap()
+{
+	Automap::Frame frame = {};
+	Q_strncpyz(frame.map, cgs.mapname, sizeof(frame.map));
+	VectorCopy(cg.snap->ps.origin, frame.player.data());
+	frame.heading = cg.snap->ps.viewangles[YAW];
+	for (int i = 0; i < ENTITYNUM_WORLD && frame.count < Automap::MaxMarkers; ++i) {
+		const auto &ent = g_entities[i];
+		if (!ent.inuse || !ent.classname || ent.client || ent.e_UseFunc == useF_NULL ||
+			(ent.svFlags & SVF_NOCLIENT) || (ent.s.eFlags & EF_NODRAW)) continue;
+		char classname[MAX_QPATH];
+		Q_strncpyz(classname,ent.classname,sizeof(classname)); Q_strlwr(classname);
+		if (!Automap::IsControl(classname, (ent.svFlags & SVF_PLAYER_USABLE) != 0)) continue;
+		auto &marker = frame.markers[frame.count++];
+		marker.entity = i;
+		marker.enabled = !(ent.svFlags & SVF_INACTIVE);
+		for (int axis = 0; axis < 3; ++axis) marker.position[axis] = (ent.absmin[axis] + ent.absmax[axis]) * 0.5f;
+	}
+	cgi_R_DrawAutomap(&frame);
+}
+
 
 // For printing objectives
 static const short objectiveStartingYpos = 75;		// Y starting position for objective text

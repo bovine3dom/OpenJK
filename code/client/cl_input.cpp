@@ -1008,6 +1008,7 @@ void CL_InitInput( void ) {
 #endif
 #ifndef JK2_MODE
 	hudReveal = Cvar_Get("cg_hudReveal", "0", CVAR_ROM);
+	CL_InitAutomap();
 	CL_CancelHudReveal();
 	Cmd_AddCommand("+showhud", IN_ShowHudDown);
 	Cmd_AddCommand("-showhud", IN_ShowHudUp);

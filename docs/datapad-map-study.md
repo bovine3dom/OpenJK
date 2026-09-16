@@ -1,6 +1,7 @@
 # Datapad Map Investigation
 
-Status: research only. No map implementation is included.
+Status: historical investigation. A full-map MVP is now described in
+[Datapad Automap](automap-sp.md). Exploration tracking remains deferred.
 
 ## Recommendation
 

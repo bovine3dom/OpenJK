@@ -217,6 +217,7 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
+	CL_ResetAutomap();
 	CL_CancelHudReveal();
 #ifdef USE_RMLUI
 	CL_SelectionWheelsCancel();

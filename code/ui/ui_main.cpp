@@ -2990,6 +2990,7 @@ void UI_LoadMenus(const char *menuFile, qboolean reset)
 	COM_EndParseSession();
 
 	Com_Printf("UI menu load time = %d milli seconds\n", Sys_Milliseconds() - start);
+	UI_AddDatapadMap();
 
 	ui.FS_FreeFile( buffer );	//let go of the buffer
 }
@@ -3831,6 +3832,9 @@ static void UI_OwnerDraw(float x, float y, float w, float h, float text_x, float
 			ui.Draw_DataPad(DP_HUD);
 			ui.Draw_DataPad(DP_OBJECTIVES);
 			break;
+		case UI_DATAPAD_MAP:
+			ui.Draw_DataPad(DP_MAP);
+			break;
 
 		case UI_DATAPAD_WEAPONS:
 			ui.Draw_DataPad(DP_HUD);
@@ -4044,6 +4048,34 @@ UI_KeyEvent
 */
 void _UI_KeyEvent( int key, qboolean down )
 {
+#ifndef JK2_MODE
+	menuDef_t *focused = Menu_GetFocused();
+	if (down && focused && focused->window.name && !(key & K_CHAR_FLAG)) {
+		if (key == A_F4 && !Q_stricmpn(focused->window.name,"datapad",7) && Menus_FindByName("datapadMapMenu")) {
+			Menus_CloseAll(); Menus_ActivateByName("datapadMapMenu"); return;
+		}
+		if (!Q_stricmp(focused->window.name,"datapadMapMenu")) {
+			const char *action = nullptr;
+			const int hotkey = key >= A_CAP_A && key <= A_CAP_Z ? key + A_LOW_A - A_CAP_A : key;
+			switch (hotkey) {
+			case A_MWHEELUP: case A_KP_PLUS: case '+': case '=': action="zoomin"; break;
+			case A_MWHEELDOWN: case A_KP_MINUS: case '-': action="zoomout"; break;
+			case A_PAGE_UP: action="up"; break;
+			case A_PAGE_DOWN: action="down"; break;
+			case A_CURSOR_LEFT: action="panleft"; break;
+			case A_CURSOR_RIGHT: action="panright"; break;
+			case A_CURSOR_UP: action="panup"; break;
+			case A_CURSOR_DOWN: action="pandown"; break;
+			case 'q': action="left"; break;
+			case 'e': action="right"; break;
+			case 't': action="tilt"; break;
+			case 'c': action="control"; break;
+			case A_HOME: action="centre"; break;
+			}
+			if (action) { ui.Cmd_ExecuteText(EXEC_APPEND,va("automap %s\n",action)); return; }
+		}
+	}
+#endif
 /*	extern qboolean SwallowBadNumLockedKPKey( int iKey );
 	if (SwallowBadNumLockedKPKey(key)){
 		return;

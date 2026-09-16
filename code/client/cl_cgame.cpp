@@ -1074,6 +1074,9 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 #else
 		return 0;
 #endif
+	case CG_R_AUTOMAP:
+		CL_DrawAutomap((const Automap::Frame *)VMA(1));
+		return 0;
 	case CG_R_PLEXTEXT:
 #ifdef USE_RMLUI
 	{

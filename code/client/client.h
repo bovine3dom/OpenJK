@@ -73,6 +73,9 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 void CL_UpdateHudReveal();
 void CL_CancelHudReveal();
 bool CL_HudRevealActive();
+void CL_InitAutomap();
+void CL_ResetAutomap();
+void CL_DrawAutomap(const Automap::Frame *frame);
 
 // snapshots are a view of the server at a given time
 typedef struct {

@@ -375,6 +375,10 @@ int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const
 	return Q_syscall(CG_R_DRAWRETICLEHUD, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(size), color, state);
 }
 
+void cgi_R_DrawAutomap(const Automap::Frame *frame) {
+	Q_syscall(CG_R_AUTOMAP, frame);
+}
+
 void cgi_ForceWheelUpdate(ForceWheel::Frame* frame) { Q_syscall(CG_FORCEWHEEL_UPDATE, frame); }
 float cgi_R_DrawForceWheel(const char* label) { return Q_syscall(CG_R_DRAWFORCEWHEELTEXT, label) / 255.0f; }
 qboolean cgi_ForceWheelPreview() { return (qboolean)Q_syscall(CG_FORCEWHEEL_PREVIEW); }

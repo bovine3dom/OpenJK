@@ -5834,6 +5834,72 @@ void Menu_Init(menuDef_t *menu)
 	Window_Init(&menu->window);
 }
 
+// Build a project-owned page from safe decorative/button items at runtime.
+// No modified copies of the retail menu assets need to be distributed.
+void UI_AddDatapadMap()
+{
+#ifndef JK2_MODE
+	menuDef_t *source = Menus_FindByName("datapadMissionMenu");
+	if (!source) return;
+	menuDef_t *map = Menus_FindByName("datapadMapMenu");
+	auto button = [](menuDef_t *menu, const char *name, const char *label, float x, float y, float w, const char *action) {
+		if (menu->itemCount >= MAX_MENUITEMS) return;
+		auto *item = static_cast<itemDef_t *>(UI_Alloc(sizeof(itemDef_t)));
+		if (!item) return;
+		Item_Init(item); item->parent = menu;
+		item->window.name = (char *)String_Alloc(name);
+		item->window.rectClient = {x,y,w,22};
+		item->window.flags = WINDOW_VISIBLE;
+		item->type = ITEM_TYPE_BUTTON; item->font = 2; item->textscale = 0.8f;
+		item->text = (char *)String_Alloc(label);
+		item->textalignment = ITEM_ALIGN_CENTER; item->textalignx = w/2;
+		VectorSet4(item->window.foreColor, 1, 0.682f, 0, 1);
+		item->action = String_Alloc(action);
+		menu->items[menu->itemCount++] = item;
+	};
+	if (!map && menuCount < MAX_MENUS) {
+		map = &Menus[menuCount++];
+		*map = *source;
+		map->window.name = (char *)String_Alloc("datapadMapMenu");
+		map->onOpen = String_Alloc("exec \"automap centre\" ;");
+		map->window.flags &= ~(WINDOW_VISIBLE | WINDOW_HASFOCUS);
+		map->itemCount = 0; map->cursorItem = -1;
+		memset(map->items, 0, sizeof(map->items));
+		for (int i = 0; i < source->itemCount; ++i) {
+			const itemDef_t *original = source->items[i];
+			if ((original->typeData && original->type != ITEM_TYPE_TEXT) ||
+				(original->window.name && !Q_stricmp(original->window.name,"scan"))) continue;
+			if (map->itemCount >= MAX_MENUITEMS) break;
+			auto *item = static_cast<itemDef_t *>(UI_Alloc(sizeof(itemDef_t)));
+			if (!item) break;
+			*item = *original; item->parent = map;
+			if (item->typeData) { item->typeData = nullptr; Item_ValidateTypeData(item); }
+			item->window.flags &= ~(WINDOW_HASFOCUS | WINDOW_MOUSEOVER);
+			if (item->window.ownerDraw == UI_DATAPAD_MISSION) item->window.ownerDraw = UI_DATAPAD_MAP;
+			if (item->window.name && !Q_stricmp(item->window.name,"screen_title")) item->text = (char *)String_Alloc("MAP");
+			if (item->window.name && !Q_stricmp(item->window.name,"mission")) {
+				item->window.flags &= ~WINDOW_DECORATION;
+				item->action = String_Alloc("close all ; open datapadMissionMenu ;");
+				VectorSet4(item->window.foreColor,1,0.682f,0,1);
+			}
+			map->items[map->itemCount++] = item;
+		}
+		const char *actions[][2] = {{"Zoom +","zoomin"},{"Zoom -","zoomout"},{"Height +","up"},{"Height -","down"},
+			{"Tilt","tilt"},{"Player","centre"},{"Fit","fit"},{"Control","control"}};
+		for (int i=0;i<8;++i) button(map, va("map_%s",actions[i][1]), actions[i][0], 24+i*74, 37, 70,
+			va("exec \"automap %s\" ;",actions[i][1]));
+		Menu_PostParse(map);
+	}
+	if (!map) return;
+	for (int i=0;i<menuCount;++i) {
+		menuDef_t *menu = &Menus[i];
+		if (!menu->window.name || Q_stricmpn(menu->window.name,"datapad",7) || Menu_FindItemByName(menu,"map_tab")) continue;
+		button(menu,"map_tab","Map  F4",538,3,90,"close all ; open datapadMapMenu ;");
+		Menu_UpdatePosition(menu);
+	}
+#endif
+}
+
 /*
 ===============
 Menu_Parse
@@ -11360,10 +11426,7 @@ void Menu_HandleKey(menuDef_t *menu, int key, qboolean down)
 		DC->getBindingBuf( key, b, 256 );
 		if (Q_stricmp(b,"datapad") == 0)	// They hit the datapad key again.
 		{
-			if (( Q_stricmp(menu->window.name,"datapadMissionMenu") == 0) ||
-			 (Q_stricmp(menu->window.name,"datapadWeaponsMenu") == 0) ||
-			 (Q_stricmp(menu->window.name,"datapadForcePowersMenu") == 0) ||
-			 (Q_stricmp(menu->window.name,"datapadInventoryMenu") == 0))
+			if (menu->window.name && !Q_stricmpn(menu->window.name,"datapad",7))
 			{
 				key = A_ESCAPE;	//pop on outta here
 			}
