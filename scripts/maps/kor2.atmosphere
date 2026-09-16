@@ -7,8 +7,8 @@ thickness 60
 observerHeight 0.15
 rayHeight 8
 mieHeight 1.5
-rayleigh 0.0058 0.0135 0.0331
-mie 0.043 0.037 0.028
+rayleigh 0.012 0.014 0.017
+mie 0.045 0.045 0.043
 absorption 0.002 0.003 0.006
 groundAlbedo 0.32 0.25 0.16
 anisotropy 0.76
@@ -17,5 +17,5 @@ sunDirection -0.55 -0.55 0.63
 sunRadius 0.006
 sunDisk 0
 cloudStrength 0.35
-cloudColor 0.84 0.77 0.62
-skyBlend 0.3
+cloudColor 0.78 0.78 0.74
+skyBlend 0.2
