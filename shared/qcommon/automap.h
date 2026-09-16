@@ -3,6 +3,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 namespace Automap {
 using Point = std::array<float, 3>;
@@ -46,6 +47,14 @@ inline Polygon Clip(Polygon polygon, float height, bool above) {
 		}
 	}
 	return result;
+}
+inline bool ClipSegment(Point &a, Point &b, float low, float high) {
+	if (a[2] > b[2]) std::swap(a,b);
+	if (a[2] > high || b[2] < low) return false;
+	const Point start=a, end=b;
+	if (a[2] < low) for (int j=0;j<3;++j) a[j]=start[j]+(end[j]-start[j])*(low-start[2])/(end[2]-start[2]);
+	if (b[2] > high) for (int j=0;j<3;++j) b[j]=start[j]+(end[j]-start[j])*(high-start[2])/(end[2]-start[2]);
+	return true;
 }
 inline Point Project(const Point &p, const Point &centre, float yaw, float tilt) {
 	const float a = yaw * 0.01745329252f, b = tilt * 0.01745329252f;

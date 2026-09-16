@@ -156,6 +156,9 @@ def main():
             match=re.search(r"exploded=1 nav_polygons=(\d+) floors=(\d+) connections=(\d+)",navstate)
             assert match and int(match[1])>10 and int(match[2])>1,navstate
             records["navigation"]=dict(polygons=int(match[1]),floors=int(match[2]),connections=int(match[3]))
+            parts=re.search(r"bsp_parts=(\d+) bsp_edges=(\d+)",navstate)
+            assert parts and int(parts[1])>=int(initial["triangles"]) and int(parts[2])>=int(initial["edges"]),navstate
+            assert int(state("exploded_bsp")["drawn"])==int(parts[1])
             bounds=[tuple(map(float,m.split(","))) for m in re.findall(r"bounds=([\d.,-]+)",navstate)]
             assert len(bounds)==int(match[2])
             for i,a in enumerate(bounds):

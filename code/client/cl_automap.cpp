@@ -10,10 +10,12 @@
 
 namespace {
 using Automap::Point;
-struct Triangle { Point p[3]; float low, high; };
-struct Edge { Point a, b, normal; int count = 0; bool crease = false; };
+struct Triangle { Point p[3]; float low, high; int floor; };
+struct Edge { Point a, b, normal; int count = 0, floor = 0; bool crease = false; };
 std::vector<Triangle> triangles;
 std::vector<Edge> edges;
+std::vector<Triangle> explodedTriangles;
+std::vector<Edge> explodedEdges;
 Automap::Frame current = {};
 Point centre = {}, minimum = {}, maximum = {};
 float span = 1024, yaw = 45, tilt = 55;
@@ -46,6 +48,7 @@ Point Position(const drawVert_t &v) { return {{LittleFloat(v.xyz[0]), LittleFloa
 // Keep the mesh renderer-independent; the old immediate-mode GL drawing is not reused.
 bool LoadMesh(const char *name) {
 	triangles.clear(); edges.clear(); navInput.clear(); nav = {}; navAttempted = exploded = false;
+	explodedTriangles.clear(); explodedEdges.clear();
 	void *buffer = nullptr;
 	const int length = FS_ReadFile(name, &buffer);
 	if (length < int(sizeof(dheader_t))) { if (buffer) FS_FreeFile(buffer); return false; }
@@ -72,7 +75,7 @@ bool LoadMesh(const char *name) {
 			else navInput.insert(navInput.end(),{a,b,c});
 		}
 		if (!display || nz < -0.1f) return; // Keep ceilings in Recast for clearance tests.
-		if (nz > 0.15f) triangles.push_back({{a,b,c}, std::min({a[2],b[2],c[2]}), std::max({a[2],b[2],c[2]})});
+		if (nz > 0.15f) triangles.push_back({{a,b,c}, std::min({a[2],b[2],c[2]}), std::max({a[2],b[2],c[2]}),0});
 		const Point points[] = {a,b,c};
 		for (const auto &p : points) {
 			for (int j = 0; j < 3; ++j) {
@@ -205,17 +208,40 @@ Point NavPosition(const Point &p,int floor) {
 	for (int j=0;j<2;++j) q[j]+=floorOffsets[floor][j];
 	return q;
 }
+void PartitionMap() {
+	explodedTriangles.clear(); explodedEdges.clear();
+	for (int floor=0;floor<int(nav.floors.size());++floor) {
+		const float low=floor ? (nav.floors[floor-1].height+nav.floors[floor].height)/2 : -MAX_WORLD_COORD;
+		const float high=floor+1<int(nav.floors.size()) ? (nav.floors[floor].height+nav.floors[floor+1].height)/2 : MAX_WORLD_COORD;
+		for (const auto &t : triangles) {
+			if (t.low>=high || t.high<low) continue;
+			auto poly=Automap::Clip(Automap::Clip({{t.p[0],t.p[1],t.p[2]},3},low,true),high,false);
+			for (int i=1;i+1<poly.count;++i) {
+				const auto &a=poly.points[0],&b=poly.points[i],&c=poly.points[i+1];
+				explodedTriangles.push_back({{a,b,c},std::min({a[2],b[2],c[2]}),std::max({a[2],b[2],c[2]}),floor});
+			}
+		}
+		for (auto edge : edges) {
+			if (std::min(edge.a[2],edge.b[2])>=high || !Automap::ClipSegment(edge.a,edge.b,low,high)) continue;
+			edge.floor=floor; explodedEdges.push_back(edge);
+		}
+	}
+}
 void NavLayout() {
 	floorLow.assign(nav.floors.size(),{{1e30f,1e30f,0}});
 	floorHigh.assign(nav.floors.size(),{{-1e30f,-1e30f,0}});
 	floorOffsets.assign(nav.floors.size(),{{0,0,0}});
-	for (const auto &face : nav.faces) for (const auto &p : face.points) {
+	auto include=[&](const Point &p,int floor) {
 		const auto q=Automap::Project(p,{{0,0,0}},yaw,tilt);
 		for (int j=0;j<2;++j) {
-			floorLow[face.floor][j]=std::min(floorLow[face.floor][j],q[j]);
-			floorHigh[face.floor][j]=std::max(floorHigh[face.floor][j],q[j]);
+			floorLow[floor][j]=std::min(floorLow[floor][j],q[j]);
+			floorHigh[floor][j]=std::max(floorHigh[floor][j],q[j]);
 		}
-	}
+	};
+	for (const auto &face : explodedTriangles) for (const auto &p : face.p) include(p,face.floor);
+	for (const auto &edge : explodedEdges) { include(edge.a,edge.floor); include(edge.b,edge.floor); }
+	// Keep an empty BSP band finite if Recast found only non-drawn solid surfaces.
+	for (const auto &face : nav.faces) for (const auto &p : face.points) include(p,face.floor);
 	float area=0,widest=0;
 	for (size_t i=0;i<nav.floors.size();++i) {
 		const float w=floorHigh[i][0]-floorLow[i][0]+256,h=floorHigh[i][1]-floorLow[i][1]+256;
@@ -261,6 +287,7 @@ void Action() {
 			navAttempted=true;
 			const int start=Sys_Milliseconds();
 			if (!nav.Build(navInput)) Com_Printf("Automap: navigation mesh unavailable; using slice view.\n");
+			PartitionMap();
 			Com_Printf("Automap navigation: polygons=%d floors=%d links=%d build_ms=%d\n",int(nav.faces.size()),int(nav.floors.size()),int(nav.links.size()),Sys_Milliseconds()-start);
 		}
 		if (!nav.floors.empty()) { exploded=!exploded; if (exploded) NavFit(); else { Centre(); span=1024; } }
@@ -333,6 +360,7 @@ void Action() {
 }
 void Status() {
 	Com_Printf("automap exploded=%d nav_polygons=%d floors=%d connections=%d nav_centre=%.1f,%.1f\n",exploded,int(nav.faces.size()),int(nav.floors.size()),int(nav.links.size()),navCentre[0],navCentre[1]);
+	Com_Printf("automap bsp_parts=%d bsp_edges=%d\n",int(explodedTriangles.size()),int(explodedEdges.size()));
 	if (exploded) for (size_t i=0;i<nav.floors.size();++i) Com_Printf("automap floor=%d elevation=%.1f bounds=%.1f,%.1f,%.1f,%.1f\n",int(i)+1,nav.floors[i].height,
 		floorLow[i][0]+floorOffsets[i][0],floorLow[i][1]+floorOffsets[i][1],floorHigh[i][0]+floorOffsets[i][0],floorHigh[i][1]+floorOffsets[i][1]);
 	Com_Printf("automap map=%s valid=%d triangles=%d edges=%d drawn=%d markers=%d shown=%d height=%.1f span=%.1f yaw=%.1f tilt=%.1f centre=%.1f,%.1f slice=%.1f lifts=%d lifts_shown=%d\n",
@@ -349,14 +377,20 @@ void Status() {
 void DrawExploded(Batch &batch) {
 	const int playerFloor=nav.FloorAt(current.player);
 	const float aspect=640.0f*cls.glconfig.vidHeight/(480.0f*cls.glconfig.vidWidth);
-	for (const auto &face : nav.faces) {
-		std::vector<Point> points;
-		for (const auto &p : face.points) points.push_back(NavScreen(p,face.floor));
-		const bool active=face.floor==playerFloor;
-		batch.Poly(points,active ? std::array<byte,4>{{38,88,105,255}} : std::array<byte,4>{{27,49,64,255}});
-		for (size_t j=0;j<points.size();++j) batch.Line(points[j],points[(j+1)%points.size()],{{65,108,126,255}},0.5f);
+	std::vector<std::pair<float,int>> order;
+	for (int i=0;i<int(explodedTriangles.size());++i) {
+		const auto &t=explodedTriangles[i];
+		Point p; for (int j=0;j<3;++j) p[j]=(t.p[0][j]+t.p[1][j]+t.p[2][j])/3;
+		order.emplace_back(Automap::Project(p,centre,yaw,tilt)[2],i);
+	}
+	std::sort(order.rbegin(),order.rend());
+	for (const auto &entry : order) {
+		const auto &t=explodedTriangles[entry.second];
+		const byte shade=byte(Com_Clamp(30,80,55+(t.low-nav.floors[t.floor].height)*0.25f));
+		batch.Poly({NavScreen(t.p[0],t.floor),NavScreen(t.p[1],t.floor),NavScreen(t.p[2],t.floor)},{{byte(shade*0.6f),shade,byte(shade+16),255}});
 		++visibleTriangles;
 	}
+	for (const auto &edge : explodedEdges) batch.Line(NavScreen(edge.a,edge.floor),NavScreen(edge.b,edge.floor),{{83,116,129,255}});
 	for (const auto &link : nav.links) batch.Line(NavScreen(link.a,link.from),NavScreen(link.b,link.to),{{175,151,90,170}},1);
 	for (int i=0;i<current.liftCount;++i) {
 		const auto &lift=current.lifts[i];
@@ -401,7 +435,7 @@ void CL_InitAutomap() {
 	Cvar_CheckRange(sliceHeight,64,4096,qtrue);
 	Cmd_AddCommand("automap", Action); Cmd_AddCommand("automap_status", Status);
 }
-void CL_ResetAutomap() { loadedMap.clear(); triangles.clear(); edges.clear(); navInput.clear(); nav={}; floorOffsets.clear(); floorLow.clear(); floorHigh.clear(); exploded=navAttempted=false; current = {}; valid = false; nextControl = nextLift = 0; recenter = true; }
+void CL_ResetAutomap() { loadedMap.clear(); triangles.clear(); edges.clear(); explodedTriangles.clear(); explodedEdges.clear(); navInput.clear(); nav={}; floorOffsets.clear(); floorLow.clear(); floorHigh.clear(); exploded=navAttempted=false; current = {}; valid = false; nextControl = nextLift = 0; recenter = true; }
 
 void CL_DrawAutomap(const Automap::Frame *frame) {
 	if (!frame || !re.DrawUiGeometry) return;
@@ -437,11 +471,7 @@ void CL_DrawAutomap(const Automap::Frame *frame) {
 		}
 		for (const auto &edge : edges) {
 			Point a=edge.a,b=edge.b;
-			if (a[2] > b[2]) std::swap(a,b);
-			if (a[2] > centre[2]+halfSlice || b[2] < centre[2]-halfSlice) continue;
-			const Point original=a;
-			if (a[2]<centre[2]-halfSlice) for (int j=0;j<3;++j) a[j]=original[j]+(b[j]-original[j])*(centre[2]-halfSlice-original[2])/(b[2]-original[2]);
-			if (b[2]>centre[2]+halfSlice) { const Point end=b; for (int j=0;j<3;++j) b[j]=original[j]+(end[j]-original[j])*(centre[2]+halfSlice-original[2])/(end[2]-original[2]); }
+			if (!Automap::ClipSegment(a,b,centre[2]-halfSlice,centre[2]+halfSlice)) continue;
 			batch.Line(Screen(a),Screen(b),{{83,116,129,255}});
 		}
 		const float aspect=640.0f*cls.glconfig.vidHeight/(480.0f*cls.glconfig.vidWidth);

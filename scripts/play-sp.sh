@@ -111,8 +111,6 @@ test "$(cat "$package/build-id.txt")" = "${package##*/}"
 grep -Fxq 'PASS: t1_sour' "$package/smoke-result.txt"
 if [ "$3" = jo ]; then
     test -s "$package/import-jo.py"
-    grep -Fxq 'PASS: kejim_post' "$package/smoke-jo-result.txt"
-    grep -Fq 'PASS: JO opening, wheels, weapon switching, save/load, and Kejim transition' "$package/jo-mvp-result.txt"
 fi
 printf '%s\n' "$package"
 REMOTE

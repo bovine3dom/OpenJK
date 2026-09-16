@@ -53,7 +53,7 @@ Press **X** or select **Explode** to build a Recast navigation mesh for the map.
 The first build occurs when you select this view. The mesh stays in memory
 until the level state resets. A build failure keeps the slice view available.
 
-The view groups navigation polygons into height bands. Large, approximately
+The navmesh supplies height bands for the original BSP map. Large, approximately
 level areas supply the reference elevations. A 48-unit tolerance combines
 nearby elevation samples. The reference does not move as samples are added.
 Slope boundaries and 16-unit elevation bands remain separate during mesh
@@ -62,14 +62,20 @@ An elevation peak must have at least 4096 square units of support and 10 percent
 of the largest peak's support to create another floor. This reduces small
 platform and stair-tread bands.
 
+The display keeps the original map's filled surfaces, height shading, and
+structural outlines. It does not draw the navigation polygons. Band boundaries
+are halfway between adjacent reference elevations. BSP surfaces and edges that
+cross a boundary are split there. Each piece keeps its original world geometry.
+
 The layout puts the bands in rows, with the highest band first. Their projected
-bounds do not overlap. Each band keeps its shape, scale, and compass orientation.
+bounds include the BSP surfaces and edges, so the bands do not overlap.
+Each band keeps its shape, scale, and compass orientation.
 Disconnected areas can share a band. These bands are estimates, not room names
 or architectural storeys. Small landings can join the nearest main band.
 
 - **F1**, **F2**, and subsequent labels identify bands from lowest to highest.
   **Z** gives the reference elevation in world units.
-- The player's band has a brighter fill. The cyan arrow shows the player.
+- The cyan arrow shows the player. The status line identifies the player's band.
 - Tan lines show navigation-polygon connections across bands.
 - Green lines show possible lift routes. These routes can require a story event.
 - Gold diamonds show active controls. Grey diamonds show inactive controls.
