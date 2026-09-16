@@ -1403,6 +1403,26 @@ void RB_ShadowTessEnd(shaderCommands_t *input, const VertexArraysProperties *ver
 	RB_AddDrawItem(backEndData->currentPass, key, item);
 }
 
+void RB_SetHazeUniforms(UniformDataWriter &writer, bool enabled, bool scatter, bool sky)
+{
+	vec4_t params = {};
+	if (enabled && r_mapHaze->integer && tr.world && !backEnd.comparisonBaseline &&
+		!backEnd.depthFill && !backEnd.sssFill && (!backEnd.viewParms.isSkyPortal || sky) &&
+		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+		!(backEnd.viewParms.flags & (VPF_DEPTHSHADOW | VPF_POINTSHADOW)) &&
+		!(backEnd.currentEntity->e.renderfx & RF_DEPTHHACK))
+	{
+		VectorCopy4(tr.world->hazeParams, params);
+		writer.SetUniformVec3(UNIFORM_HAZEORIGIN, backEnd.refdef.vieworg);
+		writer.SetUniformVec4(UNIFORM_HAZECOLOR, tr.world->hazeColor);
+		writer.SetUniformVec4(UNIFORM_HAZEMINS, tr.world->hazeMins[0], tr.world->hazeMins[1],
+			tr.world->hazeMins[2], scatter ? 1.0f : 0.0f);
+		writer.SetUniformVec4(UNIFORM_HAZEMAXS, tr.world->hazeMaxs[0], tr.world->hazeMaxs[1],
+			tr.world->hazeMaxs[2], 8192.0f);
+	}
+	writer.SetUniformVec4(UNIFORM_HAZEPARAMS, params);
+}
+
 static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArraysProperties *vertexArrays )
 {
 	Allocator& frameAllocator = *backEndData->perFrameMemory;
@@ -1505,6 +1525,13 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		assert(sp);
 
 		uniformDataWriter.Start(sp);
+
+		const int blend = stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS);
+		const bool alphaBlend = blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA);
+		const bool additive = blend == (GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE) ||
+			blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE);
+		RB_SetHazeUniforms(uniformDataWriter, !input->fogNum && !input->shader->isSky &&
+			input->shader->numUnfoggedPasses == 1 && (!blend || alphaBlend || additive), !additive);
 
 		if ( input->fogNum ) {
 			vec4_t fogColorMask;

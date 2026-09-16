@@ -84,6 +84,7 @@ uniform int u_ColorGen;
 
 out vec4 var_TexCoords;
 out vec4 var_Color;
+out vec3 var_HazePosition;
 
 #if defined(PER_PIXEL_LIGHTING)
 out vec4 var_Normal;
@@ -257,6 +258,7 @@ void main()
 
 	mat4 MVP = u_viewProjectionMatrix * u_ModelMatrix;
 	gl_Position = MVP * vec4(position, 1.0);
+	var_HazePosition = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 
 	position  = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 	normal    = normalize(mat3(u_ModelMatrix) * normal);
@@ -441,6 +443,7 @@ uniform int u_AlphaTestType;
 
 in vec4 var_TexCoords;
 in vec4 var_Color;
+in vec3 var_HazePosition;
 
 #if defined(PER_PIXEL_LIGHTING)
 in vec4 var_Normal;
@@ -1249,6 +1252,7 @@ void main()
 #endif
 
 	out_Color.a = diffuse.a;
+	out_Color.rgb = ApplyMapHaze(out_Color.rgb, u_ViewOrigin, var_HazePosition);
 
 #if defined(USE_GLOW_BUFFER)
 	out_Glow = out_Color;

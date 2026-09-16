@@ -35,6 +35,37 @@ are released after upload. There is no duplicate high-resolution 2D texture set.
 The live toggle changes sampling, not allocation. A future asset budget can make
 allocation optional on memory-limited systems.
 
+## Map-Controlled Haze
+
+`r_mapHaze 1` enables a map profile. Set it to `0` for a live comparison.
+Maps without a profile keep their original fog. The first profile is
+`maps/t2_wedge.haze`. It limits haze to the cloud layer below the platforms.
+
+A profile contains 14 finite numbers in this order:
+
+1. RGB color and maximum opacity (four values).
+2. Density, reference height, height falloff, and start distance (four values).
+3. Minimum XYZ and maximum XYZ bounds (six values).
+
+Use world units for distances. Density is inverse world distance. Height falloff
+is inverse world height. Color values must be 0–1. Maximum opacity must be 0–0.5.
+Density must be 0–0.001. Falloff must be 0–0.01. Start distance must be 0–8192.
+Bounds must be ordered and within ±65536. Invalid profiles disable the effect.
+Comments use `//`. Reload the map after a profile edit.
+
+The shader clips the view ray to the box and integrates exponential height
+density. The view distance is capped at 8192 units. Opaque, alpha-tested, and
+standard alpha-blended single-pass materials use their own surface position.
+Additive materials receive attenuation without added fog color. Existing fogged
+surfaces and custom multipass materials retain their original rendering.
+Weapon depth-hack views, shadow passes, UI, and the skin-diffusion fill are excluded.
+
+Sky cubemaps use the main camera origin, including when drawn through a sky
+portal. Portal scenery keeps its original rendering. The base enhancement
+comparison disables haze. There is no temporal history or full-screen depth
+approximation. Author bounds around outdoor regions; this box is not an indoor
+visibility detector. Do not put enclosed rooms inside a haze box.
+
 ## Verification
 
 Run `python3 scripts/test-sky-fog.py`. This headless EGL test checks six view
@@ -51,5 +82,11 @@ from the native cube was 0.056. A short P630 sky-heavy benchmark measured 70.40
 FPS with native assets and 69.37 FPS with replacements. Each result used two
 five-second samples after a three-second warmup. Shared server load can affect
 these results. This is a cost check, not evidence of new source detail.
+
+The haze stage passed both renderer smoke tests and the EGL fixture. In the
+downward view, mean image change was 0.639. Restart and disable errors were
+0.007 and 0.031. The MSAA 4 capture also showed the bounded effect. A short P630
+sky-heavy benchmark measured 71.65 FPS with haze off and 68.03 FPS with haze on,
+using the same sample lengths as the replacement test.
 
 See [the research notes](sky-fog-investigation.md) for sources and stage order.

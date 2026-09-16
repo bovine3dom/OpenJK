@@ -1,0 +1,7 @@
+// Color RGB and maximum opacity.
+0.38 0.24 0.045 0.30
+// Density, reference height, height falloff, start distance.
+0.00007 -256 0.0005 768
+// Minimum and maximum bounds. Keep haze below the platforms.
+-32768 -32768 -8192
+32768 32768 -256

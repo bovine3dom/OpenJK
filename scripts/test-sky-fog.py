@@ -27,7 +27,7 @@ def main():
     profile.mkdir(parents=True)
     settings = dict(cl_renderer="rdsp-rend2", r_mode=-1, r_customwidth=640, r_customheight=480,
                     r_fullscreen=0, com_maxfps=30, developer=1, s_initsound=0, r_ignoreGLErrors=0,
-                    r_debugContext=1, r_ext_multisample=args.msaa, r_autoExposure=0, r_highResSkies=0)
+                    r_debugContext=1, r_ext_multisample=args.msaa, r_autoExposure=0, r_highResSkies=0, r_mapHaze=0)
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("// Isolated sky fixture.\n")
     commands = ["exec krildor-traverse.cfg", "noclip", "d_npcfreeze 1", "cg_draw2D 0", "cg_drawGun 0",
@@ -44,7 +44,10 @@ def main():
         for mode in (0, 1):
             commands += [f"r_seamlessSky {mode}", "wait 5", f"screenshot_png {name}_{mode}", "wait 2"]
     commands += ["vid_restart", "wait 80", "screenshot_png restarted", "wait 2",
-                 "r_highResSkies 1", "wait 5", "screenshot_png highres", "wait 2", "echo OJK_SKY_DONE", "quit"]
+                 "r_highResSkies 1", "wait 5", "screenshot_png highres", "wait 2",
+                 "r_highResSkies 0", "r_mapHaze 1", "wait 5", "screenshot_png haze", "wait 2",
+                 "vid_restart", "wait 80", "screenshot_png haze_restart", "wait 2",
+                 "r_mapHaze 0", "wait 5", "screenshot_png haze_off", "wait 2", "echo OJK_SKY_DONE", "quit"]
     (profile / "sky-test.cfg").write_text("\n".join(commands) + "\n")
     env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_VIDEODRIVER="offscreen",
                EGL_PLATFORM="surfaceless", SDL_AUDIODRIVER="dummy")
@@ -76,6 +79,15 @@ def main():
     results["highres_delta"] = sum(abs(x-y) for x, y in zip(a, b)) / len(a)
     if "Sky cube: textures/sky_hd/wedge (2048)" not in text or not 0 < results["highres_delta"] < 3:
         raise RuntimeError("High-resolution sky missing or changed orientation/color")
+    haze = pixels(profile / "screenshots/haze.png")
+    results["haze_delta"] = sum(abs(x-y) for x, y in zip(a, haze)) / len(a)
+    if "Map haze: t2_wedge" not in text or results["haze_delta"] < 0.2:
+        raise RuntimeError("Map haze did not affect the bounded cloud layer")
+    for name, reference in (("haze_restart", haze), ("haze_off", a)):
+        image = pixels(profile / "screenshots" / f"{name}.png")
+        results[name + "_error"] = sum(abs(x-y) for x, y in zip(reference, image)) / len(image)
+        if results[name + "_error"] > 1:
+            raise RuntimeError(f"Haze lifecycle mismatch: {name}")
     (suite / "result.json").write_text(json.dumps(results, indent=2) + "\n")
     print(json.dumps(results, indent=2))
     print("PASS: sky orientation, live fallback, and restart")

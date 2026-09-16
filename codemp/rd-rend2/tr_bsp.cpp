@@ -2954,6 +2954,45 @@ void R_LoadLightGridArray( world_t *worldData, lump_t *l ) {
 R_LoadEntities
 ================
 */
+static void R_LoadMapHaze(world_t *world)
+{
+#ifdef REND2_SP
+	COM_ParseSession session;
+#else
+	COM_BeginParseSession("map haze");
+#endif
+	char *buffer = nullptr;
+	const int length = ri.FS_ReadFile(va("maps/%s.haze", world->baseName), (void **)&buffer);
+	if (!buffer) return;
+	const char *text = buffer;
+	float values[14] = {};
+	bool valid = length > 0 && length < 4096;
+	for (float &value : values)
+	{
+		const char *token = COM_ParseExt(&text, qtrue);
+		char *end;
+		value = strtof(token, &end);
+		valid = valid && end != token && !*end && std::isfinite(value) && fabsf(value) <= 65536;
+	}
+	valid = valid && !*COM_ParseExt(&text, qtrue);
+	for (int i = 0; i < 3; ++i)
+		valid = valid && values[i] >= 0 && values[i] <= 1 && values[8+i] < values[11+i];
+	valid = valid && values[3] >= 0 && values[3] <= 0.5f &&
+		values[4] >= 0 && values[4] <= 0.001f && values[6] >= 0 && values[6] <= 0.01f &&
+		values[7] >= 0 && values[7] <= 8192;
+	if (valid)
+	{
+		VectorCopy4(values, world->hazeColor);
+		VectorCopy4(values + 4, world->hazeParams);
+		VectorCopy(values + 8, world->hazeMins);
+		VectorCopy(values + 11, world->hazeMaxs);
+		ri.Printf(PRINT_ALL, "Map haze: %s\n", world->baseName);
+	}
+	else
+		ri.Printf(PRINT_WARNING, "Invalid map haze: %s\n", world->baseName);
+	ri.FS_FreeFile(buffer);
+}
+
 void R_LoadEntities( world_t *worldData, lump_t *l ) {
 #ifdef REND2_SP
 	COM_ParseSession session;
@@ -4315,6 +4354,7 @@ world_t *R_LoadBSP(const char *name, int *bspIndex)
 
 	// load into heap
 	R_LoadEntities(worldData, &header->lumps[LUMP_ENTITIES]);
+	R_LoadMapHaze(worldData);
 	R_LoadShaders(worldData, &header->lumps[LUMP_SHADERS]);
 	R_LoadLightmaps(
 		worldData,

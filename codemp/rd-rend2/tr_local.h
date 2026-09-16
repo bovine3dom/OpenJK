@@ -162,6 +162,7 @@ extern cvar_t *r_torchShadows, *r_torchShadowMapSize;
 extern cvar_t *r_compareEnhancements;
 extern cvar_t *r_seamlessSky;
 extern cvar_t *r_highResSkies;
+extern cvar_t *r_mapHaze;
 #ifdef REND2_SP
 void R_ReportGhoul2Work();
 void R_ClearGhoul2GeometryCache();
@@ -1447,6 +1448,11 @@ typedef enum
 	UNIFORM_FOGINDEX,
 
 	UNIFORM_FOGCOLORMASK,
+	UNIFORM_HAZECOLOR,
+	UNIFORM_HAZEPARAMS,
+	UNIFORM_HAZEMINS,
+	UNIFORM_HAZEMAXS,
+	UNIFORM_HAZEORIGIN,
 
 	UNIFORM_MODELMATRIX,
 	UNIFORM_MODELVIEWPROJECTIONMATRIX,
@@ -2030,6 +2036,8 @@ typedef struct
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
+	vec4_t hazeColor, hazeParams;
+	vec3_t hazeMins, hazeMaxs;
 
 	int			dataSize;
 
@@ -3249,6 +3257,7 @@ extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
 void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
+void RB_SetHazeUniforms(class UniformDataWriter &writer, bool enabled, bool scatter, bool sky = false);
 void RB_EndSurface(void);
 void RB_CheckOverflow( int verts, int indexes );
 #define RB_CHECKOVERFLOW(v,i) if (tess.numVertexes + (v) >= SHADER_MAX_VERTEXES || tess.numIndexes + (i) >= SHADER_MAX_INDEXES ) {RB_CheckOverflow(v,i);}

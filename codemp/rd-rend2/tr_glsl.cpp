@@ -113,6 +113,11 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_FogIndex",    GLSL_INT, 1 },
 
 	{ "u_FogColorMask", GLSL_VEC4, 1 },
+	{ "u_HazeColor", GLSL_VEC4, 1 },
+	{ "u_HazeParams", GLSL_VEC4, 1 },
+	{ "u_HazeMins", GLSL_VEC4, 1 },
+	{ "u_HazeMaxs", GLSL_VEC4, 1 },
+	{ "u_HazeOrigin", GLSL_VEC3, 1 },
 
 	{ "u_ModelMatrix",               GLSL_MAT4x4, 1 },
 	{ "u_ModelViewProjectionMatrix", GLSL_MAT4x4, 1 },
@@ -408,6 +413,12 @@ static size_t GLSL_GetShaderHeader(
 	if (extra)
 	{
 		Q_strcat(dest, size, extra);
+	}
+
+	if (shaderType == GL_FRAGMENT_SHADER)
+	{
+		Q_strcat(dest, size, "\n");
+		Q_strcat(dest, size, fallback_hazeProgram.shaders[0].source);
 	}
 
 	// OK we added a lot of stuff but if we do something bad in the GLSL

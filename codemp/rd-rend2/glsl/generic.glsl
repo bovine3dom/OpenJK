@@ -97,9 +97,7 @@ uniform vec4 u_Disintegration; // origin, threshhold
 
 out vec2 var_DiffuseTex;
 out vec4 var_Color;
-#if defined(USE_FOG)
 out vec3 var_WSPosition;
-#endif
 
 #if defined(USE_DEFORM_VERTEXES)
 float GetNoiseValue( float x, float y, float z, float t )
@@ -454,9 +452,7 @@ void main()
 #endif
 	}
 
-#if defined(USE_FOG)
 	var_WSPosition = (u_ModelMatrix * vec4(position, 1.0)).xyz;
-#endif
 }
 
 
@@ -511,9 +507,7 @@ uniform int u_FogIndex;
 
 in vec2 var_DiffuseTex;
 in vec4 var_Color;
-#if defined(USE_FOG)
 in vec3 var_WSPosition;
-#endif
 
 out vec4 out_Color;
 out vec4 out_Glow;
@@ -583,7 +577,7 @@ void main()
 	color *= vec4(1.0) - u_FogColorMask * fogFactor;
 #endif
 
-	out_Color = vec4(color.rgb * var_Color.rgb, color.a);
+	out_Color = vec4(ApplyMapHaze(color.rgb * var_Color.rgb, u_ViewOrigin, var_WSPosition), color.a);
 	if (u_SoftParticleParams.x > 0.0)
 	{
 		float depth = texture(u_ScreenDepthMap, gl_FragCoord.xy / r_FBufScale).r;

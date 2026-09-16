@@ -24,8 +24,10 @@ void main()
 uniform samplerCube u_DiffuseMap;
 uniform vec4 u_Color;
 in vec3 var_Direction;
+uniform vec3 u_HazeOrigin;
 out vec4 out_Color;
 void main()
 {
 	out_Color = texture(u_DiffuseMap, var_Direction) * u_Color;
+	out_Color.rgb = ApplyMapHaze(out_Color.rgb, u_HazeOrigin, u_HazeOrigin + normalize(var_Direction) * 8192.0);
 }
