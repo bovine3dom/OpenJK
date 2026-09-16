@@ -51,6 +51,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 	#    Dependencies
 	include("${CMAKE_SOURCE_DIR}/cmake/Modules/AutomapNavigation.cmake")
 	list(APPEND SPEngineLibraries automap_recast)
+	include("${CMAKE_SOURCE_DIR}/cmake/Modules/SteamAudio.cmake")
 
 	if (NOT WIN32)
 		# OpenGL
@@ -127,6 +128,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		"${SPDir}/client/cl_keys.cpp"
 		"${SPDir}/client/cl_main.cpp"
 		"${SPDir}/client/cl_automap.cpp"
+		"${SPDir}/client/snd_steam.cpp"
 		"${SharedDir}/qcommon/automap_nav.cpp"
 		"${SPDir}/client/cl_mp3.cpp"
 		"${SPDir}/client/cl_parse.cpp"
@@ -449,6 +451,9 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		set_target_properties(${ProjectName} PROPERTIES PROJECT_LABEL ${Label})
 		if(SPEngineLibraries)
 			target_link_libraries(${ProjectName} ${SPEngineLibraries})
+			if(BuildSteamAudio)
+				set_property(TARGET ${ProjectName} APPEND PROPERTY INSTALL_RPATH "$ORIGIN")
+			endif()
 		endif(SPEngineLibraries)
 	endfunction(add_sp_project)
 	if(BuildSPEngine)

@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../server/exe_headers.h"
 
 #include "snd_local.h"
+#include "snd_steam.h"
 
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
 int 	*snd_p, snd_linear_count, snd_vol;
@@ -170,6 +171,7 @@ CHANNEL MIXING
 */
 static void S_PaintChannelFrom16( channel_t *ch, const sfx_t *sfx, int count, int sampleOffset, int bufferOffset )
 {
+	if(S_SteamPaint(ch,sfx->pSoundData+sampleOffset,count,bufferOffset,snd_vol)) return;
 	portable_samplepair_t	*pSamplesDest;
 	int iData;
 
@@ -199,6 +201,7 @@ void S_PaintChannelFromMP3( channel_t *ch, const sfx_t *sc, int count, int sampl
 	static short tempMP3Buffer[PAINTBUFFER_SIZE];
 
 	MP3Stream_GetSamples( ch, sampleOffset, count, tempMP3Buffer, qfalse );	// qfalse = not stereo
+	if(S_SteamPaint(ch,tempMP3Buffer,count,bufferOffset,snd_vol)) return;
 
 	leftvol = ch->leftvol*snd_vol;
 	rightvol = ch->rightvol*snd_vol;
@@ -273,14 +276,17 @@ void S_PaintChannels( int endtime ) {
 
 	snd_vol = normal_vol = s_volume->value*256.0f;
 	voice_vol  = (s_volumeVoice->value*256.0f);
+	const int blockSize=S_SteamActive() ? 128 : PAINTBUFFER_SIZE;
+	// Keep complete effect blocks inside the requested DMA write window.
+	if(S_SteamActive() && endtime>s_paintedtime) endtime=s_paintedtime+((endtime-s_paintedtime)/blockSize)*blockSize;
 
 //Com_Printf ("%i to %i\n", s_paintedtime, endtime);
 	while ( s_paintedtime < endtime ) {
 		// if paintbuffer is smaller than DMA buffer
 		// we may need to fill it multiple times
 		end = endtime;
-		if ( endtime - s_paintedtime > PAINTBUFFER_SIZE ) {
-			end = s_paintedtime + PAINTBUFFER_SIZE;
+		if ( endtime - s_paintedtime > blockSize ) {
+			end = s_paintedtime + blockSize;
 		}
 
 		// clear the paint buffer to either music or zeros
@@ -311,6 +317,7 @@ void S_PaintChannels( int endtime ) {
 		}
 
 		// paint in the channels.
+		S_SteamBeginBlock();
 		ch = s_channels;
 		for ( i = 0; i < MAX_CHANNELS ; i++, ch++ ) {
 			if ( !ch->thesfx || (ch->leftvol<0.25 && ch->rightvol<0.25 )) {
@@ -386,6 +393,7 @@ void S_PaintChannels( int endtime ) {
 		}
 */
 		// transfer out according to DMA format
+		S_SteamEndBlock(paintbuffer,end-s_paintedtime);
 		S_TransferPaintBuffer( end );
 		s_paintedtime = end;
 	}

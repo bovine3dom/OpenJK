@@ -32,6 +32,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "sdl/sdl_sound.h"
 #include "snd_local.h"
+#include "snd_steam.h"
 #include "cl_mp3.h"
 #include "snd_music.h"
 #define __STDC_FORMAT_MACROS
@@ -641,6 +642,7 @@ void S_Init( void ) {
 //	Com_Printf("\n--- ambient sound initialization ---\n");
 
 	AS_Init();
+	if(s_soundStarted) S_SteamInit();
 }
 
 // only called from snd_restart. QA request...
@@ -672,6 +674,7 @@ void S_Shutdown( void )
 		return;
 	}
 
+	S_SteamShutdown();
 	S_FreeAllSFXMem();
 	S_UnCacheDynamicMusic();
 
@@ -1836,6 +1839,7 @@ void S_StopAllSounds(void) {
 	S_StopBackgroundTrack();
 
 	S_StopSounds();
+	S_SteamClear();
 }
 
 /*
@@ -1984,6 +1988,7 @@ void S_AddLoopSounds (void)
 
 		for ( j = i ; j < numLoopSounds ; j++) {
 			loop2 = &loopSounds[j];
+			if(S_SteamActive() && j!=i) continue; // Separate emitters need separate acoustic paths.
 			if ( loop2->sfx != loop->sfx ) {
 				continue;
 			}
@@ -2011,6 +2016,8 @@ void S_AddLoopSounds (void)
 		ch->rightvol = right_total;
 		ch->loopSound = qtrue;	// remove next frame
 		ch->thesfx = loop->sfx;
+		ch->master_vol=loop->volume; ch->entchannel=loop->entchan;
+		ch->fixed_origin=qtrue; VectorCopy(loop->origin,ch->origin);
 
 		// you cannot use MP3 files here because they offer only streaming access, not random
 		//
@@ -2600,6 +2607,7 @@ void S_Respatialize( int entityNum, const vec3_t head, vec3_t axis[3], qboolean 
 
 		// add loopsounds
 		S_AddLoopSounds ();
+		S_SteamUpdate(head,axis,entityNum,inwater);
 #ifdef USE_OPENAL
 	}
 #endif
