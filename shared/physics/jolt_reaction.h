@@ -16,6 +16,10 @@ struct Part {
 	int parent;
 };
 enum class ControlPhase { Shadow, Tracking, Stepping, Falling, Preparing, Dead };
+enum class Region { Torso, Head, Arms, Legs, Feet, Count };
+struct RegionalControl {
+	float strength[int(Region::Count)] = {1, 1, 1, 1, 1};
+};
 struct BalanceStatus {
 	ControlPhase phase = ControlPhase::Falling;
 	float error = 0, strength = 0, pelvisHeight = 0;
@@ -32,6 +36,8 @@ struct BalanceStatus {
 	float preparationError = 0;
 	bool supportedTrunk = false;
 	unsigned firstHandContact = 0, firstHeadContact = 0;
+	bool gripping = false;
+	float gripForce = 0, shock = 0;
 };
 class CollisionScene {
 	struct Impl;
@@ -64,6 +70,10 @@ public:
 	void ReleaseControl();
 	void Kill(bool soften = false);
 	void SetVitality(float fraction);
+	void SetRegionalControl(const RegionalControl& control);
+	void Grip(const Part* pose, const float* target, bool lift);
+	void ReleaseGrip();
+	void Electrocute(float intensity);
 	bool Awake() const;
 	float TrunkSpeed() const;
 	void PrepareRecovery(const Transform* bones, float seconds);

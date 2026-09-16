@@ -341,6 +341,60 @@ int main() {
 	}
 	std::puts("PASS: contact-aware bracing, physical preparation, and speed-limited get-up transitions");
 	{
+		JoltReaction::FallSimulation weakLegs(parts, stopped);
+		weakLegs.AddMesh(0, largeFloor, 6); weakLegs.Follow(parts, 0); weakLegs.Engage();
+		JoltReaction::RegionalControl profile;
+		profile.strength[int(JoltReaction::Region::Legs)] = 0;
+		profile.strength[int(JoltReaction::Region::Feet)] = 0;
+		weakLegs.SetRegionalControl(profile);
+		for (int i = 0; i < 360; ++i) Check(weakLegs.Advance(1.0f/120), "regional control solver step");
+		Check(weakLegs.Balance().phase == JoltReaction::ControlPhase::Falling, "unsupported legs yield independently of upper-body motors");
+		JoltReaction::FallSimulation a(parts, stopped), b(parts, stopped);
+		a.AddMesh(0, largeFloor, 6); b.AddMesh(0, largeFloor, 6);
+		a.Follow(parts, 0); b.Follow(parts, 0); a.Engage(); b.Engage();
+		for (int frame = 0; frame < 30; ++frame) {
+			a.Electrocute(.7f); b.Electrocute(.7f);
+			for (int i = 0; i < 6; ++i) Check(a.Advance(1.0f/120), "Lightning substep");
+			Check(b.Advance(.05f), "Lightning server step");
+		}
+		JoltReaction::Transform other[JoltReaction::PartCount]; a.Sample(pose); b.Sample(other);
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(std::abs(pose[i].matrix[r][c]-other[i].matrix[r][c]) < .001f, "Lightning motion is independent of frame partition");
+	}
+	{
+		JoltReaction::FallSimulation held(parts, stopped);
+		held.AddMesh(0, largeFloor, 6); held.Follow(parts, 0); held.Engage();
+		float target[] = {parts[2].bone.matrix[0][3],parts[2].bone.matrix[1][3],parts[2].bone.matrix[2][3]+.8f};
+		float mass = 0; for (const auto& part : parts) mass += part.mass;
+		held.Grip(parts, target, false);
+		for (int i = 0; i < 120; ++i) held.Advance(1.0f/120);
+		Check(held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().phase == JoltReaction::ControlPhase::Tracking,
+			"level one Grip keeps ground support without lift");
+		JoltReaction::RegionalControl profile;
+		profile.strength[int(JoltReaction::Region::Legs)] = .18f;
+		profile.strength[int(JoltReaction::Region::Feet)] = .1f;
+		held.SetRegionalControl(profile); held.Grip(parts, target, true);
+		for (int i = 0; i < 360; ++i) {
+			if (i % 12 == 0) held.Electrocute(.6f);
+			Check(held.Advance(1.0f/120), "Grip and Lightning share one physical rig");
+			const auto b = held.Balance();
+			Check(b.gripForce <= mass*80+.1f && b.assistForce == 0 && b.assistTorque == 0, "suspension uses a bounded external force without standing assistance");
+		}
+		held.Sample(pose);
+		std::printf("Grip: neck=%.3f target=%.3f force=%.1f shock=%.2f\n", pose[2].matrix[2][3], target[2], held.Balance().gripForce, held.Balance().shock);
+		Check(std::abs(pose[2].matrix[2][3]-target[2]) < .2f, "Grip lifts the body to its suspension target");
+		float before[3], after[3]; held.RootVelocity(before);
+		held.ReleaseGrip(); held.SetRegionalControl(JoltReaction::RegionalControl{}); held.RootVelocity(after);
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "Grip release preserves velocity");
+		for (int i = 0; i < 180; ++i) Check(held.Advance(1.0f/120), "released body falls with finite state");
+		Check(!held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().shock == 0,
+			"Grip releases and Lightning expires without a continuing force");
+		held.Grip(parts, target, true); held.Electrocute(1); held.Kill();
+		Check(held.Balance().gripping && held.Balance().shock == 0 && held.Balance().strength == 0, "death ends muscle control but preserves external Grip");
+		held.ReleaseGrip();
+		Check(!held.Balance().gripping && held.Balance().phase == JoltReaction::ControlPhase::Dead, "releasing a held corpse does not revive its controller");
+	}
+	{
 		JoltReaction::FallSimulation corpse(parts, stopped);
 		corpse.AddMesh(1, largeFloor, 6); corpse.Follow(parts, 0); corpse.Engage(); corpse.Kill();
 		for (int i = 0; i < 1200 && corpse.Awake(); ++i) Check(corpse.Advance(1.0f/120), "corpse settling step");
