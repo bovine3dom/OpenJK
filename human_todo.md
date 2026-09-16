@@ -32,8 +32,8 @@ Repeat this short check on each map:
 - [ ] At the first useful outdoor view, enter `mapname`. Check the map's decision in [the audit](docs/atmosphere-map-audit.md). For an intentionally stock map, note whether that choice still fits and continue.
 - [ ] Compare `r_atmosphere 0` and `r_atmosphere 1` from the same view. Check sky color, brightness, mood, and the match to the baked lighting. Keep exposure fixed while tuning, then restore your normal exposure setting.
 - [ ] Look at the horizon, sun, clouds, painted planets, and treetops. Check for lost detail, faded landmarks, seams, or sky glow over foreground objects.
-- [ ] If a change is needed, edit the shared file listed in [the sharing guide](docs/atmosphere-review.md#shared-profiles), or the map's private file. Change one control at a time. Use `rayleigh`/`mie` for color balance, `illuminance` for brightness, and `skyBlend` for effect strength.
-- [ ] Enter `r_atmosphereReload` after each edit. Check the console for a successful load. Leave `r_atmosphere 1` enabled when the result is satisfactory.
+- [ ] If a change is needed, enter `atmosphere_editor`. Use the sliders or exact-value boxes and the **?** help. Change one control at a time. Use `rayleigh`/`mie` for color balance, `illuminance` for brightness, and `skyBlend` for effect strength.
+- [ ] Click **Apply preview**, then compare with **Show stock / Show atmosphere**. Click **Copy file + filename** when satisfied. Paste the complete export into the indicated repository file. Update any active local override too if you want the change to survive a reload. See [the editor guide](docs/atmosphere-editor.md).
 - [ ] During the rest of the mission, check another sky opening and any outdoor cinematic. If the map uses a shared file, a quick check is enough unless that scene needs different settings.
 - [ ] Record `campaign, map, shared/private file, approved/tweak/stock, notes`. For an issue, include `viewpos`, a screenshot, or a save. Copy final shared files and private exceptions back to the matching paths under `scripts/maps/` for the next build.
 

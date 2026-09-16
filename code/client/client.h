@@ -67,6 +67,13 @@ bool CL_RmlUiText(const char* text, const UiText::Style& style, UiText::Metrics*
 void CL_RmlUiDrawSelectionWheel(const RadialWheel::View& view, const char* label, float opacity);
 void CL_RmlUiInit();
 void CL_RmlUiShutdown();
+void CL_AtmosphereEditorInit();
+void CL_AtmosphereEditorShutdown();
+bool CL_AtmosphereEditorActive();
+bool CL_AtmosphereEditorKey(int key, bool down);
+bool CL_AtmosphereEditorChar(int key);
+bool CL_AtmosphereEditorMouse(int dx, int dy);
+void CL_AtmosphereEditorDraw();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
 #endif
 

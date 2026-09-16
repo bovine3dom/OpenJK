@@ -29,8 +29,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "qcommon/qcommon.h"
 #include "rd-common/tr_public.h"
 #include "rd-common/tr_common.h"
+#include "renderer/atmosphere.h"
 #ifdef REND2_SP
-static_assert(REF_API_VERSION == 22, "Rend2 SP requires the SP private header path");
+static_assert(REF_API_VERSION == 23, "Rend2 SP requires the SP private header path");
 struct skin_t;
 #include "rd-rend2/tr_sp_import.h"
 #define ri riRend2
@@ -2056,6 +2057,7 @@ typedef struct {
 	vec4_t hazeColor, hazeParams;
 	vec3_t hazeMins, hazeMaxs;
 	image_t *atmosphereImage;
+	Atmosphere::Profile atmosphereProfile;
 	char atmosphereSky[MAX_QPATH];
 	vec4_t atmosphereSun, atmosphereParams;
 	vec3_t atmosphereCloudColor;
@@ -3294,6 +3296,8 @@ void RB_SetHazeUniforms(class UniformDataWriter &writer, class SamplerBindingsWr
 	bool enabled, bool scatter, bool sky = false);
 void R_LoadAtmosphere(world_t *world);
 void R_AtmosphereReload_f();
+bool RE_GetAtmosphere(Atmosphere::Profile *profile);
+bool RE_ApplyAtmosphere(const Atmosphere::Profile *profile);
 void RB_EndSurface(void);
 void RB_CheckOverflow( int verts, int indexes );
 #define RB_CHECKOVERFLOW(v,i) if (tess.numVertexes + (v) >= SHADER_MAX_VERTEXES || tess.numIndexes + (i) >= SHADER_MAX_INDEXES ) {RB_CheckOverflow(v,i);}

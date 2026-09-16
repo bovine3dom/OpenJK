@@ -461,6 +461,9 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	// the menu draws next
 	_UI_Refresh( cls.realtime );
+#ifdef USE_RMLUI
+	CL_AtmosphereEditorDraw();
+#endif
 
 	// console draws next
 	Con_DrawConsole ();
@@ -600,5 +603,4 @@ void  SCR_TempRawImage_CleanUp()
 	re.TempRawImage_CleanUp();
 }
 #endif
-
 

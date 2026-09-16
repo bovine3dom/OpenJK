@@ -29,8 +29,9 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "../ghoul2/G2.h"
 #include "../ghoul2/ghoul2_gore.h"
+#include "renderer/atmosphere.h"
 
-#define	REF_API_VERSION		22
+#define	REF_API_VERSION		23
 
 #define REF_UI_MAX_VERTICES 512
 #define REF_UI_MAX_INDICES 1536
@@ -159,6 +160,8 @@ typedef struct {
 	qhandle_t (*RegisterShader)( const char *name );
 	qhandle_t (*RegisterShaderNoMip)( const char *name );
 	void	(*LoadWorld)( const char *name );
+	bool (*GetAtmosphere)(Atmosphere::Profile* profile);
+	bool (*ApplyAtmosphere)(const Atmosphere::Profile* profile);
 	void	(*R_LoadImage)( const char *name, byte **pic, int *width, int *height );
 
 	// these two functions added to help with the new model alloc scheme...

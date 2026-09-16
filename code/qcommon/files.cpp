@@ -268,6 +268,7 @@ typedef struct fileHandleData_s {
 	int			zipFileLen;
 	qboolean	zipFile;
 	char		name[MAX_ZPATH];
+	char        readPath[MAX_OSPATH];
 } fileHandleData_t;
 
 static fileHandleData_t	fsh[MAX_FILE_HANDLES];
@@ -1300,6 +1301,7 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 
 	*file = FS_HandleForFile();
 	fsh[*file].handleFiles.unique = uniqueFILE;
+	fsh[*file].readPath[0] = 0;
 
 	// this new bool is in for an optimisation, if you (eg) opened a BSP file under fs_copyfiles==2,
 	//	then it triggered a copy operation to update your local HD version, then this will re-open the
@@ -1403,6 +1405,7 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 #endif
 				Q_strncpyz( fsh[*file].name, filename, sizeof( fsh[*file].name ) );
 				fsh[*file].zipFile = qfalse;
+				Q_strncpyz(fsh[*file].readPath, netpath, sizeof(fsh[*file].readPath));
 				if ( fs_debug->integer ) {
 					Com_Printf( "FS_FOpenFileRead: %s (found in '%s%c%s')\n", filename,
 						dir->path, PATH_SEP, dir->gamedir );
@@ -1471,6 +1474,20 @@ long FS_FOpenFileRead( const char *filename, fileHandle_t *file, qboolean unique
 	Com_DPrintf ("Can't find %s\n", filename);
 	*file = 0;
 	return -1;
+}
+
+// Return the loose file selected by the normal search order. Archive entries
+// have no editable OS path. The caller can resolve symlinks if needed.
+qboolean FS_GetFileReadPath(const char *qpath, char *path, int size)
+{
+	if (!path || size < 1) return qfalse;
+	path[0] = 0;
+	fileHandle_t file = 0;
+	FS_FOpenFileRead(qpath, &file, qtrue);
+	if (!file) return qfalse;
+	if (!fsh[file].zipFile) Q_strncpyz(path, fsh[file].readPath, size);
+	FS_FCloseFile(file);
+	return path[0] ? qtrue : qfalse;
 }
 
 /*

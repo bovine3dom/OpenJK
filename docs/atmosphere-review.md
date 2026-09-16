@@ -89,6 +89,11 @@ JA and JO use separate processes because their asset and campaign state differ.
 
 ## Edit and Record Results
 
+Enter `atmosphere_editor` during gameplay for mouse-driven sliders, parameter
+help, live previews, and a clipboard export with the shared or private filename.
+See [the editor guide](atmosphere-editor.md). The file-editing workflow below
+remains available for manual changes.
+
 The launcher prints the full profile, shared file, and notes paths. F10 also
 shows the active local edit path for the current map. Edit the canonical shared file
 listed below, or the map's private file, then press F6. Restarts and build updates

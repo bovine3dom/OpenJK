@@ -28,6 +28,12 @@ resource-rings { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 class ReticleSystem final : public Rml::SystemInterface {
 public:
 	double GetElapsedTime() override { return Sys_Milliseconds() * 0.001; }
+	void SetClipboardText(const Rml::String& text) override { Sys_SetClipboardData(text.c_str()); }
+	void GetClipboardText(Rml::String& text) override {
+		char* data = Sys_GetClipboardData();
+		text = data ? data : "";
+		if (data) Z_Free(data);
+	}
 	bool LogMessage(Rml::Log::Type, const Rml::String& message) override {
 		Com_Printf("RmlUi: %s\n", message.c_str());
 		return true;
@@ -211,6 +217,7 @@ cvar_t* hudEnabled = nullptr;
 } // namespace
 
 void CL_RmlUiShutdown() {
+	CL_AtmosphereEditorShutdown();
 	CL_CancelHudReveal();
 	CL_SelectionWheelsCancel();
 	textOutlines.clear();
@@ -288,6 +295,7 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 	document->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 	wheelDocument->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
+	CL_AtmosphereEditorInit();
 }
 
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state) {

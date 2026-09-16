@@ -147,6 +147,8 @@ extern "C" Q_EXPORT refexport_t *QDECL GetRefAPI(int apiVersion, refimport_t *im
 	REX(RegisterShader);
 	REX(RegisterShaderNoMip);
 	re.LoadWorld = RE_LoadWorldMap;
+	re.GetAtmosphere = RE_GetAtmosphere;
+	re.ApplyAtmosphere = RE_ApplyAtmosphere;
 	re.R_LoadImage = R_LoadImage;
 	re.RegisterMedia_LevelLoadBegin = RE_SP_LevelLoadBegin;
 	re.RegisterMedia_LevelLoadEnd = RE_SP_LevelLoadEnd;

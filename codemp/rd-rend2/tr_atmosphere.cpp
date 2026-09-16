@@ -110,76 +110,27 @@ void AmbientRadiance(const AtmosphereProfile &p, const vec3_t sun, vec3_t *ambie
 }
 }
 
-void R_LoadAtmosphere(world_t *world)
+static void BuildAtmosphere(world_t *world, const Atmosphere::Profile &settings)
 {
-	world->atmosphereImage = nullptr;
-	// Older version-1 profiles keep their full replacement strength.
-	world->atmosphereParams[3] = 1.0f;
-#ifdef REND2_SP
-	COM_ParseSession session;
-#else
-	COM_BeginParseSession("atmosphere");
-#endif
-	char *buffer = nullptr;
-	const int length = ri.FS_ReadFile(va("maps/%s.atmosphere", world->baseName), (void **)&buffer);
-	if (!buffer) return;
+	using namespace Atmosphere;
 	AtmosphereProfile profile = {};
-	struct Field { const char *name; float *value; int count; float low, high; bool seen; };
-	Field fields[] = {
-		{"radius", &profile.radius, 1, 1000, 10000, false},
-		{"thickness", &profile.thickness, 1, 20, 200, false},
-		{"observerHeight", &profile.observerHeight, 1, 0.001f, 10, false},
-		{"rayHeight", &profile.rayHeight, 1, 1, 20, false},
-		{"mieHeight", &profile.mieHeight, 1, 0.1f, 10, false},
-		{"anisotropy", &profile.anisotropy, 1, 0, 0.9f, false},
-		{"illuminance", &profile.illuminance, 1, 0.1f, 64, false},
-		{"rayleigh", profile.rayleigh, 3, 0.0001f, 0.1f, false},
-		{"mie", profile.mie, 3, 0.0001f, 0.1f, false},
-		{"absorption", profile.absorption, 3, 0, 0.1f, false},
-		{"groundAlbedo", profile.groundAlbedo, 3, 0, 1, false},
-		{"sunDirection", world->atmosphereSun, 3, -1, 1, false},
-		{"sunRadius", world->atmosphereSun + 3, 1, 0.001f, 0.03f, false},
-		{"cloudStrength", world->atmosphereParams + 1, 1, 0, 1, false},
-		{"sunDisk", world->atmosphereParams + 2, 1, 0, 32, false},
-		{"cloudColor", world->atmosphereCloudColor, 3, 0, 2, false},
-		{"skyBlend", world->atmosphereParams + 3, 1, 0, 1, false}
-	};
-	const char *text = buffer;
-	bool valid = length > 0 && length < 4096;
-	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "atmosphere");
-	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "1");
-	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "sky");
-	const char *sky = COM_ParseExt(&text, qtrue);
-	valid = valid && strlen(sky) < sizeof(world->atmosphereSky) && strlen(world->baseName) + 13 < MAX_QPATH;
-	Q_strncpyz(world->atmosphereSky, sky, sizeof(world->atmosphereSky));
-	valid = valid && world->atmosphereSky[0];
-	while (valid)
-	{
-		const char *token = COM_ParseExt(&text, qtrue);
-		if (!*token) break;
-		Field *field = nullptr;
-		for (Field &candidate : fields)
-			if (!Q_stricmp(token, candidate.name)) { field = &candidate; break; }
-		if (!field || field->seen) { valid = false; break; }
-		field->seen = true;
-		for (int i = 0; i < field->count; ++i)
-		{
-			token = COM_ParseExt(&text, qtrue);
-			char *end;
-			const float value = strtof(token, &end);
-			valid = valid && end != token && !*end && std::isfinite(value) && value >= field->low && value <= field->high;
-			field->value[i] = value;
-		}
-	}
-	for (const Field &field : fields)
-		valid = valid && (field.seen || !strcmp(field.name, "skyBlend"));
-	valid = valid && VectorLength(world->atmosphereSun) > 0.5f && world->atmosphereSun[2] > 0;
-	ri.FS_FreeFile(buffer);
-	if (!valid)
-	{
-		ri.Printf(PRINT_WARNING, "Invalid atmosphere profile: %s\n", world->baseName);
-		return;
-	}
+	profile.radius = settings.values[Radius][0];
+	profile.thickness = settings.values[Thickness][0];
+	profile.observerHeight = settings.values[ObserverHeight][0];
+	profile.rayHeight = settings.values[RayHeight][0];
+	profile.mieHeight = settings.values[MieHeight][0];
+	profile.anisotropy = settings.values[Anisotropy][0];
+	profile.illuminance = settings.values[Illuminance][0];
+	VectorCopy(settings.values[Rayleigh], profile.rayleigh);
+	VectorCopy(settings.values[Mie], profile.mie);
+	VectorCopy(settings.values[Absorption], profile.absorption);
+	VectorCopy(settings.values[GroundAlbedo], profile.groundAlbedo);
+	VectorCopy(settings.values[SunDirection], world->atmosphereSun);
+	world->atmosphereSun[3] = settings.values[SunRadius][0];
+	VectorSet4(world->atmosphereParams, 0, settings.values[CloudStrength][0],
+		settings.values[SunDisk][0], settings.values[SkyBlend][0]);
+	VectorCopy(settings.values[CloudColor], world->atmosphereCloudColor);
+	Q_strncpyz(world->atmosphereSky, settings.sky, sizeof(world->atmosphereSky));
 	VectorNormalize(world->atmosphereSun);
 	const int start = ri.Milliseconds();
 	vec3_t ambient[ambientHeights] = {};
@@ -200,8 +151,79 @@ void R_LoadAtmosphere(world_t *world)
 		world->atmosphereImage = R_CreateImage(name, nullptr, skyWidth, skyHeight, IMGTYPE_COLORALPHA, flags, GL_RGBA16F);
 	GL_Bind(world->atmosphereImage);
 	qglTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, skyWidth, skyHeight, GL_RGBA, GL_FLOAT, pixels.data());
+	world->atmosphereProfile = settings;
 	ri.Printf(PRINT_ALL, "Atmosphere: %s, sky=%s, 256x128 LUT, %d ms\n",
 		world->baseName, world->atmosphereSky, ri.Milliseconds() - start);
+}
+
+void R_LoadAtmosphere(world_t *world)
+{
+	world->atmosphereImage = nullptr;
+#ifdef REND2_SP
+	COM_ParseSession session;
+#else
+	COM_BeginParseSession("atmosphere");
+#endif
+	char *buffer = nullptr;
+	const int length = ri.FS_ReadFile(va("maps/%s.atmosphere", world->baseName), (void **)&buffer);
+	if (!buffer) return;
+	Atmosphere::Profile settings = {};
+	Q_strncpyz(settings.map, world->baseName, sizeof(settings.map));
+	settings.values[Atmosphere::SkyBlend][0] = 1;
+	bool seen[Atmosphere::Count] = {};
+	const char *text = buffer;
+	bool valid = length > 0 && length < 4096 && strlen(world->baseName) + 13 < MAX_QPATH;
+	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "atmosphere");
+	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "1");
+	valid = valid && !Q_stricmp(COM_ParseExt(&text, qtrue), "sky");
+	const char *sky = COM_ParseExt(&text, qtrue);
+	valid = valid && strlen(sky) < sizeof(settings.sky);
+	Q_strncpyz(settings.sky, sky, sizeof(settings.sky));
+	while (valid)
+	{
+		const char *token = COM_ParseExt(&text, qtrue);
+		if (!*token) break;
+		int field = 0;
+		while (field < Atmosphere::Count && Q_stricmp(token, Atmosphere::Fields()[field].name)) ++field;
+		if (field == Atmosphere::Count || seen[field]) { valid = false; break; }
+		seen[field] = true;
+		for (int c = 0; c < Atmosphere::Fields()[field].components; ++c)
+		{
+			token = COM_ParseExt(&text, qtrue);
+			char *end;
+			settings.values[field][c] = strtof(token, &end);
+			valid = valid && end != token && !*end;
+		}
+	}
+	for (int i = 0; i < Atmosphere::Count; ++i) valid = valid && (seen[i] || i == Atmosphere::SkyBlend);
+	ri.FS_FreeFile(buffer);
+	if (!valid || !Atmosphere::Valid(settings))
+	{
+		ri.Printf(PRINT_WARNING, "Invalid atmosphere profile: %s\n", world->baseName);
+		return;
+	}
+	BuildAtmosphere(world, settings);
+}
+
+bool RE_GetAtmosphere(Atmosphere::Profile *profile)
+{
+	if (!profile || !tr.world || !tr.world->atmosphereImage) return false;
+	*profile = tr.world->atmosphereProfile;
+	return true;
+}
+
+bool RE_ApplyAtmosphere(const Atmosphere::Profile *profile)
+{
+	if (!profile || !Atmosphere::Valid(*profile) || !tr.world ||
+		Q_stricmp(profile->map, tr.world->baseName)) return false;
+	bool referenced = false;
+	for (int i = 0; i < tr.world->numShaders; ++i)
+		if (!Q_stricmp(tr.world->shaders[i].shader, profile->sky)) { referenced = true; break; }
+	shader_t *sky = R_FindShaderByName(profile->sky);
+	if (!referenced || !sky || !sky->isSky || !sky->sky.cubemap) return false;
+	R_IssuePendingRenderCommands();
+	BuildAtmosphere(tr.world, *profile);
+	return true;
 }
 
 void R_AtmosphereReload_f()

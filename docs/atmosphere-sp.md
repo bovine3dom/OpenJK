@@ -67,6 +67,9 @@ The prototype does not change the sun light on baked surfaces.
 
 ## Profile Editing
 
+Use `atmosphere_editor` for the [in-game parameter panel](atmosphere-editor.md).
+It provides mouse controls, live apply/toggle actions, and clipboard export.
+
 The packaged profile is `OpenJK/maps/t1_sour.atmosphere`. For local edits, place
 an override at `maps/t1_sour.atmosphere` in the active `OpenJK` profile. Run
 `r_atmosphereReload` after an edit. Reloading updates the existing texture.

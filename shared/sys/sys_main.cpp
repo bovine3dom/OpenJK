@@ -118,6 +118,15 @@ char *Sys_GetClipboardData( void ) {
 #endif
 }
 
+bool Sys_SetClipboardData(const char *text) {
+#ifdef DEDICATED
+	(void)text;
+	return false;
+#else
+	return text && SDL_SetClipboardText(text) == 0;
+#endif
+}
+
 /*
 =================
 Sys_ConsoleInput

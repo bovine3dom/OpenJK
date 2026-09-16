@@ -1247,6 +1247,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 	// keys can still be used for bound actions
 #ifdef USE_RMLUI
+	if (CL_AtmosphereEditorKey(key, true)) return;
 	if (CL_SelectionWheelKey(keynames[key].upper) && kg.keys[keynames[key].upper].repeats > 1) return;
 	if (CL_SelectionWheelCapturesInput() && !Key_GetCatcher()) {
 		if (key == A_ESCAPE) { CL_SelectionWheelsCancel(); return; }
@@ -1323,6 +1324,9 @@ void CL_KeyUpEvent( int key, unsigned time )
 	// an action started before a mode switch.
 	//
 	CL_ParseBinding( key, qfalse, time );
+#ifdef USE_RMLUI
+	if (CL_AtmosphereEditorKey(key, false)) return;
+#endif
 
 	if ( Key_GetCatcher( ) & KEYCATCH_UI )
 		_UI_KeyEvent( key, qfalse );
@@ -1353,6 +1357,9 @@ void CL_CharEvent( int key ) {
 	// delete is not a printable character and is otherwise handled by Field_KeyDownEvent
 	if ( key == 127 )
 		return;
+#ifdef USE_RMLUI
+	if (CL_AtmosphereEditorChar(key)) return;
+#endif
 
 	// distribute the key down event to the apropriate handler
 		 if ( Key_GetCatcher() & KEYCATCH_CONSOLE )		Field_CharEvent( &g_consoleField, key );
