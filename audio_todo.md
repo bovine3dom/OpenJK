@@ -2,21 +2,25 @@
 
 ## Current Status
 
-**Blocker: the user reports that the Steam Audio output is extremely crackly.**
-Treat the current integration as an experimental implementation, not a finished
-audio upgrade. The cause of the crackling is not known. Fix this before work on
-additional effects or acoustic tuning.
+**A mixer timing defect is fixed. Clean device playback still needs a check.**
+The user reported severe crackling. The old mixer moved `s_paintedtime` backwards
+on each update. Steam Audio then processed overlapping samples with advanced
+filter and reverb state. A two-second JA capture contained 71,552 overlapping
+frames. The new capture continuity check failed on that build.
 
-The implementation is committed in `3195d7b7` (`Start sketching out Steam Audio`).
-The last package published during implementation was:
+The Steam Audio paint cursor now advances without overlap. The SDL device lock
+now covers the DMA copies, not DSP or capture file writes. Status output includes
+peak mixer time, peak device-lock time, callback intervals, and mixer underruns.
+These changes need a listening check on the user's device before effect tuning.
+
+The timing-fix package is:
 
 ```text
-build/packages/20260916T181523493202169-145525b6
+build/packages/20260916T230737092770910-adf45fc6
 ```
 
-That package contains the then-uncommitted audio implementation. Its revision
-suffix refers to the earlier HEAD. Check `build/ready` and the package source
-manifest before a comparison; another workstream can publish a newer build.
+Check `build/ready` and the package source manifest before a comparison. Another
+workstream can publish a newer build. The package includes uncommitted audio fixes.
 
 For an immediate legacy-audio comparison, use:
 
@@ -29,10 +33,16 @@ is Steam Audio. The user wants to retain it unless it cannot be made to work.
 
 ## First Tasks
 
+- [x] Reproduce the paint-cursor defect in an internal capture. Add a regression
+  check that rejects overlapping or missing frames while Steam Audio is active.
+- [x] Keep the Steam Audio paint cursor continuous. Release the device lock during
+  DSP and capture file writes.
+- [x] Add separate direct, reflection, and baked-path capture checks. Check disable,
+  enable, cache reload, save/load, and sound restart.
 - [ ] Reproduce the crackling on the user's real audio output device. Record the
   campaign, level, output rate, device, settings, and whether probes were baked.
-- [ ] Compare Steam Audio enabled and disabled at the same location. Also compare
-  direct processing alone with reflections and pathing enabled separately.
+- [ ] Listen to Steam Audio enabled and disabled at the same location. Compare
+  direct processing, reflections, and pathing separately.
 - [ ] Determine whether the corruption is present in an internal WAV capture,
   in device-loopback audio, or in both. Internal captures bypass the SDL device
   consumer and cannot prove that device playback is correct.
@@ -41,17 +51,15 @@ is Steam Audio. The user wants to retain it unless it cannot be made to work.
   changes, and reflection-result changes.
 - [ ] Check sample continuity at every 128-sample boundary, loop boundary, channel
   reuse, and transition between legacy and Steam Audio processing.
-- [ ] Add a focused regression check for the identified cause. Validate actual
-  playback before increasing effect levels or adding features.
 
 ## Debugging Hypotheses
 
-The following are investigation targets, not confirmed causes:
+The following items separate confirmed defects from remaining investigation:
 
-1. **Mixer and device timing.** `S_PaintChannels` now uses complete 128-sample
-   blocks while Steam Audio is active. It rounds the requested write window down
-   to a complete block. Check this against `s_paintedtime`, the DMA ring, device
-   callback sizes, channel start times, and the existing `s_mixahead` setting.
+1. **Mixer and device timing.** Paint-cursor overlap was confirmed and fixed.
+   `S_PaintChannels` uses complete 128-sample blocks. It rounds the requested write
+   window down to a complete block. Check device callback timing and underruns on
+   the desktop. A callback interval is not a measurement of a driver underrun.
 2. **Channel identity and DSP resets.** Legacy loop channels are cleared and
    allocated again each frame. Steam Audio keeps filter and convolution state
    by channel slot. Check resets, slot reassignment, and transitions between
@@ -108,6 +116,7 @@ classification rules during channel-reuse investigation.
 | `s_steamReverb` | `0.2`; reflection and reverb gain |
 | `s_steamCache` | `1`; reload the level after changing this for a cache comparison |
 | `s_steam_status` | Scene, source, probe, filter, and timing information |
+| `s_steam_status reset` | Clear mixer and device timing counters before a comparison |
 | `s_steam_bake` | Bake paths and room responses for the current level |
 | `s_steam_record 3` | Record three seconds of the final paint-buffer mix to a local WAV |
 | `s_steam_emit sound/weapons/blaster/fire.wav` | Emit a test world sound at the listener; optional `x y z` arguments set its position |
@@ -116,6 +125,12 @@ Captures are under `captures` in the current campaign profile. Acoustic caches
 are under `cache/steamaudio`. The current cache format version is 3. Cache names
 include the BSP checksum and SDK version. Keep generated game audio and acoustic
 data local.
+
+Capture output reports `overlap_frames` and `gap_frames`. Both must be zero in
+a steady Steam Audio capture. Legacy mixing can report overlaps because it
+repaints the mix-ahead window. The SDK's default HRTF does not initialize at
+22050 Hz. This rate now selects legacy audio before SDK initialization. Use
+`s_khz 44` and `snd_restart` for Steam Audio.
 
 Baking is explicit and pauses the game. It creates up to 256 probes with moving
 barriers treated as open. Runtime path validation applies current barriers.
@@ -134,6 +149,33 @@ Direct processing and live reflections work before a bake.
 **These checks did not establish clean audible playback.** They did not measure
 sample discontinuities, device underruns, or crackle. The user's playback report
 takes precedence over those earlier pass results.
+
+The timing-fix checks passed in JA `t1_sour` and JO `kejim_base` at 44100 Hz,
+with baked probes. All Steam Audio captures had zero overlapping or missing
+frames. The JO check also used a 256-frame device buffer. These checks used SDL's
+dummy device. This session has no PCM output device and cannot connect to the
+desktop audio server. Internal captures do not establish clean device playback.
+
+Final artifacts:
+
+| Check | Result directory under `build/smoke` |
+| --- | --- |
+| Regression before the fix | `steam-audio.qigruw98` |
+| JA, 44100 Hz, baked probes | `steam-audio.lx9s5753` |
+| JO, 44100 Hz, 256-frame device buffer, baked probes | `steam-audio.ox3dynuq` |
+| JA, 22050 Hz legacy fallback and restart | `steam-audio.q6mit6rw` |
+
+The separate effect checks reported no mixer underruns and no clipped samples.
+Peak device-lock times were 1–16 microseconds. Peak reflection-mode mixer times
+were 19.4 ms in JA and 15.1 ms in JO. These are headless test measurements,
+not desktop performance limits. JA reported an underrun during the blocking
+probe bake, before the steady capture checks. Many-source stress testing and
+source-reuse waveform checks remain open.
+
+The SDK supplies synchronization for the opaque reflection impulse-response
+handle. The integration reads simulation outputs after worker completion and
+copies path coefficients. See the
+[SDK maintainer's explanation](https://github.com/ValveSoftware/steam-audio/issues/256#issuecomment-1522219723).
 
 Relevant artifacts from implementation:
 

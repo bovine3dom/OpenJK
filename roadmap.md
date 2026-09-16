@@ -367,6 +367,9 @@ constraints, but it does not remove the need to test campaign progression.
 - Thin-window rendering and automatic SP reflection probes are implemented for JA and JO. See
   [glass presentation](docs/glass-presentation.md) for controls, coverage, research,
   and tower capture results. Breakable-glass cues are deferred. Visual approval is open.
+- Steam Audio provides transmission through walls, reflections, and baked paths.
+  The paint-cursor and device-lock fixes need a desktop listening check before
+  further tuning. See [Audio Handoff](audio_todo.md).
 
 
 

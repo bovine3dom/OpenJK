@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "snd_local.h"
 #include "snd_steam.h"
+#include "sdl/sdl_sound.h"
 
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
 int 	*snd_p, snd_linear_count, snd_vol;
@@ -394,7 +395,10 @@ void S_PaintChannels( int endtime ) {
 */
 		// transfer out according to DMA format
 		S_SteamEndBlock(paintbuffer,end-s_paintedtime);
+		// Only the DMA copy needs the device lock, not DSP or capture file writes.
+		SNDDMA_BeginPainting();
 		S_TransferPaintBuffer( end );
+		SNDDMA_Submit();
 		s_paintedtime = end;
 	}
 }

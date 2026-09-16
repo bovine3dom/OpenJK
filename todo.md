@@ -234,6 +234,15 @@ raster-only Rend2 port now select it by default.
 - [ ] Run direct v1-to-v4, v2-to-v4, and v3-to-v4 checks with the current package in both renderers after save-layout changes.
 - [ ] Qualify additional historical/modded save layouts separately; do not promise compatibility from the version number alone.
 
+## Audio
+
+- [x] Fix overlapping Steam Audio blocks and remove DSP from the SDL device lock.
+- [x] Add capture continuity checks, separate effect checks, and peak timing counters.
+- [ ] Check the timing fix on the desktop output device. Compare internal and
+  device-loopback recordings if crackling continues.
+- [ ] After clean playback is confirmed, check many-source cost, tune Kejim,
+  Artus Mine, and Yavin, and review sparse probes. See [Audio Handoff](audio_todo.md).
+
 ## Rend2 Port
 
 - [x] Replace the compile-only `BuildSPRend2Port` option with `BuildSPRend2`. Link and install `rdsp-rend2_x86_64.so` with shared MP raster code and one shader generator.

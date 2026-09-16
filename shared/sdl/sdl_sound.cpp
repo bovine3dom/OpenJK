@@ -24,6 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include <stdio.h>
 
 #include <SDL.h>
+#include "sdl_sound.h"
 
 #include "qcommon/q_shared.h"
 #include "client/client.h"
@@ -42,6 +43,18 @@ cvar_t *s_sdlMixSamps;
 /* The audio callback. All the magic happens here. */
 static int dmapos = 0;
 static int dmasize = 0;
+static AudioDeviceTiming audioTiming;
+static Uint64 lastCallback=0,lockStart=0;
+
+AudioDeviceTiming SNDDMA_GetAudioTiming(bool reset)
+{
+	if (!snd_inited) return {};
+	SDL_LockAudioDevice(dev);
+	if (reset) { audioTiming={}; lastCallback=0; }
+	const auto result=audioTiming;
+	SDL_UnlockAudioDevice(dev);
+	return result;
+}
 
 /*
 ===============
@@ -50,6 +63,13 @@ SNDDMA_AudioCallback
 */
 static void SNDDMA_AudioCallback(void *userdata, Uint8 *stream, int len)
 {
+	const Uint64 now=SDL_GetPerformanceCounter();
+	if (lastCallback) {
+		const int gap=int((now-lastCallback)*1000000/SDL_GetPerformanceFrequency());
+		if (gap>audioTiming.callbackPeakUs) audioTiming.callbackPeakUs=gap;
+	}
+	lastCallback=now;
+	++audioTiming.callbacks;
 	int pos = (dmapos * (dma.samplebits/8));
 	if (pos >= dmasize)
 		dmapos = pos = 0;
@@ -240,6 +260,7 @@ qboolean SNDDMA_Init(int sampleFrequencyInKHz)
 	}
 
 	dmapos = 0;
+	audioTiming={}; lastCallback=lockStart=0;
 	dma.samplebits = obtained.format & 0xFF;  // first byte of format is bits.
 	dma.channels = obtained.channels;
 	dma.samples = tmp;
@@ -293,6 +314,8 @@ Send sound to device if buffer isn't really the dma buffer
 */
 void SNDDMA_Submit(void)
 {
+	const int elapsed=int((SDL_GetPerformanceCounter()-lockStart)*1000000/SDL_GetPerformanceFrequency());
+	if (elapsed>audioTiming.lockPeakUs) audioTiming.lockPeakUs=elapsed;
 	SDL_UnlockAudioDevice(dev);
 }
 
@@ -304,6 +327,7 @@ SNDDMA_BeginPainting
 void SNDDMA_BeginPainting (void)
 {
 	SDL_LockAudioDevice(dev);
+	lockStart=SDL_GetPerformanceCounter();
 }
 
 #ifdef USE_OPENAL

@@ -2771,6 +2771,14 @@ void S_GetSoundtime(void)
 
 	s_soundtime = buffers*fullsamples + samplepos/dma.channels;
 
+	// Stateful effects must consume each sample once. Repainting the mix-ahead
+	// window advances their history over audio that the device has not played.
+	if ( S_SteamActive() ) {
+		if ( s_paintedtime < s_soundtime )
+			s_paintedtime = s_soundtime;
+		return;
+	}
+
 #if 0
 // check to make sure that we haven't overshot
 	if (s_paintedtime < s_soundtime)
@@ -3050,7 +3058,10 @@ void S_Update_(void) {
 	{
 #endif
 		// Updates s_soundtime
+		S_SteamBeginMix();
+		SNDDMA_BeginPainting();
 		S_GetSoundtime();
+		SNDDMA_Submit();
 
 		const int s_oldpaintedtime = s_paintedtime;
 
@@ -3071,11 +3082,9 @@ void S_Update_(void) {
 			endtime = s_soundtime + samps;
 
 
-		SNDDMA_BeginPainting ();
-
 		S_PaintChannels (endtime);
 
-		SNDDMA_Submit ();
+		S_SteamEndMix(s_soundtime);
 
 		S_DoLipSynchs( s_oldpaintedtime );
 #ifdef USE_OPENAL

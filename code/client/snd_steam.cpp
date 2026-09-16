@@ -4,9 +4,11 @@
 #include "snd_steam.h"
 #ifdef USE_STEAM_AUDIO
 #include "sound/steam_audio.h"
+#include "sdl/sdl_sound.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -26,6 +28,9 @@ IPLVector3 mapLow={},mapHigh={};
 std::map<int,int> objects;
 std::vector<short> recording;
 int recordFrames=0;
+int recordEnd=0,recordOverlaps=0,recordGaps=0;
+std::chrono::steady_clock::time_point mixStart;
+int mixPeakUs=0,mixCalls=0,mixEnd=0,underrunFrames=0;
 struct Slot {
 	sfx_t *sound=nullptr;
 	int entity=0,start=0;
@@ -157,9 +162,13 @@ bool LoadMap() {
 	probeCache=engine->LoadProbes(ReadCache("probes")); return true;
 }
 void Status() {
+	const bool reset=Cmd_Argc()==2 && !Q_stricmp(Cmd_Argv(1),"reset");
+	if(reset) mixPeakUs=mixCalls=underrunFrames=0;
+	const auto device=SNDDMA_GetAudioTiming(reset);
 	const auto info=engine ? engine->Status() : SteamSound::Info{};
 	Com_Printf("steam_audio active=%d map=%s triangles=%d movers=%d sources=%d reflections=%d probes=%d scene_cache=%d probe_cache=%d occlusion=%.3f transmission=%.3f rt60=%.3f simulation_ms=%d reflection_ms=%d mixed_blocks=%d\n",
 		S_SteamActive(),loadedMap.c_str(),info.triangles,int(objects.size()),info.active,info.reflected,info.probes,sceneCache,probeCache,info.occlusion,info.transmission,info.reverb,simulationMs,info.reflectionMs,mixedBlocks);
+	Com_Printf("steam_audio timing rate=%d mix_peak_us=%d mix_calls=%d underrun_frames=%d callbacks=%u callback_peak_us=%d lock_peak_us=%d\n",dma.speed,mixPeakUs,mixCalls,underrunFrames,device.callbacks,device.callbackPeakUs,device.lockPeakUs);
 }
 void Bake() {
 	if(!S_SteamActive()) { Com_Printf("Steam Audio: load a level with sound enabled before baking.\n"); return; }
@@ -178,11 +187,17 @@ void Record() {
 	const float seconds=Cmd_Argc()==2 ? atof(Cmd_Argv(1)) : 3;
 	if(!std::isfinite(seconds) || seconds<1 || seconds>10 || dma.speed<=0) { Com_Printf("s_steam_record seconds (1 to 10)\n"); return; }
 	recording.clear(); recordFrames=int(seconds*dma.speed); recording.reserve(recordFrames*2);
+	recordEnd=-1; recordOverlaps=recordGaps=0;
 	Com_Printf("Steam Audio: recording %.1f seconds of the final mix.\n",seconds);
 }
 void Capture(portable_samplepair_t *output,int count) {
 	if(recordFrames<=0) return;
+	if(recordEnd>=0) {
+		recordOverlaps+=std::max(0,recordEnd-s_paintedtime);
+		recordGaps+=std::max(0,s_paintedtime-recordEnd);
+	}
 	count=std::min(count,recordFrames);
+	recordEnd=s_paintedtime+count;
 	for(int i=0;i<count;++i) { recording.push_back(short(Com_Clampi(-32768,32767,output[i].left>>8))); recording.push_back(short(Com_Clampi(-32768,32767,output[i].right>>8))); }
 	recordFrames-=count; if(recordFrames) return;
 	std::vector<byte> wav(44+recording.size()*2);
@@ -192,6 +207,7 @@ void Capture(portable_samplepair_t *output,int count) {
 	memcpy(wav.data()+44,recording.data(),recording.size()*2);
 	const auto name=std::string(va("captures/steam-audio-%d.wav",Sys_Milliseconds())); FS_WriteFile(name.c_str(),wav.data(),int(wav.size())); recording.clear();
 	Com_Printf("Steam Audio capture: %s\n",name.c_str());
+	Com_Printf("Steam Audio capture continuity: overlap_frames=%d gap_frames=%d\n",recordOverlaps,recordGaps);
 }
 }
 void S_SteamInit() {
@@ -202,12 +218,12 @@ void S_SteamInit() {
 	cache=Cvar_Get("s_steamCache","1",CVAR_ARCHIVE); Cvar_CheckRange(cache,0,1,qtrue);
 	Cmd_AddCommand("s_steam_status",Status); Cmd_AddCommand("s_steam_bake",Bake); Cmd_AddCommand("s_steam_emit",Emit); Cmd_AddCommand("s_steam_record",Record);
 }
-void S_SteamClear() { engine.reset(); loadedMap.clear(); objects.clear(); slots={}; lastUpdate=lastReflection=mixedBlocks=0; sceneCache=probeCache=false; }
+void S_SteamClear() { engine.reset(); loadedMap.clear(); objects.clear(); slots={}; lastUpdate=lastReflection=mixedBlocks=0; mixPeakUs=mixCalls=mixEnd=underrunFrames=0; sceneCache=probeCache=false; }
 void S_SteamShutdown() { S_SteamClear(); recording.clear(); recordFrames=0; Cmd_RemoveCommand("s_steam_status"); Cmd_RemoveCommand("s_steam_bake"); Cmd_RemoveCommand("s_steam_emit"); Cmd_RemoveCommand("s_steam_record"); }
 bool S_SteamActive() { return enabled && enabled->integer && engine && engine->Ready(); }
 void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool inWater) {
 	(void)listener; (void)inWater;
-	if(!enabled || !enabled->integer || cls.state!=CA_ACTIVE || !cl.mapname[0] || dma.speed<22050) { if(!loadedMap.empty()) S_SteamClear(); return; }
+	if(!enabled || !enabled->integer || cls.state!=CA_ACTIVE || !cl.mapname[0] || (dma.speed!=44100 && dma.speed!=48000)) { if(!loadedMap.empty()) S_SteamClear(); return; }
 	if(loadedMap!=cl.mapname || serverId!=cl.serverId) {
 		S_SteamClear(); loadedMap=cl.mapname; serverId=cl.serverId;
 		engine.reset(new SteamSound::Engine(dma.speed));
@@ -246,6 +262,16 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 	const bool reflect=now-lastReflection>=500 || (changed && now-lastReflection>=100); if(reflect) lastReflection=now;
 	engine->Update(voices,space,reflections->integer,pathing->integer,reflect);
 	simulationMs=Sys_Milliseconds()-now;
+}
+void S_SteamBeginMix() {
+	mixStart=std::chrono::steady_clock::now();
+}
+void S_SteamEndMix(int soundtime) {
+	if(!S_SteamActive()) { mixEnd=0; return; }
+	const int elapsed=int(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-mixStart).count());
+	mixPeakUs=std::max(mixPeakUs,elapsed); ++mixCalls;
+	if(mixEnd) underrunFrames+=std::max(0,soundtime-mixEnd);
+	mixEnd=s_paintedtime;
 }
 void S_SteamBeginBlock() {
 	if(!S_SteamActive()) return;

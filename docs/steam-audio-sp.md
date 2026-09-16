@@ -45,6 +45,18 @@ Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
 game-thread work. `reflection_ms` reports the most recent background simulation.
 
+Use `s_steam_status reset` after the level has loaded to clear timing counters.
+The next status report includes:
+
+- `mix_peak_us`: the longest mixer update, including lock waits and capture writes.
+- `lock_peak_us`: the longest time that the mixer held the SDL device lock.
+- `callback_peak_us`: the longest interval between SDL callbacks. Pauses and
+  operating-system scheduling can increase this interval.
+- `underrun_frames`: frames by which the device cursor passed the last completed
+  mix. This counter cannot detect multiple complete DMA-buffer wraps.
+
+These are mixer and callback measurements. They do not measure driver underruns.
+
 ## Local Acoustic Caches
 
 The first use of a level builds its acoustic scene from the installed BSP.
@@ -85,6 +97,9 @@ The first command records three seconds to a WAV file under `captures` in the
 current profile. The second emits a world sound at the listener. Supply
 `x y z` after the sound name to place it elsewhere. Repeat with `s_steamAudio 0`
 for a legacy reference. Captures contain local game audio and stay in the profile.
+Capture output also reports overlapping and missing frames. Both counts must be
+zero during steady Steam Audio playback. Legacy captures can contain overlaps
+because the legacy mixer repaints its mix-ahead window.
 
 Useful listening cases are a closed door in Kejim, a mine shaft on Artus,
 and a small passage connected to a large chamber on Yavin. Check both stationary
@@ -92,15 +107,20 @@ and moving listeners. Check speech intelligibility as well as environmental soun
 
 ## Runtime and Build Details
 
-The mixer processes 128-sample blocks. A background worker runs scene updates
+The mixer processes each 128-sample block once. It keeps the paint cursor at the
+end of the previous block instead of repainting the mix-ahead window. The SDL
+device lock covers DMA-buffer copies. DSP and capture file writes run outside
+that lock. A background worker runs scene updates
 and direct simulation, normally at 20 Hz. It runs reflections at 2 Hz, with
 faster updates for changing sources. Steam Audio uses its Embree CPU backend
 when available. Geometry and simulation inputs are held stable while the worker
 runs. The audio mixer continues with the previous
 completed parameters. Sound stop, restart, and level changes release the scene.
 
-The initial packaged backend supports Linux x86-64 at output rates of at least
-22050 Hz. Other configurations retain legacy audio. Configure with
+The initial packaged backend supports Linux x86-64 at 44100 Hz. The SDK also
+supports 48000 Hz, but the current SDL rate selector does not select that rate.
+The default HRTF does not initialize at 22050 Hz. Lower output rates use legacy
+audio. Use `s_khz 44` and `snd_restart` to select Steam Audio. Configure with
 `-DBuildSteamAudio=OFF` to omit the SDK. The default supported build downloads
 the official SDK archive with a pinned SHA-256 hash and installs `libphonon.so`
 beside the engine. License files are under `licenses/steamaudio`.
@@ -120,13 +140,20 @@ c++ -std=c++11 -pthread -I shared -I build/sp/cache/steamaudio-src/include \
   -o build/steam-audio-test
 build/steam-audio-test
 python3 scripts/test-steam-audio-sp.py --bake
-python3 scripts/test-steam-audio-sp.py --campaign jo --bake
+python3 scripts/test-steam-audio-sp.py --campaign jo --bake --device-samples 256
+python3 scripts/test-steam-audio-sp.py --rate 22
 ```
 
 The standalone check measures transmission through a moving barrier, reflection
 tails, paths around a partition, and probe serialization. The game check uses
-a dummy audio device. It checks recorded PCM, cache reload, save/load, feature
-disable, and sound restart. It does not replace listening checks.
+a dummy audio device by default. It checks capture continuity, separate effect
+modes, recorded PCM, cache reload, save/load, feature disable and enable, and
+sound restart. Results include timing counters and clipped-sample counts. Use
+`--audio-driver pulseaudio` on a desktop with that SDL driver for a device test.
+The game window remains hidden. WAV captures still come from the internal mixer;
+they are not device-loopback recordings. These tests do not replace listening
+checks. Compare the internal capture with a desktop loopback recording if
+crackling continues.
 
 References: [Steam Audio SDK](https://valvesoftware.github.io/steam-audio/doc/capi/index.html),
 [integration guide](https://valvesoftware.github.io/steam-audio/doc/capi/integration.html),

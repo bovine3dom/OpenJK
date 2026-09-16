@@ -33,3 +33,10 @@ void	SNDDMA_Shutdown(void);
 void	SNDDMA_BeginPainting (void);
 
 void	SNDDMA_Submit(void);
+
+struct AudioDeviceTiming {
+	unsigned callbacks=0;
+	int callbackPeakUs=0,lockPeakUs=0;
+};
+
+AudioDeviceTiming SNDDMA_GetAudioTiming(bool reset);
