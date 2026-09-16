@@ -2126,6 +2126,107 @@ static bool RB_CompareView()
 		!r_smaaDebug->integer && RB_FullMainView();
 }
 
+#ifdef REND2_SP
+static bool RB_CapsuleModel(const refEntity_t &e)
+{
+	if (e.ghoul2 && e.ghoul2->size() && (*e.ghoul2)[0].mModelindex >= 0)
+	{
+		const char *name = (*e.ghoul2)[0].mFileName;
+		if (Q_strncmp(name, "models/players/", 15)) return false;
+		// These are vehicles, scenery, or a spectral projection, not body casters.
+		for (const char *excluded : {"rocks/", "lambdashuttle/", "tie_", "x-wing/", "z-95/", "swoop/", "marka_ragnos/"})
+			if (!Q_strncmp(name + 15, excluded, strlen(excluded))) return false;
+		return true;
+	}
+	const model_t *model = R_GetModelByHandle(e.hModel);
+	return model && (!Q_stricmp(model->name, "models/players/mouse/lower.md3") ||
+		!Q_stricmp(model->name, "models/players/remote_sp/lower.md3") ||
+		!Q_stricmp(model->name, "models/items/remote.md3") ||
+		!Q_strncmp(model->name, "models/players/droids/", 22));
+}
+
+static int RB_RigidCapsule(const refEntity_t &e, vec4_t *a, vec4_t *b)
+{
+	const model_t *model = R_GetModelByHandle(e.hModel);
+	if (!model || model->type != MOD_MESH || !model->data.mdv[0] || !model->data.mdv[0]->numFrames) return 0;
+	const auto *mesh = model->data.mdv[0];
+	vec3_t mins, maxs, center, half;
+	const int frame = Com_Clampi(0, mesh->numFrames - 1, e.frame);
+	const int old = Com_Clampi(0, mesh->numFrames - 1, e.oldframe);
+	int longest = 0;
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		mins[axis] = MIN(mesh->frames[frame].bounds[0][axis], mesh->frames[old].bounds[0][axis]);
+		maxs[axis] = MAX(mesh->frames[frame].bounds[1][axis], mesh->frames[old].bounds[1][axis]);
+		center[axis] = (mins[axis] + maxs[axis]) * 0.5f;
+		half[axis] = (maxs[axis] - mins[axis]) * 0.5f;
+		if (half[axis] > half[longest]) longest = axis;
+	}
+	const float radius = sqrtf(half[(longest+1)%3] * half[(longest+2)%3]);
+	if (radius < 0.5f) return 0;
+	const float length = MAX(0.0f, half[longest] - radius);
+	VectorCopy(e.origin, a[0]);
+	VectorCopy(e.origin, b[0]);
+	float scale = 0;
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		VectorMA(a[0], center[axis] - (axis == longest ? length : 0), e.axis[axis], a[0]);
+		VectorMA(b[0], center[axis] + (axis == longest ? length : 0), e.axis[axis], b[0]);
+		scale = MAX(scale, VectorLength(e.axis[axis]));
+	}
+	a[0][3] = radius * scale * r_capsuleShadowRadius->value;
+	return 1;
+}
+
+static int RB_HumanoidCapsules(const refEntity_t &e, CGhoul2Info_v &g2,
+	const model_t *model, const int *active, vec4_t *a, vec4_t *b)
+{
+	static const char *bones[] = {"pelvis", "thoracic", "cranium", "lfemurYZ", "ltibia", "ltalus",
+		"rfemurYZ", "rtibia", "rtalus", "lhumerus", "lradius", "lhand", "rhumerus", "rradius", "rhand"};
+	static const int links[][2] = {{0,1},{1,2},{3,4},{4,5},{6,7},{7,8},{9,10},{10,11},{12,13},{13,14},{11,11},{14,14}};
+	static const float radii[] = {7,5,4,3,4,3,3,2.5f,3,2.5f,2.5f,2.5f};
+	static const char *parts[] = {"torso", "head", "l_leg", "l_leg", "r_leg", "r_leg",
+		"l_arm", "l_arm", "r_arm", "r_arm", "l_hand", "r_hand"};
+	const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(model->mdxm + 1);
+	bool visible[12] = {}, hips = false;
+	for (int surface = 0; surface < model->mdxm->numSurfaces; ++surface)
+	{
+		if (!active[surface] || !static_cast<const mdxmSurface_t *>(G2_FindSurface(model, surface, 0))->numTriangles) continue;
+		const auto *info = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[surface]);
+		if (strstr(info->name, "_cap_")) continue;
+		hips |= !Q_strncmp(info->name, "hips", 4);
+		for (int link = 0; link < 12; ++link)
+			visible[link] |= !Q_strncmp(info->name, parts[link], strlen(parts[link]));
+	}
+	vec3_t points[15];
+	bool valid[15] = {};
+	for (int i = 0; i < 15; ++i)
+	{
+		const int bolt = G2API_AddBolt(&g2[0], bones[i]);
+		if (bolt < 0) continue;
+		mdxaBone_t matrix;
+		valid[i] = G2API_GetBoltMatrix(g2, 0, bolt, &matrix, e.angles, e.origin,
+			backEnd.refdef.time, nullptr, e.modelScale) != qfalse;
+		G2API_RemoveBolt(&g2[0], bolt);
+		if (valid[i])
+			for (int axis = 0; axis < 3; ++axis) points[i][axis] = matrix.matrix[axis][3];
+	}
+	float scale = MAX(fabsf(e.modelScale[0]), MAX(fabsf(e.modelScale[1]), fabsf(e.modelScale[2])));
+	if (!scale) scale = 1;
+	scale *= r_capsuleShadowRadius->value;
+	int count = 0;
+	for (int link = 0; link < 12; ++link)
+		if ((visible[link] || (link == 0 && hips)) && valid[links[link][0]] && valid[links[link][1]])
+		{
+			VectorCopy(points[link == 1 && !visible[0] ? 2 : links[link][0]], a[count]);
+			a[count][3] = radii[link] * scale;
+			VectorCopy(points[link == 0 && !visible[0] ? 0 : links[link][1]], b[count]);
+			++count;
+		}
+	return count;
+}
+#endif
+
 static void RB_RenderCapsules()
 {
 #ifdef REND2_SP
@@ -2135,12 +2236,6 @@ static void RB_RenderCapsules()
 	int prepareMsec = 0;
 	const bool report = r_capsuleShadowDebug->integer != 0;
 	if (report) ri.Cvar_Set("r_capsuleShadowDebug", "0");
-	static const char *bones[] = {"pelvis", "thoracic", "cranium", "lfemurYZ", "ltibia", "ltalus",
-		"rfemurYZ", "rtibia", "rtalus", "lhumerus", "lradius", "lhand", "rhumerus", "rradius", "rhand"};
-	static const int links[][2] = {{0,1},{1,2},{3,4},{4,5},{6,7},{7,8},{9,10},{10,11},{12,13},{13,14},{11,11},{14,14}};
-	static const float radii[] = {7,5,4,3,4,3,3,2.5f,3,2.5f,2.5f,2.5f};
-	static const char *parts[] = {"torso", "head", "l_leg", "l_leg", "r_leg", "r_leg",
-		"l_arm", "l_arm", "r_arm", "r_arm", "l_hand", "r_hand"};
 	const auto &view = backEnd.viewParms;
 	FBO_Bind(tr.screenSsaoFbo);
 	qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
@@ -2157,83 +2252,70 @@ static void RB_RenderCapsules()
 	const vec4_t strength = {r_capsuleShadowStrength->value, r_capsuleShadowSoftness->value,
 		r_capsuleShadowRange->value, float(r_capsuleShadowWalls->integer)};
 	GLSL_SetUniformVec4(&tr.capsuleShader, UNIFORM_SSSPARAMS, strength);
-	std::vector<const refEntity_t *> candidates;
+	std::vector<const trRefEntity_t *> candidates;
 	for (int i = 0; i < backEnd.refdef.num_entities; ++i)
 	{
 		const refEntity_t &e = backEnd.refdef.entities[i].e;
-		if (e.reType == RT_MODEL && e.ghoul2 && e.ghoul2->size() && (*e.ghoul2)[0].mModelindex >= 0 &&
+		if (e.reType == RT_MODEL &&
 			!(e.renderfx & (RF_NOSHADOW | RF_DEPTHHACK | RF_FORCE_ENT_ALPHA | RF_ALPHA_FADE | RF_DISTORTION | RF_DISINTEGRATE1 | RF_DISINTEGRATE2)) &&
-			!Q_strncmp((*e.ghoul2)[0].mFileName, "models/players/", 15) && Distance(e.origin, view.ori.origin) <= 1024)
-			candidates.push_back(&e);
+			Distance(e.origin, view.ori.origin) <= 1024 && RB_CapsuleModel(e))
+			candidates.push_back(&backEnd.refdef.entities[i]);
 	}
-	std::sort(candidates.begin(), candidates.end(), [&view](const refEntity_t *a, const refEntity_t *b) {
-		return Distance(a->origin, view.ori.origin) < Distance(b->origin, view.ori.origin);
+	std::sort(candidates.begin(), candidates.end(), [&view](const trRefEntity_t *a, const trRefEntity_t *b) {
+		return DistanceSquared(a->e.origin, view.ori.origin) < DistanceSquared(b->e.origin, view.ori.origin);
 	});
 	int actors = 0;
-	for (const refEntity_t *candidate : candidates)
+	for (const trRefEntity_t *candidate : candidates)
 	{
 		if (actors >= 8) break;
 		const int prepareStart = timed ? ri.Milliseconds() : 0;
-		const refEntity_t &e = *candidate;
-		CGhoul2Info_v &g2 = *e.ghoul2;
-		const char *gla = G2API_GetGLAName(&g2[0]);
-		if (!gla || !strstr(gla, "_humanoid")) continue;
-		// A detached limb retains the full skeleton. Follow the rendered surface tree.
-		const model_t *model = g2[0].currentModel;
-		if (!model || !model->mdxm) continue;
-		std::vector<int> active(model->mdxm->numSurfaces, 0);
-		G2_FindOverrideSurface(-1, g2[0].mSlist); // Initialize the per-model override lookup.
-		G2_FindRecursiveSurface(model, g2[0].mSurfaceRoot, g2[0].mSlist, active.data());
-		const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(model->mdxm + 1);
-		bool visible[12] = {}, hips = false;
-		for (int surface = 0; surface < model->mdxm->numSurfaces; ++surface)
-		{
-			if (!active[surface] || !static_cast<const mdxmSurface_t *>(G2_FindSurface(model, surface, 0))->numTriangles) continue;
-			const auto *info = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[surface]);
-			if (strstr(info->name, "_cap_")) continue;
-			hips |= !Q_strncmp(info->name, "hips", 4);
-			for (int link = 0; link < 12; ++link)
-				visible[link] |= !Q_strncmp(info->name, parts[link], strlen(parts[link]));
-		}
-		vec3_t points[15], mins, maxs;
-		bool valid[15] = {};
-		ClearBounds(mins, maxs);
-		for (int b = 0; b < 15; ++b)
-		{
-			const int bolt = G2API_AddBolt(&g2[0], bones[b]);
-			if (bolt < 0) continue;
-			mdxaBone_t matrix;
-			valid[b] = G2API_GetBoltMatrix(g2, 0, bolt, &matrix, e.angles, e.origin,
-				backEnd.refdef.time, nullptr, e.modelScale) != qfalse;
-			G2API_RemoveBolt(&g2[0], bolt);
-			if (valid[b])
-			{
-				for (int axis = 0; axis < 3; ++axis) points[b][axis] = matrix.matrix[axis][3];
-			}
-		}
+		const refEntity_t &e = candidate->e;
 		vec4_t a[12] = {}, b[12] = {};
+		vec3_t mins, maxs;
+		ClearBounds(mins, maxs);
 		int count = 0;
-		float scale = MAX(fabsf(e.modelScale[0]), MAX(fabsf(e.modelScale[1]), fabsf(e.modelScale[2])));
-		if (!scale) scale = 1;
-		scale *= r_capsuleShadowRadius->value;
-		for (int link = 0; link < 12; ++link)
-			if ((visible[link] || (link == 0 && hips)) && valid[links[link][0]] && valid[links[link][1]])
-			{
-				VectorCopy(points[link == 1 && !visible[0] ? 2 : links[link][0]], a[count]); a[count][3] = radii[link] * scale;
-				VectorCopy(points[link == 0 && !visible[0] ? 0 : links[link][1]], b[count]);
-				b[count][3] = 1.0f / MAX(DistanceSquared(a[count], b[count]), 0.001f);
-				AddPointToBounds(a[count], mins, maxs);
-				AddPointToBounds(b[count], mins, maxs);
-				++count;
-			}
-		if (!count) continue;
-		if (report)
+		if (!e.ghoul2 || !e.ghoul2->size())
 		{
-			const auto *root = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[g2[0].mSurfaceRoot]);
-			ri.Printf(PRINT_ALL, "Capsules: %s root=%s count=%d\n", g2[0].mFileName, root->name, count);
+			count = RB_RigidCapsule(e, a, b);
+			if (report && count) ri.Printf(PRINT_ALL, "Capsules: %s root=rigid count=%d\n", R_GetModelByHandle(e.hModel)->name, count);
+		}
+		else
+		{
+			CGhoul2Info_v &g2 = *e.ghoul2;
+			const char *gla = G2API_GetGLAName(&g2[0]);
+			if (!gla) continue;
+			// A detached limb retains the full skeleton. Follow the rendered surface tree.
+			const model_t *model = g2[0].currentModel;
+			if (!model || !model->mdxm) continue;
+			std::vector<int> active(model->mdxm->numSurfaces, 0);
+			G2_FindOverrideSurface(-1, g2[0].mSlist);
+			G2_FindRecursiveSurface(model, g2[0].mSurfaceRoot, g2[0].mSlist, active.data());
+			if (strstr(gla, "_humanoid"))
+				count = RB_HumanoidCapsules(e, g2, model, active.data(), a, b);
+			else
+			{
+				orientationr_t orientation;
+				R_RotateForEntity(candidate, &view, &orientation);
+				count = R_Ghoul2AutoCapsules(e, orientation.modelMatrix, active.data(), a, b);
+			}
+			if (report && count)
+			{
+				const auto *offsets = reinterpret_cast<const mdxmHierarchyOffsets_t *>(model->mdxm + 1);
+				const auto *root = reinterpret_cast<const mdxmSurfHierarchy_t *>(reinterpret_cast<const byte *>(offsets) + offsets->offsets[g2[0].mSurfaceRoot]);
+				ri.Printf(PRINT_ALL, "Capsules: %s root=%s count=%d\n", g2[0].mFileName, root->name, count);
+			}
+		}
+		if (!count) continue;
+		float maxRadius = 0;
+		for (int i = 0; i < count; ++i)
+		{
+			AddPointToBounds(a[i], mins, maxs);
+			AddPointToBounds(b[i], mins, maxs);
+			maxRadius = MAX(maxRadius, a[i][3]);
+			b[i][3] = 1.0f / MAX(DistanceSquared(a[i], b[i]), 0.001f);
 		}
 		// Bound the screen work to the actor and its short-range ground shadow.
-		const float reach = 7 * scale * (1 + strength[1]) + strength[2] * 0.6f * strength[1];
+		const float reach = maxRadius * (1 + strength[1]) + strength[2] * 0.6f * strength[1];
 		for (int axis = 0; axis < 3; ++axis)
 		{
 			const float extent = reach + ((axis == 2 || r_capsuleShadowWalls->integer) ? strength[2] : 0);

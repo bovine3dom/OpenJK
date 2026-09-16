@@ -722,7 +722,7 @@ static void MemoryCommand( void )
 			VectorClear( actor->client->ps.moveDir );
 			memset( &actor->NPC->last_ucmd, 0, sizeof(actor->NPC->last_ucmd) );
 		}
-		else if ( !Q_stricmp(action, "nearshot") || !Q_stricmp(action, "friendlyshot") || !Q_stricmp(action, "farshot")
+		else if ( !Q_stricmp(action, "nearshot") || !Q_stricmp(action, "hitshot") || !Q_stricmp(action, "friendlyshot") || !Q_stricmp(action, "farshot")
 			|| !Q_stricmp(action, "peekshot") || !Q_stricmp(action, "shortshot") || !Q_stricmp(action, "wideshot")
 			|| !Q_stricmp(action, "wallshot") || !Q_stricmp(action, "sideshot") )
 		{
@@ -735,7 +735,7 @@ static void MemoryCommand( void )
 			}
 			vec3_t origin, direction = {0, 1, 0};
 			VectorCopy( actor->currentOrigin, origin );
-			origin[0] += !Q_stricmp(action, "farshot") ? 160 : 48;
+			origin[0] += !Q_stricmp(action, "hitshot") ? 0 : !Q_stricmp(action, "farshot") ? 160 : 48;
 			origin[1] -= 80;
 			origin[2] += 16;
 			if ( !Q_stricmp(action, "wideshot") || !Q_stricmp(action, "sideshot") )
@@ -774,6 +774,7 @@ static void MemoryCommand( void )
 			}
 			int life = !Q_stricmp(action, "shortshot") || !Q_stricmp(action, "wallshot")
 				|| !Q_stricmp(action, "wideshot") || !Q_stricmp(action, "sideshot") ? 100 : 200;
+			if ( !Q_stricmp(action, "hitshot") ) life = 1000;
 			gentity_t *bolt = CreateMissile( origin, direction, 1000, life,
 				!Q_stricmp(action, "friendlyshot") ? actor : actor->enemy );
 			bolt->s.weapon = WP_BLASTER;

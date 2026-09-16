@@ -41,7 +41,10 @@ def main():
     parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
     parser.add_argument("--geometry-validate", action="store_true")
+    parser.add_argument("--gpu-skinning", action="store_true")
     args = parser.parse_args()
+    if args.geometry_validate and args.gpu_skinning:
+        parser.error("Choose CPU cache validation or GPU skinning validation")
     if not (64 <= args.width <= 16384 and 64 <= args.height <= 16384):
         parser.error("Invalid dimensions")
     if not 20 <= args.fov <= 140:
@@ -63,7 +66,10 @@ def main():
                         r_sampleShading=args.sample_shading, r_ext_multisample=msaa,
                         r_normalMapping=1, r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0,
                         r_g2GeometryValidate=int(args.geometry_validate), com_maxfps=10,
+                        r_g2GpuValidate=int(args.gpu_skinning),
                         r_mode=-1, r_customwidth=args.width, r_customheight=args.height, cg_fov=args.fov)
+        if args.gpu_skinning or args.geometry_validate:
+            settings["r_g2GpuSkinning"] = int(args.gpu_skinning)
         # Keep renderer settings out of the bounded startup command list.
         (profile / "openjk_sp.cfg").write_text("".join(f'set {name} "{value}"\n' for name, value in settings.items()))
         (profile / "autoexec_sp.cfg").write_text("// Controlled weapon AO test.\n")
@@ -82,6 +88,8 @@ def main():
         with log.open("w") as stream:
             subprocess.run(command, env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
         text = log.read_text(errors="replace")
+        if args.gpu_skinning:
+            check("GPU positions", bool(re.search(r"Ghoul2 GPU validated: vertices=[1-9]\d*", text)), log)
         if args.geometry_validate:
             check("geometry reference", bool(re.search(r"Ghoul2 cache validated: vertices=[1-9]\d* tangents=[1-9]\d*", text)), log)
         check("renderer identity", "----- rdsp-rend2 -----" in text and

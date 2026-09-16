@@ -103,7 +103,24 @@ the existing character-shadow modes.
 This is a bounded contact-shadow approximation, not a replacement for all direct
 light shadows. It does not trace occluders between the capsule and receiver.
 Check walls between characters and receivers, unusual poses, and dismemberment.
-Non-humanoid rigs and weapon models are excluded. Physical animation remains
+Non-standard character rigs now use bone-local proxies fitted from visible mesh
+vertices. This covers protocol and astromech droids, Gonk and combat droids,
+creatures, and walkers without assuming humanoid bone names. Fits are cached per
+surface and skeleton. At most twelve proxies are selected per caster. Hidden
+surfaces, detached roots, helper triangles, cut caps, and shield geometry are
+handled separately so a detached part does not cast a full-body shadow.
+
+Rigid mouse and remote droids, seekers, and droid debris use model-bound proxies.
+Spaceships, scenery, spectral projections, and weapon models are excluded.
+The eight-caster and 1024-unit limits remain. Screen bounds now include the
+selected proxies' actual radii, including large creatures.
+
+`python3 scripts/test-capsule-npcs.py` checks twenty stock droid, creature, and
+walker models. `--msaa 4 --walls 1` checks wall occlusion with MSAA. Both passed,
+including visible droid occlusion, a detached protocol hand, and a scenery
+exclusion. These are approximate local shadows, not a full light-shadow system.
+
+Physical animation remains
 deferred in `animation_todo.md`.
 
 ## Humanoid Skin Eligibility and Diffusion

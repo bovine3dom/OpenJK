@@ -16,9 +16,12 @@ def main():
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=1)
     parser.add_argument("--buffer-storage", action="store_true")
     parser.add_argument("--geometry-validate", action="store_true")
+    parser.add_argument("--gpu-skinning", action="store_true", help="Validate GPU positions through restart, load, and map change")
     args = parser.parse_args()
     package = args.package.resolve()
-    fixture_name = "rend2-geometry-validate.cfg" if args.geometry_validate else "rend2-smoke.cfg"
+    if args.geometry_validate and args.gpu_skinning:
+        parser.error("Choose CPU cache validation or GPU skinning validation")
+    fixture_name = "rend2-gpu-validate.cfg" if args.gpu_skinning else "rend2-geometry-validate.cfg" if args.geometry_validate else "rend2-smoke.cfg"
     for name in ("rend2-smoke.cfg", fixture_name):
         fixture = package / "OpenJK" / name
         if not fixture.is_file() or fixture.read_bytes() != (root / "scripts" / name).read_bytes():
@@ -39,6 +42,8 @@ def main():
     if len(logs) != 1:
         raise RuntimeError(f"Missing unique log: {suite}")
     text = logs[0].read_text(errors="replace")
+    if args.gpu_skinning and not re.search(r"Ghoul2 GPU validated: vertices=[1-9]\d*", text):
+        raise RuntimeError(f"No GPU position readback: {logs[0]}")
     if args.geometry_validate and not re.search(r"Ghoul2 cache validated: vertices=[1-9]\d* tangents=[1-9]\d*", text):
         raise RuntimeError(f"No geometry/tangent reference checks: {logs[0]}")
     if args.buffer_storage and "...using GL_ARB_buffer_storage" not in text:

@@ -810,7 +810,6 @@ static UniformBlockBinding GetEntityBlockUniformBinding(
 	return binding;
 }
 
-#ifndef REND2_SP
 static UniformBlockBinding GetBonesBlockUniformBinding(
 	const trRefEntity_t *refEntity)
 {
@@ -818,6 +817,10 @@ static UniformBlockBinding GetBonesBlockUniformBinding(
 	UniformBlockBinding binding = {};
 	binding.ubo = currentFrameUbo;
 	binding.block = UNIFORM_BLOCK_BONES;
+#ifdef REND2_SP
+	if (!glState.skeletalAnimation) return binding;
+	binding.ubo = tr.animationBoneUbo;
+#endif
 
 	if (refEntity == &tr.worldEntity)
 		binding.offset = 0;
@@ -830,7 +833,6 @@ static UniformBlockBinding GetBonesBlockUniformBinding(
 
 	return binding;
 }
-#endif
 
 static UniformBlockBinding GetShaderInstanceBlockUniformBinding(
 	const trRefEntity_t *refEntity, const shader_t *shader)
@@ -894,9 +896,7 @@ static void DrawTris(shaderCommands_t *input, const VertexArraysProperties *vert
 			GetEntityBlockUniformBinding(backEnd.currentEntity),
 			GetShaderInstanceBlockUniformBinding(
 				backEnd.currentEntity, input->shader),
-#ifndef REND2_SP
 			GetBonesBlockUniformBinding(backEnd.currentEntity)
-#endif
 		};
 
 		samplerBindingsWriter.AddStaticImage(tr.whiteImage, TB_DIFFUSEMAP);
@@ -1085,9 +1085,7 @@ static void RB_FogPass( shaderCommands_t *input, const VertexArraysProperties *v
 		GetEntityBlockUniformBinding(backEnd.currentEntity),
 		GetShaderInstanceBlockUniformBinding(
 			backEnd.currentEntity, input->shader),
-#ifndef REND2_SP
 		GetBonesBlockUniformBinding(backEnd.currentEntity)
-#endif
 	};
 
 	SamplerBindingsWriter samplerBindingsWriter;
@@ -1911,9 +1909,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			GetEntityBlockUniformBinding(backEnd.currentEntity),
 			GetShaderInstanceBlockUniformBinding(
 				backEnd.currentEntity, input->shader),
-#ifndef REND2_SP
 			GetBonesBlockUniformBinding(backEnd.currentEntity)
-#endif
 		};
 
 		DrawItem item = {};
@@ -1975,7 +1971,7 @@ void RB_StageIteratorGeneric( void )
 	// update vertex buffer data
 	//
 #ifdef REND2_SP
-	// SP Ghoul surfaces contain CPU-skinned vertices, including gore.
+	// CPU fallbacks, including gore, use the internal vertex buffer.
 	if (tess.useInternalVBO)
 	{
 		glState.skeletalAnimation = qfalse;

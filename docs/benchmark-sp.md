@@ -366,3 +366,38 @@ also passed. AO storage tests retain a separate RGBA8 reference and legacy path.
 Further large gains will need investigation of the remaining character tangent
 work and GPU passes. GPU skinning is a candidate, but it needs its own image,
 animation, gore, and lifecycle checks.
+
+## GPU Skinning: September 16, 2026
+
+GPU and CPU skinning were compared in the same build, with the existing enhanced
+settings enabled. The CPU reference retains the exact-pose cache from the
+previous pass. Validation readback and GPU timing were disabled for throughput
+measurements. Tests used the P630, frozen NPC AI, and the same Kril'dor views as
+the previous pass.
+
+| View | Resolution | CPU FPS | GPU FPS | Change |
+| --- | --- | ---: | ---: | ---: |
+| First-person blaster | 1280 x 720 | 38.83 | 56.17 | +44.7% |
+| Third person | 1280 x 720 | 31.20 | 55.17 | +76.8% |
+| First-person blaster | 1920 x 1080 | 20.58 | 25.12 | +22.1% |
+| Third person | 1920 x 1080 | 18.59 | 24.56 | +32.1% |
+| Front-facing character | 1280 x 720 | 52.30 | 66.19 | +26.6% |
+
+Regular 720p rows use three 10-second runs per setting. Other rows use two.
+Warmup is five seconds. These are approximate throughput values on shared server
+hardware, not universal gains or NVIDIA predictions. An earlier first-person
+720p pair measured 43.91 and 57.35 FPS. Compare repeated runs and screenshots when
+assessing the range of results.
+
+Set `--cvar r_g2GpuSkinning 0` or `--cvar r_g2GpuSkinning 1` to repeat the comparison.
+Paired directories under `build/benchmark-sp/`, CPU then GPU:
+
+- First-person 720p: `rdsp-rend2.myc1hrke`, `rdsp-rend2.qtyizj03`.
+- Third-person 720p: `rdsp-rend2.4nzptm9l`, `rdsp-rend2.pb_0h2jl`.
+- First-person 1080p: `rdsp-rend2.xsqd6aze`, `rdsp-rend2.e7baudb2`.
+- Third-person 1080p: `rdsp-rend2.aex9thrc`, `rdsp-rend2._gixz9x1`.
+- Character view: `rdsp-rend2.mkyrtscv`, `rdsp-rend2.i69y8l34`.
+
+The renderer now selects GPU skinning by default for supported surfaces. CPU
+fallbacks remain automatic. See `gpu-skinning-sp.md` for the tangent-basis
+difference and the readback, image, animation, gore, and lifecycle checks.

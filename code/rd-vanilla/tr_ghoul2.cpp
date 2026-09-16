@@ -37,6 +37,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../../codemp/rd-rend2/tr_cache.h"
 #include <deque>
 #include <unordered_map>
+#include <cmath>
 #else
 #include "tr_common.h"
 #endif
@@ -2855,6 +2856,239 @@ RB_SurfaceGhoul
 static int g2SkinMsec, g2TangentMsec, g2Surfaces, g2Vertices;
 static int g2CachedSkins, g2CachedTangents;
 static int g2ValidatedVertices, g2ValidatedTangents;
+static int g2GpuSurfaces, g2GpuVertices, g2GpuFallbacks;
+static int g2GpuGoreFallbacks;
+static int g2GpuValidated;
+static float g2GpuMaxError;
+static GLuint g2GpuReadback;
+static GLuint g2GpuPalettes[MAX_FRAMES];
+static size_t g2GpuPaletteOffsets[MAX_FRAMES];
+static unsigned g2GpuPaletteFrames[MAX_FRAMES];
+static constexpr size_t G2_PALETTE_BYTES = 4*1024*1024;
+static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, const int *references,
+	const mdxaBone_t *pose, vec3_t position, vec3_t normal);
+struct G2GpuVertex
+{
+	vec3_t position;
+	uint32_t normal;
+	vec2_t texcoord;
+	byte indices[4];
+	vec4_t weights;
+	uint32_t tangent;
+	vec4_t color;
+	vec2_t unusedTexcoord;
+};
+struct G2GpuMesh
+{
+	VBO_t vbo = {};
+	IBO_t ibo = {};
+	std::vector<int> usedBones;
+};
+static std::unordered_map<const mdxmSurface_t *, G2GpuMesh> g2GpuMeshes;
+static size_t g2GpuBytes;
+
+void R_ClearGhoul2GpuBuffers()
+{
+	R_BindNullVBO();
+	R_BindNullIBO();
+	for (auto &item : g2GpuMeshes)
+	{
+		qglDeleteBuffers(1, &item.second.vbo.vertexesVBO);
+		qglDeleteBuffers(1, &item.second.ibo.indexesVBO);
+	}
+	g2GpuMeshes.clear();
+	g2GpuBytes = 0;
+	if (g2GpuReadback) qglDeleteBuffers(1, &g2GpuReadback);
+	g2GpuReadback = 0;
+	qglDeleteBuffers(MAX_FRAMES, g2GpuPalettes);
+	memset(g2GpuPalettes, 0, sizeof(g2GpuPalettes));
+	memset(g2GpuPaletteOffsets, 0, sizeof(g2GpuPaletteOffsets));
+	memset(glState.currentUBOs, 0, sizeof(glState.currentUBOs));
+	glState.currentGlobalUBO = 0;
+}
+
+static void R_ValidateGhoulGpu(CRenderableSurface *surf, const int *references)
+{
+	if (!r_g2GpuValidate->integer) return;
+	const auto *surface = surf->surfaceData;
+	const auto *vertices = (const mdxmVertex_t *)((const byte *)surface + surface->ofsVerts);
+	std::vector<float> positions(surface->numVerts * 3);
+	if (!g2GpuReadback) qglGenBuffers(1, &g2GpuReadback);
+	qglBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, g2GpuReadback);
+	qglBufferData(GL_TRANSFORM_FEEDBACK_BUFFER, positions.size() * sizeof(float), nullptr, GL_STREAM_READ);
+	qglBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, g2GpuReadback);
+	GLSL_BindProgram(&tr.g2ValidateShader);
+	RB_BindUniformBlock(tr.animationBoneUbo, UNIFORM_BLOCK_BONES, tr.animationBoneUboOffset);
+	GLSL_VertexAttribsState(ATTR_POSITION | ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS, nullptr);
+	qglEnable(GL_RASTERIZER_DISCARD);
+	qglBeginTransformFeedback(GL_POINTS);
+	qglDrawArrays(GL_POINTS, 0, surface->numVerts);
+	qglEndTransformFeedback();
+	qglDisable(GL_RASTERIZER_DISCARD);
+	qglGetBufferSubData(GL_TRANSFORM_FEEDBACK_BUFFER, 0, positions.size() * sizeof(float), positions.data());
+	qglBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
+	qglBindBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, 0);
+	glState.currentXFBBO = {};
+	for (int j = 0; j < surface->numVerts; ++j)
+	{
+		vec3_t position, normal;
+		R_SkinGhoulVertex(&vertices[j], surf->boneCache, references, nullptr, position, normal);
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			const float error = fabsf(position[axis] - positions[j*3+axis]);
+			if (!std::isfinite(position[axis]) || !std::isfinite(positions[j*3+axis]) || error > 0.005f + fabsf(position[axis]) * 0.00001f)
+				ri.Error(ERR_DROP, "Ghoul2 GPU position mismatch: surface=%d vertex=%d error=%g", surface->thisSurfaceIndex, j, error);
+			g2GpuMaxError = MAX(g2GpuMaxError, error);
+		}
+	}
+	g2GpuValidated += surface->numVerts;
+}
+
+static G2GpuMesh *R_GhoulGpuMesh(const mdxmSurface_t *surface)
+{
+	auto found = g2GpuMeshes.find(surface);
+	if (found != g2GpuMeshes.end()) return &found->second;
+	const size_t vertexBytes = surface->numVerts * sizeof(G2GpuVertex);
+	const size_t indexBytes = surface->numTriangles * 3 * sizeof(glIndex_t);
+	if (g2GpuBytes + vertexBytes + indexBytes > 64*1024*1024) return nullptr;
+	const auto *source = (const mdxmVertex_t *)((const byte *)surface + surface->ofsVerts);
+	const auto *texcoords = (const mdxmVertexTexCoord_t *)(source + surface->numVerts);
+	const auto *triangles = (const glIndex_t *)((const byte *)surface + surface->ofsTriangles);
+	std::vector<mdxmVertex_t> bindVertices(source, source + surface->numVerts);
+	std::vector<uint32_t> tangents(surface->numVerts);
+	std::vector<G2GpuVertex> vertices(surface->numVerts);
+	std::vector<int> usedBones;
+	bool used[MAX_G2_BONES] = {};
+	for (int j = 0; j < surface->numVerts; ++j)
+	{
+		auto &out = vertices[j];
+		VectorCopy(source[j].vertCoords, out.position);
+		if (!VectorNormalize(bindVertices[j].normal)) VectorSet(bindVertices[j].normal, 0, 0, 1);
+		out.normal = R_VboPackNormal(bindVertices[j].normal);
+		vec4_t tangent;
+		PerpendicularVector(tangent, bindVertices[j].normal);
+		tangent[3] = 1;
+		tangents[j] = R_VboPackTangent(tangent);
+		VectorCopy2(texcoords[j].texCoords, out.texcoord);
+		VectorSet4(out.color, 1, 1, 1, 1);
+		float total = 0;
+		const int weights = G2_GetVertWeights(&source[j]);
+		if (weights > 4) return nullptr;
+		for (int k = 0; k < weights; ++k)
+		{
+			const int index = G2_GetVertBoneIndex(&source[j], k);
+			if (index < 0 || index >= surface->numBoneReferences) return nullptr;
+			out.indices[k] = index;
+			out.weights[k] = G2_GetVertBoneWeight(&source[j], k, total, weights);
+			if (!used[index]) { used[index] = true; usedBones.push_back(index); }
+		}
+	}
+	R_CalcMikkTSpaceGlmSurface(surface->numTriangles, bindVertices.data(), texcoords, tangents.data(), triangles);
+	for (int j = 0; j < surface->numVerts; ++j) vertices[j].tangent = tangents[j];
+	G2GpuMesh &mesh = g2GpuMeshes[surface];
+	mesh.usedBones = std::move(usedBones);
+	mesh.vbo.vertexesSize = vertexBytes;
+	mesh.ibo.indexesSize = indexBytes;
+	// Backend allocation must not recursively issue the pending render commands.
+	qglGenBuffers(1, &mesh.vbo.vertexesVBO);
+	qglBindBuffer(GL_ARRAY_BUFFER, mesh.vbo.vertexesVBO);
+	qglBufferData(GL_ARRAY_BUFFER, vertexBytes, vertices.data(), GL_STATIC_DRAW);
+	qglGenBuffers(1, &mesh.ibo.indexesVBO);
+	qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ibo.indexesVBO);
+	qglBufferData(GL_ELEMENT_ARRAY_BUFFER, indexBytes, triangles, GL_STATIC_DRAW);
+	qglBindBuffer(GL_ARRAY_BUFFER, 0);
+	qglBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glState.currentVBO = nullptr;
+	glState.currentIBO = nullptr;
+	const auto attribute = [&mesh](int index, int offset, int size) {
+		mesh.vbo.offsets[index] = offset;
+		mesh.vbo.strides[index] = sizeof(G2GpuVertex);
+		mesh.vbo.sizes[index] = size;
+	};
+	attribute(ATTR_INDEX_POSITION, offsetof(G2GpuVertex, position), sizeof(vec3_t));
+	attribute(ATTR_INDEX_NORMAL, offsetof(G2GpuVertex, normal), sizeof(uint32_t));
+	attribute(ATTR_INDEX_TANGENT, offsetof(G2GpuVertex, tangent), sizeof(uint32_t));
+	attribute(ATTR_INDEX_TEXCOORD0, offsetof(G2GpuVertex, texcoord), sizeof(vec2_t));
+	for (int i = ATTR_INDEX_TEXCOORD1; i <= ATTR_INDEX_TEXCOORD4; ++i)
+		attribute(i, offsetof(G2GpuVertex, unusedTexcoord), sizeof(vec2_t));
+	attribute(ATTR_INDEX_COLOR, offsetof(G2GpuVertex, color), sizeof(vec4_t));
+	attribute(ATTR_INDEX_BONE_INDEXES, offsetof(G2GpuVertex, indices), sizeof(byte));
+	attribute(ATTR_INDEX_BONE_WEIGHTS, offsetof(G2GpuVertex, weights), sizeof(vec4_t));
+	g2GpuBytes += vertexBytes + indexBytes;
+	return &mesh;
+}
+
+static bool R_DrawGhoulGpu(CRenderableSurface *surf)
+{
+	const mdxmSurface_t *surface = surf->surfaceData;
+	if (!r_g2GpuSkinning->integer || r_externalGLSL->integer) return false;
+#ifdef _G2_GORE
+	if (surf->alternateTex || surf->goreChain) { ++g2GpuGoreFallbacks; return false; }
+#endif
+	if (surf->genShadows || tess.shader == tr.shadowShader ||
+		tess.shader->numDeforms || tess.shader->sort > SS_OPAQUE || tess.shader->useDistortion ||
+		(tess.shader->vertexAttribs & ATTR_LIGHTDIRECTION) || r_shadows->integer == 4 ||
+		surface->numBoneReferences <= 0 || surface->numBoneReferences > MAX_G2_BONES ||
+		(backEnd.currentEntity->e.renderfx & (RF_DISINTEGRATE1 | RF_DISINTEGRATE2 | RF_DISTORTION))) return false;
+	auto *frame = backEndData->currentFrame;
+	const int slot = frame - backEndData->frames;
+	if (g2GpuPaletteFrames[slot] != backEndData->realFrameNumber)
+	{
+		g2GpuPaletteFrames[slot] = backEndData->realFrameNumber;
+		g2GpuPaletteOffsets[slot] = 0;
+	}
+	const size_t alignment = glRefConfig.uniformBufferOffsetAlignment - 1;
+	const size_t size = (sizeof(SkeletonBoneMatricesBlock) + alignment) & ~alignment;
+	if (g2GpuPaletteOffsets[slot] + size > G2_PALETTE_BYTES) return false;
+	RB_EndSurface();
+	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
+	G2GpuMesh *mesh = R_GhoulGpuMesh(surface);
+	if (!mesh) return false;
+	SkeletonBoneMatricesBlock palette = {};
+	const int *references = (const int *)((const byte *)surface + surface->ofsBoneReferences);
+	for (int index : mesh->usedBones)
+	{
+#ifdef JK2_MODE
+		const mdxaBone_t &bone = surf->boneCache->Eval(references[index]);
+#else
+		const mdxaBone_t &bone = surf->boneCache->EvalRender(references[index]);
+#endif
+		memcpy(palette.matrices[index], bone.matrix, sizeof(mdxaBone_t));
+	}
+	// Separate palettes cannot exhaust the scene/camera uniform allocator. Each slot
+	// follows the existing frame fence before its storage is reused.
+	if (!g2GpuPalettes[slot])
+	{
+		qglGenBuffers(1, &g2GpuPalettes[slot]);
+		qglBindBuffer(GL_UNIFORM_BUFFER, g2GpuPalettes[slot]);
+		qglBufferData(GL_UNIFORM_BUFFER, G2_PALETTE_BYTES, nullptr, GL_DYNAMIC_DRAW);
+	}
+	else if (glState.currentGlobalUBO != g2GpuPalettes[slot])
+		qglBindBuffer(GL_UNIFORM_BUFFER, g2GpuPalettes[slot]);
+	glState.currentGlobalUBO = g2GpuPalettes[slot];
+	tr.animationBoneUbo = g2GpuPalettes[slot];
+	tr.animationBoneUboOffset = g2GpuPaletteOffsets[slot];
+	qglBufferSubData(GL_UNIFORM_BUFFER, tr.animationBoneUboOffset, sizeof(palette), &palette);
+	g2GpuPaletteOffsets[slot] += size;
+	R_BindVBO(&mesh->vbo);
+	R_BindIBO(&mesh->ibo);
+	tess.useInternalVBO = qfalse;
+	tess.externalIBO = &mesh->ibo;
+	tess.numIndexes = surface->numTriangles * 3;
+	tess.numVertexes = surface->numVerts;
+	tess.dlightBits = surf->dlightBits;
+	tess.pshadowBits = surf->pshadowBits;
+	glState.skeletalAnimation = qtrue;
+	glState.vertexAnimation = qfalse;
+	glState.genShadows = qfalse;
+	R_ValidateGhoulGpu(surf, references);
+	++g2GpuSurfaces;
+	g2GpuVertices += surface->numVerts;
+	RB_EndSurface();
+	glState.skeletalAnimation = qfalse;
+	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
+	return true;
+}
 struct G2Geometry
 {
 	std::vector<mdxaBone_t> bones;
@@ -2868,7 +3102,7 @@ struct G2Geometry
 using G2GeometryKey = std::pair<const mdxmSurface_t *, CBoneCache *>;
 struct G2GeometryHash
 {
-	size_t operator()(const G2GeometryKey &key) const
+	template<class A, class B> size_t operator()(const std::pair<A, B> &key) const
 	{
 		return std::hash<const void *>()(key.first) ^ (std::hash<const void *>()(key.second) << 1);
 	}
@@ -2876,10 +3110,137 @@ struct G2GeometryHash
 static std::unordered_map<G2GeometryKey, G2Geometry, G2GeometryHash> g2Geometry;
 static size_t g2GeometryBytes;
 
+struct G2CapsuleFit
+{
+	int bone;
+	vec3_t a, b;
+	float radius, volume;
+};
+using G2CapsuleKey = std::pair<const mdxmSurface_t *, const mdxaHeader_t *>;
+static std::unordered_map<G2CapsuleKey, std::vector<G2CapsuleFit>, G2GeometryHash> g2CapsuleFits;
+
+static const std::vector<G2CapsuleFit> &R_FitGhoulCapsules(const mdxmSurface_t *surface, CBoneCache *bones)
+{
+	const G2CapsuleKey key = {surface, bones->header};
+	auto found = g2CapsuleFits.find(key);
+	if (found != g2CapsuleFits.end()) return found->second;
+	if (g2CapsuleFits.size() >= 4096) g2CapsuleFits.clear();
+	auto &fits = g2CapsuleFits[key];
+	struct Bounds { vec3_t mins, maxs; int vertices = 0; };
+	std::vector<Bounds> bounds(bones->mNumBones);
+	for (auto &bound : bounds) ClearBounds(bound.mins, bound.maxs);
+	const auto *vertices = (const mdxmVertex_t *)((const byte *)surface + surface->ofsVerts);
+	const int *references = (const int *)((const byte *)surface + surface->ofsBoneReferences);
+	const int *triangles = (const int *)((const byte *)surface + surface->ofsTriangles);
+	std::vector<bool> used(surface->numVerts, false);
+	for (int index = 0; index < surface->numTriangles * 3; ++index)
+	{
+		const int j = triangles[index];
+		if (used[j]) continue;
+		used[j] = true;
+		const mdxmVertex_t &vertex = vertices[j];
+		float total = 0, largest = -1;
+		int bone = 0;
+		const int weights = G2_GetVertWeights(&vertex);
+		for (int k = 0; k < weights; ++k)
+		{
+			const float weight = G2_GetVertBoneWeight(&vertex, k, total, weights);
+			if (weight > largest) { largest = weight; bone = references[G2_GetVertBoneIndex(&vertex, k)]; }
+		}
+		vec3_t local;
+		const auto &inverse = bones->mSkels[bone]->BasePoseMatInv;
+		for (int axis = 0; axis < 3; ++axis)
+			local[axis] = DotProduct(inverse.matrix[axis], vertex.vertCoords) + inverse.matrix[axis][3];
+		AddPointToBounds(local, bounds[bone].mins, bounds[bone].maxs);
+		++bounds[bone].vertices;
+	}
+	for (int bone = 0; bone < bones->mNumBones; ++bone)
+	{
+		if (bounds[bone].vertices < 3) continue;
+		vec3_t half, center;
+		int longest = 0;
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			half[axis] = (bounds[bone].maxs[axis] - bounds[bone].mins[axis]) * 0.5f;
+			center[axis] = (bounds[bone].maxs[axis] + bounds[bone].mins[axis]) * 0.5f;
+			if (half[axis] > half[longest]) longest = axis;
+		}
+		G2CapsuleFit fit = {};
+		fit.bone = bone;
+		fit.radius = sqrtf(half[(longest+1)%3] * half[(longest+2)%3]);
+		if (fit.radius < 0.5f) continue;
+		VectorCopy(center, fit.a);
+		VectorCopy(center, fit.b);
+		const float length = MAX(0.0f, half[longest] - fit.radius);
+		fit.a[longest] -= length;
+		fit.b[longest] += length;
+		fit.volume = fit.radius * fit.radius * (2*length + 4.0f/3.0f*fit.radius);
+		fits.push_back(fit);
+	}
+	return fits;
+}
+
+int R_Ghoul2AutoCapsules(const refEntity_t &entity, const matrix_t modelMatrix,
+	const int *activeSurfaces, vec4_t *a, vec4_t *b)
+{
+	CGhoul2Info_v &g2 = *entity.ghoul2;
+	CGhoul2Info &info = g2[0];
+	if (!info.aHeader || !info.aHeader->numBones || !info.currentModel || !info.currentModel->mdxm) return 0;
+	const auto *boneOffsets = (const mdxaSkelOffsets_t *)(info.aHeader + 1);
+	const auto *root = (const mdxaSkel_t *)((const byte *)boneOffsets + boneOffsets->offsets[0]);
+	const int bolt = G2API_AddBolt(&info, root->name);
+	if (bolt < 0) return 0;
+	mdxaBone_t rootMatrix;
+	const bool valid = G2API_GetBoltMatrix(g2, 0, bolt, &rootMatrix, entity.angles, entity.origin,
+		backEnd.refdef.time, nullptr, entity.modelScale) != qfalse;
+	G2API_RemoveBolt(&info, bolt);
+	if (!valid || !info.mBoneCache) return 0;
+	const auto *model = info.currentModel;
+	const auto *offsets = (const mdxmHierarchyOffsets_t *)(model->mdxm + 1);
+	std::vector<G2CapsuleFit> fits;
+	for (int i = 0; i < model->mdxm->numSurfaces; ++i)
+	{
+		if (!activeSurfaces[i]) continue;
+		const auto *hierarchy = (const mdxmSurfHierarchy_t *)((const byte *)offsets + offsets->offsets[i]);
+		if (hierarchy->name[0] == '*' || !Q_strncmp(hierarchy->name, "stupidtriangle", 14) ||
+			strstr(hierarchy->name, "_cap_") || strstr(hierarchy->name, "shield") || !Q_strncmp(hierarchy->name, "cap_", 4)) continue;
+		const auto *surface = (const mdxmSurface_t *)G2_FindSurface(model, i, 0);
+		const auto &surfaceFits = R_FitGhoulCapsules(surface, info.mBoneCache);
+		fits.insert(fits.end(), surfaceFits.begin(), surfaceFits.end());
+	}
+	std::stable_sort(fits.begin(), fits.end(), [](const G2CapsuleFit &x, const G2CapsuleFit &y) { return x.volume > y.volume; });
+	const int count = MIN(12, int(fits.size()));
+	for (int i = 0; i < count; ++i)
+	{
+		const auto &fit = fits[i];
+		mdxaBone_t pose;
+		Multiply_3x4Matrix(&pose, &info.mBoneCache->EvalUnsmooth(fit.bone), &info.mBoneCache->mSkels[fit.bone]->BasePoseMat);
+		auto point = [&](const float *local, float *world) {
+			vec3_t p;
+			for (int axis = 0; axis < 3; ++axis) p[axis] = DotProduct(pose.matrix[axis], local) + pose.matrix[axis][3];
+			for (int axis = 0; axis < 3; ++axis)
+				world[axis] = modelMatrix[axis]*p[0] + modelMatrix[4+axis]*p[1] + modelMatrix[8+axis]*p[2] + modelMatrix[12+axis];
+		};
+		point(fit.a, a[i]);
+		point(fit.b, b[i]);
+		float scale = 0;
+		for (int column = 0; column < 3; ++column)
+		{
+			vec3_t direction;
+			for (int axis = 0; axis < 3; ++axis)
+				direction[axis] = modelMatrix[axis]*pose.matrix[0][column] + modelMatrix[4+axis]*pose.matrix[1][column] + modelMatrix[8+axis]*pose.matrix[2][column];
+			scale = MAX(scale, VectorLength(direction));
+		}
+		a[i][3] = fit.radius * scale * r_capsuleShadowRadius->value;
+	}
+	return count;
+}
+
 void R_ClearGhoul2GeometryCache()
 {
 	g2Geometry.clear();
 	g2GeometryBytes = 0;
+	g2CapsuleFits.clear();
 }
 
 static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, const int *references,
@@ -2975,6 +3336,14 @@ static G2Geometry *R_GhoulGeometry(CRenderableSurface *surf, const mdxmVertex_t 
 
 void R_ReportGhoul2Work()
 {
+	if (r_speeds->integer == 100 || r_g2GpuValidate->integer)
+		ri.Printf(PRINT_ALL, "Ghoul2 GPU: surfaces=%d vertices=%d fallbacks=%d bytes=%zu gore=%d\n", g2GpuSurfaces, g2GpuVertices, g2GpuFallbacks, g2GpuBytes, g2GpuGoreFallbacks);
+	g2GpuSurfaces = g2GpuVertices = g2GpuFallbacks = 0;
+	g2GpuGoreFallbacks = 0;
+	if (g2GpuValidated)
+		ri.Printf(PRINT_ALL, "Ghoul2 GPU validated: vertices=%d max_error=%g\n", g2GpuValidated, g2GpuMaxError);
+	g2GpuValidated = 0;
+	g2GpuMaxError = 0;
 	if (r_speeds->integer == 100)
 		ri.Printf(PRINT_ALL, "Ghoul2 CPU: skin=%d tangent=%d surfaces=%d vertices=%d cached_skin=%d cached_tangent=%d bytes=%zu\n",
 			g2SkinMsec, g2TangentMsec, g2Surfaces, g2Vertices, g2CachedSkins, g2CachedTangents, g2GeometryBytes);
@@ -3021,6 +3390,8 @@ void RB_SurfaceGhoul( CRenderableSurface *surf )
 #endif
 	if (!numVerts || !numIndexes)
 		return;
+	if (R_DrawGhoulGpu(surf)) return;
+	if (r_g2GpuSkinning->integer) ++g2GpuFallbacks;
 
 	// A gore fade is constant for this batch, not for the shader or entity.
 	if (sourceVerts || !tess.useInternalVBO || glState.genShadows != surf->genShadows ||

@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--msaa", type=int, choices=(0, 4), default=0)
+    parser.add_argument("--gpu-skinning", action="store_true")
     args = parser.parse_args()
     package = args.package.resolve()
     fixture = "rend2-features.cfg"
@@ -35,6 +36,8 @@ def main():
                     r_ignoreGLErrors=0, r_debugContext=1, s_initsound=0)
     if args.msaa:
         settings["r_ext_multisample"] = args.msaa
+    if args.gpu_skinning:
+        settings.update(r_g2GpuSkinning=1, r_g2GpuValidate=1)
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("// Controlled graphics fixture.\n")
     env = dict(os.environ, OJK_PROFILE=str(profile.parent), SDL_VIDEODRIVER="offscreen",
@@ -46,12 +49,14 @@ def main():
                         os.environ.get("OJK_ASSETS", str(root / "GameData")), "+devmap", "t2_wedge", "+exec", fixture],
                        env=env, stdout=stream, stderr=subprocess.STDOUT, check=True)
     log = (suite / "console.log").read_text(errors="replace")
+    if args.gpu_skinning and not re.search(r"Ghoul2 GPU validated: vertices=[1-9]\d*", log):
+        raise RuntimeError("GPU position readback was not exercised")
     defaults = dict(cl_renderer="rdsp-rend2", r_ssao=1, r_ssaoMethod=1, r_gtaoQuality=1,
                     r_gtaoHalfRes=1, r_gtaoDenoise=1, r_capsuleShadows=1, r_capsuleShadowWalls=1,
                     r_smaa=1, r_sss=1, r_sssRadius=0.5, r_softParticles=1, r_softParticleDistance=8,
                     r_genNormalMaps=1, r_normalStrength=1, r_generatedNormalStrength=0.25,
                     r_generatedNormalBrighten=0, r_normalMapCache=1, r_sampleShading=0,
-                    r_compactAO=1, r_g2GeometryCache=1,
+                    r_compactAO=1, r_g2GeometryCache=1, r_g2GpuSkinning=1,
                     r_ext_multisample=args.msaa)
     plain = re.sub(r"\^[0-9]", "", log)
     for name, value in defaults.items():

@@ -9,8 +9,9 @@ cannot load. Builds without SP Rend2 retain the vanilla default.
 
 The module uses native SP API 18 imports and exports. Native SP Ghoul2 retains
 ownership of arrays and handles. It supplies bone evaluation, collision, Ghoul2
-save data, inverse kinematics (IK), and ragdolls. The first playable path uses
-CPU skinning with packed normals and tangents in Rend2 dynamic buffers.
+save data, inverse kinematics (IK), and ragdolls. Supported Ghoul2 surfaces now use
+GPU skinning by default, with CPU fallbacks for special cases. See
+`gpu-skinning-sp.md` for controls, resource limits, and validation.
 
 SP and MP share Rend2 raster code, GLSL, framebuffer objects (FBOs), lighting,
 materials, effects, and one shader generator. Raster sources are not copied into
@@ -106,7 +107,7 @@ parallax retain the full path as a precaution. Materials with effective
 normal maps still use MikkTSpace. CPU skinning, fallback tangent writes, and
 gore writes are unchanged.
 
-SP now has a bounded geometry cache controlled by `r_g2GeometryCache`, default
+The CPU fallback has a bounded geometry cache controlled by `r_g2GeometryCache`, default
 `1`. It compares every used, evaluated bone matrix before reusing positions,
 normals, or MikkTSpace tangents. Changed poses are recalculated. Gore surfaces
 use the uncached path. The cache has an 8 MiB data budget, plus container overhead.
@@ -114,7 +115,8 @@ It keeps current-frame entries for later passes, evicts older entries when
 needed, and uses the uncached path when the budget is full. Renderer shutdown
 clears it, including soft map resets.
 
-Set `r_g2GeometryCache 0` for the reference path. For development checks, set
+With `r_g2GpuSkinning 0`, set `r_g2GeometryCache 0` for the uncached reference path.
+For development checks of the CPU cache, use `r_g2GeometryCache 1` and
 `r_g2GeometryValidate 1`. This recomputes cached skinning and tangents and requires
 exact matches. Validation is slow and is not enabled by default.
 

@@ -172,6 +172,10 @@ and test commands.
 
 ## Rend2 Performance
 
+- [x] Add SP GPU skinning with native CPU bone evaluation, float weights, bounded static buffers, and separate frame-slot palettes. Retain CPU fallbacks and verify GPU positions by readback.
+- [x] Compare CPU and GPU rendering, animation, weapons, gore, stencil shadows, save/load, and renderer restart. Enable GPU skinning for supported surfaces after measured gains. See `docs/gpu-skinning-sp.md`.
+- [x] Add fitted capsule proxies for non-humanoid rigs and bounds-based proxies for rigid droids. Check twenty stock models, detached parts, and scenery exclusions.
+
 - [x] Add an exact-pose Ghoul2 geometry cache with an 8 MiB data budget and reference validation. Test animation, weapons, restart, save/load, map changes, and stencil shadows.
 - [x] Skip empty GTAO filter pixels, simplify accepted-sample normalization, and use single-channel GTAO colour buffers. Check storage equivalence and retain the legacy format fallback.
 - [x] Measure the second pass in regular first/third-person views and a front-facing character view. Results range from 7% to 36% on the P630. See `docs/benchmark-sp.md`.

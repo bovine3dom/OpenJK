@@ -345,6 +345,9 @@ void R_SP_DeleteIBO(IBO_t *ibo)
 void R_DestroyGPUBuffers(void)
 {
 	ri.Printf(PRINT_ALL, "------- R_DestroyGPUBuffers -------\n");
+#ifdef REND2_SP
+	R_ClearGhoul2GpuBuffers();
+#endif
 
 	R_BindNullVBO();
 	R_BindNullIBO();

@@ -163,7 +163,11 @@ extern cvar_t *r_compareEnhancements;
 #ifdef REND2_SP
 void R_ReportGhoul2Work();
 void R_ClearGhoul2GeometryCache();
+void R_ClearGhoul2GpuBuffers();
+int R_Ghoul2AutoCapsules(const refEntity_t &entity, const matrix_t modelMatrix,
+	const int *activeSurfaces, vec4_t *a, vec4_t *b);
 #endif
+extern cvar_t *r_g2GpuSkinning, *r_g2GpuValidate;
 extern cvar_t *r_g2GeometryCache;
 extern cvar_t *r_g2GeometryValidate;
 extern cvar_t *r_compactAO;
@@ -2617,6 +2621,7 @@ typedef struct trGlobals_s {
 	shaderProgram_t dglowUpsample;
 	shaderProgram_t spriteShader[SSDEF_COUNT];
 	shaderProgram_t weatherUpdateShader;
+	shaderProgram_t g2ValidateShader;
 	shaderProgram_t weatherShader;
 
 	GLuint staticUbo;
@@ -2639,6 +2644,7 @@ typedef struct trGlobals_s {
 	int skyEntityUboOffset;
 	int entityUboOffsets[REFENTITYNUM_WORLD + 1];
 	int animationBoneUboOffset;
+	GLuint animationBoneUbo;
 
 	// -----------------------------------------
 

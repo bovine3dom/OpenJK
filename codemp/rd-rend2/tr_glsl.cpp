@@ -2545,6 +2545,13 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramDynamicGlowDownsample(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramSurfaceSprites(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramWeather(builder, allocator);
+#ifdef REND2_SP
+	GLSL_LoadGPUProgramBasic(builder, allocator, &tr.g2ValidateShader, "g2validate", fallback_g2validateProgram,
+		ATTR_POSITION | ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS, (1u << XFB_VAR_POSITION));
+	GLSL_InitUniforms(&tr.g2ValidateShader);
+	GLSL_FinishGPUShader(&tr.g2ValidateShader);
+	++numEtcShaders;
+#endif
 
 	builder.PrintCacheStats();
 	builder.Reset();
@@ -2635,6 +2642,9 @@ void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 		GLSL_DeleteGPUShader(&tr.spriteShader[i]);
 
 	GLSL_DeleteGPUShader(&tr.weatherUpdateShader);
+#ifdef REND2_SP
+	GLSL_DeleteGPUShader(&tr.g2ValidateShader);
+#endif
 	GLSL_DeleteGPUShader(&tr.weatherShader);
 
 	glState.currentProgram = 0;
@@ -2750,6 +2760,13 @@ void GL_VertexArraysToAttribs(
 		attrib.integerAttribute = attributes[attributeIndex].integerAttribute;
 		attrib.type = attributes[attributeIndex].type;
 		attrib.normalize = attributes[attributeIndex].normalize;
+#ifdef REND2_SP
+		if (attributeIndex == ATTR_INDEX_BONE_WEIGHTS && vertexArrays->sizes[attributeIndex] == sizeof(vec4_t))
+		{
+			attrib.type = GL_FLOAT;
+			attrib.normalize = GL_FALSE;
+		}
+#endif
 		attrib.stride = vertexArrays->strides[attributeIndex];
 		attrib.offset = vertexArrays->offsets[attributeIndex];
 		attrib.stepRate = 0;

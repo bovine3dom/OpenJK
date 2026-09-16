@@ -141,6 +141,7 @@ cvar_t *r_capsuleShadowDebug;
 cvar_t *r_torchShadows, *r_torchShadowMapSize;
 cvar_t *r_compareEnhancements;
 cvar_t *r_g2GeometryCache;
+cvar_t *r_g2GpuSkinning, *r_g2GpuValidate;
 cvar_t *r_g2GeometryValidate;
 cvar_t *r_compactAO;
 cvar_t *r_capsuleShadowSoftness, *r_capsuleShadowRadius, *r_capsuleShadowRange, *r_capsuleShadowWalls;
@@ -1542,6 +1543,9 @@ void R_Register( void )
 	r_smaa = ri.Cvar_Get("r_smaa", "1", CVAR_ARCHIVE, "Enable SMAA 1x before UI rendering.");
 	r_compareEnhancements = ri.Cvar_Get("r_compareEnhancements", "0", 0, "Live comparison: 0 enhanced, 1 base lighting, 2 base left/enhanced right.");
 	r_g2GeometryCache = ri.Cvar_Get("r_g2GeometryCache", "1", CVAR_ARCHIVE, "Reuse SP Ghoul2 geometry for identical evaluated bone poses.");
+	r_g2GpuSkinning = ri.Cvar_Get("r_g2GpuSkinning", "1", CVAR_ARCHIVE, "Use SP GPU skinning for supported Ghoul2 surfaces.");
+	r_g2GpuValidate = ri.Cvar_Get("r_g2GpuValidate", "0", 0, "Read back GPU skinning and compare positions with CPU skinning.");
+	ri.Cvar_CheckRange(r_g2GpuSkinning, 0, 1, qtrue);
 	ri.Cvar_CheckRange(r_g2GeometryCache, 0, 1, qtrue);
 	r_g2GeometryValidate = ri.Cvar_Get("r_g2GeometryValidate", "0", 0, "Compare cached SP geometry with uncached skinning and MikkTSpace.");
 	ri.Cvar_CheckRange(r_compareEnhancements, 0, 2, qtrue);
