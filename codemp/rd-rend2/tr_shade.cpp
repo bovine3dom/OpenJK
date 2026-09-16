@@ -1745,7 +1745,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		// do multitexture
 		//
 		bool enableCubeMaps = (	!backEnd.comparisonBaseline && r_cubeMapping->integer
-								&& !(tr.viewParms.flags & VPF_NOCUBEMAPS)
+								&& !(backEnd.viewParms.flags & VPF_NOCUBEMAPS)
 								&& input->cubemapIndex > 0
 								&& pStage->rgbGen != CGEN_LIGHTMAPSTYLE );
 		bool enableDLights = (	tess.dlightBits
@@ -2159,7 +2159,7 @@ void RB_EndSurface( void ) {
 		if (tr.world->skyboxportal)
 		{
 			// world
-			if (!(tr.viewParms.isSkyPortal) && (tess.currentStageIteratorFunc == RB_StageIteratorSky))
+			if (!(backEnd.viewParms.isSkyPortal) && (tess.currentStageIteratorFunc == RB_StageIteratorSky))
 			{	// don't process these tris at all
 				return;
 			}

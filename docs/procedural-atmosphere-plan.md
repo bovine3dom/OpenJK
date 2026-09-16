@@ -4,8 +4,9 @@
 
 Add a continuous sky and consistent distant haze to selected outdoor SP maps.
 Use `t1_sour` as the first art and integration target. Preserve campaign lighting,
-landmarks, visibility, and scripted camera behavior. This document is a plan.
-Procedural atmosphere is not implemented.
+landmarks, visibility, and scripted camera behavior. A sky-only prototype is now
+implemented for `t1_sour`. See [the prototype report](atmosphere-sp.md) for its
+scope, controls, captures, and measured cost. Aerial perspective is still planned.
 
 The current foundation provides seamless sky cubes, selected source-derived
 2048-pixel skies, bounded analytic haze, and an optional local fog grid.
@@ -234,7 +235,7 @@ build job. Record results in `docs/sky-fog-sp.md`. Make one commit per increment
 
 ## First Next Action
 
-Build the `t1_sour` capture route and inspect its six desert sky faces. Establish
-the sun direction, retained layers, and portal distance transform before adding
-the optical shaders. This makes the first prototype specific enough for a useful
-visual review.
+Review the sky-only prototype on the desktop. Then establish the portal distance
+transform and outdoor path clipping for aerial perspective. The capture route,
+source inventory, and measured sun direction are now available. Keep the next
+comparison specific to distant geometry so that its visual benefit is clear.

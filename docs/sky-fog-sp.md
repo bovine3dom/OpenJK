@@ -2,9 +2,10 @@
 
 ## Seamless Sky Sampling
 
-`r_seamlessSky 1` enables cross-face cubemap sampling. Set it to `0` for the
-original six-image path. The switch is live. The base side of enhancement
-comparison uses the original path.
+`r_seamlessSky 1` enables cross-face cubemap sampling. Set it to `0` to clamp
+sampling at each face edge. The switch is live. It controls filtering only;
+sky resolution, haze, and local fog have separate controls. The base side of
+enhancement comparison uses the original six-image path and native assets.
 
 The loader converts the stock face orientation to OpenGL cube orientation.
 It preserves the loaded image color space and HDR values. It builds mipmaps
@@ -12,7 +13,8 @@ after all six faces are present. Hardware filtering samples adjacent faces.
 Source image discontinuities can still be visible.
 
 Incomplete skies, non-square faces, mixed formats, and faces larger than 1024
-pixels use the original path. Each extra cube uses at most 64 MiB, including
+pixels use the original path. Smaller square faces are resampled to the largest
+face size. Each extra cube uses at most 64 MiB, including
 mipmaps. Cubes share the renderer image cache and normal shutdown cleanup.
 The original faces remain available for live comparison. Conversion reads
 textures once during loading; there is no per-frame readback.
@@ -20,7 +22,7 @@ textures once during loading; there is no per-frame readback.
 ## Selected High-Resolution Skies
 
 `r_highResSkies 1` selects 2048-pixel reconstructions of the Krildor (`wedge`)
-and Yavin skies. It requires `r_seamlessSky 1`. Set it to `0` for native assets.
+and Yavin skies. It works with either filtering setting. Set it to `0` for native assets.
 Missing replacements use the native sky. The base comparison uses native assets.
 
 The build script generates `OpenJK/sky-hd.pk3` from the local game archives.
@@ -101,8 +103,16 @@ original rendering. Portal scenery still needs a separate distance policy.
 ## Verification
 
 Run `python3 scripts/test-sky-fog.py`. This headless EGL test checks six view
-directions on `t2_wedge`, live fallback, and renderer restart. It rejects shader
-and OpenGL errors. Use `--msaa 4` to check the MSAA path.
+directions on `t2_wedge`, independent controls, bloom output, and renderer restart.
+Bloom is enabled by default. Use `--glow 0` to disable it, or `--msaa 4` to check
+the MSAA path. It rejects shader and OpenGL errors.
+
+Use `--missing-glow-output` to check rejection of an incomplete sky shader.
+The first sky shader omitted its glow output. That left an undefined attachment
+value, which could cause excessive bloom and foreground bleed on some drivers.
+The sky shader now writes black to that output. Shader loading verifies both
+output locations. The image test also checks that clear sky stays black in the
+glow-only view, with native and reconstructed assets.
 
 The first P630 run passed. Mean absolute differences between stock and cube
 views were 0.026 to 0.054 on a 0–255 scale. The restart difference was 0.045.
@@ -136,3 +146,4 @@ load. Desktop appearance and full campaign coverage still need human review.
 See [the research notes](sky-fog-investigation.md) for sources and stage order.
 See [the procedural atmosphere plan](procedural-atmosphere-plan.md) for the
 proposed `t1_sour` work, rendering design, and acceptance criteria.
+See [the t1_sour prototype](atmosphere-sp.md) for the implemented sky-only stage.

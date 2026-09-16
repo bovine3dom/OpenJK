@@ -163,6 +163,7 @@ extern cvar_t *r_compareEnhancements;
 extern cvar_t *r_seamlessSky;
 extern cvar_t *r_highResSkies;
 extern cvar_t *r_mapHaze;
+extern cvar_t *r_atmosphere;
 extern cvar_t *r_localFog;
 #ifdef REND2_SP
 void R_ReportGhoul2Work();
@@ -901,7 +902,8 @@ enum
 	TB_SKINDEPTHMAP = 10,
 	TB_TORCHSHADOWMAP = 11,
 	TB_LOCALFOG = 12,
-	NUM_TEXTURE_BUNDLES = 13
+	TB_ATMOSPHERE = 13,
+	NUM_TEXTURE_BUNDLES = 14
 };
 
 typedef enum
@@ -1455,6 +1457,10 @@ typedef enum
 	UNIFORM_HAZEMINS,
 	UNIFORM_HAZEMAXS,
 	UNIFORM_HAZEORIGIN,
+	UNIFORM_ATMOSPHEREMAP,
+	UNIFORM_ATMOSPHEREPARAMS,
+	UNIFORM_ATMOSPHERESUN,
+	UNIFORM_ATMOSPHERECLOUDCOLOR,
 	UNIFORM_VOLUMEMAP,
 	UNIFORM_VOLUMEPARAMS,
 	UNIFORM_VOLUMEMATRIX,
@@ -2049,6 +2055,10 @@ typedef struct {
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
 	vec4_t hazeColor, hazeParams;
 	vec3_t hazeMins, hazeMaxs;
+	image_t *atmosphereImage;
+	char atmosphereSky[MAX_QPATH];
+	vec4_t atmosphereSun, atmosphereParams;
+	vec3_t atmosphereCloudColor;
 	int numLocalFogs;
 	vec4_t localFogMins[4], localFogMaxs[4], localFogColor[4];
 
@@ -2479,6 +2489,8 @@ typedef struct {
 	int         softDepthViewParm;
 	bool        sssFill;
 	bool        comparisonBaseline;
+	struct drawSurfsCommand_s *comparisonSky;
+	int comparisonSkyFrame;
 	int         ssaoWeaponViewParm;
 	enum { DEPTH_ALL, DEPTH_WORLD, DEPTH_WEAPON_AO, DEPTH_WEAPON_NATIVE } ssaoDepthLayer;
 	bool        ssaoWeaponReady;
@@ -3280,6 +3292,8 @@ extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
 void RB_SetHazeUniforms(class UniformDataWriter &writer, class SamplerBindingsWriter &samplers,
 	bool enabled, bool scatter, bool sky = false);
+void R_LoadAtmosphere(world_t *world);
+void R_AtmosphereReload_f();
 void RB_EndSurface(void);
 void RB_CheckOverflow( int verts, int indexes );
 #define RB_CHECKOVERFLOW(v,i) if (tess.numVertexes + (v) >= SHADER_MAX_VERTEXES || tess.numIndexes + (i) >= SHADER_MAX_INDEXES ) {RB_CheckOverflow(v,i);}
@@ -3985,6 +3999,7 @@ qhandle_t RE_RegisterShaderNoMip( const char *name );
 const char		*RE_ShaderNameFromIndex(int index);
 image_t *R_CreateImage( const char *name, byte *pic, int width, int height, imgType_t type, int flags, int internalFormat );
 image_t *R_CreateSkyCube(const char *name, image_t *const faces[6]);
+image_t *R_GetLoadedImage(const char *name, int flags);
 image_t *R_LoadHighResSkyCube(const char *name, int flags);
 
 float ProjectRadius( float r, vec3_t location );
@@ -4060,6 +4075,7 @@ struct RenderState
 	uint32_t cullType; // this is stupid
 
 	bool transformFeedback;
+	bool clampCubeFaces;
 };
 
 struct DrawItem

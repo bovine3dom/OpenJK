@@ -440,6 +440,7 @@ extern PFNGLGETPROGRAMIVPROC qglGetProgramiv;
 extern PFNGLGETATTACHEDSHADERSPROC qglGetAttachedShaders;
 extern PFNGLGETPROGRAMINFOLOGPROC qglGetProgramInfoLog;
 extern PFNGLBINDFRAGDATALOCATIONPROC qglBindFragDataLocation;
+extern PFNGLGETFRAGDATALOCATIONPROC qglGetFragDataLocation;
 
 // Vertex attributes
 extern PFNGLGETACTIVEATTRIBPROC qglGetActiveAttrib;

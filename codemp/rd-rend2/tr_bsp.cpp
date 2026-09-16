@@ -4396,6 +4396,7 @@ world_t *R_LoadBSP(const char *name, int *bspIndex)
 	// load into heap
 	R_LoadEntities(worldData, &header->lumps[LUMP_ENTITIES]);
 	R_LoadMapHaze(worldData);
+	R_LoadAtmosphere(worldData);
 	R_LoadLocalFog(worldData);
 	R_LoadShaders(worldData, &header->lumps[LUMP_SHADERS]);
 	R_LoadLightmaps(

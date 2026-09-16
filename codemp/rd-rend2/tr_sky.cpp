@@ -445,6 +445,18 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 	float colorScale = backEnd.refdef.colorScale;
 	uniformDataWriter.Start(sp);
 	RB_SetHazeUniforms(uniformDataWriter, samplerBindingsWriter, cube, true, true);
+	vec4_t atmosphere = {};
+	uniformDataWriter.SetUniformInt(UNIFORM_ATMOSPHEREMAP, TB_ATMOSPHERE);
+	if (cube && r_atmosphere->integer && !backEnd.comparisonBaseline && tr.world &&
+		tr.world->atmosphereImage && !Q_stricmp(tess.shader->name, tr.world->atmosphereSky))
+	{
+		VectorCopy4(tr.world->atmosphereParams, atmosphere);
+		atmosphere[0] = 1;
+		samplerBindingsWriter.AddStaticImage(tr.world->atmosphereImage, TB_ATMOSPHERE);
+		uniformDataWriter.SetUniformVec4(UNIFORM_ATMOSPHERESUN, tr.world->atmosphereSun);
+		uniformDataWriter.SetUniformVec3(UNIFORM_ATMOSPHERECLOUDCOLOR, tr.world->atmosphereCloudColor);
+	}
+	uniformDataWriter.SetUniformVec4(UNIFORM_ATMOSPHEREPARAMS, atmosphere);
 	uniformDataWriter.SetUniformVec4(UNIFORM_COLOR, colorScale, colorScale, colorScale, 1.0f);
 	uniformDataWriter.SetUniformVec4(
 		UNIFORM_BASECOLOR, colorScale, colorScale, colorScale, 1.0f);
@@ -460,11 +472,12 @@ static void DrawSkySide( struct image_s *image, const int mins[2], const int max
 	const GLuint currentFrameUbo = backEndData->currentFrame->ubo;
 	const UniformBlockBinding uniformBlockBindings[] = {
 		{ currentFrameUbo, tr.skyEntityUboOffset, UNIFORM_BLOCK_ENTITY },
-		{ currentFrameUbo, tr.cameraUboOffsets[tr.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
+		{ currentFrameUbo, tr.cameraUboOffsets[backEnd.viewParms.currentViewParm], UNIFORM_BLOCK_CAMERA }
 	};
 
 	DrawItem item = {};
 	item.renderState.cullType = CT_TWO_SIDED;
+	item.renderState.clampCubeFaces = cube && !r_seamlessSky->integer;
 	item.renderState.depthRange = RB_GetDepthRange(backEnd.currentEntity, tess.shader);
 	item.program = sp;
 	item.ibo = backEndData->currentFrame->dynamicIbo;
@@ -561,7 +574,7 @@ static void DrawSkyBox( shader_t *shader )
 
 		image_t *cube = r_highResSkies->integer && shader->sky.highResCube
 			? shader->sky.highResCube : shader->sky.cubemap;
-		DrawSkySide( r_seamlessSky->integer && !backEnd.comparisonBaseline && cube
+		DrawSkySide( !backEnd.comparisonBaseline && cube
 					 ? cube : shader->sky.outerbox[i],
 			         sky_mins_subd,
 					 sky_maxs_subd );
@@ -846,7 +859,7 @@ void RB_StageIteratorSky( void ) {
 		return;
 	}
 
-	if (tr.world->skyboxportal && !(tr.viewParms.isSkyPortal)) {
+	if (tr.world->skyboxportal && !(backEnd.viewParms.isSkyPortal)) {
 		return;
 	}
 

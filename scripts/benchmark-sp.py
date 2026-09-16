@@ -342,7 +342,7 @@ def main():
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--reloads", type=int, default=0, help="Measure same-process map reloads after the frame test")
     parser.add_argument("--weapon", type=int, choices=range(2, 10), help="Equip a weapon for a first-person benchmark")
-    parser.add_argument("--viewpos", nargs=4, type=float, default=(2688, 640, -60, 315), metavar=("X", "Y", "Z", "YAW"))
+    parser.add_argument("--viewpos", nargs=4, type=float, metavar=("X", "Y", "Z", "YAW"))
     parser.add_argument("--noclip", action="store_true", help="Hold an airborne test position")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
@@ -362,6 +362,8 @@ def main():
             parser.error("Use 1..10 live characters or 1..60 corpses")
         if args.seconds + args.warmup > 45:
             parser.error("Keep the active control benchmark within its 60-second hold")
+    if args.viewpos is None:
+        args.viewpos = (6328, -952, 80, 225) if args.map == "t1_sour" else (2688, 640, -60, 315)
     if any(not math.isfinite(value) or abs(value) > 100000 for value in args.viewpos):
         parser.error("Invalid view position")
     for name, value in args.cvar:

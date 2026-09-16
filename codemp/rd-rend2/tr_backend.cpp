@@ -601,7 +601,7 @@ void RB_BeginDrawingView (void) {
 	}
 
 	// dont clear color if we have a skyportal and it has been rendered
-	if (tr.world && tr.world->skyboxportal == 1 && !(tr.viewParms.isSkyPortal))
+	if (tr.world && tr.world->skyboxportal == 1 && !(backEnd.viewParms.isSkyPortal))
 		clearBits &= ~GL_COLOR_BUFFER_BIT;
 
 	if (clearBits > 0 && !(backEnd.viewParms.flags & VPF_NOCLEAR))
@@ -1090,6 +1090,8 @@ static void RB_DrawItems(
 		GLSL_SetUniforms(drawItem.program, drawItem.uniformData);
 
 		RB_SetRenderState(drawItem.renderState);
+		if (drawItem.renderState.clampCubeFaces)
+			qglDisable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
 		switch ( drawItem.draw.type )
 		{
@@ -1135,6 +1137,8 @@ static void RB_DrawItems(
 			qglEndTransformFeedback();
 			qglDisable(GL_RASTERIZER_DISCARD);
 		}
+		if (drawItem.renderState.clampCubeFaces)
+			qglEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 	}
 }
 
@@ -2120,10 +2124,15 @@ static bool RB_FullMainView()
 		backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
 }
 
-static bool RB_CompareView()
+static bool RB_CompareView(bool includeSky = false)
 {
+	const bool skyView = includeSky && backEnd.viewParms.isSkyPortal &&
+		!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo) &&
+		backEnd.viewParms.viewportX == 0 && backEnd.viewParms.viewportY == 0 &&
+		backEnd.viewParms.viewportWidth == glConfig.vidWidth && backEnd.viewParms.viewportHeight == glConfig.vidHeight;
 	return r_compareEnhancements->integer && !r_ssaoDebug->integer && !r_sssDebug->integer &&
-		!r_smaaDebug->integer && RB_FullMainView();
+		!r_smaaDebug->integer && (RB_FullMainView() || skyView);
 }
 
 #ifdef REND2_SP
@@ -3695,6 +3704,8 @@ const void *RB_PostProcess(const void *data)
 		post.refdef = backEnd.refdef;
 		post.viewParms = backEnd.viewParms;
 		backEnd.comparisonBaseline = true;
+		if (backEnd.comparisonSky && backEnd.comparisonSkyFrame == backEndData->realFrameNumber)
+			RB_DrawSurfs(backEnd.comparisonSky);
 		RB_DrawSurfs(&draw);
 		RB_PostProcess(&post);
 		const int half = glConfig.vidWidth / 2;
@@ -3702,6 +3713,7 @@ const void *RB_PostProcess(const void *data)
 		FBO_FastBlit(tr.comparisonFbo, right, nullptr, right, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 	}
 	backEnd.comparisonBaseline = false;
+	backEnd.comparisonSky = nullptr;
 	return (const void *)(cmd + 1);
 }
 
@@ -3776,7 +3788,22 @@ static const void *RB_DrawSurfs(const void *data) {
 
 	// clear the z buffer, set the modelview, etc
 	if (!backEnd.comparisonBaseline)
-		backEnd.comparisonBaseline = r_compareEnhancements->integer == 1 && RB_CompareView();
+		backEnd.comparisonBaseline = r_compareEnhancements->integer == 1 && RB_CompareView(true);
+	if (!backEnd.comparisonBaseline && r_compareEnhancements->integer == 2 &&
+		backEnd.viewParms.isSkyPortal && RB_CompareView(true) && cmd->numDrawSurfs > 0)
+	{
+		// The frontend reuses its surface list for the main view. Preserve the
+		// portal list in this frame's arena so comparison can replay both views.
+		Allocator &allocator = *backEndData->perFrameMemory;
+		backEnd.comparisonSky = ojkAllocArray<drawSurfsCommand_t>(allocator, 1);
+		*backEnd.comparisonSky = *cmd;
+		backEnd.comparisonSky->drawSurfs = ojkAllocArray<drawSurf_t>(allocator, cmd->numDrawSurfs);
+		memcpy(backEnd.comparisonSky->drawSurfs, cmd->drawSurfs, cmd->numDrawSurfs * sizeof(drawSurf_t));
+		backEnd.comparisonSky->refdef.drawSurfs = backEnd.comparisonSky->drawSurfs;
+		backEnd.comparisonSky->refdef.fistDrawSurf = 0;
+		backEnd.comparisonSky->refdef.numDrawSurfs = cmd->numDrawSurfs;
+		backEnd.comparisonSkyFrame = backEndData->realFrameNumber;
+	}
 	RB_BeginDrawingView();
 
 	if (cmd->numDrawSurfs > 0)

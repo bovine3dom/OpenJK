@@ -118,6 +118,10 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_HazeMins", GLSL_VEC4, 1 },
 	{ "u_HazeMaxs", GLSL_VEC4, 1 },
 	{ "u_HazeOrigin", GLSL_VEC3, 1 },
+	{ "u_AtmosphereMap", GLSL_INT, 1 },
+	{ "u_AtmosphereParams", GLSL_VEC4, 1 },
+	{ "u_AtmosphereSun", GLSL_VEC4, 1 },
+	{ "u_AtmosphereCloudColor", GLSL_VEC3, 1 },
 	{ "u_VolumeMap", GLSL_INT, 1 },
 	{ "u_VolumeParams", GLSL_VEC4, 1 },
 	{ "u_VolumeMatrix", GLSL_MAT4x4, 1 },
@@ -2555,6 +2559,11 @@ void GLSL_LoadGPUShaders()
 	GLSL_SetUniformInt(&tr.skyCubeShader, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
 	qglUseProgram(0);
 	GLSL_FinishGPUShader(&tr.skyCubeShader);
+	// Fail at load time on every driver if an external or built-in sky shader
+	// omits an attachment. Otherwise some drivers bloom the entire sky.
+	if (qglGetFragDataLocation(tr.skyCubeShader.program, "out_Color") != 0 ||
+		qglGetFragDataLocation(tr.skyCubeShader.program, "out_Glow") != 1)
+		ri.Error(ERR_DROP, "Sky shader must write scene color and glow outputs");
 	GLSL_LoadGPUProgramBasic(builder, allocator, &tr.localFogShader, "localfog", fallback_localfogProgram, 0);
 	GLSL_InitUniforms(&tr.localFogShader);
 	qglUseProgram(tr.localFogShader.program);

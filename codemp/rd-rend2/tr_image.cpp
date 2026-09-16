@@ -2943,7 +2943,7 @@ Finds or loads the given image.
 Returns NULL if it fails, not a default image.
 ==============
 */
-static void R_OrientSkyFace(const byte *source, byte *target, int size, int stride, int face)
+static void R_OrientSkyFace(const byte *source, byte *target, int size, int stride, int face, int sourceSize = 0)
 {
 	// Convert MakeSkyVec's rt/lf/bk/ft/up/dn convention to GL cube axes.
 	for (int y = 0; y < size; ++y)
@@ -2953,7 +2953,27 @@ static void R_OrientSkyFace(const byte *source, byte *target, int size, int stri
 			if (face == 1) { sx = size - 1 - y; sy = size - 1 - x; }
 			if (face == 2) { sx = x; sy = size - 1 - y; }
 			if (face == 3) { sx = size - 1 - x; sy = y; }
-			memcpy(target + stride * (y * size + x), source + stride * (sy * size + sx), stride);
+			if (!sourceSize || sourceSize == size)
+				memcpy(target + stride * (y * size + x), source + stride * (sy * size + sx), stride);
+			else
+			{
+				// Mixed-size source faces use the float readback path. Stock desert
+				// skies have a 32-pixel bottom face and 1024-pixel side faces.
+				assert(stride == sizeof(vec4_t));
+				const float u = (sx + 0.5f) * sourceSize / size - 0.5f;
+				const float v = (sy + 0.5f) * sourceSize / size - 0.5f;
+				const int ix = int(floorf(u)), iy = int(floorf(v));
+				float *out = (float *)(target + stride * (y * size + x));
+				for (int c = 0; c < 4; ++c) out[c] = 0;
+				for (int dy = 0; dy < 2; ++dy)
+					for (int dx = 0; dx < 2; ++dx)
+					{
+						const float weight = (dx ? u - ix : 1 - (u - ix)) * (dy ? v - iy : 1 - (v - iy));
+						const float *in = (const float *)source + 4 *
+							(Com_Clampi(0, sourceSize - 1, iy + dy) * sourceSize + Com_Clampi(0, sourceSize - 1, ix + dx));
+						for (int c = 0; c < 4; ++c) out[c] += in[c] * weight;
+					}
+			}
 		}
 }
 
@@ -2996,16 +3016,18 @@ image_t *R_LoadHighResSkyCube(const char *name, int flags)
 
 image_t *R_CreateSkyCube(const char *name, image_t *const faces[6])
 {
-	const int size = faces[0]->uploadWidth;
+	int size = 0;
 	// Keep incomplete, non-square, mixed-format and oversized custom skies on
 	// the original path. The extra cube is capped at 64 MiB including mipmaps.
-	if (size < 1 || size > 1024)
-		return nullptr;
 	for (int i = 0; i < 6; ++i)
+	{
 		if (!faces[i] || faces[i] == tr.defaultImage ||
-			faces[i]->uploadWidth != size || faces[i]->uploadHeight != size ||
+			faces[i]->uploadWidth != faces[i]->uploadHeight ||
+			faces[i]->uploadWidth < 1 || faces[i]->uploadWidth > 1024 ||
 			faces[i]->internalFormat != faces[0]->internalFormat)
 			return nullptr;
+		size = MAX(size, faces[i]->uploadWidth);
+	}
 
 	char cubeName[MAX_QPATH];
 	if (strlen(name) + 6 >= sizeof(cubeName))
@@ -3023,7 +3045,7 @@ image_t *R_CreateSkyCube(const char *name, image_t *const faces[6])
 	{
 		GL_Bind(faces[face]);
 		qglGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, source);
-		R_OrientSkyFace((byte *)source, (byte *)target, size, sizeof(vec4_t), face);
+		R_OrientSkyFace((byte *)source, (byte *)target, size, sizeof(vec4_t), face, faces[face]->uploadWidth);
 		GL_Bind(cube);
 		qglTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, 0, 0,
 			size, size, GL_RGBA, GL_FLOAT, target);

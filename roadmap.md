@@ -340,3 +340,5 @@ constraints, but it does not remove the need to test campaign progression.
 - gameplay: make it easier to activate 'moves' like wall-running, katas, jump slash... make the combinations more forgiving timing wise
 - better glass materials? still visible as glass, but less ... ugly and white?
 - make jolt apply to pull/push force powers. consider how to integrate jolt with lightsabers?
+- more qol stuff: first person lightsaber, lean + shoot while leaning; in JO campaign add the extra JA force powers at logical places, or allow points to be spent like in JA?
+- chase down last stretched parts of in-game UI: weapon/inventory/ammo pickups, force hint icon on objects around reticule

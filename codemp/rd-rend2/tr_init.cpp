@@ -143,6 +143,7 @@ cvar_t *r_compareEnhancements;
 cvar_t *r_seamlessSky;
 cvar_t *r_highResSkies;
 cvar_t *r_mapHaze;
+cvar_t *r_atmosphere;
 cvar_t *r_localFog;
 cvar_t *r_g2GeometryCache;
 cvar_t *r_g2GpuSkinning, *r_g2GpuValidate;
@@ -1447,6 +1448,7 @@ typedef struct consoleCommand_s {
 } consoleCommand_t;
 
 static consoleCommand_t	commands[] = {
+	{ "r_atmosphereReload", R_AtmosphereReload_f },
 	{ "imagelist",			R_ImageList_f },
 	{ "shaderlist",			R_ShaderList_f },
 	{ "skinlist",			R_SkinList_f },
@@ -1546,9 +1548,11 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_softParticleDistance, 0, 64, qfalse);
 	r_smaa = ri.Cvar_Get("r_smaa", "1", CVAR_ARCHIVE, "Enable SMAA 1x before UI rendering.");
 	r_compareEnhancements = ri.Cvar_Get("r_compareEnhancements", "0", 0, "Live comparison: 0 enhanced, 1 base lighting, 2 base left/enhanced right.");
-	r_seamlessSky = ri.Cvar_Get("r_seamlessSky", "1", CVAR_ARCHIVE, "Filter sky faces as a seamless cubemap. Live toggle.");
+	r_seamlessSky = ri.Cvar_Get("r_seamlessSky", "1", CVAR_ARCHIVE, "Filter across sky cube edges. Independent of sky resolution and fog. Live toggle.");
 	r_highResSkies = ri.Cvar_Get("r_highResSkies", "1", CVAR_ARCHIVE, "Use selected reconstructed sky assets. Live toggle.");
 	r_mapHaze = ri.Cvar_Get("r_mapHaze", "1", CVAR_ARCHIVE, "Use bounded distance/height haze from map profiles.");
+	r_atmosphere = ri.Cvar_Get("r_atmosphere", "0", CVAR_ARCHIVE, "Map-authored procedural sky atmosphere. Live toggle; prototype.");
+	ri.Cvar_CheckRange(r_atmosphere, 0, 1, qtrue);
 	r_localFog = ri.Cvar_Get("r_localFog", "0", CVAR_ARCHIVE, "Prototype: 0 off, 1 local fog, 2 grid debug. Replaces map haze.");
 	ri.Cvar_CheckRange(r_localFog, 0, 2, qtrue);
 	r_g2GeometryCache = ri.Cvar_Get("r_g2GeometryCache", "1", CVAR_ARCHIVE, "Reuse SP Ghoul2 geometry for identical evaluated bone poses.");
