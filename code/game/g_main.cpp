@@ -711,6 +711,7 @@ void G_InitCvars( void ) {
 	gi.cvar( "ui_prisonerobj_maxtotal", "0", CVAR_ROM|CVAR_SAVEGAME|CVAR_NORESTART);
 
 	gi.cvar( "g_clearstats", "1", CVAR_ROM|CVAR_NORESTART);
+	gi.cvar( "cg_missionstatusscreen", "0", CVAR_ROM);
 
 }
 /*
@@ -834,6 +835,8 @@ void ShutdownGame( void )
 {
 	NAV_RouteTestReset( "shutdown" );
 	// write all the client session data so we can get it back
+	if (G_IsOutcast() && gi.Cvar_VariableIntegerValue("cg_missionstatusscreen"))
+		G_ShowOutcastMissionStats(qtrue);
 	G_WriteSessionData();
 
 	// Destroy the Game Interface.

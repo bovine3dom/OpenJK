@@ -47,7 +47,42 @@ def blocks(data):
 
 def uncomment(text):
     return re.sub(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
-                  lambda m: m[0] if m[0].startswith('"') else " " * len(m[0]), text, flags=re.S)
+                  lambda m: m[0] if m[0].startswith('"') else re.sub(r'[^\r\n]', ' ', m[0]), text, flags=re.S)
+
+
+def braced_body(text, start):
+    depth = 0
+    for token in re.finditer(r'"(?:\\.|[^"\\])*"|[{}]', text[start:]):
+        if token[0] == "{": depth += 1
+        elif token[0] == "}": depth -= 1
+        if depth == 0:
+            return text[start + 1:start + token.start()]
+    raise ValueError("Unclosed source body")
+
+
+def script_interface(path, legacy=False):
+    text = uncomment(path.read_text(errors="replace"))
+    registered = set(re.findall(r'ENUM2STRING\((SET_\w+)\)', text))
+    operations = {}
+    for operation, method in (("set", "Set"), ("get-float", "GetFloat"), ("get-string", "GetString"), ("get-vector", "GetVector")):
+        symbol = ("Q3_" if legacy else "CQuake3GameInterface::") + method
+        match = re.search(r'\b' + symbol + r'\s*\([^{};]*\)\s*\{', text)
+        if not match:
+            raise ValueError(f"Missing script dispatcher: {symbol}")
+        body = braced_body(text, match.end() - 1)
+        code = re.sub(r'"(?:\\.|[^"\\])*"', lambda m: " " * len(m[0]), body)
+        cases = list(re.finditer(r'\b(?:case\s+(SET_\w+)|default)\s*:', code))
+        handlers = {}
+        end, section = len(body), ""
+        for case in reversed(cases):
+            # Empty fall-through labels share the following implementation.
+            section = body[case.end():end].strip() or section
+            end = case.start()
+            if case[1] is None: continue
+            handlers[case[1]] = {"source": f"{path.relative_to(ROOT)}:{text.count(chr(10), 0, match.end() + case.start()) + 1}",
+                                 "stub_review": section in ("break;", "return 0;", "return qfalse;") or "not implemented" in section.lower()}
+        operations[operation] = handlers
+    return registered, operations
 
 
 def source_tables(folder):
@@ -56,11 +91,7 @@ def source_tables(folder):
         original = path.read_text(errors="replace")
         text = uncomment(original)
         for match in re.finditer(r'\bvoid\s+(SP_\w+)\s*\([^;{}]*\)\s*\{', text):
-            pos, depth = match.end(), 1
-            while depth and pos < len(text):
-                depth += (text[pos] == "{") - (text[pos] == "}")
-                pos += 1
-            body = text[match.end():pos - 1].strip()
+            body = braced_body(text, match.end() - 1).strip()
             functions[match[1]] = {"source": f"{path.relative_to(ROOT)}:{original.count(chr(10), 0, match.start()) + 1}",
                                    "empty": body in ("", "return;"), "body": body}
         for match in re.finditer(r'/\*QUAKED\s+(\S+)[^\n]*', original):
@@ -81,6 +112,27 @@ def audit(academy, outcast):
     old_handlers, _, old_flags = source_tables(ROOT / "codeJK2/game")
     game_text = "\n".join(p.read_text(errors="replace") for p in (ROOT / "code/game").glob("*.cpp"))
     findings, maps, scripts = [], {}, {}
+    old_properties, old_dispatch = script_interface(ROOT / "codeJK2/game/Q3_Interface.cpp", legacy=True)
+    properties, dispatch = script_interface(ROOT / "code/game/Q3_Interface.cpp")
+    reviews = json.loads((ROOT / "scripts/jo-behavior-reviews.json").read_text())
+    behaviors = {}
+
+    def property_reference(operation, name, source):
+        key = operation + ":" + name
+        if key not in behaviors:
+            registered, handled = name in properties, name in dispatch[operation]
+            old_handled = name in old_properties and name in old_dispatch[operation]
+            status = "implemented" if registered and handled else "missing" if old_handled else "retail-reference-review"
+            entry = {"operation": operation, "property": name, "status": status,
+                     "registered": registered, "dispatched": handled, "jo_dispatched": old_handled,
+                     "jo_stub_review": old_dispatch[operation].get(name, {}).get("stub_review", False),
+                     "references": [], **dispatch[operation].get(name, {})}
+            if entry.get("stub_review"): entry["status"] = "handler-review"
+            if key in reviews and registered and handled:
+                entry.update(reviews[key])
+            behaviors[key] = entry
+        if source is not None:
+            behaviors[key]["references"].append(source)
 
     def issue(kind, source, reference, detail):
         findings.append(dict(kind=kind, source=source, reference=reference, detail=detail))
@@ -127,10 +179,17 @@ def audit(academy, outcast):
                     dependencies.add(script_path(values[0]))
                 if block["op"] == 26 and values and isinstance(values[0], str):
                     key = values[0]
+                    if key.startswith("SET_"):
+                        property_reference("set", key, source)
                     if key.endswith("SCRIPT") and len(values) > 1 and isinstance(values[1], str) and values[1].lower() not in ("null", "none", ""):
                         dependencies.add(script_path(values[1]))
-                    if any(word in key for word in ("FORCE", "SABER", "WEAPON", "OBJECTIVE", "INVENTORY", "VIDEO", "LOADGAME")):
+                    if any(word in key for word in ("FORCE", "SABER", "WEAPON", "OBJECTIVE", "INVENTORY", "VIDEO", "LOADGAME", "MISSION")):
                         progression.append(block)
+                for i, value in enumerate(values[:-2]):
+                    if isinstance(value, dict) and value.get("kind") == 36 and isinstance(values[i + 2], str):
+                        operation = {4: "get-string", 6: "get-float", 14: "get-vector"}.get(values[i + 1])
+                        if operation and values[i + 2].startswith("SET_"):
+                            property_reference(operation, values[i + 2], source)
                 if block["op"] == 20 and len(values) > 1 and isinstance(values[1], str):
                     sound = values[1].lower()
                     candidates = {sound, sound.removesuffix(".wav") + ".mp3", sound.removesuffix(".mp3") + ".wav"}
@@ -163,7 +222,9 @@ def audit(academy, outcast):
                 selected = int(ent.get("spawnflags", "0"))
                 for bit, (old, new) in enumerate(zip(old_flags.get(cls, []), flags.get(cls, []))):
                     if selected & (1 << bit) and old.lower() != new.lower():
-                        issue("spawnflag-review", source, f"{cls}:{1 << bit}", f"JO label {old}; JA label {new}; compare handler behavior")
+                        ref = f"{cls}:{1 << bit}"
+                        issue("spawnflag-review", source, ref, f"JO label {old}; JA label {new}; compare handler behavior")
+                        findings[-1].update(reviews.get("spawnflag:" + ref, {"status": "review-required"}))
                 for key, value in ent.items():
                     if key.endswith("script") and value:
                         dependencies.add(script_path(value))
@@ -189,13 +250,24 @@ def audit(academy, outcast):
                 pending.extend(scripts.get(dep, {}).get("dependencies", []))
             maps[path] = {"entities": entities, "scripts": sorted(reachable), "transitions": transitions,
                           "navigation": path.removesuffix(".bsp") + ".nav" in available}
+    for operation, cases in old_dispatch.items():
+        for name in sorted(old_properties & cases.keys()):
+            property_reference(operation, name, None)
+    for key, behavior in behaviors.items():
+        if behavior["status"] in ("missing", "handler-review", "retail-reference-review"):
+            for source in behavior["references"]:
+                issue("script-" + behavior["status"], source, key, "Inspect registration and operation-specific dispatch")
     return {"limits": ["Static references do not establish runtime behavior.",
+                       "A registered property or dispatcher case does not establish equivalent behavior.",
+                       "Source inspection does not evaluate preprocessor branches or execute handlers.",
                        "Script branches and variable references require runtime checks.",
                        "Animation findings require actor-specific review; cinematic aliases require cinematic actors.",
                        "Spawn-flag labels are evidence for review, not proof of a defect.",
                        "Asset presence does not establish importer selection, material rendering, or model compatibility."],
             "counts": dict(Counter(f["kind"] for f in findings)), "findings": findings,
-            "maps": maps, "npcs": npcs, "scripts": scripts}
+            "maps": maps, "npcs": npcs, "scripts": scripts, "behaviors": behaviors,
+            "behavior_status_counts": dict(Counter(b["status"] for b in behaviors.values())),
+            "used_behavior_status_counts": dict(Counter(b["status"] for b in behaviors.values() if b["references"]))}
 
 
 def main():
@@ -209,6 +281,7 @@ def main():
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(f"Audited {len(report['maps'])} maps and {len(report['scripts'])} scripts: {args.output}")
     print(json.dumps(report["counts"], indent=2))
+    print("Referenced script behavior:", json.dumps(report["used_behavior_status_counts"], sort_keys=True))
 
 
 if __name__ == "__main__":

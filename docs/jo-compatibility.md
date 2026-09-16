@@ -21,6 +21,8 @@ retail assets. It records these items:
 - Sound and runtime model references. Compiled `misc_model` references are excluded.
 - Weapon, Force, inventory, and objective commands, with script byte offsets.
 - Map transitions, item entities, and navigation-file availability.
+- Script-property registration and operation-specific setter/getter dispatch.
+- Empty or unimplemented handler candidates and reviewed behavior differences.
 
 Each finding includes a source reference. Map entity numbers refer to the BSP
 entity list, not runtime entity numbers. Script byte offsets refer to the original
@@ -35,6 +37,18 @@ Some references are also absent from the original JO assets or handler tables.
 For example, `cairn_assembly` contains an `item_shield` entity that has no item
 definition in either campaign. Do not treat every finding as a new integration
 defect.
+
+`behaviors` contains both referenced operations and the original JO interface
+catalog. Each entry records registration, dispatch, source location, and script
+references. `used_behavior_status_counts` counts only referenced operations.
+`implemented` means that a source handler exists; it does not prove equivalent
+behavior. `verified` entries have a specific regression check.
+
+Reviews are stored in `scripts/jo-behavior-reviews.json`. Missing operations and
+handler-review candidates remain visible. The current report includes the
+unused `SET_FULLNAME` setter/getter gap and unused handler stubs. Two retail
+`SET_FACE_MOVEDIR` references have no registered handler in either source tree.
+These findings require separate review; they are not all new port defects.
 
 ## Prisoner Heads
 
@@ -108,10 +122,11 @@ The collision check samples the thin opaque water boundary in `yavin_swamp`.
 The boundary retains opacity but has no solid contents in JO mode. JA keeps its
 existing collision rules.
 
-The remaining spawn-flag report entry is `valley` entity 2. JO uses bit 2 to hide
-its legacy mission-status screen. JA uses it to suppress optional story audio.
-This entity has no JA story-audio setting. The shared UI does not use JO's legacy
-mission-status display switch; this difference does not block the transition.
+The spawn-flag report entry for `valley` entity 2 is now implemented and tested.
+JO uses bit 2 to hide completion statistics; JA uses it for optional story audio.
+The JO loading panel and script request are restored. See `jo-statistics.md`.
+The earlier assessment that this difference was non-blocking did not establish
+presentation parity.
 
 Use `campaign_status all` to include hidden objectives in a status report.
 Use `surface_status <targetname> <surface> [...]` to inspect model surface indices

@@ -445,6 +445,7 @@ stringID_table_t setTable[] =
 	ENUM2STRING(SET_INACTIVE),
 	ENUM2STRING(SET_FUNC_USABLE_VISIBLE),
 	ENUM2STRING(SET_END_SCREENDISSOLVE),
+	ENUM2STRING(SET_MISSION_STATUS_SCREEN),
 	ENUM2STRING(SET_LOOPSOUND),
 	ENUM2STRING(SET_ICARUS_FREEZE),
 	ENUM2STRING(SET_ICARUS_UNFREEZE),
@@ -9285,6 +9286,9 @@ extern void LockDoors(gentity_t *const ent);
 
 	case SET_END_SCREENDISSOLVE:
 		gi.SendConsoleCommand( "endscreendissolve\n");
+		break;
+	case SET_MISSION_STATUS_SCREEN:
+		G_ShowOutcastMissionStats(qtrue);
 		break;
 
 	case SET_FUNC_USABLE_VISIBLE:

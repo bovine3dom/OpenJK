@@ -820,6 +820,26 @@ static void Svcmd_IKnowKungfu_f(void)
 	}
 }
 
+static void Svcmd_MissionStatsStatus_f(void)
+{
+	if (!level.clients) return;
+	const auto &s = level.clients[0].sess.missionStats;
+	gi.Printf("missionstats live map=%s kills=%d secrets=%d total=%d shots=%d hits=%d push=%d jump=%d thrown=%d blocks=%d\n",
+		level.mapname, s.enemiesKilled, s.secretsFound, s.totalSecrets, s.shotsFired, s.hits,
+		s.forceUsed[FP_PUSH], s.forceUsed[FP_LEVITATION], s.saberThrownCnt, s.saberBlocksCnt);
+	char map[MAX_QPATH], favorite[256], secrets[128], accuracy[64];
+	gi.Cvar_VariableStringBuffer("ui_stats_map", map, sizeof(map));
+	gi.Cvar_VariableStringBuffer("ui_stats_fave", favorite, sizeof(favorite));
+	gi.Cvar_VariableStringBuffer("ui_stats_jo_secrets", secrets, sizeof(secrets));
+	gi.Cvar_VariableStringBuffer("ui_stats_accuracy", accuracy, sizeof(accuracy));
+	gi.Printf("missionstats snapshot source=%s visible=%d kills=%d secrets=\"%s\" shots=%d hits=%d accuracy=\"%s\" favorite=%d label=\"%s\" saber=%d push=%d jump=%d thrown=%d blocks=%d\n",
+		map[0] ? map : "none", gi.Cvar_VariableIntegerValue("cg_missionstatusscreen"),
+		gi.Cvar_VariableIntegerValue("ui_stats_enemieskilled"), secrets, gi.Cvar_VariableIntegerValue("ui_stats_shots"),
+		gi.Cvar_VariableIntegerValue("ui_stats_hits"), accuracy, gi.Cvar_VariableIntegerValue("ui_stats_fave_weapon"), favorite,
+		gi.Cvar_VariableIntegerValue("ui_stats_saber"), gi.Cvar_VariableIntegerValue("ui_stats_push"),
+		gi.Cvar_VariableIntegerValue("ui_stats_jump"), gi.Cvar_VariableIntegerValue("ui_stats_thrown"), gi.Cvar_VariableIntegerValue("ui_stats_blocks"));
+}
+
 static void Svcmd_CampaignStatus_f(void)
 {
 	const gentity_t *pl = &g_entities[0];
@@ -1022,6 +1042,7 @@ static int svcmdcmp( const void *a, const void *b ) {
 // FIXME some of these should be made CMD_ALIVE too!
 static svcmd_t svcmds[] = {
 	{ "campaign_status", Svcmd_CampaignStatus_f, CMD_NONE },
+	{ "missionstats_status", Svcmd_MissionStatsStatus_f, CMD_NONE },
 	{ "cinematic_status", Svcmd_CinematicStatus_f, CMD_NONE },
 	{ "surface_status", Svcmd_SurfaceStatus_f, CMD_NONE },
 	{ "galak_test", Svcmd_GalakTest_f, CMD_CHEAT },

@@ -328,6 +328,7 @@ typedef enum //# setType_e
 
 	//in-bhc tables
 	SET_LEAN,//## %t="LEAN_TYPES" # Lean left, right or stop leaning
+	SET_MISSION_STATUS_SCREEN,//## # Show completed mission statistics during JO loading
 
 	//# #eol
 	SET_

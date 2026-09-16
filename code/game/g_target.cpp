@@ -925,7 +925,7 @@ void set_mission_stats_cvars( void )
 	char text[1024]={0};
 
 	//we'll assume that the activator is the player
-	gclient_t* const client = &level.clients[0];
+	gclient_t* const client = level.clients;
 
 	if (!client)
 	{
@@ -934,13 +934,13 @@ void set_mission_stats_cvars( void )
 
 	gi.cvar_set("ui_stats_enemieskilled", va("%d",client->sess.missionStats.enemiesKilled));	//pass this on to the menu
 
-	if (cg_entities[0].gent->client->sess.missionStats.totalSecrets)
+	if (client->sess.missionStats.totalSecrets)
 	{
 		cgi_SP_GetStringTextString( "SP_INGAME_SECRETAREAS_OF", text, sizeof(text) );
 		gi.cvar_set("ui_stats_secretsfound", va("%d %s %d",
-			cg_entities[0].gent->client->sess.missionStats.secretsFound,
+			client->sess.missionStats.secretsFound,
 			text,
-			cg_entities[0].gent->client->sess.missionStats.totalSecrets));
+			client->sess.missionStats.totalSecrets));
 	}
 	else	// Setting ui_stats_secretsfound to 0 will hide the text on screen
 	{
@@ -949,16 +949,18 @@ void set_mission_stats_cvars( void )
 
 	// Find the favorite weapon
 	int wpn=0,i;
-	int max_wpn = cg_entities[0].gent->client->sess.missionStats.weaponUsed[0];
+	int max_wpn = client->sess.missionStats.weaponUsed[0];
 	for (i = 1; i<WP_NUM_WEAPONS; i++)
 	{
-		if (cg_entities[0].gent->client->sess.missionStats.weaponUsed[i] > max_wpn)
+		if (client->sess.missionStats.weaponUsed[i] > max_wpn)
 		{
-			max_wpn = cg_entities[0].gent->client->sess.missionStats.weaponUsed[i];
+			max_wpn = client->sess.missionStats.weaponUsed[i];
 			wpn = i;
 		}
 	}
 
+	gi.cvar_set("ui_stats_fave", "");
+	gi.cvar_set("ui_stats_fave_weapon", va("%d", wpn));
 	if ( wpn )
 	{
 		gitem_t	*wItem= FindItemForWeapon( (weapon_t)wpn);
@@ -1001,6 +1003,22 @@ void set_mission_stats_cvars( void )
 
 }
 
+void G_ShowOutcastMissionStats(qboolean show)
+{
+	if (!G_IsOutcast()) return;
+	gi.cvar_set("cg_missionstatusscreen", show ? "1" : "0");
+	if (!show || !level.clients) return;
+	set_mission_stats_cvars();
+	const auto &client = level.clients[0];
+	const auto &stats = client.sess.missionStats;
+	char of[128];
+	cgi_SP_GetStringTextString("SP_INGAME_SECRETAREAS_OF", of, sizeof(of));
+	gi.cvar_set("ui_stats_jo_secrets", va("%d %s %d", stats.secretsFound, of, stats.totalSecrets));
+	gi.cvar_set("ui_stats_otherattacks", va("%d", stats.otherAttacksCnt));
+	gi.cvar_set("ui_stats_saber", ((client.ps.stats[STAT_WEAPONS] & (1 << WP_SABER)) || stats.weaponUsed[WP_SABER]) ? "1" : "0");
+	gi.cvar_set("ui_stats_map", level.mapname);
+}
+
 #include "../cgame/cg_media.h"	//access to cgs
 extern void G_ChangeMap (const char *mapname, const char *spawntarget, qboolean hub);	//g_utils
 void target_level_change_use(gentity_t *self, gentity_t *other, gentity_t *activator)
@@ -1040,7 +1058,8 @@ void target_level_change_use(gentity_t *self, gentity_t *other, gentity_t *activ
 		}
 	}
 
-	set_mission_stats_cvars();
+	if (G_IsOutcast()) G_ShowOutcastMissionStats((self->spawnflags & 2) ? qfalse : qtrue);
+	else set_mission_stats_cvars();
 
 }
 

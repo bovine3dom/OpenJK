@@ -19,6 +19,12 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_strings_allow_metadata_before_english_text(self):
+        data = (b'REFERENCE INGAME\nCOUNT 2\nINDEX 0\n{\n REFERENCE SECRETAREAS_OF\n'
+                b' NOTES "used for "0 of 3" secrets"\n TEXT_LANGUAGE1 "of"\n}\n'
+                b'INDEX 1\n{\n REFERENCE TITLE\n TEXT_LANGUAGE1 "Level stats"\n}\n')
+        self.assertEqual(jo.strings(data), [("SECRETAREAS_OF", "of"), ("TITLE", "Level stats")])
+
     def test_prisoner_alternate_head_surfaces_remain_distinct(self):
         names = (b"head", b"head_off", b"head_face", b"head_face_off", b"head_cap_torso_off")
         model = bytearray(164)

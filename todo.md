@@ -62,6 +62,15 @@ separate manual checks; record any diagnostic trigger activation in automated te
 - [x] Add a strict static audit and six full cutscene cases. Check the office, restraint, bartender, and reunion scenes in both renderers. Record remaining manual scene checks.
 - [x] Publish the passing package `20260916T020444391132401-8d0e9087` after all required checks.
 
+## JO Mission Statistics and Behavior Parity
+
+- [x] Restore the statistics display during JO mission loading. Keep a snapshot of the completed mission before its counters can reset.
+- [x] Support normal exit targets, `SET_MISSION_STATUS_SCREEN`, and JO's `HIDEINFO` flag. Hide completion statistics on new games, direct map loads, and save loads.
+- [x] Check kills, secrets, shots, hits, accuracy, favorite weapon, and Force/saber counters. Include zero-shot and pre-saber cases.
+- [x] Test visible and hidden transitions, counter carry/reset rules, save loading, and both renderers.
+- [x] Extend the audit to registered script properties, actual dispatch handlers, empty handlers, and reviewed behavior differences. Separate implementation from runtime verification.
+- [x] Update the compatibility report and publish the tested package `20260916T073530525195835-50a3e4ec`.
+
 ## Verified Prerequisites
 
 - [x] Confirm that this server runs x86-64 Arch Linux.

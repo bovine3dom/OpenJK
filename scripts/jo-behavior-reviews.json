@@ -1,0 +1,22 @@
+{
+  "set:SET_MISSION_STATUS_SCREEN": {
+    "status": "verified",
+    "detail": "JO requests a snapshot for the loading screen. JA mission failure display is a separate path.",
+    "test": "scripts/test-jo-stats.py"
+  },
+  "spawnflag:target_level_change:2": {
+    "status": "verified",
+    "detail": "In JO, HIDEINFO hides completion statistics. In JA, the bit retains its story-audio meaning.",
+    "test": "scripts/test-jo-stats.py"
+  },
+  "set:SET_ANIM_BOTH": {
+    "status": "verified",
+    "detail": "Staged JO actors use original skeletons and frames. Runtime checks cover representative scenes; full normal-play visual checks remain open.",
+    "test": "scripts/test-jo-cinematics.py"
+  },
+  "set:SET_SABER_OFFENSE": {
+    "status": "verified",
+    "detail": "The original Yavin pickup script grants the level after its dialogue. The shared pickup has a valid saber definition.",
+    "test": "scripts/test-jo-sp.py --progression"
+  }
+}

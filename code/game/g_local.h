@@ -35,6 +35,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "dmstates.h"
 
 bool G_IsOutcast();
+void G_ShowOutcastMissionStats(qboolean show);
 void NPC_RestoreOutcastClass(gentity_t *ent);
 const char *NPC_OutcastCinematicParms(const char *name, char *buffer, int size);
 void NPC_ReloadOutcastAnimationSets(void);

@@ -39,7 +39,14 @@ def read(index, name):
 def strings(data):
     """Read the English text and references from a retail STRIP package."""
     text = data.decode("cp1252", errors="replace")
-    return re.findall(r'\bREFERENCE\s+(\w+)\s+TEXT_LANGUAGE1\s+"((?:\\.|[^"\\])*)"', text)
+    references = list(re.finditer(r'(?m)^[ \t]*REFERENCE[ \t]+(\w+)', text))
+    entries = []
+    for i, reference in enumerate(references):
+        end = references[i + 1].start() if i + 1 < len(references) else len(text)
+        value = re.search(r'(?m)^[ \t]*TEXT_LANGUAGE1\s+"((?:\\.|[^"\\])*)"', text[reference.end():end])
+        if value:
+            entries.append((reference[1], value[1]))
+    return entries
 
 
 def stringed(entries):

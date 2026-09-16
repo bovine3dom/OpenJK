@@ -816,6 +816,59 @@ CG_DrawInformation
 Draw all the status / pacifier stuff during level loading
 ====================
 */
+static void CG_MissionStatsRow(const char *label, const char *cvar, float x, float y, float columnWidth = 242)
+{
+	char text[256], value[256];
+	cgi_SP_GetStringTextString(va("SP_INGAME_%s", label), text, sizeof(text));
+	gi.Cvar_VariableStringBuffer(cvar, value, sizeof(value));
+	if (!value[0]) cgi_SP_GetStringTextString("SP_INGAME_NONE", value, sizeof(value));
+	cgi_R_Font_DrawString(x, y, text, colorTable[CT_LTGOLD1], cgs.media.qhFontSmall, -1, 0.8f);
+	const int width = cgi_R_Font_StrLenPixels(value, cgs.media.qhFontSmall, 0.8f);
+	cgi_R_Font_DrawString(x + columnWidth - width, y, value, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+}
+
+static void CG_DrawOutcastMissionStats(void)
+{
+	char map[MAX_QPATH], title[256];
+	gi.Cvar_VariableStringBuffer("ui_stats_map", map, sizeof(map));
+	if (!gi.Cvar_VariableIntegerValue("cg_missionstatusscreen") || !map[0]) return;
+	CG_GameTextScope textScope(true);
+	const vec4_t background = {0.0f, 0.0f, 0.0f, 0.85f};
+	CG_FillRect(40, 48, 560, 360, background);
+	cgi_SP_GetStringTextString("SP_INGAME_MISSIONCOMPLETION", title, sizeof(title));
+	const int width = cgi_R_Font_StrLenPixels(title, cgs.media.qhFontMedium, 1.0f);
+	cgi_R_Font_DrawString(320 - width / 2, 58, title, colorTable[CT_WHITE], cgs.media.qhFontMedium, -1, 1.0f);
+	cgi_R_Font_DrawString(62, 86, map, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+	CG_MissionStatsRow("SECRETAREAS", "ui_stats_jo_secrets", 62, 112);
+	CG_MissionStatsRow("ENEMIESKILLED", "ui_stats_enemieskilled", 62, 136);
+	CG_MissionStatsRow("FAVORITEWEAPON", "ui_stats_fave", 62, 184, 516);
+	CG_MissionStatsRow("SHOTSFIRED", "ui_stats_shots", 336, 112);
+	CG_MissionStatsRow("HITS", "ui_stats_hits", 336, 136);
+	CG_MissionStatsRow("ACCURACY", "ui_stats_accuracy", 336, 160);
+	if (gi.Cvar_VariableIntegerValue("ui_stats_saber"))
+	{
+		static const struct { const char *label; const char *cvar; } saber[] = {
+			{"THROWN", "thrown"}, {"BLOCKS", "blocks"}, {"LEGATTACKS", "legattacks"},
+			{"ARMATTACKS", "armattacks"}, {"BODYATTACKS", "bodyattacks"}, {"OTHERATTACKS", "otherattacks"}
+		}, force[] = {
+			{"HEAL", "heal"}, {"JUMP2", "jump"}, {"SPEED", "speed"}, {"PUSH", "push"},
+			{"PULL", "pull"}, {"MINDTRICK", "mindtrick"}, {"GRIP", "grip"}, {"LIGHTNING", "lightning"}
+		};
+		cgi_SP_GetStringTextString("SP_INGAME_LIGHTSABERUSE", title, sizeof(title));
+		cgi_R_Font_DrawString(62, 220, title, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+		cgi_SP_GetStringTextString("SP_INGAME_FORCEUSE", title, sizeof(title));
+		cgi_R_Font_DrawString(336, 220, title, colorTable[CT_WHITE], cgs.media.qhFontSmall, -1, 0.8f);
+		for (int i = 0; i < ARRAY_LEN(saber); ++i)
+			CG_MissionStatsRow(saber[i].label, va("ui_stats_%s", saber[i].cvar), 62, 246 + i * 18);
+		for (int i = 0; i < ARRAY_LEN(force); ++i)
+			CG_MissionStatsRow(force[i].label, va("ui_stats_%s", force[i].cvar), 336, 246 + i * 18);
+	}
+	if (gi.Cvar_VariableIntegerValue("d_missionStats"))
+		gi.Printf("jo_stats draw source=%s shots=%d hits=%d saber=%d stage=%d\n", map,
+			gi.Cvar_VariableIntegerValue("ui_stats_shots"), gi.Cvar_VariableIntegerValue("ui_stats_hits"),
+			gi.Cvar_VariableIntegerValue("ui_stats_saber"), cg.loadLCARSStage);
+}
+
 void CG_DrawInformation( void ) {
 	int		y;
 
@@ -849,6 +902,8 @@ void CG_DrawInformation( void ) {
 		// JO's retail levelshots include empty placeholders; use its loading artwork.
 		cgi_R_SetColor(NULL);
 		CG_DrawPic(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, cgi_R_RegisterShaderNoMip("menu/art/unknownmap"));
+		if (g_eSavedGameJustLoaded != eFULL && strcmp(s, "kejim_post"))
+			CG_DrawOutcastMissionStats();
 	}
 	else if ( g_eSavedGameJustLoaded != eFULL && !strcmp(s,"yavin1") )//special case for first map!
 	{

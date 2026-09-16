@@ -46,6 +46,7 @@ cp docs/debrief-sp.md "$package/"
 cp docs/jo-campaign.md "$package/"
 cp docs/jo-compatibility.md "$package/"
 cp docs/jo-cinematics.md "$package/"
+cp docs/jo-statistics.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp docs/torch-sp.md "$package/"
 cp docs/hud-reveal-sp.md "$package/"
@@ -107,6 +108,8 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-cinematics.py --package "$package" | tee "$package/jo-cinematics-result.txt"
     for renderer in rdsp-vanilla rdsp-rend2; do
+        python3 scripts/test-jo-stats.py --package "$package" --renderer "$renderer" \
+            | tee "$package/jo-stats-$renderer-result.txt"
         OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
             python3 scripts/test-jo-sp.py --package "$package" --prisoners --renderer "$renderer" \
             | tee "$package/jo-prisoners-$renderer-result.txt"

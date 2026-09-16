@@ -125,6 +125,9 @@ enablement, diffuse compensation, and parallax enablement require a restart.
 
 ## Jedi Outcast Campaign
 
+- [ ] Check the statistics at a normal mission exit. Confirm kills, secrets, accuracy, favorite weapon, and Force/saber use. Check readability at the desktop resolution.
+- [ ] Load a save and start a new game. Neither loading screen should show stale completion statistics.
+
 The JO prototype loads on the desktop. Full mission completion is not yet
 verified. Automated checks also cover prisoner heads, the Artus Topside handoff,
 Yavin Force controls and saber acquisition, Galak's damage states and completion

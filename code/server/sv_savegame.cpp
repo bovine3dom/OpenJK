@@ -148,7 +148,7 @@ void SV_WipeGame_f(void)
 		return;
 	}
 	SG_WipeSavegame(Cmd_Argv(1));
-//	Com_Printf("%s has been wiped\n", Cmd_Argv(1));	// wurde gelöscht in german, but we've only got one string
+//	Com_Printf("%s has been wiped\n", Cmd_Argv(1)); // Not localized.
 //	Com_Printf("Ok\n"); // no localization of this
 }
 
@@ -1243,11 +1243,9 @@ qboolean SG_ReadSavegame(
 	char sComment[iSG_COMMENT_SIZE];
 	char sMapCmd[iSG_MAPCMD_SIZE];
 
-#ifdef JK2_MODE
 	Cvar_Set(
 		"cg_missionstatusscreen",
 		"0");
-#endif
 
 	ojk::SavedGame& saved_game = ojk::SavedGame::get_instance();
 
