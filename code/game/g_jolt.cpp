@@ -1213,14 +1213,23 @@ bool G_JoltRender(gentity_t* ent, int time, const float* origin, float* angles) 
 	if (SavedCorpse(ent)) { VectorSet(angles, 0, ent->currentAngles[YAW], 0); return true; }
 	return false;
 }
-bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength) {
-	if (G_JoltBlocksAI(ent)) return true;
+bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength, bool force) {
+	if (force && (!Eligible(ent) || ExternalPoseOwner(ent))) return false;
+	if (!force && G_JoltBlocksAI(ent)) return true;
 	if (strength < 100) return false;
-	auto* state = Acquire(ent);
-	if (!state || (!state->Active(ent) && !state->engaged)) return false;
+	auto* state = Acquire(ent, force);
+	if (!state || (!force && !state->Active(ent) && !state->engaged)) return false;
+	if (force && state->engaged) {
+		state->CancelRecovery(ent);
+		vec3_t velocity; VectorScale(ent->client->ps.velocity, MetresPerUnit, velocity);
+		// Tracking velocity includes root motion. Other phases store only the new throw.
+		if (state->fall->Balance().phase == JoltReaction::ControlPhase::Tracking)
+			state->fall->SetRootVelocity(velocity);
+		else state->fall->AddVelocity(velocity);
+	}
 	vec3_t point; VectorCopy(ent->currentOrigin, point); point[2] += 20;
 	const bool inherited = ent->client->ps.pm_time > 0 && (ent->client->ps.pm_flags & PMF_TIME_KNOCKBACK);
-	return state->StartFall(ent, direction, point, inherited ? 0 : std::min(12.0f, strength * .02f));
+	return state->StartFall(ent, direction, point, inherited || force ? 0 : std::min(12.0f, strength * .02f));
 }
 bool G_JoltSuppressPain(const gentity_t* ent, int mod) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;

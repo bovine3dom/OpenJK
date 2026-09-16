@@ -21,6 +21,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "g_local.h"
+#include "g_jolt.h"
 #include "anims.h"
 #include "b_local.h"
 #include "bg_local.h"
@@ -8565,6 +8566,15 @@ void WP_ForceKnockdown( gentity_t *self, gentity_t *pusher, qboolean pull, qbool
 			&& !PM_RollingAnim( self->client->ps.legsAnim )
 			&& !PM_InKnockDown( &self->client->ps ) )
 		{
+			if ( G_JoltKnockdown(self, pushDir, strongKnockdown ? 400 : 200, true) )
+			{
+				if ( pusher->NPC && pusher->enemy == self )
+				{
+					G_AddVoiceEvent( pusher, Q_irand( EV_GLOAT1, EV_GLOAT3 ), 3000 );
+					pusher->NPC->blockedSpeechDebounceTime = level.time + 3000;
+				}
+				return;
+			}
 			int knockAnim = BOTH_KNOCKDOWN1;//default knockdown
 			if ( pusher->client->NPC_class == CLASS_DESANN && self->client->NPC_class != CLASS_LUKE )
 			{//desann always knocks down, unless you're Luke

@@ -32,7 +32,7 @@ void G_JoltAfterDeath(gentity_t* ent);
 bool G_JoltDead(const gentity_t* ent);
 bool G_JoltKnockback(gentity_t* ent, const float* velocity);
 bool G_JoltExplosion(int mod);
-bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength);
+bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength, bool force = false);
 #else
 inline void G_JoltReset() {}
 inline void G_JoltForget(const gentity_t*) {}
@@ -52,5 +52,5 @@ inline void G_JoltAfterDeath(gentity_t*) {}
 inline bool G_JoltDead(const gentity_t*) { return false; }
 inline bool G_JoltKnockback(gentity_t*, const float*) { return false; }
 inline bool G_JoltExplosion(int) { return false; }
-inline bool G_JoltKnockdown(gentity_t*, const float*, float) { return false; }
+inline bool G_JoltKnockdown(gentity_t*, const float*, float, bool = false) { return false; }
 #endif
