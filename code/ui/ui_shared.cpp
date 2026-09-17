@@ -5401,6 +5401,12 @@ Menus_ActivateByName
 void Menu_HandleMouseMove(menuDef_t *menu, float x, float y);
 menuDef_t *Menus_ActivateByName(const char *p)
 {
+	if (DC->getCVarValue("com_outcast") && !Q_stricmp(p, "characterMenu"))
+	{
+		Menus_CloseAll();
+		DC->executeText(EXEC_APPEND, "map kejim_post\n");
+		return NULL;
+	}
 	bool rmlSelection = false;
 	int i;
 	menuDef_t *m = NULL;

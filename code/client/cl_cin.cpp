@@ -1890,10 +1890,20 @@ static void PlayCinematic(const char *arg, const char *s, qboolean qbInGame)
 				hCrawl = re.RegisterShaderNoMip( "menu/video/tc_0" );
 			}
 #else
-			hCrawl = re.RegisterShaderNoMip( va("menu/video/tc_%s",se_language->string) );
+			if (Cvar_VariableIntegerValue("com_outcast"))
+			{
+				// JO stores its crawl images by language number.
+				const char *languages[] = { "english", "french", "german", "british", "korean", "taiwanese", "italian", "spanish", "japanese" };
+				int language = 0;
+				for (int i = 0; i < ARRAY_LEN(languages); ++i)
+					if (!Q_stricmp(se_language->string, languages[i])) language = i;
+				hCrawl = re.RegisterShaderNoMip(va("menu/video/tc_%d", language));
+			}
+			else
+				hCrawl = re.RegisterShaderNoMip( va("menu/video/tc_%s",se_language->string) );
 			if (!hCrawl)
 			{
-				hCrawl = re.RegisterShaderNoMip( "menu/video/tc_english" );//failed, so go back to english
+				hCrawl = re.RegisterShaderNoMip(Cvar_VariableIntegerValue("com_outcast") ? "menu/video/tc_0" : "menu/video/tc_english");
 			}
 #endif
 			bits |= CIN_hold;
@@ -2172,5 +2182,3 @@ qboolean CL_InGameCinematicOnStandBy(void)
 {
 	return qbInGameCinematicOnStandBy;
 }
-
-
