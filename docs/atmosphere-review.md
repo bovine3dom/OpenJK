@@ -102,8 +102,8 @@ when the packaged map uses a shared file; setup and F10 report those exceptions.
 
 ## Shared Profiles
 
-Map aliases are relative symlinks to `OpenJK/maps/shared/`. There are 17 editable
-profiles for the 33 selected maps: seven shared files and ten private files.
+Map aliases are relative symlinks to `OpenJK/maps/shared/`. There are 18 editable
+profiles for the 33 selected maps: seven shared files and eleven private files.
 The same layout is used in `scripts/maps/` and in the published package.
 
 | Shared file under `maps/shared/` | Maps |
@@ -113,7 +113,7 @@ The same layout is used in `scripts/maps/` and in the published package.
 | `ja-tatooine.atmosphere` | `t1_sour`, `t1_surprise` |
 | `ja-amber.atmosphere` | `t2_rancor`, `taspir2` |
 | `jo-artus.atmosphere` | `artus_mine`, `artus_topside` |
-| `jo-bespin.atmosphere` | `bespin_undercity`, `ns_starpad` |
+| `jo-bespin.atmosphere` | `bespin_undercity` |
 | `jo-yavin.atmosphere` | `yavin_courtyard`, `yavin_final`, `yavin_temple`, `yavin_trial` |
 
 The shared Korriban file contains the user's grey tuning. `yavin1b.atmosphere`
@@ -127,6 +127,15 @@ its aliases when their profiles load. Reload the current map's profile with F6
 in review mode or `r_atmosphereReload` in normal play.
 
 ### Existing Local Edits
+
+`kejim_post` has a separate dusk profile. It retains the painted mountains and
+most of the original clouds. The `ns_*` maps use their original night skies.
+The renderer ignores old atmosphere files for these maps, including files in
+existing play profiles. Run the headless check with:
+
+```bash
+python3 scripts/test-jo-cinematics.py --case skies --renderer rdsp-rend2
+```
 
 On the next setup, equivalent old per-map copies become links. Original files,
 including their comments, are saved in `OpenJK/maps/atmosphere-backups/` first.

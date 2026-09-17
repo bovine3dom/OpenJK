@@ -30,6 +30,8 @@ MAPS["turret"] = "ns_starpad"
 ACTORS["turret"] = ("lady_luck_gun",)
 MAPS["saber"] = "bespin_undercity"
 ACTORS["saber"] = ("kyle_tube", "reborn_shaft")
+MAPS["skies"] = "kejim_post"
+ACTORS["skies"] = ("sky_test",)
 
 
 def run_case(package, case, renderer, saved):
@@ -37,6 +39,12 @@ def run_case(package, case, renderer, saved):
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=f"{case}.{renderer}.", dir=output))
     profile = run / "profile"
+    if case == "skies":
+        folder = profile / "campaigns/jo/OpenJK"
+        folder.mkdir(parents=True)
+        with zipfile.ZipFile(folder / "zzz_old_skies.pk3", "w") as archive:
+            for name in ("ns_streets", "ns_hideout", "ns_starpad"):
+                archive.writestr(f"maps/{name}.atmosphere", (package / "OpenJK/maps/shared/jo-bespin.atmosphere").read_bytes())
     if case == "jan-door" and not saved:
         folder = profile / "campaigns/jo/OpenJK"
         subprocess.run([sys.executable, str(package / "import-jo.py"),
@@ -158,6 +166,14 @@ def run_case(package, case, renderer, saved):
                 cmd("helpusobi 1; wait 150; use jan_jail_door")
             elif case == "trial":
                 cmd("helpusobi 1; wait 150; use cinematic13script")
+            elif case == "skies":
+                cmd("helpusobi 1; exitview; wait 200; god; noclip; setviewpos 100 160 600 180; cg_draw2D 0; wait 20")
+                capture("kejim_dusk")
+                assert "Atmosphere: kejim_post, sky=textures/skies/kejim" in log.read_text(errors="replace")
+                for name in ("ns_streets", "ns_hideout", "ns_starpad"):
+                    cmd(f"map {name}; wait 100; exitview; wait 100; r_atmosphereReload")
+                    capture(name)
+                    assert f"Atmosphere: {name}," not in log.read_text(errors="replace")
             elif case == "saber":
                 cmd("helpusobi 1; god; saberColor yellow; use t179; wait 20; use cin_firstreborn")
             elif case == "turret":
@@ -242,6 +258,8 @@ def run_case(package, case, renderer, saved):
                 if case != "droid" and completed and all(s.get("absent") == "1" for s in completed):
                     break
             else:
+                if case == "droid":
+                    cmd("save droid_stuck")
                 raise TimeoutError(f"Cinematic did not complete: {log}")
             if case == "cctv":
                 galak = [s for s in history if s["name"] == "cinematic_galak" and "absent" not in s]
@@ -348,7 +366,7 @@ def run_case(package, case, renderer, saved):
             traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
                       for line in text.splitlines() if "cinematic_animation actor=" in line]
             staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
-            assert (staged or case in ("boarding", "jan-door", "droid", "turret", "saber")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert (staged or case in ("boarding", "jan-door", "droid", "turret", "saber", "skies")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
             assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)
@@ -374,6 +392,8 @@ def main():
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 640x480x24", sys.executable,
                                 __file__, *sys.argv[1:], "--inside"])
     for case in ([args.case] if args.case else MAPS):
+        if case == "skies" and args.renderer != "rdsp-rend2":
+            continue
         run_case(args.package.resolve(), case, args.renderer, args.save)
     return 0
 

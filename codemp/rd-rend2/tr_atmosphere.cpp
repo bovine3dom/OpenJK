@@ -159,6 +159,8 @@ static void BuildAtmosphere(world_t *world, const Atmosphere::Profile &settings)
 void R_LoadAtmosphere(world_t *world)
 {
 	world->atmosphereImage = nullptr;
+	// These night maps must also reject profiles left by older packages.
+	if (!Q_stricmpn(world->baseName, "ns_", 3)) return;
 #ifdef REND2_SP
 	COM_ParseSession session;
 #else

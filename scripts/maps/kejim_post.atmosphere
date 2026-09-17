@@ -1,0 +1,21 @@
+atmosphere 1
+sky textures/skies/kejim
+// Initial palette: kejim-dusk. Edit this map profile for tuning.
+// Source-art lighting estimate; no new sun disc.
+radius 6360
+thickness 60
+observerHeight 0.15
+rayHeight 8
+mieHeight 1.5
+rayleigh 0.0058 0.0135 0.0331
+mie 0.025 0.023 0.025
+absorption 0.002 0.003 0.006
+groundAlbedo 0.12 0.12 0.16
+anisotropy 0.76
+illuminance 2
+sunDirection -0.7 -0.71 0.035
+sunRadius 0.006
+sunDisk 0
+cloudStrength 0.15
+cloudColor 0.35 0.27 0.4
+skyBlend 0.35

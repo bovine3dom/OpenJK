@@ -131,7 +131,8 @@ tolerance: the remaining distance must not exceed the actor's horizontal radius.
 
 The headless check opens the droid door and waits in the lift. It checks that the
 retail script moves the droid, enables the lift trigger, and loads `bespin_streets`.
-It passes with both renderers.
+It passes with both renderers. The Rend2 check also passes after loading a save
+made with the old build while the droid was stopped at the previous waypoint.
 
 ```bash
 python3 scripts/test-jo-cinematics.py --case droid --renderer rdsp-vanilla

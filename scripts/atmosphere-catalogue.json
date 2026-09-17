@@ -2182,8 +2182,8 @@
       "campaign": "jo",
       "map": "kejim_post",
       "kind": "sp",
-      "palette": null,
-      "reason": "Keep the moonlit mountain and cloud composition; a daylight replacement would alter the scene.",
+      "palette": "kejim-dusk",
+      "reason": "Add low dusk light. Keep the painted mountains, moon, and most of the original clouds.",
       "approved": false,
       "skies": [
         {
@@ -2206,14 +2206,17 @@
         -15.0,
         180.0
       ],
-      "view_source": "BSP player start; use flight to reach a sky opening."
+      "view_source": "BSP player start; use flight to reach a sky opening.",
+      "sky": "textures/skies/kejim",
+      "sun_basis": "Source-art lighting estimate; no new sun disc.",
+      "sun_direction": [-0.7, -0.71, 0.035]
     },
     {
       "campaign": "jo",
       "map": "ns_hideout",
       "kind": "sp",
       "palette": null,
-      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "reason": "Keep the original night sky. Do not add a daylight atmosphere.",
       "approved": false,
       "skies": [],
       "sky_portal": false,
@@ -2229,8 +2232,8 @@
       "campaign": "jo",
       "map": "ns_starpad",
       "kind": "sp",
-      "palette": "bespin",
-      "reason": "Use the authored peach cloud backdrop as the palette reference, with a low blend.",
+      "palette": null,
+      "reason": "Keep the original night sky. Do not add a daylight atmosphere.",
       "approved": false,
       "skies": [
         {
@@ -2247,21 +2250,14 @@
         -7755.0,
         90.0
       ],
-      "view_source": "BSP player start; use flight to reach a sky opening.",
-      "sky": "textures/skies/bespin",
-      "sun_basis": "Source-art lighting estimate; no new sun disc.",
-      "sun_direction": [
-        0.35,
-        -0.93,
-        0.12
-      ]
+      "view_source": "BSP player start; use flight to reach a sky opening."
     },
     {
       "campaign": "jo",
       "map": "ns_streets",
       "kind": "sp",
       "palette": null,
-      "reason": "No rendered cube sky; retain the authored interior or fog background.",
+      "reason": "Keep the original night sky. Do not add a daylight atmosphere.",
       "approved": false,
       "skies": [],
       "sky_portal": false,

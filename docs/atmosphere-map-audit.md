@@ -73,10 +73,10 @@ See [the review guide](atmosphere-review.md) for controls and profile editing.
 | `doom_detention` | Stock | `textures/skies/nebula2` | Keep the painted space backdrop and planets. |
 | `doom_shields` | Stock | `none` | No rendered cube sky; retain the authored interior or fog background. |
 | `kejim_base` | Stock | `textures/skies/stars` | Keep the stars and dark space/night background. |
-| `kejim_post` | Stock | `textures/skies/desert2, textures/skies/nebula2` | Keep the moonlit mountain and cloud composition; a daylight replacement would alter the scene. |
-| `ns_hideout` | Stock | `none` | No rendered cube sky; retain the authored interior or fog background. |
-| `ns_starpad` | bespin | `textures/skies/bespin` | Use the authored peach cloud backdrop as the palette reference, with a low blend. |
-| `ns_streets` | Stock | `none` | No rendered cube sky; retain the authored interior or fog background. |
+| `kejim_post` | kejim-dusk | `textures/skies/kejim` | Add low dusk light. Keep the painted mountains, moon, and most of the original clouds. |
+| `ns_hideout` | Stock | `none` | Keep the original night sky. Do not add a daylight atmosphere. |
+| `ns_starpad` | Stock | `textures/skies/bespin` | Keep the original night sky. Do not add a daylight atmosphere. |
+| `ns_streets` | Stock | `none` | Keep the original night sky. Do not add a daylight atmosphere. |
 | `pit` | Stock | `none` | No rendered cube sky; retain the authored interior or fog background. |
 | `valley` | Stock | `textures/skies/nebula2` | Keep the painted space backdrop and planets. |
 | `yavin_canyon` | Stock | `none` | No rendered cube sky; retain the authored interior or fog background. |
