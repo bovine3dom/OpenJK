@@ -4,9 +4,9 @@ Research date: 2026-09-17.
 
 ## Decision
 
-Build a small `openjk-launcher` executable. Make it the normal desktop entry
-point for the single-player package. Keep `openjk_sp` as the game executable and
-as a supported direct entry point for command-line users and tests.
+Build a small OpenJedvibe launcher executable. Make it the normal desktop entry
+point for the single-player package. Keep `openjedvibe_sp` as a supported direct
+entry point for command-line users and tests.
 
 The launcher must:
 
@@ -91,7 +91,7 @@ Keep the setup screen open after an error. Show one of these states:
 | Incomplete | List the missing PK3 files. Show **Choose another folder** and **Check again**. |
 | Wrong game | State which game was found. Keep both paths unchanged. |
 | Unsupported data | State that the files are not a known supported profile. Offer a diagnostic report. |
-| Unreadable | State that OpenJK cannot read the folder. Mention sandbox access when applicable. |
+| Unreadable | State that OpenJedvibe cannot read the folder. Mention sandbox access when applicable. |
 | Damaged archive | Name the archive that cannot be opened. Suggest the store's verify or repair action. |
 | Dialog unavailable | Show a path text field and explain how to enable a Linux desktop portal. |
 
@@ -114,11 +114,11 @@ show the error and a **Retry** action. Do not start JO with a partial overlay.
 
 ### Executables
 
-- Add an `openjk-launcher` target for Windows, macOS, and Linux.
+- Add an internal launcher target for Windows, macOS, and Linux.
 - Install it with the JA single-player package.
 - Point desktop shortcuts and application entries to the launcher.
-- Keep `openjk_sp` available for scripts, tests, and advanced command-line use.
-- Start `openjk_sp` as a child process. Do not pass the command through a shell.
+- Keep `openjedvibe_sp` available for scripts, tests, and advanced command-line use.
+- Start `openjedvibe_sp` as a child process. Do not pass the command through a shell.
 
 Keep the launcher open during JO import because it owns the progress UI. Exit
 the launcher after a successful game-process start.
@@ -480,7 +480,7 @@ the release launcher.
 - [ ] Add macOS application-bundle providers.
 - [x] Add atomic `bootstrap.ini` persistence.
 - [x] Add a diagnostic command, such as
-  `openjk-launcher --headless-check --ja-path PATH --jo-path PATH`.
+  `openjedvibe-launcher --headless-check --ja-path PATH --jo-path PATH`.
 
 ### Phase 2: Add the Standalone RmlUi Launcher
 
@@ -502,7 +502,7 @@ the release launcher.
 - [x] Add Windows, macOS, and Linux process launch implementations.
 - [x] Report a missing engine binary or failed child start in the launcher.
 - [x] Update desktop shortcuts and application entries to use the launcher.
-- [x] Keep direct `openjk_sp` startup working.
+- [x] Keep direct `openjedvibe_sp` startup working.
 - [ ] Retire `launch-sp.sh` from the public package after feature parity. Keep it
   as a development tool if it remains useful.
 
@@ -659,7 +659,6 @@ the data, and provide a browse or retry path.
 
 ## Open Questions
 
-- What public product name should distinguish this fork from upstream OpenJK?
 - Must the first public build support portable mode, Flatpak, or an app-store
   sandbox, or can these follow the native packages?
 - Which original retail and native macOS editions are available for validation

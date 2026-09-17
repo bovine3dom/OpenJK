@@ -365,7 +365,7 @@ int run() {
     FileInterface file_interface;
     Runtime runtime;
     try {
-        runtime.backend = Backend::Initialize("OpenJK / Campaign Control", 960, 640, true);
+        runtime.backend = Backend::Initialize("OpenJedvibe / Campaign Control", 960, 640, true);
         if (!runtime.backend) throw std::runtime_error(std::string("Cannot create the launcher window: ") + SDL_GetError());
         SDL_SetWindowMinimumSize(Backend::GetWindow(), 720, 560);
         Rml::SetSystemInterface(Backend::GetSystemInterface());
@@ -419,7 +419,7 @@ int run() {
         Rml::RemoveContext("launcher");
         return 0;
     } catch (const std::exception& error) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "OpenJK launcher startup error", error.what(),
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "OpenJedvibe launcher startup error", error.what(),
             runtime.backend ? Backend::GetWindow() : nullptr);
         return 1;
     }

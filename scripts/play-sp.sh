@@ -104,13 +104,13 @@ if [ -n "$2" ]; then
 fi
 package=$(realpath -e -- "$root/build/ready")
 case "$package" in "$root/build/packages/"*) ;; *) exit 1 ;; esac
-for file in openjk_sp.x86_64 rdsp-vanilla_x86_64.so OpenJK/jagamex86_64.so launch-sp.sh build-id.txt; do
+for file in openjedvibe_sp.x86_64 rdsp-vanilla_x86_64.so OpenJK/jagamex86_64.so launch-sp.sh build-id.txt; do
     test -s "$package/$file"
 done
 test "$(cat "$package/build-id.txt")" = "${package##*/}"
 grep -Fxq 'PASS: t1_sour' "$package/smoke-result.txt"
 if [ "$3" = jo ]; then
-    test -x "$package/openjk-import-jo"
+    test -x "$package/openjedvibe-import-jo"
 fi
 printf '%s\n' "$package"
 REMOTE
@@ -122,11 +122,11 @@ rsync -a --secluded-args --no-whole-file --modify-window=-1 \
     --delay-updates --delete-delay --partial-dir=.rsync-partial \
     --exclude=/.play-lock --exclude=/.openjk-managed --exclude=/.update-incomplete \
     --info=stats2,name1 -e ssh -- "$host:$remote/" "$destination/"
-for file in openjk_sp.x86_64 rdsp-vanilla_x86_64.so OpenJK/jagamex86_64.so launch-sp.sh; do
+for file in openjedvibe_sp.x86_64 rdsp-vanilla_x86_64.so OpenJK/jagamex86_64.so launch-sp.sh; do
     test -s "$destination/$file"
 done
 [[ $(<"$destination/build-id.txt") == "${remote##*/}" ]]
-test -x "$destination/openjk_sp.x86_64"
+test -x "$destination/openjedvibe_sp.x86_64"
 rm -- "$destination/.update-incomplete"
 export OJK_PROFILE="$profile"
 # The launcher inherits descriptor 9 and keeps the same lock through game exit.

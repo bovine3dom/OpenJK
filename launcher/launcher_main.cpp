@@ -22,7 +22,7 @@ using namespace bootstrap;
 namespace {
 
 int error(const std::string& detail) {
-    std::cerr << "openjk-launcher: " << detail << '\n';
+    std::cerr << "openjedvibe-launcher: " << detail << '\n';
     return 1;
 }
 
@@ -76,7 +76,7 @@ int run(const std::vector<std::string>& args) {
         } else return error("Unknown option: " + arg + ". Use --help for options.");
     }
     if (help) {
-        std::cout << "Usage: openjk-launcher [options] [-- engine arguments]\n"
+        std::cout << "Usage: openjedvibe-launcher [options] [-- engine arguments]\n"
                      "  --headless-check   Check supplied game paths, or saved paths; do not launch\n"
                      "  --print-launch     Prepare the campaign and print one quoted argument per line\n"
                      "  --ja-path PATH     Select Jedi Academy data\n"
@@ -142,7 +142,7 @@ int run(const std::vector<std::string>& args) {
     if (game == Game::outcast) {
         auto imported = jo_import::import_campaign(academy.data_root, outcast->data_root, campaign_profile(root, game));
         if (!imported) return error(imported.error->message);
-        if (!imported.warning.empty()) std::cerr << "openjk-launcher: " << imported.warning << '\n';
+        if (!imported.warning.empty()) std::cerr << "openjedvibe-launcher: " << imported.warning << '\n';
     }
     if (print) {
         for (const auto& arg : argv) std::cout << inspect_argument(arg) << '\n';

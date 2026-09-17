@@ -29,7 +29,7 @@ Upstream projects: [RmlUi](https://github.com/mikke89/RmlUi) and
 
 ## Build Settings
 
-CMake 3.28 or later is required. OpenJK targets default to C++11 without
+CMake 3.28 or later is required. Project targets default to C++11 without
 compiler extensions. RmlUi Core requires C++17 and supplies that requirement
 to the SP client through `RmlUi::Core`.
 
@@ -40,7 +40,7 @@ FreeType settings are explicit: `FT_DISABLE_ZLIB`, `FT_DISABLE_BZIP2`,
 `FT_DISABLE_PNG`, `FT_DISABLE_HARFBUZZ`, and `FT_DISABLE_BROTLI` are ON.
 Their `FT_REQUIRE_*` settings and `FT_ENABLE_ERROR_STRINGS` are OFF.
 FreeType keeps its internal gzip/zlib implementation. It does not link the
-optional system libraries. These settings do not change OpenJK's existing
+optional system libraries. These settings do not change the existing
 SDL, PNG, zlib, or other dependency settings.
 
 RmlUi samples, tests, shell, Lua bindings, Lottie, SVG, HarfBuzz sample,

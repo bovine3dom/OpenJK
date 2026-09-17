@@ -82,7 +82,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ matrix.build_type == 'Release' }}
         with:
-          name: OpenJK-windows-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
+          name: OpenJedvibe-windows-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
           path: ${{ github.workspace }}/build/bin/JediAcademy
           if-no-files-found: error
 
@@ -159,11 +159,11 @@ jobs:
         shell: bash
         run: cmake --install .
 
-      - name: Create OpenJK binary archive
+      - name: Create OpenJedvibe binary archive
         if: ${{ matrix.build_type == 'Release' }}
         working-directory: ${{ github.workspace }}/install/JediAcademy
         shell: bash
-        run: tar -czvf OpenJK-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz *
+        run: tar -czvf OpenJedvibe-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz *
 
       - name: Create OpenJO binary archive
         if: ${{ matrix.build_type == 'Release' }}
@@ -174,8 +174,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ matrix.build_type == 'Release' }}
         with:
-          name: OpenJK-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
-          path: ${{github.workspace}}/install/JediAcademy/OpenJK-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz
+          name: OpenJedvibe-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
+          path: ${{github.workspace}}/install/JediAcademy/OpenJedvibe-linux-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
@@ -243,11 +243,11 @@ jobs:
         shell: bash
         run: cmake --install .
 
-      - name: Create OpenJK binary archive
+      - name: Create OpenJedvibe binary archive
         if: ${{ matrix.build_type == 'Release' }}
         working-directory: ${{ github.workspace }}/install/JediAcademy
         shell: bash
-        run: tar -czvf openjk-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz *
+        run: tar -czvf openjedvibe-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz *
 
       - name: Create OpenJO binary archive
         if: ${{ matrix.build_type == 'Release' }}
@@ -258,8 +258,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ matrix.build_type == 'Release' }}
         with:
-          name: OpenJK-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
-          path: ${{ github.workspace }}/install/JediAcademy/openjk-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz
+          name: OpenJedvibe-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}
+          path: ${{ github.workspace }}/install/JediAcademy/openjedvibe-macos-${{ matrix.arch }}-${{ matrix.build_type }}-${{ matrix.portable }}.tar.gz
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v4
@@ -283,12 +283,12 @@ jobs:
 
       - name: Create binary archives
         run: |
-          7z a -r OpenJK-windows-x86.zip ./OpenJK-windows-x86-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
-          7z a -r OpenJK-windows-x86_64.zip ./OpenJK-windows-x86_64-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
-          mv ./OpenJK-linux-x86-Release-Non-Portable/* OpenJK-linux-x86.tar.gz
-          mv ./OpenJK-linux-x86_64-Release-Non-Portable/* OpenJK-linux-x86_64.tar.gz
-          mv ./OpenJK-macos-x86_64-Release-Non-Portable/* OpenJK-macos-x86_64.tar.gz
-          mv ./OpenJK-macos-arm64-Release-Non-Portable/* OpenJK-macos-arm64.tar.gz
+          7z a -r OpenJedvibe-windows-x86.zip ./OpenJedvibe-windows-x86-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
+          7z a -r OpenJedvibe-windows-x86_64.zip ./OpenJedvibe-windows-x86_64-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
+          mv ./OpenJedvibe-linux-x86-Release-Non-Portable/* OpenJedvibe-linux-x86.tar.gz
+          mv ./OpenJedvibe-linux-x86_64-Release-Non-Portable/* OpenJedvibe-linux-x86_64.tar.gz
+          mv ./OpenJedvibe-macos-x86_64-Release-Non-Portable/* OpenJedvibe-macos-x86_64.tar.gz
+          mv ./OpenJedvibe-macos-arm64-Release-Non-Portable/* OpenJedvibe-macos-arm64.tar.gz
 
           7z a -r OpenJO-windows-x86.zip ./OpenJO-windows-x86-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
           7z a -r OpenJO-windows-x86_64.zip ./OpenJO-windows-x86_64-Release-Non-Portable/* '-x!msvcp*.*' '-x!vcruntime*.*' '-x!concrt*.*'
@@ -316,28 +316,28 @@ jobs:
     strategy:
       matrix:
         include:
-          - artifact_dir: OpenJK-windows-x86-Release-Non-Portable/JediAcademy
-            artifact_name: OpenJK-windows-x86.zip
+          - artifact_dir: OpenJedvibe-windows-x86-Release-Non-Portable
+            artifact_name: OpenJedvibe-windows-x86.zip
             zip: true
 
-          - artifact_dir: OpenJK-windows-x86_64-Release-Non-Portable/JediAcademy
-            artifact_name: OpenJK-windows-x86_64.zip
+          - artifact_dir: OpenJedvibe-windows-x86_64-Release-Non-Portable
+            artifact_name: OpenJedvibe-windows-x86_64.zip
             zip: true
 
-          - artifact_dir: OpenJK-linux-x86-Release-Non-Portable
-            artifact_name: OpenJK-linux-x86.tar.gz
+          - artifact_dir: OpenJedvibe-linux-x86-Release-Non-Portable
+            artifact_name: OpenJedvibe-linux-x86.tar.gz
             zip: false
 
-          - artifact_dir: OpenJK-linux-x86_64-Release-Non-Portable
-            artifact_name: OpenJK-linux-x86_64.tar.gz
+          - artifact_dir: OpenJedvibe-linux-x86_64-Release-Non-Portable
+            artifact_name: OpenJedvibe-linux-x86_64.tar.gz
             zip: false
 
-          - artifact_dir: OpenJK-macos-x86_64-Release-Non-Portable
-            artifact_name: OpenJK-macos-x86_64.tar.gz
+          - artifact_dir: OpenJedvibe-macos-x86_64-Release-Non-Portable
+            artifact_name: OpenJedvibe-macos-x86_64.tar.gz
             zip: false
 
-          - artifact_dir: OpenJK-macos-arm64-Release-Non-Portable
-            artifact_name: OpenJK-macos-arm64.tar.gz
+          - artifact_dir: OpenJedvibe-macos-arm64-Release-Non-Portable
+            artifact_name: OpenJedvibe-macos-arm64.tar.gz
             zip: false
 
           - artifact_dir: OpenJO-windows-x86-Release-Non-Portable/JediOutcast

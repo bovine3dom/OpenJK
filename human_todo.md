@@ -38,7 +38,7 @@ package without access to retail game data.
    gh run watch <run-id>
    ```
 
-4. Download the `OpenJK-windows-x86_64-Release-Non-Portable` artifact. The
+4. Download the `OpenJedvibe-windows-x86_64-Release-Non-Portable` artifact. The
    non-portable build is still relocatable. It stores user data in
    `Documents\My Games\OpenJK` instead of the extracted application folder.
 
@@ -49,9 +49,9 @@ package without access to retail game data.
 6. Confirm that the package contains these files and folders:
 
    ```text
-   openjk-launcher.exe
-   openjk-import-jo.exe
-   openjk_sp.x86_64.exe
+   openjedvibe-launcher.exe
+   openjedvibe-import-jo.exe
+   openjedvibe_sp.x86_64.exe
    SDL2.dll
    OpenJK\
    launcher\
@@ -62,19 +62,19 @@ package without access to retail game data.
 7. Create and record a SHA-256 hash before distribution.
 
    ```powershell
-   Get-FileHash .\OpenJK-launcher-win64-test.zip -Algorithm SHA256
+   Get-FileHash .\OpenJedvibe-win64-test.zip -Algorithm SHA256
    ```
 
 Test the ZIP package before an NSIS installer. The ZIP test checks the launcher
 and its runtime dependencies. A later installer test must also check non-admin
-installation, removal, and the **Jedi Academy SP** Start Menu shortcut.
+installation, removal, and the **OpenJedvibe** Start Menu shortcut.
 
 ### Run the Windows Test
 
 - [ ] Use a clean Windows 10 or Windows 11 computer without development tools.
 - [ ] Extract the complete ZIP to a path that contains spaces. If possible, use
   a Windows account or path that contains non-ASCII characters.
-- [ ] Start `openjk-launcher.exe` from File Explorer. Record any Windows
+- [ ] Start `openjedvibe-launcher.exe` from File Explorer. Record any Windows
   SmartScreen or antivirus warning. The test build is not signed.
 - [ ] Select the tester's own Jedi Academy and Jedi Outcast data folders. Do not
   copy or change the retail data for this test.
@@ -150,7 +150,7 @@ Load the trusted local updater configuration and locate the managed package:
 config=${OJK_DESKTOP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf}
 source "$config"
 package="${OJK_DESKTOP_DIR%/}/worktrees/openjk-squad_ai/build"
-test -x "$package/openjk-launcher"
+test -x "$package/openjedvibe-launcher"
 cat "$package/build-id.txt"
 ```
 
@@ -160,13 +160,13 @@ update can delete files that are not part of the published package.
 ### Test the Synced Launcher
 
 Use a separate XDG data folder so that this test does not change the normal
-OpenJK profile:
+retained OpenJK compatibility profile:
 
 ```bash
-test_xdg="${XDG_DATA_HOME:-$HOME/.local/share}/openjk-launcher-test/squad_ai"
-XDG_DATA_HOME="$test_xdg" "$package/openjk-launcher" \
+test_xdg="${XDG_DATA_HOME:-$HOME/.local/share}/openjedvibe-launcher-test/squad_ai"
+XDG_DATA_HOME="$test_xdg" "$package/openjedvibe-launcher" \
   --headless-check --ja-path "$OJK_ASSETS" --jo-path "$OJK_JO_ASSETS"
-XDG_DATA_HOME="$test_xdg" "$package/openjk-launcher"
+XDG_DATA_HOME="$test_xdg" "$package/openjedvibe-launcher"
 ```
 
 Both headless checks must report `ready`. The headless check does not save the
@@ -185,7 +185,7 @@ paths. Select the same local folders in the graphical launcher.
 - [ ] Test the packaged desktop entry:
 
   ```bash
-  XDG_DATA_HOME="$test_xdg" gio launch "$package/openjk-launcher.desktop"
+  XDG_DATA_HOME="$test_xdg" gio launch "$package/openjedvibe.desktop"
   ```
 
 - [ ] Exit the launcher and game. Publish another package, run the rsync command

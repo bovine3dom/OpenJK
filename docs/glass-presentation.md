@@ -185,7 +185,7 @@ and desktop review of the planar correction remain open.
   object examples are not a suitable visual target for thin, flat windows.
 
 These sources support separate transmission, reflection, and surface detail.
-The visibility cues proposed below are art choices for OpenJK, not a documented
+The visibility cues proposed below are art choices for OpenJedvibe, not a documented
 recipe from a particular shipped game.
 
 A flat, parallel-sided pane bends light at both interfaces. The outgoing ray is

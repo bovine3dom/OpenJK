@@ -23,6 +23,7 @@ exec 9>build/sp/build.lock
 flock -n 9 || { printf 'Another SP build is running\n' >&2; exit 1; }
 cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DProjectName=OpenJedvibe \
     -DBuildMPEngine=OFF -DBuildMPRdVanilla=OFF -DBuildMPDed=OFF \
     -DBuildMPGame=OFF -DBuildMPCGame=OFF -DBuildMPUI=OFF -DBuildMPRend2=OFF \
     -DBuildSPEngine=ON -DBuildSPGame=ON -DBuildSPRdVanilla=ON -DBuildSPRend2=ON \
@@ -115,7 +116,7 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 {
     uname -sm
     c++ --version
-    for binary in "$package/openjk-launcher" "$package/openjk-import-jo" "$package/openjk_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/rdsp-rend2_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
+    for binary in "$package/openjedvibe-launcher" "$package/openjedvibe-import-jo" "$package/openjedvibe_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/rdsp-rend2_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
         ldd "$binary"
         sha256sum "$binary"
     done
@@ -123,8 +124,8 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 
 test -s "$package/launcher/launcher.rml"
 test -s "$package/launcher/launcher.rcss"
-test -x "$package/openjk-launcher.desktop"
-"$package/openjk-launcher" --headless-check --profile "$stage/launcher-profile" \
+test -x "$package/openjedvibe.desktop"
+"$package/openjedvibe-launcher" --headless-check --profile "$stage/launcher-profile" \
     --ja-path "${OJK_ASSETS:-$root/GameData}" > "$package/launcher-check.txt"
 
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"

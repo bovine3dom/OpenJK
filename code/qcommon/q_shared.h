@@ -76,8 +76,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #else
 #define PRODUCT_NAME			"openjk_sp"
 
-#define CLIENT_WINDOW_TITLE "OpenJK (SP)"
-#define CLIENT_CONSOLE_TITLE "OpenJK Console (SP)"
+#define CLIENT_WINDOW_TITLE "OpenJedvibe"
+#define CLIENT_CONSOLE_TITLE "OpenJedvibe Console"
 #define HOMEPATH_NAME_UNIX "openjk"
 #define HOMEPATH_NAME_WIN "OpenJK"
 #define HOMEPATH_NAME_MACOSX HOMEPATH_NAME_WIN

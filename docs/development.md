@@ -1,4 +1,4 @@
-# Single-Player Development
+# OpenJedvibe Single-Player Development
 
 ## Build and Test
 

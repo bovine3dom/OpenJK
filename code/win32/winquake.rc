@@ -80,12 +80,12 @@ BEGIN
         BEGIN
             VALUE "Comments", "Raven Software"
             VALUE "CompanyName", "Activision Inc"
-            VALUE "FileDescription", "OpenJK Singleplayer"
+            VALUE "FileDescription", "OpenJedvibe"
             VALUE "FileVersion",  VERSION_STRING
             VALUE "InternalName", "JASP"
             VALUE "LegalCopyright", "Copyright (C) 2013"
             VALUE "OriginalFilename", "jasp.exe"
-            VALUE "ProductName", "OpenJK Singleplayer"
+            VALUE "ProductName", "OpenJedvibe"
             VALUE "ProductVersion",  VERSION_STRING
         END
     END
@@ -97,5 +97,4 @@ END
 
 #endif    // English (U.S.) resources
 /////////////////////////////////////////////////////////////////////////////
-
 

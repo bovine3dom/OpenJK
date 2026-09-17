@@ -81,7 +81,7 @@ if [[ -n $review ]]; then profile="${profile%/}/atmosphere-review"; fi
 if [[ $campaign == jo ]]; then
     profile="${profile%/}/campaigns/jo"
     jo_assets=$(realpath -e -- "${OJK_JO_ASSETS:?Set OJK_JO_ASSETS to the Jedi Outcast GameData directory}")
-    "$package/openjk-import-jo" "$assets" "$jo_assets" "$profile"
+    "$package/openjedvibe-import-jo" "$assets" "$jo_assets" "$profile"
 fi
 mkdir -p -- "$profile"
 profile=$(realpath -- "$profile")
@@ -102,7 +102,7 @@ if [[ -f "$package/build-id.txt" ]]; then
     cat -- "$package/build-id.txt"
 fi
 cd -- "$package"
-exec ./openjk_sp.x86_64 \
+exec ./openjedvibe_sp.x86_64 \
     +set fs_basepath "$package" +set fs_cdpath "$assets" \
     +set fs_homepath "$profile" +set fs_game OpenJK \
     +set g_dismemberment 3 +set g_dismemberProbabilities 0 +set broadsword 1 \

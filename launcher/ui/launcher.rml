@@ -1,12 +1,12 @@
 <rml>
 <head>
-    <title>OpenJK / Campaign Control</title>
+    <title>OpenJedvibe / Campaign Control</title>
     <link type="text/rcss" href="launcher.rcss" />
 </head>
 <body>
     <div id="console">
         <div class="header">
-            <div class="eyebrow">OPENJK // FLIGHT CONTROL</div>
+            <div class="eyebrow">OPENJEDVIBE // FLIGHT CONTROL</div>
             <h1>Choose your campaign.</h1>
             <div class="subtitle">Locate your game files. Check the system. Begin the mission.</div>
             <div id="last" class="technical">LAST CAMPAIGN / Reading profile</div>

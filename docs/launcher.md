@@ -1,18 +1,18 @@
-# OpenJK Launcher
+# OpenJedvibe Launcher
 
 ## Requirements
 
 You must own and install Jedi Academy to use this package. You must also own
 and install Jedi Outcast to play the Jedi Outcast campaign.
 
-The OpenJK package does not contain game data. The launcher reads your game
+The OpenJedvibe package does not contain game data. The launcher reads your game
 data from the folders that you select. It does not change these source files.
 
 ## Start The Launcher
 
-On Windows, use the **Jedi Academy SP** Start Menu shortcut. On macOS, open
-`OpenJK Launcher.app`. On Linux, open `openjk-launcher.desktop`. You can also
-start `openjk-launcher` directly.
+On Windows, use the **OpenJedvibe** Start Menu shortcut. On macOS, open
+`OpenJedvibe.app`. On Linux, open `openjedvibe.desktop`. You can also start
+`openjedvibe-launcher` directly.
 
 Select the folder that contains `base/assets0.pk3`. You can select a game
 folder, a `GameData` folder, or a `base` folder. Jedi Academy data is necessary

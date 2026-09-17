@@ -1,4 +1,4 @@
-# bovine3dom's slopped up fork of OpenJK
+# OpenJedvibe: bovine3dom's slopped up fork of OpenJK
 
 don't use this. use [upstream instead](https://github.com/JACoders/OpenJK). tested and patched for single player only. only tested on linux.
 
@@ -32,6 +32,8 @@ unification:
 - play jedi outcast in the jedi academy engine. mostly to make my life easier for all the improvements without maintaining two codebases, but you can also use weapons and force powers from JA. every time i reach a new level i find a broken thing so don't play it faster than me.
 
 ---
+
+Upstream information:
 
 # OpenJK
 

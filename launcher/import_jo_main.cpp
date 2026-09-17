@@ -5,7 +5,7 @@
 namespace {
 int run(int argc, const std::filesystem::path* args) {
     if (argc != 4) {
-        std::cerr << "Usage: import_jo <academy> <outcast> <profile>\n"
+        std::cerr << "Usage: openjedvibe-import-jo <academy> <outcast> <profile>\n"
                      "Select game folders that contain base/assets*.pk3.\n"
                      "Select a profile folder outside both game folders.\n";
         return 2;

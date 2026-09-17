@@ -31,6 +31,7 @@ if(WIN32)
 endif()
 
 add_executable(openjk-launcher launcher_main.cpp)
+set_target_properties(openjk-launcher PROPERTIES OUTPUT_NAME "${LauncherExecutable}")
 target_compile_features(openjk-launcher PRIVATE cxx_std_17)
 target_link_libraries(openjk-launcher PRIVATE openjk_bootstrap openjk_jo_import)
 if(WIN32)
@@ -158,6 +159,7 @@ if(BuildRmlUi)
 endif()
 
 add_executable(openjk-import-jo import_jo_main.cpp)
+set_target_properties(openjk-import-jo PROPERTIES OUTPUT_NAME "${JOImporterExecutable}")
 target_compile_features(openjk-import-jo PRIVATE cxx_std_17)
 target_link_libraries(openjk-import-jo PRIVATE openjk_jo_import)
 if(MINGW)
@@ -180,7 +182,7 @@ install(FILES "${CMAKE_SOURCE_DIR}/docs/launcher.md"
 	DESTINATION ${JKASPInstallDir}
 	COMPONENT ${JKASPClientComponent})
 if(UNIX AND NOT APPLE AND BuildRmlUi)
-	install(PROGRAMS openjk-launcher.desktop
+	install(PROGRAMS openjedvibe.desktop
 		DESTINATION ${JKASPInstallDir}
 		COMPONENT ${JKASPClientComponent})
 endif()

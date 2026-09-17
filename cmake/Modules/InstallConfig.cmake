@@ -22,7 +22,7 @@ set(JK2InstallDir "JediOutcast")
 set(JKASPInstallDir "${JKAInstallDir}")
 if(APPLE AND MakeApplicationBundles)
 	if(BuildLauncher)
-		set(JKASPBundleName "OpenJK Launcher")
+		set(JKASPBundleName "OpenJedvibe")
 	else()
 		set(JKASPBundleName "${SPEngine}")
 	endif()
@@ -76,11 +76,10 @@ cpack_add_component_group(JK2SP
 	DESCRIPTION "Jedi Outcast single player game")
 
 if(WIN32)
-	set(CPACK_NSIS_DISPLAY_NAME "OpenJK")
-	set(CPACK_NSIS_PACKAGE_NAME "OpenJK")
+	set(CPACK_NSIS_DISPLAY_NAME "OpenJedvibe")
+	set(CPACK_NSIS_PACKAGE_NAME "OpenJedvibe")
 	set(CPACK_NSIS_MUI_ICON "${SharedDir}/icons/icon.ico")
 	set(CPACK_NSIS_MUI_UNIICON "${SharedDir}/icons/icon.ico")
-	set(CPACK_NSIS_URL_INFO_ABOUT "https://openjk.org")
 
 	set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
 	include(InstallRequiredSystemLibraries)
@@ -109,22 +108,22 @@ if(WIN32)
 
 	if(BuildSPEngine)
 		if(BuildLauncher)
-			set(SP_SHORTCUT_TARGET "$INSTDIR\\\\${JKAInstallDir}\\\\openjk-launcher.exe")
-			set(SP_SHORTCUT_ICON "$INSTDIR\\\\${JKAInstallDir}\\\\openjk-launcher.exe")
+			set(SP_SHORTCUT_TARGET "$INSTDIR\\\\${JKAInstallDir}\\\\${LauncherExecutable}.exe")
+			set(SP_SHORTCUT_ICON "$INSTDIR\\\\${JKAInstallDir}\\\\${LauncherExecutable}.exe")
 		else()
 			set(SP_SHORTCUT_TARGET "$INSTDIR\\\\${JKAInstallDir}\\\\${SPEngine}.exe")
 			set(SP_SHORTCUT_ICON "$INSTDIR\\\\${JKAInstallDir}\\\\${SPEngine}.exe")
 		endif()
 		set(CPACK_NSIS_CREATE_ICONS_EXTRA
 			"${CPACK_NSIS_CREATE_ICONS_EXTRA}
-			CreateShortCut '$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Jedi Academy SP.lnk' \\\\
+			CreateShortCut '$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\OpenJedvibe.lnk' \\\\
 				'${SP_SHORTCUT_TARGET}' \\\\
 				'' \\\\
 				'${SP_SHORTCUT_ICON}'")
 
 		set(CPACK_NSIS_DELETE_ICONS_EXTRA
 			"${CPACK_NSIS_DELETE_ICONS_EXTRA}
-			Delete '$SMPROGRAMS\\\\$MUI_TEMP\\\\Jedi Academy SP.lnk'")
+			Delete '$SMPROGRAMS\\\\$MUI_TEMP\\\\OpenJedvibe.lnk'")
 
 		install(FILES ${MPDir}/OpenAL32.dll ${MPDir}/EaxMan.dll
 			DESTINATION ${JKAInstallDir}
@@ -168,11 +167,13 @@ endif()
 set(CPACK_PACKAGE_VERSION_MAJOR "1")
 set(CPACK_PACKAGE_VERSION_MINOR "0")
 set(CPACK_PACKAGE_VERSION_PATCH "0")
-set(CPACK_PACKAGE_FILE_NAME "OpenJK-${CMAKE_SYSTEM_NAME}-${Architecture}")
+set(CPACK_PACKAGE_NAME "OpenJedvibe")
+set(CPACK_PACKAGE_FILE_NAME "OpenJedvibe-${CMAKE_SYSTEM_NAME}-${Architecture}")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "OpenJedvibe-1.0.0-Source")
 
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "An improved Jedi Academy")
-set(CPACK_PACKAGE_VENDOR "JACoders")
-set(CPACK_PACKAGE_INSTALL_DIRECTORY "OpenJK")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OpenJedvibe single-player engine and campaign launcher")
+set(CPACK_PACKAGE_VENDOR "OpenJedvibe contributors")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "OpenJedvibe")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.txt")
 set(CPACK_PACKAGE_DIRECTORY ${PACKAGE_DIR})

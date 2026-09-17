@@ -152,7 +152,7 @@ was needed for the automated checks on the build machine.
 - [x] Configure the server package path and the desktop build, asset, and profile directories.
 - [ ] Record runtime library versions for the current package. Check that the executable and all native modules load on the desktop. Avoid server-specific CPU optimisation.
 - [x] Reuse the existing desktop assets and exclude them from routine build transfers.
-- [x] Package `openjk_sp.x86_64`, `rdsp-vanilla_x86_64.so`, `rdsp-rend2_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
+- [x] Package `openjedvibe_sp.x86_64`, `rdsp-vanilla_x86_64.so`, `rdsp-rend2_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
 - [x] Assign each package a unique identifier and source checksums, including uncommitted files. Publish only complete packages that passed both renderer smoke tests.
 - [x] Add a configured desktop pull-and-launch command in `scripts/play-sp.sh`. Reuse one managed directory for rsync delta updates, resolve a fixed server package, and refuse updates while the game is running.
 - [x] Test delta reuse, transfer failure/retry, path protection, publication changes, and launcher locking locally. Actual desktop SSH and GPU validation remain pending.
