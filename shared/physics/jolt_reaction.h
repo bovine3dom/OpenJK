@@ -31,6 +31,7 @@ struct BalanceStatus {
 	float targetChange = 0;
 	float handoffGap = 0, handoffAngle = 0;
 	float assistForce = 0, assistTorque = 0;
+	float passiveTorque = 0;
 	float peakLegLift = 0;
 	unsigned braceMask = 0, handContacts = 0, handContactsSeen = 0;
 	float preparationError = 0;

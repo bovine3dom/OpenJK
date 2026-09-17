@@ -271,13 +271,17 @@ int main() {
 		brace.AddMesh(0, largeFloor, 6); brace.Follow(parts, 0); brace.Engage();
 		brace.Impulse(1, direction, parts[1].end, 25); brace.ReleaseControl();
 		unsigned attempts = 0, contacts = 0;
+		float resistance = 0;
 		for (int i = 0; i < 600; ++i) {
 			Check(brace.Advance(1.0f/120), "braced fall solver step");
 			const auto b = brace.Balance(); attempts |= b.braceMask; contacts |= b.handContacts;
+			resistance = std::max(resistance, b.passiveTorque);
+			Check(b.passiveTorque <= 6.01f, "passive joint damping remains bounded");
 			Check(b.assistForce == 0 && b.assistTorque == 0, "bracing does not apply root assistance");
 		}
 		std::printf("Brace: targets=%u contacts=%u speed=%.3f hand=%u head=%u\n", attempts, contacts, brace.Speed(), brace.Balance().firstHandContact, brace.Balance().firstHeadContact);
 		Check(attempts != 0 && contacts != 0, "fall reaches a surface and records hand contact");
+		Check(resistance > 0, "free falls resist relative joint motion");
 		if (direction == forward) Check(!brace.Balance().firstHeadContact || brace.Balance().firstHandContact <= brace.Balance().firstHeadContact, "forward bracing places a hand before the head strikes");
 		brace.Sample(pose);
 		JoltReaction::Transform target[JoltReaction::PartCount];
@@ -385,6 +389,7 @@ int main() {
 			Check(held.Advance(1.0f/120), "Grip and Lightning share one physical rig");
 			const auto b = held.Balance();
 			Check(b.gripForce <= mass*80+.1f && b.assistForce == 0 && b.assistTorque == 0, "suspension uses a bounded external force without standing assistance");
+			Check(b.passiveTorque == 0, "Grip keeps its regional control and freely hanging ankles");
 		}
 		held.Sample(pose);
 		std::printf("Grip: neck=%.3f target=%.3f force=%.1f shock=%.2f\n", pose[2].matrix[2][3], target[2], held.Balance().gripForce, held.Balance().shock);

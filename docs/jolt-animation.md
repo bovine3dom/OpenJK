@@ -33,6 +33,12 @@ Death ends the contractions and
 muscle control. A Grip attachment remains active while the native power holds
 the corpse. Release then lets the passive body fall.
 
+Free falls and corpses have modest damping between connected bones. It slows
+rapid folding without a rest-pose target. The torso has the most resistance;
+the ankles have the least. Equal and opposite torques preserve total angular
+momentum. Active Grip, Lightning contractions, and catching arms retain their
+own control. Sleeping bodies do not receive these torques.
+
 The controller has separate strength settings for torso, head, arms, legs, and
 feet. Strength changes are gradual. Grip and Lightning use the same rig and the
 existing active-body budget. Unsupported actors use native behaviour.

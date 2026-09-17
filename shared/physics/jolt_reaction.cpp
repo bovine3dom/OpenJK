@@ -735,6 +735,27 @@ struct FallSimulation::Impl {
 			}
 		}
 	}
+	void PassiveResistance() {
+		balance.passiveTorque = 0;
+		if (balance.gripping || balance.shock > .05f ||
+			(balance.phase != ControlPhase::Falling && balance.phase != ControlPhase::Dead)) return;
+		auto& api = world.GetBodyInterface();
+		for (int i = 1; i < PartCount; ++i) {
+			// Catching arms keep their active control. Sleeping islands must stay asleep.
+			if (i >= 3 && i <= 6 && (balance.braceMask & (1u << ((i-3)/2)))) continue;
+			if (!body[i]->IsActive() || !body[parent[i]]->IsActive()) continue;
+			const auto relative = api.GetAngularVelocity(bodies[i])-api.GetAngularVelocity(bodies[parent[i]]);
+			if (relative.LengthSq() < 1e-8f) continue;
+			const float damping = i >= 11 ? .08f : i >= 7 ? .25f : i == 1 ? .55f : .15f;
+			const float limit = i >= 11 ? .75f : i >= 7 ? 3.0f : i == 1 ? 6.0f : 2.0f;
+			auto torque = -relative*damping;
+			if (torque.Length() > limit) torque *= limit/torque.Length();
+			// Equal and opposite torques dissipate joint motion without a rest-pose target.
+			api.AddTorque(bodies[i], torque, JPH::EActivation::DontActivate);
+			api.AddTorque(bodies[parent[i]], -torque, JPH::EActivation::DontActivate);
+			balance.passiveTorque = std::max(balance.passiveTorque, torque.Length());
+		}
+	}
 	void DeathControl() {
 		if (deathStrength <= 0) return;
 		deathAge += Step;
@@ -1112,12 +1133,14 @@ bool FallSimulation::Advance(float seconds) {
 	if (!std::isfinite(seconds) || seconds < 0 || seconds > 0.25f) return false;
 	auto& s = *impl;
 	if (s.balance.phase == ControlPhase::Dead && !s.world.GetNumActiveBodies(JPH::EBodyType::RigidBody)) {
+		s.balance.passiveTorque = 0;
 		s.clock += seconds;
 		s.history.Push(s.clock, s.position, s.rotation);
 		return true;
 	}
 	s.accumulator += seconds;
 	while (s.accumulator + 0.000001f >= Step) {
+		s.PassiveResistance();
 		if (s.balance.strength > 0 || s.balance.phase != ControlPhase::Falling) s.Control();
 		s.supported[0] = s.supported[1] = false;
 		s.handContacts = 0;
