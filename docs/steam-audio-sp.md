@@ -48,6 +48,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain; `0` uses the raw material result |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
+| `cg_alarmRelays` | `1` | Add Kejim Post perimeter-alarm relays at its control panel and gun base |
 
 Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
@@ -88,6 +89,12 @@ The material result is blended above the minimum, so material differences remain
 This is an audibility adjustment, not a physical wall measurement. Clear paths
 retain their existing gain. Distance attenuation still applies. Global ambient
 beds bypass spatial processing and do not occupy reflection slots.
+
+The Kejim Post perimeter alarm has two additional audio emitters attached to
+existing defense hardware. They use the original alarm's live on/off state.
+They need no new game entities or save format. Only one visible control-panel
+variant emits sound. The relays require `cg_spatialAmbience 1` and stop when the
+original alarm stops. Set `cg_alarmRelays 0` for an original-source comparison.
 
 `cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
 transmission and indirect paths when enabled. Unpositioned global ambient sets

@@ -255,6 +255,7 @@ vmCvar_t	cg_renderToTextureFX;
 vmCvar_t	cg_shadowCullDistance;
 vmCvar_t	cg_footsteps;
 vmCvar_t	cg_spatialAmbience;
+vmCvar_t	cg_alarmRelays;
 vmCvar_t	cg_saberEntMarks;
 vmCvar_t	cg_paused;
 vmCvar_t	cg_drawTimer;
@@ -376,6 +377,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_shadowCullDistance, "r_shadowRange", "1000", CVAR_ARCHIVE },
 	{ &cg_footsteps, "cg_footsteps", "3", CVAR_ARCHIVE  },//1 = sounds, 2 = sounds & effects, 3 = sounds, effects & marks, 4 = always
 	{ &cg_spatialAmbience, "cg_spatialAmbience", "1", CVAR_ARCHIVE },
+	{ &cg_alarmRelays, "cg_alarmRelays", "1", CVAR_ARCHIVE },
 	{ &cg_saberEntMarks, "cg_saberEntMarks", "1", CVAR_ARCHIVE  },
 
 	{ &cg_draw2D, "cg_draw2D", "1", CVAR_ARCHIVE  },

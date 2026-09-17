@@ -2,6 +2,12 @@
 
 ## Current Status
 
+The perimeter alarm now has relays at its existing control panel and gun base.
+All three sources follow the original alarm state. The relay check verifies
+separate emitters, clear sound at the panel, save/load, and scripted stop.
+The combined alarm, dense-fire, first-use, and bake run passed in
+`build/smoke/steam-audio.2q6avow8`.
+
 The user confirms that the first-use gap is gone. A dense-fire check then found
 159 full-scale samples with four simultaneous blaster shots. A stereo-linked
 lookahead limiter now controls the combined mix. The same capture passed without

@@ -166,12 +166,20 @@ def main():
                                for line in re.findall(r"steam_source ([^\n]+)", cmd("s_steam_status sources"))]
                     return [s for s in sources if s["sound"].endswith("/alarm1") and s["loop"] == "1"]
                 source = alarm()
-                assert len(source) == 1 and float(source[0]["occlusion"]) < .1, source
-                assert min(float(source[0]["left"]), float(source[0]["right"])) > 0, source
-                assert float(source[0]["transmission"].split(",")[1]) >= .119, source
-                records["alarm"] = source[0]
+                original = [s for s in source if s["pos"] == "56.0,160.0,472.0"]
+                assert len(original) == 1 and float(original[0]["occlusion"]) < .1, source
+                assert float(original[0]["transmission"].split(",")[1]) >= .119, source
+                assert len(source) == 3 and len({s["entity"] for s in source}) == 3, source
+                records["alarm"] = source
+                cmd("set cg_alarmRelays 0; wait 40")
+                assert len(alarm()) == 1
+                cmd("set cg_alarmRelays 1; setviewpos -16 160 480 180; wait 100")
+                assert any(float(s["occlusion"]) > .9 and s["pos"] != "56.0,160.0,472.0" for s in alarm())
+                cmd("save audio_alarm_test; load audio_alarm_test; wait 100")
+                assert len(alarm()) == 3, "Alarm relays did not survive save/load"
                 cmd("use defense_alarm_sound; wait 40")
                 assert not alarm(), "Scripted alarm stop was ignored"
+                initial = status("after_alarm")
             if args.ambient:
                 assert not args.map, "Ambient fixtures use the default map"
                 ambient()

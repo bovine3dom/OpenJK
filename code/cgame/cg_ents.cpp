@@ -163,6 +163,28 @@ static bool CG_EnvironmentalSound(const gentity_t *ent) {
 	return !ent->client && (ent->s.eType==ET_GENERAL || ent->s.eType==ET_SPEAKER || ent->s.eType==ET_MOVER);
 }
 
+static void CG_AlarmRelays(const gentity_t *source,sfxHandle_t sound) {
+	if(!cg_alarmRelays.integer || !sound || !G_IsOutcast() || Q_stricmp(cgs.mapname,"maps/kejim_post.bsp") ||
+		!source->targetname || Q_stricmp(source->targetname,"defense_alarm_sound")) return;
+	// Attach perimeter-warning audio to the existing control panel and gun base.
+	// The original speaker remains the sole owner of the alarm's on/off state.
+	bool panelAdded=false;
+	for(int i=1;i<ENTITYNUM_WORLD;++i) {
+		const auto &anchor=g_entities[i];
+		if(!anchor.inuse || !anchor.linked || !anchor.targetname || (anchor.s.eFlags&EF_NODRAW) || (anchor.svFlags&SVF_NOCLIENT)) continue;
+		vec3_t origin;
+		if(anchor.bmodel && !Q_stricmp(anchor.targetname,"run_perimeter_defense")) {
+			if(panelAdded) continue;
+			panelAdded=true;
+			VectorAdd(anchor.absmin,anchor.absmax,origin); VectorScale(origin,.5f,origin);
+			origin[0]+=24; origin[2]+=8;
+		} else if(anchor.classname && !Q_stricmp(anchor.classname,"emplaced_gun") && !Q_stricmp(anchor.targetname,"perimeter_gun1")) {
+			VectorCopy(anchor.currentOrigin,origin); origin[2]+=48;
+		} else continue;
+		cgi_S_AddLoopingSound(i,origin,vec3_origin,sound,CHAN_AUTO);
+	}
+}
+
 static void CG_EntityEffects( centity_t *cent ) {
 
 	// update sound origins
@@ -2539,6 +2561,7 @@ void CG_AddPacketEntities( qboolean isPortal ) {
 		if(ent->s.loopSound && !(ent->s.eFlags&EF_NODRAW)) {
 			const sfxHandle_t sound=ent->s.eType==ET_MOVER ? ent->s.loopSound : cgs.sound_precache[ent->s.loopSound];
 			cgi_S_AddLoopingSound(num,origin,vec3_origin,sound,(ent->s.eFlags&EF_LESS_ATTEN) ? CHAN_LESS_ATTEN : CHAN_AUTO);
+			CG_AlarmRelays(ent,sound);
 		}
 		if(localSet) ent->setTime=cgi_S_AddLocalSet(ent->soundSet,cg.refdef.vieworg,origin,num,ent->setTime);
 		if(!localSet && ent->s.eType==ET_SPEAKER) CG_Speaker(cent,ent->s);
