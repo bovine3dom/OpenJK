@@ -12,9 +12,14 @@
 namespace SteamSound {
 namespace {
 constexpr float Duration=1.5f;
-constexpr float HybridDuration=0.15f;
+constexpr float HybridDuration=0.6f;
 constexpr int Order=1, Channels=4;
 IPLSimulationFlags All=static_cast<IPLSimulationFlags>(IPL_SIMULATIONFLAGS_DIRECT|IPL_SIMULATIONFLAGS_REFLECTIONS|IPL_SIMULATIONFLAGS_PATHING);
+IPLDirectEffectParams NeutralDirect() {
+	IPLDirectEffectParams params={}; params.occlusion=params.distanceAttenuation=params.directivity=1;
+	for(int i=0;i<3;++i) params.airAbsorption[i]=params.transmission[i]=1;
+	return params;
+}
 }
 struct Engine::Impl {
 	IPLContext context=nullptr;
@@ -41,12 +46,14 @@ struct Engine::Impl {
 		IPLDirectEffectParams smooth={};
 		float pathSH[Channels]={};
 		bool active=false, reflected=false, hasReflection=false, hasPath=false, fresh=true;
+		bool discardPending=false, reflectionUpdated=false;
 		int tail=0;
 	};
 	std::array<Source,Voices+1> sources;
 	IPLAudioSettings audio={};
 	IPLCoordinateSpace3 listener={};
 	std::array<float,Block> room={};
+	std::array<float,Block> indirectLeft={},indirectRight={};
 	Info info;
 	unsigned worldTriangles=0;
 	std::future<void> job;
@@ -94,8 +101,7 @@ struct Engine::Impl {
 				iplReflectionEffectCreate(context,&audio,&reflectionSettings,&s.reflection)!=IPL_STATUS_SUCCESS ||
 				iplAmbisonicsDecodeEffectCreate(context,&audio,&decodeSettings,&s.decode)!=IPL_STATUS_SUCCESS) return;
 			iplSourceAdd(s.source,simulator);
-			s.smooth.occlusion=1; s.smooth.distanceAttenuation=1; s.smooth.directivity=1;
-			for (int i=0;i<3;++i) s.smooth.airAbsorption[i]=s.smooth.transmission[i]=1;
+			s.smooth=NeutralDirect();
 			s.output.direct=s.smooth;
 			s.output.pathing.shCoeffs=s.pathSH;
 		}
@@ -135,10 +141,21 @@ struct Engine::Impl {
 		job.get();
 		info.occlusion=info.transmission=1;
 		for(int i=0;i<=Voices;++i) {
-			auto &s=sources[i]; IPLSimulationOutputs output={}; iplSourceGetOutputs(s.source,All,&output);
+			auto &s=sources[i];
+			IPLSimulationOutputs output={}; iplSourceGetOutputs(s.source,All,&output);
+			if(s.discardPending) {
+				// Consume a published IR before the SDK can publish the replacement.
+				if(pending[i]) {
+					s.output.reflections=output.reflections; s.hasReflection=true; s.tail=1;
+					float silence[Block]={},left[Block]={},right[Block]={};
+					Reflect(s,silence,0,left,right); iplReflectionEffectReset(s.reflection);
+					s.hasReflection=false; s.tail=0;
+				}
+				s.discardPending=false; continue;
+			}
 			s.output.direct=output.direct; s.output.pathing=output.pathing;
 			std::copy(output.pathing.shCoeffs,output.pathing.shCoeffs+Channels,s.pathSH); s.output.pathing.shCoeffs=s.pathSH;
-			if(pending[i]) { s.output.reflections=output.reflections; s.hasReflection=true; }
+			if(pending[i]) { s.output.reflections=output.reflections; s.hasReflection=true; s.reflectionUpdated=true; }
 			if(i<Voices && s.active) {info.occlusion=std::min(info.occlusion,output.direct.occlusion); info.transmission=std::min(info.transmission,output.direct.transmission[1]);}
 		}
 		info.reverb=sources[Voices].output.reflections.reverbTimes[1];
@@ -153,12 +170,16 @@ struct Engine::Impl {
 		for(float &time:params.reverbTimes) { time=std::max(0.1f,std::min(6.0f,time)); decay=std::max(decay,time); }
 		bool signal=false; for(int i=0;i<Block;++i) signal|=std::abs(input[i])>0.000001f;
 		if(signal) s.tail=int(audio.samplingRate*decay/Block)+1;
-		if(s.tail<=0) return;
-		--s.tail;
+		const bool audible=s.tail>0;
+		// Drain new IRs even while quiet so the first shot uses the current room.
+		if(!audible && !s.reflectionUpdated) return;
+		s.reflectionUpdated=false;
+		if(audible) --s.tail;
 		float reflected[Channels][Block]={},stereo[2][Block]={};
 		float *in[]={input},*ambi[]={reflected[0],reflected[1],reflected[2],reflected[3]},*out[]={stereo[0],stereo[1]};
 		IPLAudioBuffer ib={1,Block,in},ab={Channels,Block,ambi},ob={2,Block,out};
 		iplReflectionEffectApply(s.reflection,&params,&ib,&ab,nullptr);
+		if(!audible) return;
 		IPLAmbisonicsDecodeEffectParams decode={}; decode.order=Order; decode.orientation=listener; decode.binaural=IPL_FALSE;
 		iplAmbisonicsDecodeEffectApply(s.decode,&decode,&ab,&ob);
 		for(int i=0;i<Block;++i) { left[i]+=stereo[0][i]*gain; right[i]+=stereo[1][i]*gain; }
@@ -319,13 +340,16 @@ void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSp
 	});
 }
 void Engine::ResetVoice(int index) {
-	Wait();
 	auto &s=p->sources[index]; iplDirectEffectReset(s.direct); iplPathEffectReset(s.path); iplReflectionEffectReset(s.reflection); s.tail=0; s.hasReflection=false; s.hasPath=false; s.fresh=true;
+	// Effects are mixer-owned. Do not wait for, or consume, the previous occupant's simulation.
+	s.discardPending=p->job.valid(); s.reflected=false; s.output.direct=s.smooth=NeutralDirect();
+	s.reflectionUpdated=false;
 	std::fill(s.pathSH,s.pathSH+Channels,0); s.output.pathing.shCoeffs=s.pathSH;
 }
-void Engine::Begin() { p->room.fill(0); }
-void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight,float transmissionFloor) {
+void Engine::Begin() { p->room.fill(0); p->indirectLeft.fill(0); p->indirectRight.fill(0); }
+void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight,float transmissionFloor,float reverbSend) {
 	auto &s=p->sources[index]; float filtered[Block]={}; float *in[]={const_cast<float*>(input)},*out[]={filtered};
+	float *wetLeft=p->indirectLeft.data(),*wetRight=p->indirectRight.data();
 	IPLAudioBuffer ib={1,Block,in},ob={1,Block,out};
 	auto &smooth=s.smooth; const auto &target=s.output.direct;
 	if(s.fresh) { smooth=target; s.fresh=false; }
@@ -334,7 +358,8 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 	const float floor[]={std::min(1.0f,2*transmissionFloor),transmissionFloor,.25f*transmissionFloor};
 	for(int b=0;b<3;++b) {
 		smooth.airAbsorption[b]+=(target.airAbsorption[b]-smooth.airAbsorption[b])*blend;
-		smooth.transmission[b]+=(std::max(floor[b],target.transmission[b])-smooth.transmission[b])*blend;
+		const float transmitted=floor[b]+(1-floor[b])*target.transmission[b];
+		smooth.transmission[b]+=(transmitted-smooth.transmission[b])*blend;
 	}
 	smooth.flags=static_cast<IPLDirectEffectFlags>(IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION|IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION|IPL_DIRECTEFFECTFLAGS_APPLYAIRABSORPTION);
 	smooth.transmissionType=IPL_TRANSMISSIONTYPE_FREQDEPENDENT;
@@ -344,18 +369,25 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 		float stereo[2][Block]={}; float *channels[]={stereo[0],stereo[1]}; IPLAudioBuffer pathOut={2,Block,channels};
 		auto params=s.output.pathing; params.order=Order; params.binaural=IPL_FALSE; params.listener=p->listener; params.hrtf=p->hrtf;
 		iplPathEffectApply(s.path,&params,&ib,&pathOut);
-		for(int i=0;i<Block;++i) { outLeft[i]+=stereo[0][i]*gain*(1-smooth.occlusion); outRight[i]+=stereo[1][i]*gain*(1-smooth.occlusion); }
+		for(int i=0;i<Block;++i) { wetLeft[i]+=stereo[0][i]*gain*(1-smooth.occlusion); wetRight[i]+=stereo[1][i]*gain*(1-smooth.occlusion); }
 	}
-	if(s.reflected && s.hasReflection) p->Reflect(s,in[0],gain*wet,outLeft,outRight);
+	if(s.reflected && s.hasReflection) p->Reflect(s,in[0],gain*wet*reverbSend,wetLeft,wetRight);
 	else {
 		float silence[Block]={};
-		if(s.tail>0 && s.hasReflection) p->Reflect(s,silence,gain*wet,outLeft,outRight);
+		if(s.hasReflection && (s.tail>0 || s.reflectionUpdated)) p->Reflect(s,silence,gain*wet*reverbSend,wetLeft,wetRight);
 		// A listener-room reverb must not bypass a barrier or the source's distance falloff.
-		const float roomGain=std::min(gain,std::hypot(left,right));
+		const float roomGain=std::min(gain,std::hypot(left,right))*reverbSend;
 		for(int i=0;i<Block;++i) p->room[i]+=filtered[i]*roomGain;
 	}
 }
-void Engine::End(float wet,float *left,float *right) { p->Reflect(p->sources[Voices],p->room.data(),wet,left,right); }
+void Engine::End(float wet,float *left,float *right) {
+	p->Reflect(p->sources[Voices],p->room.data(),wet,p->indirectLeft.data(),p->indirectRight.data());
+	for(int i=0;i<Block;++i) { left[i]+=p->indirectLeft[i]; right[i]+=p->indirectRight[i]; }
+}
+void Engine::Indirect(float *left,float *right) const {
+	std::copy(p->indirectLeft.begin(),p->indirectLeft.end(),left);
+	std::copy(p->indirectRight.begin(),p->indirectRight.end(),right);
+}
 Info Engine::Status() const { auto info=p->info; info.reflectionMs=p->reflectionMs.load(); info.scenePeakUs=p->scenePeakUs.load(); return info; }
 IPLDirectEffectParams Engine::DirectParams(int index) const { return p->sources[index].smooth; }
 }

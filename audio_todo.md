@@ -2,6 +2,25 @@
 
 ## Current Status
 
+The room-entry stutter is resolved in the user's report. Acoustic rendering now
+uses 256-sample blocks and a 0.6-second early-reflection window. The previous
+0.15-second window could not preserve distant canyon echoes. A synthetic cliff
+40 metres away produces its first return after approximately 0.23 seconds.
+One-shot world effects use a stronger send (`s_steamTransientReverb`, default 2.5).
+Speech and loops retain their normal send level. New voices enter processing
+while the simulation worker is busy; they use the listener-room response until
+their own response is ready. Reused voices reject the previous source's result.
+The mixer also accepts room impulse responses during silence. The SDK can then
+publish the current room response before the next shot. A regression check moves
+a silent listener away from a cliff and rejects an echo from the old position.
+`s_steam_record 3 wet` isolates indirect output for indoor/outdoor comparisons.
+
+The latest Kejim Post checks cover file access, alarm gain and stop, indoor/outdoor
+wet captures, a silent effects-off control, baking, save/load, and sound restart.
+They passed in `build/smoke/steam-audio.k7lo_ul9`. The JA first-use and ambient
+checks passed in `build/smoke/steam-audio.qpzvrks1`. These use SDL's dummy device;
+the latest balance still needs desktop listening.
+
 The Kejim perimeter alarm was active, but its blocked-path transmission fell to
 about 0.00001 in the mid band. Its source was outside solid geometry. The mixer
 now uses a tunable transmission minimum (`s_steamTransmission`, default 0.12).
@@ -17,17 +36,10 @@ The Kejim Post file-access regression failed before the fix with one buffer clea
 and passed after it with zero. The passing baked run is
 `build/smoke/steam-audio.v3pmryij`; the failing run is `steam-audio.3e66jzlw`.
 
-The user confirms that almost all crackling is gone. Brief sound gaps on first
-use and frame-time peaks near doors remain. Work now targets those stalls and
-environmental emitters that stop outside the visible room.
-
-First-use changes move acoustic scene creation into level loading. Hybrid
-convolution now allocates and processes 0.15 seconds, which matches its transition
-to parametric reverb. The 1.5-second simulation and late reverb remain in use.
-An immediate sound start no longer resets its DSP again when the mixer assigns
-its sample time. `tests/steam_audio_perf.cpp` checks 32 sources, repeated reflection
-updates, and a moving door against a large static mesh. The initial comparison
-reduced mean DSP time from 1.83 ms to 0.40 ms per 128-sample block on this host.
+The user confirms that almost all crackling is gone. Acoustic scene creation runs
+during level loading. `tests/steam_audio_perf.cpp` checks 32 sources, repeated
+reflection updates, and a moving door against a large static mesh. With the new
+0.6-second window, mean DSP time was 1.01 ms per 5.80 ms block on this host.
 
 The static BSP now has a separate acceleration structure. Moving doors update
 the parent instance hierarchy. In the large-mesh test, mean door-update time
@@ -49,7 +61,7 @@ when spatial ambience was enabled. Steam Audio captures had no overlapping or
 missing frames. Results are in `build/smoke/steam-audio.1atpgq8r` and
 `build/smoke/steam-audio.4_lhfnbu`. The audible result still needs desktop review.
 
-**A mixer timing defect is fixed. Clean device playback still needs a check.**
+### Earlier Timing Fixes
 The user reported severe crackling. The old mixer moved `s_paintedtime` backwards
 on each update. Steam Audio then processed overlapping samples with advanced
 filter and reverb state. A two-second JA capture contained 71,552 overlapping
@@ -58,16 +70,8 @@ frames. The new capture continuity check failed on that build.
 The Steam Audio paint cursor now advances without overlap. The SDL device lock
 now covers the DMA copies, not DSP or capture file writes. Status output includes
 peak mixer time, peak device-lock time, callback intervals, and mixer underruns.
-These changes need a listening check on the user's device before effect tuning.
-
-The timing-fix package is:
-
-```text
-build/packages/20260916T230737092770910-adf45fc6
-```
-
 Check `build/ready` and the package source manifest before a comparison. Another
-workstream can publish a newer build. The package includes uncommitted audio fixes.
+workstream can publish a newer build.
 
 For an immediate legacy-audio comparison, use:
 
@@ -86,8 +90,12 @@ is Steam Audio. The user wants to retain it unless it cannot be made to work.
   DSP and capture file writes.
 - [x] Add separate direct, reflection, and baked-path capture checks. Check disable,
   enable, cache reload, save/load, and sound restart.
-- [ ] Reproduce the crackling on the user's real audio output device. Record the
-  campaign, level, output rate, device, settings, and whether probes were baked.
+- [x] Obtain desktop feedback: the severe crackling and room-entry stalls are fixed.
+- [x] Reproduce and fix filesystem buffer clears during active DSP playback.
+- [x] Check the Kejim alarm's blocked-path gain and scripted stop.
+- [x] Check a delayed cliff echo and isolate indirect output in WAV captures.
+- [ ] Check the latest first-use, alarm, and acoustic-contrast changes on the
+  desktop. Record the output device, rate, settings, and bake state.
 - [ ] Listen to Steam Audio enabled and disabled at the same location. Compare
   direct processing, reflections, and pathing separately.
 - [ ] Determine whether the corruption is present in an internal WAV capture,
@@ -96,7 +104,7 @@ is Steam Audio. The user wants to retain it unless it cannot be made to work.
 - [ ] Measure peak mixer duration and device underruns. Check short peaks, not
   only average CPU use. Correlate the peaks with crackles, scene updates, source
   changes, and reflection-result changes.
-- [ ] Check sample continuity at every 128-sample boundary, loop boundary, channel
+- [ ] Check sample continuity at every 256-sample boundary, loop boundary, channel
   reuse, and transition between legacy and Steam Audio processing.
 
 ## Debugging Hypotheses
@@ -104,7 +112,7 @@ is Steam Audio. The user wants to retain it unless it cannot be made to work.
 The following items separate confirmed defects from remaining investigation:
 
 1. **Mixer and device timing.** Paint-cursor overlap was confirmed and fixed.
-   `S_PaintChannels` uses complete 128-sample blocks. It rounds the requested write
+   `S_PaintChannels` uses complete 256-sample blocks. It rounds the requested write
    window down to a complete block. Check device callback timing and underruns on
    the desktop. A callback interval is not a measurement of a driver underrun.
 2. **Channel identity and DSP resets.** Legacy loop channels are cleared and
@@ -133,7 +141,7 @@ The following items separate confirmed defects from remaining investigation:
 | `code/client/snd_steam.cpp` | Game integration, collision-brush and patch extraction, material presets, moving brush entities, channel slots, caches, diagnostics, and WAV capture |
 | `code/client/snd_steam.h` | Mixer hooks and stubs for builds without Steam Audio |
 | `shared/sound/steam_audio.cpp` | SDK objects, effects, asynchronous simulation, reflections, pathing, and probe baking |
-| `shared/sound/steam_audio.h` | Processing interface; 128-sample blocks and 32 voice slots |
+| `shared/sound/steam_audio.h` | Processing interface; 256-sample blocks and 32 voice slots |
 | `code/client/snd_mix.cpp` | WAV/MP3 interception, block scheduling, and final mix integration |
 | `code/client/snd_dma.cpp` | Initialization, shutdown, listener updates, and separate looping emitters |
 | `shared/sdl/sdl_sound.cpp` | Existing SDL device output and DMA buffer handling |
@@ -161,11 +169,14 @@ classification rules during channel-reuse investigation.
 | `s_steamReflections` | `1`; set to `0` to disable reflections and room reverb |
 | `s_steamPathing` | `1`; uses baked paths when available |
 | `s_steamReverb` | `0.2`; reflection and reverb gain |
+| `s_steamTransientReverb` | `2.5`; one-shot effect send multiplier |
+| `s_steamTransmission` | `0.12`; minimum blocked-path mid-band gain |
 | `s_steamCache` | `1`; reload the level after changing this for a cache comparison |
 | `s_steam_status` | Scene, source, probe, filter, and timing information |
 | `s_steam_status reset` | Clear mixer and device timing counters before a comparison |
 | `s_steam_bake` | Bake paths and room responses for the current level |
 | `s_steam_record 3` | Record three seconds of the final paint-buffer mix to a local WAV |
+| `s_steam_record 3 wet` | Record only indirect output |
 | `s_steam_emit sound/weapons/blaster/fire.wav` | Emit a test world sound at the listener; optional `x y z` arguments set its position |
 
 Captures are under `captures` in the current campaign profile. Acoustic caches

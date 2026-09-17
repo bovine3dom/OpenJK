@@ -43,6 +43,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamReflections` | `1` | Enable reflections and room reverb |
 | `s_steamPathing` | `1` | Use cached propagation paths when available |
 | `s_steamReverb` | `0.2` | Set reflection and reverb gain, from 0 to 1 |
+| `s_steamTransientReverb` | `2.5` | Reflection send multiplier for one-shot world effects; `1` restores the previous send level |
 | `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain; `0` uses the raw material result |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
@@ -77,6 +78,7 @@ occlusion and transmission values remain the raw simulation minima.
 
 The transmission minimum keeps authored gameplay cues audible through BSP walls.
 Low frequencies have twice this minimum gain; high frequencies have one quarter.
+The material result is blended above the minimum, so material differences remain.
 This is an audibility adjustment, not a physical wall measurement. Clear paths
 retain their existing gain. Distance attenuation still applies. Global ambient
 beds bypass spatial processing and do not occupy reflection slots.
@@ -130,18 +132,24 @@ Capture output also reports overlapping and missing frames. Both counts must be
 zero during steady Steam Audio playback. Legacy captures can contain overlaps
 because the legacy mixer repaints its mix-ahead window.
 
+Use `s_steam_record 3 wet` to capture only reflections and indirect paths. This
+excludes dry sound, music, and global ambient beds. Record the same blaster sound
+inside and outside to compare the acoustic response. The capture is silent when
+both reflections and pathing are disabled. The transient send multiplier applies
+to one-shot effects, including blasters. Speech and loops keep their normal send.
+
 Useful listening cases are a closed door in Kejim, a mine shaft on Artus,
 and a small passage connected to a large chamber on Yavin. Check both stationary
 and moving listeners. Check speech intelligibility as well as environmental sound.
 
 ## Runtime and Build Details
 
-The mixer processes each 128-sample block once. It keeps the paint cursor at the
+The mixer processes each 256-sample block once. It keeps the paint cursor at the
 end of the previous block instead of repainting the mix-ahead window. The SDL
 device lock covers DMA-buffer copies. DSP and capture file writes run outside
 that lock. A background worker runs scene updates
-and direct simulation, normally at 20 Hz. It runs reflections at 2 Hz, with
-faster updates for changing sources. Steam Audio uses its Embree CPU backend
+and direct simulation, normally at 20 Hz. It runs reflections at 2 Hz while idle
+and up to 10 Hz when sources change or the listener moves. Steam Audio uses its Embree CPU backend
 when available. Geometry and simulation inputs are held stable while the worker
 runs. The audio mixer continues with the previous
 completed parameters. Sound stop, restart, and level changes release the scene.
@@ -150,7 +158,14 @@ Acoustic scene creation runs during level loading. The static BSP has its own
 scene and acceleration structure. The main scene contains instances of the BSP
 and brush models. Door movement updates this small instance hierarchy. It does
 not rebuild the static BSP hierarchy. Hybrid convolution processes the first
-0.15 seconds; parametric reverb supplies the late tail.
+0.6 seconds, so distant cliff returns remain discrete echoes. Parametric reverb
+supplies the late tail. The larger blocks limit the added convolution cost.
+
+New voices enter the mixer even when simulation is busy. They use the current
+listener-room response until their source response is ready. Voice reset does
+not wait for the worker. Results from the previous channel occupant are discarded.
+The mixer accepts updated impulse responses during silence. This prevents an
+unread SDK buffer from preserving the previous room's response for the next shot.
 
 Runtime file access preserves queued Steam Audio output. The legacy filesystem
 buffer clear erased the mix-ahead window on first asset access. This caused an
@@ -183,13 +198,16 @@ python3 scripts/test-steam-audio-sp.py --campaign jo --bake --device-samples 256
 python3 scripts/test-steam-audio-sp.py --rate 22
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --first-use --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --alarm --bake
+python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --acoustics --bake
 python3 scripts/test-steam-audio-sp.py --ambient --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
 python3 scripts/test-doors-sp.py --case ordinary --audio
 ```
 
 The standalone check measures transmission through a moving barrier, reflection
-tails, paths around a partition, and probe serialization. The game check uses
+tails, paths around a partition, probe serialization, and an echo from a cliff
+40 metres away. It also checks voice reuse during a pending simulation.
+The game check uses
 a dummy audio device by default. It checks capture continuity, separate effect
 modes, recorded PCM, cache reload, save/load, feature disable and enable, and
 sound restart. Results include timing counters and clipped-sample counts. Use

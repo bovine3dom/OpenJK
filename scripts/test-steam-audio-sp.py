@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--ambient", action="store_true", help="Check emitters outside the visual snapshot on the default map")
     parser.add_argument("--first-use", action="store_true", help="Check that runtime file access preserves queued audio")
     parser.add_argument("--alarm", action="store_true", help="Check the Kejim Post perimeter alarm behind a wall")
+    parser.add_argument("--acoustics", action="store_true", help="Capture indoor and outdoor indirect sound on Kejim Post")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -83,9 +84,9 @@ def main():
             assert timing, result
             records[name + "_timing"] = dict(word.split("=", 1) for word in timing[1].split())
             return value
-        def capture(continuous=True):
+        def capture(continuous=True, wet=False, signal=True):
             start = len(text())
-            cmd("s_steam_record 2; s_steam_emit sound/weapons/blaster/fire.wav")
+            cmd(f"s_steam_record 2{' wet' if wet else ''}; s_steam_emit sound/weapons/blaster/fire.wav")
             result = wait("Steam Audio capture continuity:", start)
             match = re.search(r"Steam Audio capture: (\S+)", result)
             assert match
@@ -93,12 +94,13 @@ def main():
                 assert wav.getnchannels() == 2 and wav.getsampwidth() == 2
                 assert wav.getnframes() == 2 * wav.getframerate()
                 samples = array.array("h", wav.readframes(wav.getnframes()))
-            assert max(map(abs, samples)) > 100, "Recorded audio is silent"
+            peak = max(map(abs, samples))
+            assert (peak > 100 if signal else peak == 0), f"Unexpected capture peak: {peak}"
             continuity = re.search(r"overlap_frames=(\d+) gap_frames=(\d+)", result)
             assert continuity, result
             records.setdefault("captures", []).append(dict(
                 file=match[1], continuous=continuous, overlap_frames=int(continuity[1]), gap_frames=int(continuity[2]),
-                peak=max(map(abs, samples)), clipped_samples=sum(s in (-32768, 32767) for s in samples)))
+                peak=peak, wet=wet, clipped_samples=sum(s in (-32768, 32767) for s in samples)))
             if continuous:
                 assert continuity.groups() == ("0", "0"), continuity[0]
         def ambient():
@@ -175,6 +177,18 @@ def main():
                 cmd(f"set s_steamReflections {reflections}; set s_steamPathing {pathing}; wait 100; s_steam_status reset")
                 capture()
                 status(name)
+            if args.acoustics:
+                assert args.campaign == "jo" and args.map == "kejim_post"
+                if not (args.alarm or args.ambient):
+                    cmd("noclip")
+                cmd("set cg_thirdPerson 0; set s_steamReflections 1; set s_steamPathing 0")
+                for name, position in (("canyon", "1692 -1692 -16"), ("room", "528 200 8")):
+                    cmd(f"setviewpos {position} 0; wait 200")
+                    capture(wet=True)
+                    records[name + "_wet"] = records["captures"][-1]
+                    assert records[name + "_wet"]["clipped_samples"] == 0
+                cmd("set s_steamReflections 0; wait 100")
+                capture(wet=True, signal=False)
             cmd("set s_steamReflections 1; set s_steamPathing 1")
             cmd("save steam_audio_test; load steam_audio_test; wait 100")
             loaded = status("loaded")

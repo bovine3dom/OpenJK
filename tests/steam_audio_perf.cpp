@@ -63,7 +63,8 @@ int main() {
 		if(i==0) assert(engine.Status().occlusion<.01f);
 		if(i==39) assert(engine.Status().occlusion>.99f);
 	}
-	std::cout<<"voices="<<Voices<<" mix_mean_us="<<total/512<<" mix_peak_us="<<peak
+	std::cout<<"voices="<<Voices<<" block_frames="<<Block<<" mix_mean_us="<<total/512<<" mix_peak_us="<<peak
+		<<" dsp_fraction="<<(total/512)/(1000000.0*Block/44100)
 		<<" reset_peak_us="<<resetPeak<<" door_mean_us="<<moveTotal/40<<" door_peak_us="<<movePeak
 		<<" scene_peak_us="<<engine.Status().scenePeakUs<<'\n';
 }

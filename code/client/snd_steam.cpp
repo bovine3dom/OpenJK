@@ -19,15 +19,18 @@ namespace {
 constexpr float Metres=1.0f/32;
 constexpr unsigned CacheVersion=3;
 std::unique_ptr<SteamSound::Engine> engine;
-cvar_t *enabled,*reflections,*pathing,*wet,*cache,*transmission;
+cvar_t *enabled,*reflections,*pathing,*wet,*cache,*transmission,*transientReverb;
 std::string loadedMap;
 unsigned mapChecksum=0;
 int serverId=0,lastUpdate=0,lastReflection=0,simulationMs=0,mixedBlocks=0;
 bool sceneCache=false,probeCache=false;
+bool reflectionDirty=false;
+IPLVector3 reflectionOrigin={};
 IPLVector3 mapLow={},mapHigh={};
 std::map<int,int> objects;
 std::vector<short> recording;
 int recordFrames=0;
+bool recordWet=false;
 int recordEnd=0,recordOverlaps=0,recordGaps=0;
 std::chrono::steady_clock::time_point mixStart;
 int mixPeakUs=0,mixCalls=0,mixEnd=0,underrunFrames=0;
@@ -37,6 +40,7 @@ struct Slot {
 	int entity=0,start=0;
 	bool loop=false,active=false;
 	float input[SteamSound::Block]={},left=0,right=0,gain=0;
+	float reverbSend=1;
 };
 std::array<Slot,SteamSound::Voices> slots;
 IPLVector3 Position(const float *p) { return {p[0]*Metres,p[2]*Metres,-p[1]*Metres}; }
@@ -194,11 +198,19 @@ void Emit() {
 	S_StartSound(origin,ENTITYNUM_WORLD,CHAN_AUTO,S_RegisterSound(Cmd_Argv(1)));
 }
 void Record() {
-	const float seconds=Cmd_Argc()==2 ? atof(Cmd_Argv(1)) : 3;
-	if(!std::isfinite(seconds) || seconds<1 || seconds>10 || dma.speed<=0) { Com_Printf("s_steam_record seconds (1 to 10)\n"); return; }
+	const float seconds=Cmd_Argc()>=2 ? atof(Cmd_Argv(1)) : 3;
+	if(!std::isfinite(seconds) || seconds<1 || seconds>10 || dma.speed<=0 || Cmd_Argc()>3 ||
+		(Cmd_Argc()==3 && Q_stricmp(Cmd_Argv(2),"wet"))) { Com_Printf("s_steam_record seconds (1 to 10) [wet]\n"); return; }
+	recordWet=Cmd_Argc()==3;
 	recording.clear(); recordFrames=int(seconds*dma.speed); recording.reserve(recordFrames*2);
 	recordEnd=-1; recordOverlaps=recordGaps=0;
-	Com_Printf("Steam Audio: recording %.1f seconds of the final mix.\n",seconds);
+	Com_Printf("Steam Audio: recording %.1f seconds of the %s mix.\n",seconds,recordWet ? "indirect" : "final");
+}
+void AddToPaint(portable_samplepair_t *output,const float *left,const float *right,int count) {
+	for(int i=0;i<count;++i) {
+		if(std::isfinite(left[i])) output[i].left+=int(Com_Clamp(-16,16,left[i])*8388608);
+		if(std::isfinite(right[i])) output[i].right+=int(Com_Clamp(-16,16,right[i])*8388608);
+	}
 }
 void Capture(portable_samplepair_t *output,int count) {
 	if(recordFrames<=0) return;
@@ -225,13 +237,15 @@ void S_SteamInit() {
 	reflections=Cvar_Get("s_steamReflections","1",CVAR_ARCHIVE); Cvar_CheckRange(reflections,0,1,qtrue);
 	pathing=Cvar_Get("s_steamPathing","1",CVAR_ARCHIVE); Cvar_CheckRange(pathing,0,1,qtrue);
 	wet=Cvar_Get("s_steamReverb","0.2",CVAR_ARCHIVE); Cvar_CheckRange(wet,0,1,qfalse);
+	transientReverb=Cvar_Get("s_steamTransientReverb","2.5",CVAR_ARCHIVE); Cvar_CheckRange(transientReverb,0,4,qfalse);
 	transmission=Cvar_Get("s_steamTransmission","0.12",CVAR_ARCHIVE); Cvar_CheckRange(transmission,0,1,qfalse);
 	cache=Cvar_Get("s_steamCache","1",CVAR_ARCHIVE); Cvar_CheckRange(cache,0,1,qtrue);
 	Cmd_AddCommand("s_steam_status",Status); Cmd_AddCommand("s_steam_bake",Bake); Cmd_AddCommand("s_steam_emit",Emit); Cmd_AddCommand("s_steam_record",Record);
 }
-void S_SteamClear() { engine.reset(); loadedMap.clear(); objects.clear(); slots={}; lastUpdate=lastReflection=mixedBlocks=0; mixPeakUs=mixCalls=mixEnd=underrunFrames=bufferClears=0; sceneCache=probeCache=false; }
+void S_SteamClear() { engine.reset(); loadedMap.clear(); objects.clear(); slots={}; lastUpdate=lastReflection=mixedBlocks=0; mixPeakUs=mixCalls=mixEnd=underrunFrames=bufferClears=0; sceneCache=probeCache=reflectionDirty=false; reflectionOrigin={}; }
 void S_SteamShutdown() { S_SteamClear(); recording.clear(); recordFrames=0; Cmd_RemoveCommand("s_steam_status"); Cmd_RemoveCommand("s_steam_bake"); Cmd_RemoveCommand("s_steam_emit"); Cmd_RemoveCommand("s_steam_record"); }
 bool S_SteamActive() { return enabled && enabled->integer && engine && engine->Ready(); }
+int S_SteamBlockSize() { return S_SteamActive() ? SteamSound::Block : PAINTBUFFER_SIZE; }
 void S_SteamPrepare() {
 	if(!enabled || !enabled->integer || !cl.mapname[0] || (dma.speed!=44100 && dma.speed!=48000)) return;
 	if(loadedMap!=cl.mapname || serverId!=cl.serverId) {
@@ -248,7 +262,7 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 		return;
 	}
 	S_SteamPrepare();
-	if(!engine || engine->Busy()) return;
+	if(!engine) return;
 	std::array<SteamSound::Voice,SteamSound::Voices> voices={}; bool changed=false;
 	for(int i=0;i<SteamSound::Voices;++i) {
 		const auto &ch=s_channels[i]; auto &slot=slots[i]; const bool active=Eligible(ch);
@@ -262,6 +276,8 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 		const float *origin=ch.fixed_origin ? ch.origin : s_entityPosition[Com_Clampi(0,MAX_GENTITIES-1,ch.entnum)];
 		voices[i].position=Position(origin); voices[i].active=true; voices[i].priority=float(std::max(ch.leftvol,ch.rightvol));
 	}
+	reflectionDirty|=changed;
+	if(engine->Busy()) return;
 	const int now=Sys_Milliseconds(); if(!changed && now-lastUpdate<50) return; lastUpdate=now;
 	std::map<int,int> seen;
 	if(ge && sv.state==SS_GAME) for(int i=0;i<ge->num_entities;++i) {
@@ -279,7 +295,9 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 	objects.swap(seen);
 	IPLCoordinateSpace3 space={}; space.origin=Position(head); space.ahead=Direction(axis[0]); space.up=Direction(axis[2]);
 	vec3_t right; VectorNegate(axis[1],right); space.right=Direction(right);
-	const bool reflect=now-lastReflection>=500 || (changed && now-lastReflection>=100); if(reflect) lastReflection=now;
+	const float dx=space.origin.x-reflectionOrigin.x,dy=space.origin.y-reflectionOrigin.y,dz=space.origin.z-reflectionOrigin.z;
+	const bool reflect=now-lastReflection>=500 || ((reflectionDirty || dx*dx+dy*dy+dz*dz>.25f) && now-lastReflection>=100);
+	if(reflect) { lastReflection=now; reflectionOrigin=space.origin; reflectionDirty=false; }
 	engine->Update(voices,space,reflections->integer,pathing->integer,reflect);
 	simulationMs=Sys_Milliseconds()-now;
 }
@@ -304,19 +322,25 @@ bool S_SteamPaint(channel_t *channel,const short *samples,int count,int offset,i
 	auto &slot=slots[index];
 	for(int i=0;i<count;++i) slot.input[offset+i]=samples[i]/32768.0f;
 	slot.left=channel->leftvol*volume/65536.0f; slot.right=channel->rightvol*volume/65536.0f; slot.gain=channel->master_vol*volume/65536.0f;
+	const bool voice=channel->entchannel==CHAN_VOICE || channel->entchannel==CHAN_VOICE_ATTEN;
+	slot.reverbSend=channel->loopSound || voice ? 1 : transientReverb->value;
 	return true;
 }
 void S_SteamEndBlock(portable_samplepair_t *output,int count) {
+	float left[SteamSound::Block]={},right[SteamSound::Block]={};
 	if(S_SteamActive() && count==SteamSound::Block) {
-		float left[SteamSound::Block]={},right[SteamSound::Block]={};
-		for(int i=0;i<SteamSound::Voices;++i) { auto &s=slots[i]; engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right,transmission->value); }
+		for(int i=0;i<SteamSound::Voices;++i) { auto &s=slots[i]; engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right,transmission->value,s.reverbSend); }
 		engine->End(wet->value,left,right);
-		for(int i=0;i<count;++i) {
-			if(std::isfinite(left[i])) output[i].left+=int(Com_Clamp(-16,16,left[i])*8388608);
-			if(std::isfinite(right[i])) output[i].right+=int(Com_Clamp(-16,16,right[i])*8388608);
-		}
+		AddToPaint(output,left,right,count);
 		++mixedBlocks;
 	}
-	Capture(output,count);
+	if(recordWet && recordFrames>0) {
+		portable_samplepair_t indirect[PAINTBUFFER_SIZE]={};
+		if(S_SteamActive() && count==SteamSound::Block) {
+			engine->Indirect(left,right);
+			AddToPaint(indirect,left,right,count);
+		}
+		Capture(indirect,count);
+	} else Capture(output,count);
 }
 #endif

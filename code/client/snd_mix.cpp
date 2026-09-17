@@ -277,7 +277,7 @@ void S_PaintChannels( int endtime ) {
 
 	snd_vol = normal_vol = s_volume->value*256.0f;
 	voice_vol  = (s_volumeVoice->value*256.0f);
-	const int blockSize=S_SteamActive() ? 128 : PAINTBUFFER_SIZE;
+	const int blockSize=S_SteamBlockSize();
 	// Keep complete effect blocks inside the requested DMA write window.
 	if(S_SteamActive() && endtime>s_paintedtime) endtime=s_paintedtime+((endtime-s_paintedtime)/blockSize)*blockSize;
 

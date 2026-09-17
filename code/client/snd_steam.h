@@ -7,6 +7,7 @@ void S_SteamShutdown();
 void S_SteamClear();
 void S_SteamPrepare();
 bool S_SteamActive();
+int S_SteamBlockSize();
 void S_SteamUpdate(const float *head, const float axis[3][3], int listener, bool inWater);
 void S_SteamBeginMix();
 void S_SteamBufferCleared();
@@ -20,6 +21,7 @@ inline void S_SteamShutdown() {}
 inline void S_SteamClear() {}
 inline void S_SteamPrepare() {}
 inline bool S_SteamActive() { return false; }
+inline int S_SteamBlockSize() { return PAINTBUFFER_SIZE; }
 inline void S_SteamUpdate(const float *, const float [3][3], int, bool) {}
 inline void S_SteamBeginMix() {}
 inline void S_SteamBufferCleared() {}

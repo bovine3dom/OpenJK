@@ -6,7 +6,7 @@
 #include <memory>
 
 namespace SteamSound {
-constexpr int Block=128, Voices=32;
+constexpr int Block=256, Voices=32;
 struct Mesh {
 	std::vector<IPLVector3> vertices;
 	std::vector<IPLTriangle> triangles;
@@ -40,8 +40,9 @@ public:
 	void Update(const std::array<Voice,Voices> &voices, const IPLCoordinateSpace3 &listener, bool reflections, bool pathing, bool simulateReflections);
 	void ResetVoice(int index);
 	void Begin();
-	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight, float transmissionFloor=0);
+	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight, float transmissionFloor=0, float reverbSend=1);
 	void End(float wet, float *outLeft, float *outRight);
+	void Indirect(float *left, float *right) const;
 	Info Status() const;
 	IPLDirectEffectParams DirectParams(int index) const;
 private:

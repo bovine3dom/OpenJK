@@ -50,10 +50,14 @@ int main() {
 		engine.Begin(); engine.Mix(0,input,.5f,.5f,1,0,left,right,.12f); engine.End(0,left,right);
 	}
 	const auto audible=engine.DirectParams(0);
-	assert(audible.occlusion<.01f && audible.transmission[0]>.239f && audible.transmission[1]>.119f && audible.transmission[2]>.029f);
+	assert(audible.occlusion<.01f && audible.transmission[0]>.24f && audible.transmission[1]>.12f && audible.transmission[2]>.03f);
 	assert(audible.transmission[0]>audible.transmission[1] && audible.transmission[1]>audible.transmission[2]);
 	float protectedEnergy=0; for(float sample:left) protectedEnergy+=sample*sample;
 	assert(protectedEnergy>blocked/19 && protectedEnergy<clear/19);
+	// Reusing a voice must not wait for or inherit the previous source's blocked result.
+	engine.Update(voices,listener,true,false,true);
+	engine.ResetVoice(0); engine.Wait();
+	assert(engine.DirectParams(0).occlusion==1);
 	engine.Object(1,1,transform,false); engine.Update(voices,listener,true,false,true);
 	engine.Wait();
 	assert(engine.Status().occlusion>0.99f);
@@ -102,4 +106,46 @@ int main() {
 	std::cout << "sealed=" << sealed << " routed=" << routed << std::endl;
 	assert(sealed<routed*0.01f); // A closed barrier invalidates the baked route.
 	std::cout << "PASS: Steam Audio direct transmission, moving barrier, reflection tail, and cached probes\n";
+
+	Engine canyon(44100); assert(canyon.Ready());
+	Mesh cliff; Quad(cliff,{-100,-100,-40},{100,-100,-40},{100,100,-40},{-100,100,-40});
+	assert(canyon.AddModel(cliff,material));
+	listener.origin={0,0,0}; voices[0].position=listener.origin;
+	canyon.Update(voices,listener,true,false,true); canyon.Wait();
+	std::fill(input,input+Block,0); input[0]=.5f;
+	float first=-1,late=0;
+	for(int n=0;n<300;++n) {
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		canyon.Begin(); canyon.Mix(0,input,0,0,1,1,left,right); canyon.End(1,left,right);
+		float wetLeft[Block],wetRight[Block]; canyon.Indirect(wetLeft,wetRight);
+		for(int i=0;i<Block;++i) {
+			assert(std::isfinite(left[i]) && wetLeft[i]==left[i] && wetRight[i]==right[i]);
+			const float time=float(n*Block+i)/44100;
+			if(first<0 && std::abs(left[i])>1e-6f) first=time;
+			if(time>.18f && time<.35f) late+=left[i]*left[i];
+		}
+		input[0]=0;
+	}
+	std::cout<<"cliff_first_seconds="<<first<<" cliff_echo_energy="<<late<<std::endl;
+	assert(first>.18f && first<.35f && late>1e-7f);
+	std::cout<<"PASS: distant cliff echo and indirect capture\n";
+
+	// A quiet listener moving away must not retain the old room's unread IR.
+	voices[0].active=false;
+	for(int move=0;move<2;++move) {
+		listener.origin.x=move*1000.0f;
+		canyon.Update(voices,listener,true,false,true); canyon.Wait();
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		canyon.Begin(); canyon.End(1,left,right);
+	}
+	input[0]=.5f; float stale=0;
+	for(int n=0;n<200;++n) {
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		canyon.Begin(); canyon.Mix(1,input,1,1,1,1,left,right); canyon.End(1,left,right);
+		canyon.Indirect(left,right);
+		for(float sample:left) stale+=sample*sample;
+		input[0]=0;
+	}
+	assert(stale<1e-9f);
+	std::cout<<"PASS: first-shot room response after silent movement\n";
 }
