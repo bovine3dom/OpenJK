@@ -270,7 +270,7 @@ void S_SteamInit() {
 	reflections=Cvar_Get("s_steamReflections","1",CVAR_ARCHIVE); Cvar_CheckRange(reflections,0,1,qtrue);
 	pathing=Cvar_Get("s_steamPathing","1",CVAR_ARCHIVE); Cvar_CheckRange(pathing,0,1,qtrue);
 	wet=Cvar_Get("s_steamReverb","0.2",CVAR_ARCHIVE); Cvar_CheckRange(wet,0,1,qfalse);
-	transientReverb=Cvar_Get("s_steamTransientReverb","2.5",CVAR_ARCHIVE); Cvar_CheckRange(transientReverb,0,4,qfalse);
+	transientReverb=Cvar_Get("s_steamTransientReverb","1.0",CVAR_ARCHIVE); Cvar_CheckRange(transientReverb,0,4,qfalse);
 	limiterEnabled=Cvar_Get("s_steamLimiter","1",CVAR_ARCHIVE); Cvar_CheckRange(limiterEnabled,0,1,qtrue);
 	transmission=Cvar_Get("s_steamTransmission","0.12",CVAR_ARCHIVE); Cvar_CheckRange(transmission,0,1,qfalse);
 	cache=Cvar_Get("s_steamCache","1",CVAR_ARCHIVE); Cvar_CheckRange(cache,0,1,qtrue);

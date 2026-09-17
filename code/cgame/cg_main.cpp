@@ -381,7 +381,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_spatialAmbience, "cg_spatialAmbience", "1", CVAR_ARCHIVE },
 	{ &cg_alarmRelays, "cg_alarmRelays", "1", CVAR_ARCHIVE },
 	{ &cg_boltFlyby, "cg_boltFlyby", "0", CVAR_ARCHIVE },
-	{ &cg_boltFlybyVolume, "cg_boltFlybyVolume", "192", CVAR_ARCHIVE },
+	{ &cg_boltFlybyVolume, "cg_boltFlybyVolume", "256", CVAR_ARCHIVE },
 	{ &cg_saberEntMarks, "cg_saberEntMarks", "1", CVAR_ARCHIVE  },
 
 	{ &cg_draw2D, "cg_draw2D", "1", CVAR_ARCHIVE  },
