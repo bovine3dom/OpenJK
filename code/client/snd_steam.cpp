@@ -19,7 +19,7 @@ namespace {
 constexpr float Metres=1.0f/32;
 constexpr unsigned CacheVersion=3;
 std::unique_ptr<SteamSound::Engine> engine;
-cvar_t *enabled,*reflections,*pathing,*wet,*cache;
+cvar_t *enabled,*reflections,*pathing,*wet,*cache,*transmission;
 std::string loadedMap;
 unsigned mapChecksum=0;
 int serverId=0,lastUpdate=0,lastReflection=0,simulationMs=0,mixedBlocks=0;
@@ -175,7 +175,9 @@ void Status() {
 		bool visible=false;
 		for(int i=0;i<cl.frame.numEntities;++i)
 			visible|=cl.parseEntities[(cl.frame.parseEntitiesNum+i)&(MAX_PARSE_ENTITIES-1)].number==ch.entnum;
-		Com_Printf("steam_source entity=%d loop=%d visible=%d left=%d right=%d sound=%s\n",ch.entnum,ch.loopSound,visible,ch.leftvol,ch.rightvol,ch.thesfx->sSoundName);
+		const float *origin=ch.fixed_origin ? ch.origin : s_entityPosition[Com_Clampi(0,MAX_GENTITIES-1,ch.entnum)];
+		const auto direct=engine ? engine->DirectParams(int(&ch-s_channels)) : IPLDirectEffectParams{};
+		Com_Printf("steam_source entity=%d loop=%d visible=%d left=%d right=%d solid=%d pos=%.1f,%.1f,%.1f occlusion=%.3f transmission=%.5f,%.5f,%.5f sound=%s\n",ch.entnum,ch.loopSound,visible,ch.leftvol,ch.rightvol,bool(CM_PointContents(origin,0)&CONTENTS_SOLID),origin[0],origin[1],origin[2],direct.occlusion,direct.transmission[0],direct.transmission[1],direct.transmission[2],ch.thesfx->sSoundName);
 	}
 }
 void Bake() {
@@ -223,6 +225,7 @@ void S_SteamInit() {
 	reflections=Cvar_Get("s_steamReflections","1",CVAR_ARCHIVE); Cvar_CheckRange(reflections,0,1,qtrue);
 	pathing=Cvar_Get("s_steamPathing","1",CVAR_ARCHIVE); Cvar_CheckRange(pathing,0,1,qtrue);
 	wet=Cvar_Get("s_steamReverb","0.2",CVAR_ARCHIVE); Cvar_CheckRange(wet,0,1,qfalse);
+	transmission=Cvar_Get("s_steamTransmission","0.12",CVAR_ARCHIVE); Cvar_CheckRange(transmission,0,1,qfalse);
 	cache=Cvar_Get("s_steamCache","1",CVAR_ARCHIVE); Cvar_CheckRange(cache,0,1,qtrue);
 	Cmd_AddCommand("s_steam_status",Status); Cmd_AddCommand("s_steam_bake",Bake); Cmd_AddCommand("s_steam_emit",Emit); Cmd_AddCommand("s_steam_record",Record);
 }
@@ -306,7 +309,7 @@ bool S_SteamPaint(channel_t *channel,const short *samples,int count,int offset,i
 void S_SteamEndBlock(portable_samplepair_t *output,int count) {
 	if(S_SteamActive() && count==SteamSound::Block) {
 		float left[SteamSound::Block]={},right[SteamSound::Block]={};
-		for(int i=0;i<SteamSound::Voices;++i) { auto &s=slots[i]; engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right); }
+		for(int i=0;i<SteamSound::Voices;++i) { auto &s=slots[i]; engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right,transmission->value); }
 		engine->End(wet->value,left,right);
 		for(int i=0;i<count;++i) {
 			if(std::isfinite(left[i])) output[i].left+=int(Com_Clamp(-16,16,left[i])*8388608);

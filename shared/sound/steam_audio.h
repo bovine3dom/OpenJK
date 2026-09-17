@@ -40,9 +40,10 @@ public:
 	void Update(const std::array<Voice,Voices> &voices, const IPLCoordinateSpace3 &listener, bool reflections, bool pathing, bool simulateReflections);
 	void ResetVoice(int index);
 	void Begin();
-	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight);
+	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight, float transmissionFloor=0);
 	void End(float wet, float *outLeft, float *outRight);
 	Info Status() const;
+	IPLDirectEffectParams DirectParams(int index) const;
 private:
 	struct Impl;
 	std::unique_ptr<Impl> p;

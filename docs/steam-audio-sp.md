@@ -43,6 +43,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamReflections` | `1` | Enable reflections and room reverb |
 | `s_steamPathing` | `1` | Use cached propagation paths when available |
 | `s_steamReverb` | `0.2` | Set reflection and reverb gain, from 0 to 1 |
+| `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain; `0` uses the raw material result |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
 
@@ -70,6 +71,15 @@ Use `s_steam_status sources` to list mixed sources, entity numbers, loop state,
 channel gains, and sound names. `visible=0` means that the source entity is absent
 from the current visual snapshot. A local sound set retains its entity number
 even when another emitter uses the same sound asset.
+Source details also include position, solid contents at that position, and the
+smoothed occlusion and three transmission bands used by the mixer. Scene-wide
+occlusion and transmission values remain the raw simulation minima.
+
+The transmission minimum keeps authored gameplay cues audible through BSP walls.
+Low frequencies have twice this minimum gain; high frequencies have one quarter.
+This is an audibility adjustment, not a physical wall measurement. Clear paths
+retain their existing gain. Distance attenuation still applies. Global ambient
+beds bypass spatial processing and do not occupy reflection slots.
 
 `cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
 transmission and indirect paths when enabled. Unpositioned global ambient sets
@@ -172,6 +182,7 @@ python3 scripts/test-steam-audio-sp.py --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --bake --device-samples 256
 python3 scripts/test-steam-audio-sp.py --rate 22
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --first-use --bake
+python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --alarm --bake
 python3 scripts/test-steam-audio-sp.py --ambient --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
 python3 scripts/test-doors-sp.py --case ordinary --audio

@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--bake", action="store_true")
     parser.add_argument("--ambient", action="store_true", help="Check emitters outside the visual snapshot on the default map")
     parser.add_argument("--first-use", action="store_true", help="Check that runtime file access preserves queued audio")
+    parser.add_argument("--alarm", action="store_true", help="Check the Kejim Post perimeter alarm behind a wall")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -147,6 +148,21 @@ def main():
                 clears = re.search(r"buffer_clears=(\d+)", output)
                 records["fileio_buffer_clears"] = int(clears[1]) if clears else None
                 assert clears and clears[1] == "0", output
+            if args.alarm:
+                assert args.campaign == "jo" and args.map == "kejim_post"
+                cmd("set cg_thirdPerson 0; noclip; use defense_alarm_sound")
+                cmd("setviewpos 56 0 400 0; wait 100")
+                def alarm():
+                    sources = [dict(word.split("=", 1) for word in line.split())
+                               for line in re.findall(r"steam_source ([^\n]+)", cmd("s_steam_status sources"))]
+                    return [s for s in sources if s["sound"].endswith("/alarm1") and s["loop"] == "1"]
+                source = alarm()
+                assert len(source) == 1 and float(source[0]["occlusion"]) < .1, source
+                assert min(float(source[0]["left"]), float(source[0]["right"])) > 0, source
+                assert float(source[0]["transmission"].split(",")[1]) >= .119, source
+                records["alarm"] = source[0]
+                cmd("use defense_alarm_sound; wait 40")
+                assert not alarm(), "Scripted alarm stop was ignored"
             if args.ambient:
                 assert not args.map, "Ambient fixtures use the default map"
                 ambient()

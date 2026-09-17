@@ -45,6 +45,15 @@ int main() {
 	engine.Wait();
 	assert(engine.Status().occlusion<0.01f && engine.Status().transmission<0.1f);
 	const float blocked=energy(); assert(blocked<clear*0.1f);
+	for(int n=0;n<300;++n) {
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		engine.Begin(); engine.Mix(0,input,.5f,.5f,1,0,left,right,.12f); engine.End(0,left,right);
+	}
+	const auto audible=engine.DirectParams(0);
+	assert(audible.occlusion<.01f && audible.transmission[0]>.239f && audible.transmission[1]>.119f && audible.transmission[2]>.029f);
+	assert(audible.transmission[0]>audible.transmission[1] && audible.transmission[1]>audible.transmission[2]);
+	float protectedEnergy=0; for(float sample:left) protectedEnergy+=sample*sample;
+	assert(protectedEnergy>blocked/19 && protectedEnergy<clear/19);
 	engine.Object(1,1,transform,false); engine.Update(voices,listener,true,false,true);
 	engine.Wait();
 	assert(engine.Status().occlusion>0.99f);

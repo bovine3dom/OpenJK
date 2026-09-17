@@ -324,14 +324,18 @@ void Engine::ResetVoice(int index) {
 	std::fill(s.pathSH,s.pathSH+Channels,0); s.output.pathing.shCoeffs=s.pathSH;
 }
 void Engine::Begin() { p->room.fill(0); }
-void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight) {
+void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight,float transmissionFloor) {
 	auto &s=p->sources[index]; float filtered[Block]={}; float *in[]={const_cast<float*>(input)},*out[]={filtered};
 	IPLAudioBuffer ib={1,Block,in},ob={1,Block,out};
 	auto &smooth=s.smooth; const auto &target=s.output.direct;
 	if(s.fresh) { smooth=target; s.fresh=false; }
 	const float blend=1-std::exp(-Block/(0.08f*p->audio.samplingRate));
 	smooth.occlusion+=(target.occlusion-smooth.occlusion)*blend;
-	for(int b=0;b<3;++b) { smooth.airAbsorption[b]+=(target.airAbsorption[b]-smooth.airAbsorption[b])*blend; smooth.transmission[b]+=(target.transmission[b]-smooth.transmission[b])*blend; }
+	const float floor[]={std::min(1.0f,2*transmissionFloor),transmissionFloor,.25f*transmissionFloor};
+	for(int b=0;b<3;++b) {
+		smooth.airAbsorption[b]+=(target.airAbsorption[b]-smooth.airAbsorption[b])*blend;
+		smooth.transmission[b]+=(std::max(floor[b],target.transmission[b])-smooth.transmission[b])*blend;
+	}
 	smooth.flags=static_cast<IPLDirectEffectFlags>(IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION|IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION|IPL_DIRECTEFFECTFLAGS_APPLYAIRABSORPTION);
 	smooth.transmissionType=IPL_TRANSMISSIONTYPE_FREQDEPENDENT;
 	iplDirectEffectApply(s.direct,&smooth,&ib,&ob);
@@ -353,4 +357,5 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 }
 void Engine::End(float wet,float *left,float *right) { p->Reflect(p->sources[Voices],p->room.data(),wet,left,right); }
 Info Engine::Status() const { auto info=p->info; info.reflectionMs=p->reflectionMs.load(); info.scenePeakUs=p->scenePeakUs.load(); return info; }
+IPLDirectEffectParams Engine::DirectParams(int index) const { return p->sources[index].smooth; }
 }

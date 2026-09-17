@@ -1971,7 +1971,8 @@ void S_AddAmbientLoopingSound( const vec3_t origin, unsigned char volume, sfxHan
 	//TODO: Calculate the distance falloff
 	loopSounds[numLoopSounds].volume = volume;
 	loopSounds[numLoopSounds].entnum = entityNum;
-	loopSounds[numLoopSounds].entchan = CHAN_AUTO;
+	// Global ambient beds follow the listener; they are not acoustic point sources.
+	loopSounds[numLoopSounds].entchan = entityNum==ENTITYNUM_WORLD ? CHAN_LOCAL_SOUND : CHAN_AUTO;
 	numLoopSounds++;
 }
 

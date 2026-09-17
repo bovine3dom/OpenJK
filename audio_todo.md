@@ -2,6 +2,13 @@
 
 ## Current Status
 
+The Kejim perimeter alarm was active, but its blocked-path transmission fell to
+about 0.00001 in the mid band. Its source was outside solid geometry. The mixer
+now uses a tunable transmission minimum (`s_steamTransmission`, default 0.12).
+Low frequencies pass more strongly than high frequencies. Clear-path and distance
+gains remain unchanged. Listener-attached global ambient beds now bypass spatial
+effects and no longer occupy reflection slots.
+
 The remaining first-use gap had a separate cause: filesystem operations cleared
 the queued DMA audio. Steam Audio retained its advanced paint cursor, so the
 erased window stayed silent. This did not count as a mixer underrun. Runtime file
