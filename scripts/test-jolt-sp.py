@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--floor-combat", action="store_true", help="Test movement over fallen NPCs and the saber floor finisher")
     parser.add_argument("--collapse", action="store_true", help="Test and record the motor fade during a standing death")
     parser.add_argument("--force-effects", action="store_true", help="Test native Grip and Lightning with physical reactions")
+    parser.add_argument("--force-effect", choices=("grip", "lightning"), help="Test only one Force effect")
     parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
     parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
@@ -36,6 +37,7 @@ def main():
     parser.add_argument("--fps", type=int, choices=(60, 120, 144), default=60)
     parser.add_argument("--inside", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    args.force_effects = args.force_effects or bool(args.force_effect)
     args.demo = args.demo or bool(args.demo_case) or args.launcher
     if not args.inside:
         return subprocess.call(["xvfb-run", "-a", "-s", "-screen 0 960x720x24",
@@ -132,7 +134,7 @@ def main():
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
             if args.force_effects:
                 results = {}
-                for power in (1, 2, 3):
+                for power in (() if args.force_effect == "lightning" else (1, 2, 3)):
                     start = len(log.read_text(errors="replace"))
                     cmd("jolt_demo idle")
                     wait_for("Jolt demo finished: idle", start)
@@ -174,7 +176,7 @@ def main():
                     if power == 2:
                         assert max(s["pelvis_z"] for s in samples) > before["pelvis_z"]+12, samples[-1]
                     print(f"PASS: {args.renderer}: Grip level {power} and release", flush=True)
-                for power in (1, 2, 3):
+                for power in (() if args.force_effect == "grip" else (1, 2, 3)):
                     start = len(log.read_text(errors="replace"))
                     cmd("jolt_demo idle")
                     wait_for("Jolt demo finished: idle", start)
@@ -191,16 +193,20 @@ def main():
                     assert any(s["shock"] > 0 and s["hits"] > 0 for s in samples), samples[:3]
                     assert stopped["health"] < before["health"] and stopped["shock"] == 0, stopped
                     limit = 5.08/(3 if power == 1 else 1)
-                    assert 0 < max(s["shock_push"] for s in samples) <= limit+.01, samples[-1]
+                    assert max(s["shock_push"] for s in samples) > 0, samples[-1]
+                    assert max(s["shock_rate"] for s in samples) <= limit+.01, samples[-1]
+                    if power == 3:
+                        assert max(s["shock_push"] for s in samples) > limit*2, samples[-1]
                     assert max(s["pelvis_z"] for s in samples) < before["pelvis_z"]+16, samples[-1]
-                    print(f"PASS: {args.renderer}: Lightning {power}, bounded push, contractions, and fade", flush=True)
-                start = len(log.read_text(errors="replace"))
-                cmd("jolt_demo idle")
-                wait_for("Jolt demo finished: idle", start)
-                cmd("nav memory jolt_demo_actor protect; give force; +force_lightning; wait 15; -force_lightning; wait 8")
-                protected = status("jolt_demo_actor")
-                assert protected["health"] == 500 and protected["hits"] == 0 and protected["shock"] == 0, protected
-                print(f"PASS: {args.renderer}: protected targets do not acquire a Lightning reaction", flush=True)
+                    print(f"PASS: {args.renderer}: Lightning {power}, continuous push, contractions, and fade", flush=True)
+                if args.force_effect != "grip":
+                    start = len(log.read_text(errors="replace"))
+                    cmd("jolt_demo idle")
+                    wait_for("Jolt demo finished: idle", start)
+                    cmd("nav memory jolt_demo_actor protect; give force; +force_lightning; wait 15; -force_lightning; wait 8")
+                    protected = status("jolt_demo_actor")
+                    assert protected["health"] == 500 and protected["hits"] == 0 and protected["shock"] == 0, protected
+                    print(f"PASS: {args.renderer}: protected targets do not acquire a Lightning reaction", flush=True)
                 stdin.write("quit\n"); stdin.flush()
                 assert process.wait(timeout=30) == 0
                 return 0

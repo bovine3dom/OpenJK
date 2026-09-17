@@ -418,18 +418,25 @@ int main() {
 			shocked.Electrocute(.9f, forward, 2);
 			unpushed.Electrocute(.9f); unpushed.Advance(.05f);
 			Check(shocked.Advance(.05f), "continuous Lightning step");
-			Check(shocked.Balance().shockPushUsed <= 2.001f, "damage ticks share one push allowance");
+			Check(std::abs(shocked.Balance().shockPushUsed-(frame+1)*.1f) < .01f, "Lightning push scales with exposure time");
 		}
 		float v[3], baseline[3]; shocked.RootVelocity(v); unpushed.RootVelocity(baseline);
 		std::printf("Lightning: velocity=%.3f,%.3f,%.3f push=%.3f\n", v[0], v[1], v[2], shocked.Balance().shockPushUsed);
-		Check(v[0]-baseline[0] > 1.5f && v[0]-baseline[0] <= 2.05f && std::abs(v[2]-baseline[2]) < .2f,
-			"Lightning adds bounded horizontal motion without repeated upward kicks");
-		Check(shocked.Balance().shock > .8f, "contractions continue after the push allowance is spent");
-		for (int i = 0; i < 20; ++i) shocked.Advance(.05f);
+		Check(v[0]-baseline[0] > 4.8f && v[0]-baseline[0] <= 6.05f && std::abs(v[2]-baseline[2]) < .2f,
+			"Lightning continuously accelerates horizontally without upward kicks");
+		Check(shocked.Balance().shock > .8f, "contractions continue throughout exposure");
+		shocked.EndElectrocution();
+		shocked.Advance(.15f);
+		Check(shocked.Balance().shockPushRate == 0 && shocked.Balance().shock > .5f, "push stops before the contraction after-effect");
+		const float delivered = shocked.Balance().shockPushUsed;
+		for (int i = 0; i < 7; ++i) shocked.Advance(.05f);
+		Check(shocked.Balance().shock > .25f && shocked.Balance().shockPushUsed == delivered, "contractions linger without extra acceleration");
+		for (int i = 0; i < 11; ++i) shocked.Advance(.05f);
 		Check(shocked.Balance().shock == 0, "strong contractions fade after exposure");
-		shocked.RootVelocity(baseline);
-		shocked.Electrocute(.9f, forward, 2); shocked.Advance(.25f); shocked.RootVelocity(v);
-		Check(v[0] > baseline[0]+1, "a separate Lightning exposure can supply another bounded shove");
+		for (int i = 0; i < 5; ++i) { shocked.Electrocute(.9f, forward, 2); shocked.Advance(.05f); }
+		Check(std::abs(shocked.Balance().shockPushUsed-.5f) < .01f, "a separate exposure starts a new continuous push");
+		shocked.Advance(.2f); shocked.Advance(.2f);
+		Check(shocked.Balance().shockPushRate == 0 && shocked.Balance().shock > 0, "losing beam contact stops push while the after-effect continues");
 	}
 	{
 		JoltReaction::FallSimulation corpse(parts, stopped);

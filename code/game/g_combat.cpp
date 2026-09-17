@@ -6059,7 +6059,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, const
 		}
 	}
 	// figure momentum add, even if the damage won't be taken
-	// Physical Lightning supplies a bounded push after accepted damage instead.
+	// Physical Lightning supplies continuous, time-scaled force after accepted damage instead.
 	const bool physicalLightning = mod == MOD_FORCE_LIGHTNING && G_JoltLightningTarget(targ);
 	if ( knockback && !(dflags&DAMAGE_DEATH_KNOCKBACK) && !physicalLightning ) //&& targ->client
 	{

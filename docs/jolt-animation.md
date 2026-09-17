@@ -19,14 +19,16 @@ The controller waits for the native recovery delay before a get-up.
 
 Lightning reactions start only after accepted health damage. Repeated hits
 refresh one exposure state. Contractions become stronger at higher power levels
-and retain motor strength during a fall. The effect fades when hits stop.
-Native damage remains in use. Physical targets receive one horizontal push
-allowance per continuous exposure, without repeated upward kicks. The default
-`g_joltLightningPushScale 0.5` sets this allowance to half the nominal horizontal
-Force Push strength at the same level, distance, and target mass. Weak or
-partially resisted hits reduce it further. Values from
-zero to one allow further tuning. A gap of 0.3 seconds without accepted hits
-starts a new exposure. Unsupported targets retain native knockback.
+and retain motor strength during a fall. Contractions fade over approximately
+one second after the last hit. Native damage remains in use. Physical targets
+receive continuous horizontal acceleration, without repeated upward kicks.
+The default `g_joltLightningPushScale 0.5` applies the nominal horizontal Force
+Push velocity change over two seconds of exposure at the same level, distance,
+and target mass. Contacts and drag affect the resulting motion. Weak or
+partially resisted hits reduce the acceleration. Values from zero to one allow
+further tuning. Push stops when the caster's power ends. A contact grace period
+of 0.3 seconds covers slow server updates and ends push when the beam misses.
+Push does not continue during the contraction after-effect. Unsupported targets retain native knockback.
 Death ends the contractions and
 muscle control. A Grip attachment remains active while the native power holds
 the corpse. Release then lets the passive body fall.

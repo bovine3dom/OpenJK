@@ -302,7 +302,7 @@ struct FallSimulation::Impl {
 	JPH::Vec3 gripTarget = JPH::Vec3::sZero(), gripGoal = JPH::Vec3::sZero();
 	bool gripLift = false;
 	float gripAge = 0, shockRemaining = 0, shockTarget = 0, shockAge = 0;
-	float nextGripStruggle = .45f, shockPushLimit = 0;
+	float nextGripStruggle = .45f, shockAcceleration = 0, shockContact = 0;
 	JPH::Vec3 shockPushDirection = JPH::Vec3::sZero();
 	int swing = 0;
 	JPH::Vec3 desiredVelocity = JPH::Vec3::sZero(), reactionAxis = JPH::Vec3::sAxisY();
@@ -426,10 +426,13 @@ struct FallSimulation::Impl {
 		for (int i = 0; i < int(Region::Count); ++i)
 			regional.strength[i] += std::clamp(requestedRegional.strength[i]-regional.strength[i], -Step*5, Step*5);
 		shockRemaining = std::max(0.0f, shockRemaining-Step);
-		balance.shock += std::clamp((shockRemaining > 0 ? shockTarget : 0)-balance.shock, -Step*4, Step*8);
+		shockContact = std::max(0.0f, shockContact-Step);
+		const float tail = std::min(1.0f, shockRemaining);
+		balance.shock += std::clamp(shockTarget*tail*tail*(3-2*tail)-balance.shock, -Step*4, Step*8);
 		shockAge += Step;
-		if (shockRemaining > 0 && balance.phase != ControlPhase::Dead) {
-			const float push = std::min(std::max(0.0f, shockPushLimit-balance.shockPushUsed), shockPushLimit*Step/.25f);
+		balance.shockPushRate = shockContact > 0 && balance.phase != ControlPhase::Dead ? shockAcceleration : 0;
+		if (balance.shockPushRate > 0) {
+			const float push = balance.shockPushRate*Step;
 			if (push > 0) for (auto id : bodies) world.GetBodyInterface().AddLinearVelocity(id, shockPushDirection*push);
 			balance.shockPushUsed += push;
 		}
@@ -665,7 +668,7 @@ struct FallSimulation::Impl {
 		for (int i = 1; i < PartCount; ++i) {
 			auto desired = goals[i].GetQuaternion();
 			if (balance.shock > 0) {
-				const float amplitude = balance.shock*(i == 2 ? .04f : i >= 7 ? .09f : .18f);
+				const float amplitude = balance.shock*(i == 2 ? .05f : i >= 7 ? .11f : .22f);
 				const float pulse = std::sin(shockAge*31+i*.8f) + .35f*std::sin(shockAge*17+i);
 				desired = JPH::Quat::sRotation(goals[0].GetAxisX(), amplitude*pulse)*desired;
 			}
@@ -1012,23 +1015,29 @@ void FallSimulation::ReleaseGrip() {
 	impl->gripLift = false;
 	impl->AnkleControl(false);
 }
-void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushSpeed) {
+void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushAcceleration) {
 	if (!std::isfinite(intensity) || impl->balance.phase == ControlPhase::Dead) return;
-	if (impl->shockRemaining <= 0) {
-		impl->shockAge = 0;
-		impl->shockPushLimit = impl->balance.shockPushUsed = 0;
-	}
-	if (pushDirection && std::isfinite(pushSpeed) && pushSpeed > 0 && !Vector(pushDirection).IsNaN()) {
-		impl->shockPushLimit = std::max(impl->shockPushLimit, std::min(20.0f, pushSpeed));
+	if (impl->shockRemaining <= 0) impl->shockAge = 0;
+	if (impl->shockContact <= 0) impl->balance.shockPushUsed = 0;
+	impl->shockAcceleration = 0;
+	if (pushDirection && std::isfinite(pushAcceleration) && pushAcceleration > 0 && !Vector(pushDirection).IsNaN()) {
+		impl->shockAcceleration = std::min(20.0f, pushAcceleration);
 		impl->shockPushDirection = Vector(pushDirection).NormalizedOr(JPH::Vec3::sZero());
 	}
 	impl->shockTarget = std::clamp(intensity, .1f, 1.0f);
-	impl->shockRemaining = .3f;
+	impl->shockContact = .3f;
+	impl->shockRemaining = 1.0f;
+}
+void FallSimulation::EndElectrocution() {
+	if (impl->balance.phase == ControlPhase::Dead || impl->shockContact <= 0) return;
+	impl->shockContact = impl->balance.shockPushRate = 0;
+	if (impl->balance.shock > 0) impl->shockTarget = impl->balance.shock;
+	impl->shockRemaining = 1.0f;
 }
 void FallSimulation::Kill(bool soften) {
 	auto& s = *impl;
 	if (s.balance.phase == ControlPhase::Dead) return;
-	s.shockRemaining = s.balance.shock = 0;
+	s.shockRemaining = s.shockContact = s.balance.shock = s.balance.shockPushRate = 0;
 	const float height = (s.world.GetBodyInterface().GetWorldTransform(s.bodies[0])*s.offsets[0]).GetTranslation().GetZ()
 		- std::min(s.Foot(0).GetZ(), s.Foot(1).GetZ());
 	s.deathStrength = soften && !s.balance.gripping && !s.trunkContact && height > .45f ? s.balance.strength : 0;

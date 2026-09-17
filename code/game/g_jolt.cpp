@@ -109,6 +109,7 @@ struct Actor {
 	bool dead = false;
 	bool sleepingPose = false;
 	int gripLevel = 0, gripCaster = -1;
+	int lightningCaster = -1;
 	JoltReaction::Part gripPose[JoltReaction::PartCount];
 	int riseStart = 0;
 	float handoffError = 0;
@@ -704,6 +705,7 @@ void Actor::Reset(bool restoreOrigin) {
 	engaged = false;
 	sleepingPose = false;
 	gripLevel = 0; gripCaster = -1;
+	lightningCaster = -1;
 	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
@@ -719,6 +721,10 @@ void Actor::Frame() {
 	gentity_t* ent = &g_entities[actor];
 	if (!ent->inuse || !ent->client) { Reset(false); return; }
 	if (!dead && ent->health <= 0 && engaged) Die(ent);
+	if (fall && lightningCaster >= 0 && (!g_entities[lightningCaster].inuse || !g_entities[lightningCaster].client ||
+		!(g_entities[lightningCaster].client->ps.forcePowersActive & (1 << FP_LIGHTNING)))) {
+		fall->EndElectrocution(); lightningCaster = -1;
+	}
 	if (gripLevel && (!(ent->client->ps.eFlags & EF_FORCE_GRIPPED) || gripCaster < 0 || !g_entities[gripCaster].inuse ||
 		!g_entities[gripCaster].client || g_entities[gripCaster].client->ps.forceGripEntityNum != actor ||
 		!(g_entities[gripCaster].client->ps.forcePowersActive & (1 << FP_GRIP)))) G_JoltEndGrip(ent, 0);
@@ -775,19 +781,20 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 		Engage(ent);
 		fall->SetVitality(float(std::max(0, ent->health)) / std::max(1, ent->client->ps.stats[STAT_MAX_HEALTH]));
 		if (lightning) {
+			lightningCaster = attacker && attacker->client && (attacker->client->ps.forcePowersActive & (1 << FP_LIGHTNING)) ? attacker->s.number : -1;
 			const int power = attacker && attacker->client ? std::max(1, std::min(3, attacker->client->ps.forcePowerLevel[FP_LIGHTNING])) : 1;
-			float push = 0;
+			float acceleration = 0;
 			vec3_t horizontal = {direction[0], direction[1], 0};
 			if (lightningKnockback > 0 && attacker && VectorNormalize(horizontal) > 0) {
-				// Match the ordinary Force Push distance, level, mass, and gravity scaling.
+				// The scale is the fraction of a nominal Force Push velocity added per second.
 				const float knockback = std::max(100.0f, 200-Distance(ent->currentOrigin, attacker->currentOrigin))/(power == 1 ? 3 : 1);
 				const float mass = ent->physicsBounce > 0 ? ent->physicsBounce : 200;
-				push = knockback*g_knockback->value/mass*(g_gravity->value > 0 ? .8f : 1)*MetresPerUnit*
+				acceleration = knockback*g_knockback->value/mass*(g_gravity->value > 0 ? .8f : 1)*MetresPerUnit*
 					std::max(0.0f, std::min(1.0f, lightningPushScale->value));
 				// Partially resisted hits retain a reduced shove.
-				push *= std::min(1.0f, lightningKnockback/(power == 3 ? 4.0f : 2.0f));
+				acceleration *= std::min(1.0f, lightningKnockback/(power == 3 ? 4.0f : 2.0f));
 			}
-			fall->Electrocute(std::min(1.0f, .45f+.18f*(power-1)+std::min(.15f, damage*.025f)), horizontal, push);
+			fall->Electrocute(std::min(1.0f, .45f+.18f*(power-1)+std::min(.15f, damage*.025f)), horizontal, acceleration);
 		} else if (blast) {
 			// Native damage already supplied distance-scaled knockback. Do not add it twice.
 			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
@@ -877,7 +884,7 @@ void Actor::Status() {
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
-	gi.Printf("jolt effects grip=%d grip_force=%.2f grip_error=%.3f ankles_free=%d shock=%.3f grip_struggles=%u shock_push=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.gripError, balance.looseAnkles, balance.shock, balance.gripStruggles, balance.shockPushUsed,
+	gi.Printf("jolt effects grip=%d grip_force=%.2f grip_error=%.3f ankles_free=%d shock=%.3f grip_struggles=%u shock_push=%.3f shock_rate=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.gripError, balance.looseAnkles, balance.shock, balance.gripStruggles, balance.shockPushUsed, balance.shockPushRate,
 		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
