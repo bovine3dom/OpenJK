@@ -395,18 +395,31 @@ struct FallSimulation::Impl {
 		balance.gripForce = 0;
 		if (!balance.gripping) return;
 		gripAge += Step;
-		if (!gripLift) return;
 		auto& api = world.GetBodyInterface();
-		auto movement = gripTarget-gripGoal;
-		if (movement.Length() > Step*6) movement *= Step*6/movement.Length();
-		gripGoal += movement;
+		if (gripLift) {
+			auto movement = gripTarget-gripGoal;
+			if (movement.Length() > Step*6) movement *= Step*6/movement.Length();
+			gripGoal += movement;
+		}
 		const auto anchor = api.GetWorldTransform(bodies[1])*endLocal[1];
-		auto force = (gripGoal-anchor)*(totalMass*60) - api.GetPointVelocity(bodies[1], anchor)*(totalMass*12) - world.GetGravity()*totalMass;
-		const float limit = totalMass*80;
+		balance.gripError = (gripGoal-anchor).Length();
+		// Level one restrains the initial neck position without lifting or cancelling gravity.
+		auto force = (gripGoal-anchor)*(totalMass*(gripLift ? 60 : 120)) - api.GetPointVelocity(bodies[1], anchor)*(totalMass*(gripLift ? 12 : 18));
+		if (gripLift) force -= world.GetGravity()*totalMass;
+		const float limit = totalMass*(gripLift ? 80 : 40);
 		if (force.Length() > limit) force *= limit/force.Length();
 		force *= std::min(1.0f, gripAge/.2f);
 		api.AddForce(bodies[1], force, anchor);
 		balance.gripForce = force.Length();
+	}
+	void AnkleControl(bool loose) {
+		balance.looseAnkles = loose;
+		for (int i = 11; i < PartCount; ++i) {
+			const auto motor = loose || balance.phase == ControlPhase::Dead ? JPH::EMotorState::Off : JPH::EMotorState::Position;
+			joints[i]->SetSwingMotorState(motor);
+			joints[i]->SetTwistMotorState(motor);
+			joints[i]->SetMaxFrictionTorque(loose ? 0 : 1);
+		}
 	}
 	void Control() {
 		if (balance.phase == ControlPhase::Shadow) return;
@@ -985,6 +998,7 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 		s.gripGoal = s.world.GetBodyInterface().GetWorldTransform(s.bodies[1])*s.endLocal[1];
 	}
 	s.balance.gripping = true; s.gripLift = lift; s.gripTarget = Vector(target);
+	s.AnkleControl(lift);
 	for (int i = 0; i < PartCount; ++i) s.gripPose[i] = Matrix(pose[i].bone)*s.offsets[i].InversedRotationTranslation();
 	if (lift) {
 		if (s.balance.phase != ControlPhase::Dead) ReleaseControl();
@@ -993,9 +1007,10 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 }
 void FallSimulation::ReleaseGrip() {
 	if (!impl->balance.gripping) return;
-	impl->balance.gripping = false; impl->balance.gripForce = 0;
+	impl->balance.gripping = false; impl->balance.gripForce = impl->balance.gripError = 0;
 	if (impl->gripLift && impl->balance.phase != ControlPhase::Dead) ReleaseControl();
 	impl->gripLift = false;
+	impl->AnkleControl(false);
 }
 void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushSpeed) {
 	if (!std::isfinite(intensity) || impl->balance.phase == ControlPhase::Dead) return;

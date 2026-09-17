@@ -877,7 +877,7 @@ void Actor::Status() {
 	if (fall) gi.Printf("jolt support contacts=%u landings=%u foot_error=%.3f peak_error=%.3f rejected_steps=%u assist_force=%.2f assist_torque=%.2f peak_leg_lift=%.3f\n", balance.contacts, balance.landings, balance.footError, balance.peakError, balance.rejectedSteps, balance.assistForce, balance.assistTorque, balance.peakLegLift);
 	gi.Printf("jolt recovery preparing=%d blend_ms=%d brace_mask=%u hand_contacts=%u hand_contacts_seen=%u arm_error=%.3f\n", prepareStart != 0, recoveryTime, balance.braceMask, balance.handContacts, balance.handContactsSeen, balance.preparationError);
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
-	gi.Printf("jolt effects grip=%d grip_force=%.2f shock=%.3f grip_struggles=%u shock_push=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.shock, balance.gripStruggles, balance.shockPushUsed,
+	gi.Printf("jolt effects grip=%d grip_force=%.2f grip_error=%.3f ankles_free=%d shock=%.3f grip_struggles=%u shock_push=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.gripError, balance.looseAnkles, balance.shock, balance.gripStruggles, balance.shockPushUsed,
 		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
@@ -1188,7 +1188,7 @@ bool G_JoltGripping(const gentity_t* ent) {
 }
 bool G_JoltSupported(const gentity_t* ent) {
 	const auto* state = ent ? Find(ent->s.number) : nullptr;
-	return state && state->engaged && state->fall && (state->fall->Balance().contacts || state->fall->Balance().supportedTrunk);
+	return state && state->engaged && state->fall && (state->gripLevel == 1 || state->fall->Balance().contacts || state->fall->Balance().supportedTrunk);
 }
 bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* head, int powerLevel) {
 	if (!Humanoid(ent) || ent->client->dismembered || ExternalPoseOwner(ent, true) || caster < 0 || caster >= ENTITYNUM_WORLD || powerLevel < 1 || powerLevel > 3) return false;
@@ -1216,7 +1216,7 @@ bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* he
 	profile.strength[int(JoltReaction::Region::Torso)] = .7f;
 	profile.strength[int(JoltReaction::Region::Head)] = .6f;
 	profile.strength[int(JoltReaction::Region::Legs)] = powerLevel > 1 ? .04f : 1;
-	profile.strength[int(JoltReaction::Region::Feet)] = powerLevel > 1 ? .025f : 1;
+	profile.strength[int(JoltReaction::Region::Feet)] = powerLevel > 1 ? 0 : 1;
 	state->fall->SetRegionalControl(profile);
 	state->fall->Sample(state->fallPose);
 	vec3_t anchor;

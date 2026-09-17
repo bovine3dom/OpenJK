@@ -367,13 +367,19 @@ int main() {
 		float target[] = {parts[2].bone.matrix[0][3],parts[2].bone.matrix[1][3],parts[2].bone.matrix[2][3]+.8f};
 		float mass = 0; for (const auto& part : parts) mass += part.mass;
 		held.Grip(parts, target, false);
-		for (int i = 0; i < 120; ++i) held.Advance(1.0f/120);
-		Check(held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().phase == JoltReaction::ControlPhase::Tracking,
-			"level one Grip keeps ground support without lift");
+		for (int i = 0; i < 600; ++i) {
+			if (i == 120) { const float nudge[] = {.8f,0,0}; held.AddVelocity(nudge); }
+			held.Advance(1.0f/120); held.Sample(pose);
+			Check(held.Balance().gripError < .25f, "level one Grip restrains the initial neck position");
+			Check(pose[2].matrix[2][3] < parts[2].bone.matrix[2][3]+.1f, "level one Grip does not lift its target");
+		}
+		Check(held.Balance().gripping && held.Balance().phase == JoltReaction::ControlPhase::Tracking,
+			"level one Grip keeps the target standing after a disturbance");
 		JoltReaction::RegionalControl profile;
 		profile.strength[int(JoltReaction::Region::Legs)] = .04f;
-		profile.strength[int(JoltReaction::Region::Feet)] = .025f;
+		profile.strength[int(JoltReaction::Region::Feet)] = 0;
 		held.SetRegionalControl(profile); held.Grip(parts, target, true);
+		Check(held.Balance().looseAnkles, "lifted Grip releases ankle motors and friction");
 		for (int i = 0; i < 360; ++i) {
 			if (i % 12 == 0) held.Electrocute(.6f);
 			Check(held.Advance(1.0f/120), "Grip and Lightning share one physical rig");
@@ -391,6 +397,7 @@ int main() {
 		}
 		float before[3], after[3]; held.RootVelocity(before);
 		held.ReleaseGrip(); held.SetRegionalControl(JoltReaction::RegionalControl{}); held.RootVelocity(after);
+		Check(!held.Balance().looseAnkles, "release restores normal ankle control");
 		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "Grip release preserves velocity");
 		for (int i = 0; i < 180; ++i) Check(held.Advance(1.0f/120), "released body falls with finite state");
 		Check(!held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().shock == 0,

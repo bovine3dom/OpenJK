@@ -38,6 +38,8 @@ struct BalanceStatus {
 	unsigned firstHandContact = 0, firstHeadContact = 0;
 	bool gripping = false;
 	float gripForce = 0, shock = 0;
+	float gripError = 0;
+	bool looseAnkles = false;
 	unsigned gripStruggles = 0;
 	float shockPushUsed = 0;
 };

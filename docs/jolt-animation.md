@@ -8,10 +8,12 @@ their results. See [Performance Check](jolt-performance.md) for measurements.
 ## Force Effects
 
 Grip uses the native targeting, resistance, damage, and release rules.
-Level 1 keeps ground support. Levels 2 and 3 suspend the body through a bounded
+Level 1 restrains the neck near its initial position with a bounded spring.
+It does not raise the target or cancel gravity. Levels 2 and 3 suspend the body through a bounded
 force at the upper torso. The hands follow a choking pose. Weak leg motors use
 downward targets. Small, intermittent thigh impulses make the legs struggle
-without holding a raised pose. Level 3 follows the native carry
+without holding a raised pose. Lifted ankles have no motor drive or joint
+friction; anatomical limits still apply. Level 3 follows the native carry
 target. Release preserves physical velocity and applies the native speed limit.
 The controller waits for the native recovery delay before a get-up.
 
