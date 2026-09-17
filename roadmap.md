@@ -380,7 +380,7 @@ rough notes / todo
   - give play-sp an option to launch it.
   - UX needs classic 'all text and buttons must be useful to users'
   - more cohesive styling with rest of game
-  - should provide sensible defaults (i am not sure rend2-defaults actually gets executed? maybe we need to port it to the .cpp files?), esp desktop resolution
+  - should provide sensible defaults, esp desktop resolution
   - it totally needs a star wars chip-tune
   - 'continue' button to load most recent save
   - JO and JA should swap positions, so JO always comes first

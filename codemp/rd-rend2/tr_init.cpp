@@ -1567,7 +1567,7 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_compareEnhancements, 0, 2, qtrue);
 	r_smaaDebug = ri.Cvar_Get("r_smaaDebug", "0", 0, "SMAA debug: 0 scene, 1 edges, 2 weights.");
 	r_sss = ri.Cvar_Get("r_sss", "1", CVAR_ARCHIVE, "Skin diffusion strength; values above 1 exaggerate the correction.");
-	r_sssRadius = ri.Cvar_Get("r_sssRadius", "0.5", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
+	r_sssRadius = ri.Cvar_Get("r_sssRadius", "1", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
 	r_sssDebug = ri.Cvar_Get("r_sssDebug", "0", 0, "SSS views: 0 scene, 1 mask, 2 raw irradiance, 3 filtered irradiance, 4 difference, 5 split scene.");
 	r_sssDebugGain = ri.Cvar_Get("r_sssDebugGain", "16", 0, "Gain for the SSS difference view.");
 	r_capsuleShadows = ri.Cvar_Get("r_capsuleShadows", "1", CVAR_ARCHIVE, "Skeletal capsule occlusion; requires screen AO and depth prepass.");
@@ -1604,7 +1604,7 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_gtaoHalfRes, 0, 1, qtrue);
 	r_gtaoDenoise = ri.Cvar_Get("r_gtaoDenoise", "1", CVAR_ARCHIVE, "Use a wider spatial filter for half-resolution GTAO.");
 	ri.Cvar_CheckRange(r_gtaoDenoise, 0, 1, qtrue);
-	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "1", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
+	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "0", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
 	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
 	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
 	r_ssaoRadius = ri.Cvar_Get("r_ssaoRadius", "1", CVAR_ARCHIVE, "World AO radius multiplier.");
@@ -1769,7 +1769,7 @@ void R_Register( void )
 	r_drawBuffer = ri.Cvar_Get( "r_drawBuffer", "GL_BACK", CVAR_CHEAT, "" );
 	r_lockpvs = ri.Cvar_Get ("r_lockpvs", "0", CVAR_CHEAT, "");
 	r_noportals = ri.Cvar_Get ("r_noportals", "0", CVAR_CHEAT, "");
-	r_shadows = ri.Cvar_Get( "cg_shadows", "1", 0, "" );
+	r_shadows = ri.Cvar_Get( "cg_shadows", "0", 0, "" );
 
 	r_marksOnTriangleMeshes = ri.Cvar_Get("r_marksOnTriangleMeshes", "0", CVAR_ARCHIVE, "");
 
