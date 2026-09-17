@@ -10,10 +10,10 @@ their results. See [Performance Check](jolt-performance.md) for measurements.
 Grip uses the native targeting, resistance, damage, and release rules.
 Level 1 restrains the neck near its initial position with a bounded spring.
 It does not raise the target or cancel gravity. Levels 2 and 3 suspend the body through a bounded
-force at the upper torso. The hands follow a choking pose. Weak leg motors use
-downward targets. Small, intermittent thigh impulses make the legs struggle
-without holding a raised pose. Lifted ankles have no motor drive or joint
-friction; anatomical limits still apply. Level 3 follows the native carry
+force at the upper torso. The hands follow a choking pose. Suspended hips,
+knees, and ankles have no motor drive. They use the same passive joint damping,
+friction, and anatomical limits as a free ragdoll. Small, intermittent thigh
+impulses make the legs struggle without holding a raised pose. Level 3 follows the native carry
 target. Release preserves physical velocity and applies the native speed limit.
 The controller waits for the native recovery delay before a get-up.
 
@@ -36,7 +36,8 @@ the corpse. Release then lets the passive body fall.
 Free falls and corpses have modest damping between connected bones. It slows
 rapid folding without a rest-pose target. The torso has the most resistance;
 the ankles have the least. Equal and opposite torques preserve total angular
-momentum. Active Grip, Lightning contractions, and catching arms retain their
+momentum. Grip uses this resistance in the suspended legs and in held corpses.
+Its active upper body, Lightning contractions, and catching arms retain their
 own control. Sleeping bodies do not receive these torques.
 
 The controller has separate strength settings for torso, head, arms, legs, and

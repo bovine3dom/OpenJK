@@ -40,7 +40,7 @@ struct BalanceStatus {
 	bool gripping = false;
 	float gripForce = 0, shock = 0;
 	float gripError = 0;
-	bool looseAnkles = false;
+	bool passiveLegs = false;
 	unsigned gripStruggles = 0;
 	float shockPushUsed = 0, shockPushRate = 0;
 };

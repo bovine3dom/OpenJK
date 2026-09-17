@@ -380,21 +380,24 @@ int main() {
 		Check(held.Balance().gripping && held.Balance().phase == JoltReaction::ControlPhase::Tracking,
 			"level one Grip keeps the target standing after a disturbance");
 		JoltReaction::RegionalControl profile;
-		profile.strength[int(JoltReaction::Region::Legs)] = .04f;
+		profile.strength[int(JoltReaction::Region::Legs)] = 0;
 		profile.strength[int(JoltReaction::Region::Feet)] = 0;
 		held.SetRegionalControl(profile); held.Grip(parts, target, true);
-		Check(held.Balance().looseAnkles, "lifted Grip releases ankle motors and friction");
+		Check(held.Balance().passiveLegs, "lifted Grip releases hip, knee, and ankle motors");
+		float legResistance = 0;
 		for (int i = 0; i < 360; ++i) {
-			if (i % 12 == 0) held.Electrocute(.6f);
+			if (i >= 120 && i % 12 == 0) held.Electrocute(.6f);
 			Check(held.Advance(1.0f/120), "Grip and Lightning share one physical rig");
 			const auto b = held.Balance();
 			Check(b.gripForce <= mass*80+.1f && b.assistForce == 0 && b.assistTorque == 0, "suspension uses a bounded external force without standing assistance");
-			Check(b.passiveTorque == 0, "Grip keeps its regional control and freely hanging ankles");
+			legResistance = std::max(legResistance, b.passiveTorque);
+			Check(b.passiveTorque <= 3.01f, "lifted live targets use only the lower-body passive resistance");
 		}
 		held.Sample(pose);
 		std::printf("Grip: neck=%.3f target=%.3f force=%.1f shock=%.2f\n", pose[2].matrix[2][3], target[2], held.Balance().gripForce, held.Balance().shock);
 		Check(std::abs(pose[2].matrix[2][3]-target[2]) < .2f, "Grip lifts the body to its suspension target");
 		Check(held.Balance().gripStruggles >= 3, "suspended legs receive intermittent struggle impulses");
+		Check(legResistance > 0, "suspended legs retain free-ragdoll joint resistance");
 		for (int side = 0; side < 2; ++side) {
 			const int hip = side ? 9 : 7, foot = side ? 12 : 11;
 			const float dx = pose[foot].matrix[0][3]-pose[hip].matrix[0][3], dy = pose[foot].matrix[1][3]-pose[hip].matrix[1][3];
@@ -402,7 +405,7 @@ int main() {
 		}
 		float before[3], after[3]; held.RootVelocity(before);
 		held.ReleaseGrip(); held.SetRegionalControl(JoltReaction::RegionalControl{}); held.RootVelocity(after);
-		Check(!held.Balance().looseAnkles, "release restores normal ankle control");
+		Check(!held.Balance().passiveLegs, "release restores normal leg control");
 		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "Grip release preserves velocity");
 		for (int i = 0; i < 180; ++i) Check(held.Advance(1.0f/120), "released body falls with finite state");
 		Check(!held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().shock == 0,

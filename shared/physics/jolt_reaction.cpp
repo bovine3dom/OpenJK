@@ -412,13 +412,13 @@ struct FallSimulation::Impl {
 		api.AddForce(bodies[1], force, anchor);
 		balance.gripForce = force.Length();
 	}
-	void AnkleControl(bool loose) {
-		balance.looseAnkles = loose;
-		for (int i = 11; i < PartCount; ++i) {
-			const auto motor = loose || balance.phase == ControlPhase::Dead ? JPH::EMotorState::Off : JPH::EMotorState::Position;
+	void LegControl(bool passive) {
+		balance.passiveLegs = passive;
+		for (int i = 7; i < PartCount; ++i) {
+			const auto motor = passive || balance.phase == ControlPhase::Dead ? JPH::EMotorState::Off : JPH::EMotorState::Position;
 			joints[i]->SetSwingMotorState(motor);
 			joints[i]->SetTwistMotorState(motor);
-			joints[i]->SetMaxFrictionTorque(loose ? 0 : 1);
+			joints[i]->SetMaxFrictionTorque(1);
 		}
 	}
 	void Control() {
@@ -471,12 +471,6 @@ struct FallSimulation::Impl {
 			if (gripLift) {
 				const auto forward = (goals[11].GetAxisY()*JPH::Vec3(1,1,0)).NormalizedOr(JPH::Vec3::sAxisX());
 				const auto axis = JPH::Vec3::sAxisZ().Cross(forward);
-				for (int side = 0; side < 2; ++side) {
-					const int upper = side ? 9 : 7;
-					const auto hip = (api.GetWorldTransform(bodies[upper])*offsets[upper]).GetTranslation();
-					const float length = endLocal[upper].Length()*2 + endLocal[upper+1].Length()*2;
-					LegTargets(goals, side, hip-JPH::Vec3(0,0,length*.97f), &hip);
-				}
 				if (gripAge >= nextGripStruggle) {
 					const int upper = balance.gripStruggles % 2 ? 9 : 7;
 					const auto impulse = axis*(.45f*(mass[upper]/8)*(.8f+.2f*std::sin(balance.gripStruggles*2.1f)));
@@ -673,7 +667,7 @@ struct FallSimulation::Impl {
 				desired = JPH::Quat::sRotation(goals[0].GetAxisX(), amplitude*pulse)*desired;
 			}
 			const bool injured = (i == 7 || i == 8 || i == 11) ? withdraw[0] : (i == 9 || i == 10 || i == 12) && withdraw[1];
-			const bool worldHip = (i == 7 || i == 9) && ((balance.gripping && gripLift) || balance.phase == ControlPhase::Stepping || (balance.phase == ControlPhase::Tracking && injured));
+			const bool worldHip = (i == 7 || i == 9) && (balance.phase == ControlPhase::Stepping || (balance.phase == ControlPhase::Tracking && injured));
 			const bool bracing = i >= 3 && i <= 6 && (balance.braceMask & (1u << ((i-3)/2)));
 			const bool worldArm = bracing && (i == 3 || i == 5);
 			const auto q = balance.phase == ControlPhase::Tracking && plantedPose && i >= 7 && !injured ? stanceFrom[i].SLERP(stanceJoint[i], std::min(1.0f, landedAge/.35f)) :
@@ -737,10 +731,11 @@ struct FallSimulation::Impl {
 	}
 	void PassiveResistance() {
 		balance.passiveTorque = 0;
-		if (balance.gripping || balance.shock > .05f ||
+		if (balance.shock > .05f ||
 			(balance.phase != ControlPhase::Falling && balance.phase != ControlPhase::Dead)) return;
 		auto& api = world.GetBodyInterface();
 		for (int i = 1; i < PartCount; ++i) {
+			if (balance.gripping && balance.phase != ControlPhase::Dead && (!gripLift || i < 7)) continue;
 			// Catching arms keep their active control. Sleeping islands must stay asleep.
 			if (i >= 3 && i <= 6 && (balance.braceMask & (1u << ((i-3)/2)))) continue;
 			if (!body[i]->IsActive() || !body[parent[i]]->IsActive()) continue;
@@ -1022,7 +1017,7 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 		s.gripGoal = s.world.GetBodyInterface().GetWorldTransform(s.bodies[1])*s.endLocal[1];
 	}
 	s.balance.gripping = true; s.gripLift = lift; s.gripTarget = Vector(target);
-	s.AnkleControl(lift);
+	s.LegControl(lift);
 	for (int i = 0; i < PartCount; ++i) s.gripPose[i] = Matrix(pose[i].bone)*s.offsets[i].InversedRotationTranslation();
 	if (lift) {
 		if (s.balance.phase != ControlPhase::Dead) ReleaseControl();
@@ -1034,7 +1029,7 @@ void FallSimulation::ReleaseGrip() {
 	impl->balance.gripping = false; impl->balance.gripForce = impl->balance.gripError = 0;
 	if (impl->gripLift && impl->balance.phase != ControlPhase::Dead) ReleaseControl();
 	impl->gripLift = false;
-	impl->AnkleControl(false);
+	impl->LegControl(false);
 }
 void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushAcceleration) {
 	if (!std::isfinite(intensity) || impl->balance.phase == ControlPhase::Dead) return;
