@@ -892,7 +892,7 @@ void Actor::Status() {
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
 	gi.Printf("jolt effects grip=%d grip_force=%.2f grip_error=%.3f legs_passive=%d shock=%.3f grip_struggles=%u shock_push=%.3f shock_rate=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.gripError, balance.passiveLegs, balance.shock, balance.gripStruggles, balance.shockPushUsed, balance.shockPushRate,
 		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
-	gi.Printf("jolt facing facing_yaw=%.2f yaw_error=%.2f yaw_speed=%.2f torque=%.2f\n", fall ? fall->FacingYaw() : 0, balance.gripYawError, balance.gripYawSpeed, balance.gripTorque);
+	gi.Printf("jolt facing facing_yaw=%.2f yaw_error=%.2f yaw_speed=%.2f torque=%.2f leg_tone=%.3f\n", fall ? fall->FacingYaw() : 0, balance.gripYawError, balance.gripYawSpeed, balance.gripTorque, balance.gripLegTone);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
 		const auto& player = g_entities[0];

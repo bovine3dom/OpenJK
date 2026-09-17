@@ -188,6 +188,7 @@ def main():
                         assert max(s["grip_force"] for s in samples) > 100, samples
                         assert max(s["grip_struggles"] for s in samples) > 0, samples
                         assert all(s["legs_passive"] for s in samples if s["grip"] == power), samples[-1]
+                        assert 0 < max(s["leg_tone"] for s in samples) <= 5.01, samples[-1]
                     if power == 2:
                         assert max(s["pelvis_z"] for s in samples) > before["pelvis_z"]+12, samples[-1]
                     print(f"PASS: {args.renderer}: Grip level {power} and release", flush=True)

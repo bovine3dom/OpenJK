@@ -385,12 +385,15 @@ int main() {
 		held.SetRegionalControl(profile); held.Grip(parts, target, true);
 		Check(held.Balance().passiveLegs, "lifted Grip releases hip, knee, and ankle motors");
 		float legResistance = 0;
+		float legTone = 0;
 		for (int i = 0; i < 360; ++i) {
 			if (i >= 120 && i % 12 == 0) held.Electrocute(.6f);
 			Check(held.Advance(1.0f/120), "Grip and Lightning share one physical rig");
 			const auto b = held.Balance();
 			Check(b.gripForce <= mass*80+.1f && b.assistForce == 0 && b.assistTorque == 0, "suspension uses a bounded external force without standing assistance");
 			legResistance = std::max(legResistance, b.passiveTorque);
+			legTone = std::max(legTone, b.gripLegTone);
+			Check(b.gripLegTone <= 5.01f, "suspended hip and knee tone remains gentle and bounded");
 			Check(b.passiveTorque <= 3.01f, "lifted live targets use only the lower-body passive resistance");
 		}
 		held.Sample(pose);
@@ -398,6 +401,7 @@ int main() {
 		Check(std::abs(pose[2].matrix[2][3]-target[2]) < .2f, "Grip lifts the body to its suspension target");
 		Check(held.Balance().gripStruggles >= 3, "suspended legs receive intermittent struggle impulses");
 		Check(legResistance > 0, "suspended legs retain free-ragdoll joint resistance");
+		Check(legTone > 0, "living suspended legs retain some muscle control");
 		for (int side = 0; side < 2; ++side) {
 			const int hip = side ? 9 : 7, foot = side ? 12 : 11;
 			const float dx = pose[foot].matrix[0][3]-pose[hip].matrix[0][3], dy = pose[foot].matrix[1][3]-pose[hip].matrix[1][3];
@@ -406,12 +410,14 @@ int main() {
 		float before[3], after[3]; held.RootVelocity(before);
 		held.ReleaseGrip(); held.SetRegionalControl(JoltReaction::RegionalControl{}); held.RootVelocity(after);
 		Check(!held.Balance().passiveLegs, "release restores normal leg control");
+		Check(held.Balance().gripLegTone == 0, "release removes suspended muscle tone");
 		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "Grip release preserves velocity");
 		for (int i = 0; i < 180; ++i) Check(held.Advance(1.0f/120), "released body falls with finite state");
 		Check(!held.Balance().gripping && held.Balance().gripForce == 0 && held.Balance().shock == 0,
 			"Grip releases and Lightning expires without a continuing force");
 		held.Grip(parts, target, true); held.Electrocute(1); held.Kill();
 		Check(held.Balance().gripping && held.Balance().shock == 0 && held.Balance().strength == 0, "death ends muscle control but preserves external Grip");
+		Check(held.Balance().gripLegTone == 0, "held corpses do not receive living muscle tone");
 		const auto struggles = held.Balance().gripStruggles;
 		held.Advance(.2f);
 		Check(held.Balance().gripStruggles == struggles, "a held corpse does not struggle");

@@ -10,10 +10,13 @@ their results. See [Performance Check](jolt-performance.md) for measurements.
 Grip uses the native targeting, resistance, damage, and release rules.
 Level 1 restrains the neck near its initial position with a bounded spring.
 It does not raise the target or cancel gravity. Levels 2 and 3 suspend the body through a bounded
-force at the upper torso. The hands follow a choking pose. Suspended hips,
-knees, and ankles have no motor drive. They use the same passive joint damping,
-friction, and anatomical limits as a free ragdoll. Small, intermittent thigh
-impulses make the legs struggle without holding a raised pose. Level 3 follows the native carry
+force at the upper torso. The hands follow a choking pose. Suspended legs keep
+the passive joint damping, friction, and limits of a free ragdoll. Living hips
+and knees also have gentle muscle tone toward a near-vertical posture with a
+small knee bend. The added torque is limited to 5 N m at each hip and 3 N m at
+each knee. It damps swinging without locking axial twist. Ankles stay passive.
+Small, intermittent thigh impulses make the legs struggle. The added muscle
+tone ends on release or death. Level 3 follows the native carry
 target. Release preserves physical velocity and applies the native speed limit.
 The controller waits for the native recovery delay before a get-up.
 
