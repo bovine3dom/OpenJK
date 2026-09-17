@@ -40,6 +40,7 @@ struct BalanceStatus {
 	bool gripping = false;
 	float gripForce = 0, shock = 0;
 	float gripError = 0;
+	float gripYawError = 0, gripYawSpeed = 0, gripTorque = 0; // Degrees, degrees/s, N m.
 	bool passiveLegs = false;
 	unsigned gripStruggles = 0;
 	float shockPushUsed = 0, shockPushRate = 0;
@@ -76,8 +77,9 @@ public:
 	void Kill(bool soften = false);
 	void SetVitality(float fraction);
 	void SetRegionalControl(const RegionalControl& control);
-	void Grip(const Part* pose, const float* target, bool lift);
+	void Grip(const Part* pose, const float* target, bool lift, const float* casterPosition = nullptr);
 	void ReleaseGrip();
+	float FacingYaw() const; // World-space degrees.
 	void Electrocute(float intensity, const float* pushDirection = nullptr, float pushAcceleration = 0);
 	void EndElectrocution();
 	bool Awake() const;

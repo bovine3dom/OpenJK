@@ -300,6 +300,8 @@ struct FallSimulation::Impl {
 	RegionalControl regional, requestedRegional;
 	JPH::Mat44 gripPose[PartCount];
 	JPH::Vec3 gripTarget = JPH::Vec3::sZero(), gripGoal = JPH::Vec3::sZero();
+	JPH::Vec3 gripCaster = JPH::Vec3::sZero(), facingLocal = JPH::Vec3::sAxisX(), rightLocal = -JPH::Vec3::sAxisY();
+	bool gripFacing = false;
 	bool gripLift = false;
 	float gripAge = 0, shockRemaining = 0, shockTarget = 0, shockAge = 0;
 	float nextGripStruggle = .45f, shockAcceleration = 0, shockContact = 0;
@@ -391,8 +393,23 @@ struct FallSimulation::Impl {
 			api.AddTorque(bodies[i], torque); api.AddTorque(bodies[parent[i]], -torque);
 		}
 	}
+	void FacingReference(const Part* parts) {
+		const auto up = (Matrix(parts[2].bone).GetTranslation()-Matrix(parts[1].bone).GetTranslation()).NormalizedOr(JPH::Vec3::sAxisZ());
+		const auto shoulders = Matrix(parts[3].bone).GetTranslation()-Matrix(parts[5].bone).GetTranslation();
+		const auto forward = shoulders.Cross(up).NormalizedOr(-Matrix(parts[1].bone).GetAxisZ());
+		const auto inverse = target[1].GetQuaternion().Conjugated();
+		facingLocal = inverse*forward;
+		rightLocal = inverse*forward.Cross(up).NormalizedOr(-JPH::Vec3::sAxisY());
+	}
+	JPH::Vec3 FacingDirection() const {
+		const auto rotation = world.GetBodyInterface().GetRotation(bodies[1]);
+		auto forward = (rotation*facingLocal)*JPH::Vec3(1,1,0);
+		if (forward.LengthSq() < .1f) forward = JPH::Vec3::sAxisZ().Cross(rotation*rightLocal);
+		return forward.NormalizedOr(JPH::Vec3::sAxisX());
+	}
 	void GripForce() {
 		balance.gripForce = 0;
+		balance.gripTorque = balance.gripYawError = balance.gripYawSpeed = 0;
 		if (!balance.gripping) return;
 		gripAge += Step;
 		auto& api = world.GetBodyInterface();
@@ -411,6 +428,18 @@ struct FallSimulation::Impl {
 		force *= std::min(1.0f, gripAge/.2f);
 		api.AddForce(bodies[1], force, anchor);
 		balance.gripForce = force.Length();
+		if (gripLift && gripFacing) {
+			const auto forward = FacingDirection();
+			const auto toward = (gripCaster-anchor)*JPH::Vec3(1,1,0);
+			const float error = toward.LengthSq() > .01f ? std::atan2(forward.Cross(toward).GetZ(), forward.Dot(toward)) : 0;
+			const float speed = api.GetAngularVelocity(bodies[1]).GetZ();
+			const float desiredSpeed = std::clamp(error*2, -1.5f, 1.5f);
+			const float torque = std::clamp((desiredSpeed-speed)*totalMass*.4f, -totalMass*.5f, totalMass*.5f)*std::min(1.0f, gripAge/.25f);
+			api.AddTorque(bodies[1], JPH::Vec3(0,0,torque));
+			balance.gripYawError = JPH::RadiansToDegrees(error);
+			balance.gripYawSpeed = JPH::RadiansToDegrees(speed);
+			balance.gripTorque = torque;
+		}
 	}
 	void LegControl(bool passive) {
 		balance.passiveLegs = passive;
@@ -828,6 +857,7 @@ struct FallSimulation::Impl {
 			if (parts[i].parent >= 0) MakeJoint(i, start, delta.Normalized());
 		}
 		standingHeight = std::max(.3f, Matrix(parts[0].bone).GetTranslation().GetZ() - std::min(parts[8].end[2], parts[10].end[2]));
+		FacingReference(parts);
 		history.Push(0, position, rotation);
 	}
 	~Impl() {
@@ -954,6 +984,7 @@ void FallSimulation::Follow(const Part* pose, float seconds) {
 		}
 		s.targetFrom[i] = s.target[i] = goal;
 	}
+	s.FacingReference(pose);
 	if (seconds > 0) Advance(seconds);
 	else s.history.Push(s.clock, s.position, s.rotation);
 }
@@ -1009,7 +1040,7 @@ void FallSimulation::SetRegionalControl(const RegionalControl& control) {
 	for (int i = 0; i < int(Region::Count); ++i)
 		impl->requestedRegional.strength[i] = std::isfinite(control.strength[i]) ? std::clamp(control.strength[i], 0.0f, 1.5f) : 1;
 }
-void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
+void FallSimulation::Grip(const Part* pose, const float* target, bool lift, const float* casterPosition) {
 	auto& s = *impl;
 	if (!s.balance.gripping) {
 		s.gripAge = 0;
@@ -1017,6 +1048,8 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 		s.gripGoal = s.world.GetBodyInterface().GetWorldTransform(s.bodies[1])*s.endLocal[1];
 	}
 	s.balance.gripping = true; s.gripLift = lift; s.gripTarget = Vector(target);
+	s.gripFacing = casterPosition != nullptr;
+	if (casterPosition) s.gripCaster = Vector(casterPosition);
 	s.LegControl(lift);
 	for (int i = 0; i < PartCount; ++i) s.gripPose[i] = Matrix(pose[i].bone)*s.offsets[i].InversedRotationTranslation();
 	if (lift) {
@@ -1027,9 +1060,14 @@ void FallSimulation::Grip(const Part* pose, const float* target, bool lift) {
 void FallSimulation::ReleaseGrip() {
 	if (!impl->balance.gripping) return;
 	impl->balance.gripping = false; impl->balance.gripForce = impl->balance.gripError = 0;
+	impl->balance.gripTorque = impl->balance.gripYawError = impl->balance.gripYawSpeed = 0;
 	if (impl->gripLift && impl->balance.phase != ControlPhase::Dead) ReleaseControl();
 	impl->gripLift = false;
 	impl->LegControl(false);
+}
+float FallSimulation::FacingYaw() const {
+	const auto forward = impl->FacingDirection();
+	return JPH::RadiansToDegrees(std::atan2(forward.GetY(), forward.GetX()));
 }
 void FallSimulation::Electrocute(float intensity, const float* pushDirection, float pushAcceleration) {
 	if (!std::isfinite(intensity) || impl->balance.phase == ControlPhase::Dead) return;

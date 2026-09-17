@@ -419,6 +419,55 @@ int main() {
 		Check(!held.Balance().gripping && held.Balance().phase == JoltReaction::ControlPhase::Dead, "releasing a held corpse does not revive its controller");
 	}
 	{
+		JoltReaction::FallSimulation facing(parts, stopped);
+		facing.AddMesh(0, largeFloor, 6); facing.Follow(parts, 0); facing.Engage();
+		float hold[] = {parts[2].bone.matrix[0][3], parts[2].bone.matrix[1][3], parts[2].bone.matrix[2][3]+.8f};
+		float caster[] = {hold[0]-3, hold[1], 0};
+		// An opposing pair of shoulder impacts supplies spin without a net launch.
+		const float reverse[] = {-1,0,0};
+		float shoulder[3];
+		for (int r = 0; r < 3; ++r) shoulder[r] = parts[3].bone.matrix[r][3];
+		facing.Impulse(3, forward, shoulder, 10);
+		for (int r = 0; r < 3; ++r) shoulder[r] = parts[5].bone.matrix[r][3];
+		facing.Impulse(5, reverse, shoulder, 10);
+		facing.Grip(parts, hold, true, caster);
+		float mass = 0; for (const auto& part : parts) mass += part.mass;
+		for (int i = 0; i < 600; ++i) {
+			Check(facing.Advance(1.0f/120), "Grip facing solver step");
+			Check(std::abs(facing.Balance().gripTorque) <= mass*.5f+.01f, "Grip turning moment is bounded");
+		}
+		std::printf("Grip facing: error=%.2f speed=%.2f\n", facing.Balance().gripYawError, facing.Balance().gripYawSpeed);
+		Check(std::abs(facing.Balance().gripYawError) < 10 && std::abs(facing.Balance().gripYawSpeed) < 15,
+			"a spinning target settles facing the caster");
+		facing.Sample(pose);
+		caster[0] = hold[0]; caster[1] = hold[1]+3;
+		facing.Grip(parts, hold, true, caster);
+		JoltReaction::Transform unchanged[JoltReaction::PartCount]; facing.Sample(unchanged);
+		for (int i = 0; i < JoltReaction::PartCount; ++i) for (int r = 0; r < 3; ++r) for (int c = 0; c < 4; ++c)
+			Check(pose[i].matrix[r][c] == unchanged[i].matrix[r][c], "changing Grip facing does not snap the pose");
+		for (int i = 0; i < 360; ++i) facing.Advance(1.0f/120);
+		Check(std::abs(facing.Balance().gripYawError) < 10, "the facing equilibrium follows a moving caster");
+		facing.Sample(pose);
+		JoltReaction::Part restored[JoltReaction::PartCount];
+		for (int i = 0; i < JoltReaction::PartCount; ++i) {
+			restored[i] = parts[i]; restored[i].bone = pose[i];
+			float local[3] = {};
+			for (int c = 0; c < 3; ++c) for (int r = 0; r < 3; ++r)
+				local[c] += parts[i].bone.matrix[r][c]*(parts[i].end[r]-parts[i].bone.matrix[r][3]);
+			for (int r = 0; r < 3; ++r) {
+				restored[i].end[r] = pose[i].matrix[r][3];
+				for (int c = 0; c < 3; ++c) restored[i].end[r] += pose[i].matrix[r][c]*local[c];
+			}
+		}
+		JoltReaction::FallSimulation corpseFacing(restored, stopped);
+		corpseFacing.Follow(restored, 0); corpseFacing.Engage(); corpseFacing.Kill();
+		corpseFacing.Grip(restored, hold, true, caster); corpseFacing.Advance(1.0f/120);
+		Check(std::abs(corpseFacing.Balance().gripYawError) < 10, "restored corpse facing follows its physical shoulders rather than a stale entity yaw");
+		float before[3], after[3]; facing.RootVelocity(before); facing.ReleaseGrip(); facing.RootVelocity(after);
+		Check(facing.Balance().gripTorque == 0, "release removes the external turning moment");
+		for (int r = 0; r < 3; ++r) Check(before[r] == after[r], "release preserves physical velocity");
+	}
+	{
 		const float movingVelocity[] = {4,0,-1};
 		JoltReaction::FallSimulation shocked(parts, movingVelocity, 0), unpushed(parts, movingVelocity, 0);
 		shocked.Follow(parts, 0); shocked.Engage(); unpushed.Follow(parts, 0); unpushed.Engage();

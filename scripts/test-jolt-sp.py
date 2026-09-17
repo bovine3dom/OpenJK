@@ -112,6 +112,9 @@ def main():
             effects = re.findall(r"jolt effects ([^\r\n]+)", text)
             if effects:
                 line += " " + effects[-1]
+            facing = re.findall(r"jolt facing ([^\r\n]+)", text)
+            if facing:
+                line += " " + facing[-1]
             combat = re.findall(r"jolt combat ([^\r\n]+)", text)
             if combat:
                 line += " " + combat[-1]
@@ -144,6 +147,16 @@ def main():
                     for _ in range(12):
                         samples.append(status("jolt_demo_actor"))
                         cmd("wait 1", 0)
+                    if power > 1:
+                        # A struggle can briefly rotate the torso; the held heading must stay near the caster.
+                        assert max(abs(s["yaw_error"]) for s in samples[-3:]) < 10, samples[-3:]
+                        assert max(abs(s["torque"]) for s in samples) <= 39.1, samples[-1]
+                    if power == 2:
+                        x, y, z = samples[-1]["player_origin"]
+                        cmd(f"give force; setviewpos {x+64} {y} {z+25} 117; wait 10")
+                        turned = status("jolt_demo_actor")
+                        assert turned["grip"] == 2 and abs(turned["yaw_error"]) < 15, turned
+                        assert abs((turned["facing_yaw"]-samples[-1]["facing_yaw"]+180) % 360-180) > 10, turned
                     if power == 3:
                         x, y, z = samples[-1]["player_origin"]
                         cmd(f"give force; setviewpos {x} {y} {z+25} 105; wait 10")
@@ -154,7 +167,8 @@ def main():
                         cmd("set g_joltReactions 1; give force; wait 6")
                         assert status("jolt_demo_actor")["grip"] == 3
                         cmd("save jolt_grip; load jolt_grip; wait 10; give force")
-                        assert status("jolt_demo_actor")["grip"] == 3
+                        loaded = status("jolt_demo_actor")
+                        assert loaded["grip"] == 3 and abs(loaded["yaw_error"]) < 20, loaded
                         cmd("npc kill jolt_demo_actor; wait 4")
                         dead = status("jolt_demo_actor")
                         assert dead["corpse"] and dead["grip"] == 3 and dead["engaged"], dead
@@ -164,6 +178,7 @@ def main():
                     (run / "force-results.json").write_text(json.dumps(results, indent=2))
                     assert any(s["grip"] == power for s in samples), samples[:3]
                     assert released["grip"] == 0, released
+                    assert released["torque"] == 0, released
                     if power == 1:
                         held = [s for s in samples if s["grip"] == 1]
                         assert min(s["pelvis_z"] for s in held) > before["pelvis_z"]-12, held[-1]

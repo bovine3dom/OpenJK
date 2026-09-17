@@ -696,6 +696,12 @@ void LocalVector(gentity_t* ent, const vec3_t world, vec3_t local) {
 void Actor::Reset(bool restoreOrigin) {
 	if (engaged && fall && actor > 0 && g_entities[actor].inuse && g_entities[actor].client) {
 		auto* ent = &g_entities[actor];
+		if (gripLevel > 1 && !dead && !ExternalPoseOwner(ent, true)) {
+			vec3_t angles = {0, fall->FacingYaw(), 0};
+			G_SetAngles(ent, angles); SetClientViewAngle(ent, angles);
+			ent->client->renderInfo.legsYaw = angles[YAW];
+			if (ent->NPC) ent->NPC->desiredYaw = angles[YAW];
+		}
 		ClearPhysicalBones(ent);
 		VectorCopy(savedMins, ent->mins); VectorCopy(savedMaxs, ent->maxs);
 		if (restoreOrigin && !recoverStart && ent->health > 0) { G_SetOrigin(ent, safeOrigin); VectorCopy(safeOrigin, ent->client->ps.origin); }
@@ -886,6 +892,7 @@ void Actor::Status() {
 	gi.Printf("jolt ownership corpse=%d sleeping=%d active_bodies=%d body_limit=%d handoff_error=%.3f rise_start=%d\n", dead, dead && fall && !fall->Awake(), ActiveBodies(), bodyBudget ? std::max(1, std::min(16, bodyBudget->integer)) : 10, handoffError, riseStart);
 	gi.Printf("jolt effects grip=%d grip_force=%.2f grip_error=%.3f legs_passive=%d shock=%.3f grip_struggles=%u shock_push=%.3f shock_rate=%.3f caster_grip=%d caster_force=%d\n", gripLevel, balance.gripForce, balance.gripError, balance.passiveLegs, balance.shock, balance.gripStruggles, balance.shockPushUsed, balance.shockPushRate,
 		g_entities[0].client->ps.forceGripEntityNum, g_entities[0].client->ps.forcePower);
+	gi.Printf("jolt facing facing_yaw=%.2f yaw_error=%.2f yaw_speed=%.2f torque=%.2f\n", fall ? fall->FacingYaw() : 0, balance.gripYawError, balance.gripYawSpeed, balance.gripTorque);
 	if (actor > 0) {
 		const auto& ent = g_entities[actor];
 		const auto& player = g_entities[0];
@@ -1228,7 +1235,8 @@ bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* he
 	state->fall->Sample(state->fallPose);
 	vec3_t anchor;
 	for (int r = 0; r < 3; ++r) anchor[r] = (target[r]-head[r])*MetresPerUnit+state->fallPose[2].matrix[r][3];
-	state->fall->Grip(state->dead ? state->reference : state->gripPose, anchor, powerLevel > 1);
+	vec3_t casterPosition; VectorScale(g_entities[caster].currentOrigin, MetresPerUnit, casterPosition);
+	state->fall->Grip(state->dead ? state->reference : state->gripPose, anchor, powerLevel > 1, casterPosition);
 	VectorClear(ent->client->ps.velocity);
 	return true;
 }

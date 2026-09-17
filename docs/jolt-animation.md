@@ -17,6 +17,11 @@ impulses make the legs struggle without holding a raised pose. Level 3 follows t
 target. Release preserves physical velocity and applies the native speed limit.
 The controller waits for the native recovery delay before a get-up.
 
+Lifted targets turn toward the caster through a bounded yaw torque. Angular
+damping removes spin, and the target turn rate is limited. The equilibrium
+follows the caster's position. Release removes this turning torque. The facing
+reference uses shoulder and spine positions, including for restored corpses.
+
 Lightning reactions start only after accepted health damage. Repeated hits
 refresh one exposure state. Contractions become stronger at higher power levels
 and retain motor strength during a fall. Contractions fade over approximately
