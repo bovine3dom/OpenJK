@@ -21,6 +21,27 @@ GALAK_ANIMATIONS = (b"BOTH_ALERT1", b"TORSO_RAISEWEAP2", b"TORSO_DROPWEAP2",
                     b"BOTH_TRIUMPHANT1START", b"BOTH_TRIUMPHANT1STARTGESTURE", b"BOTH_TRIUMPHANT1STOP")
 # These two retail script names have no clips in the supplied animation sets.
 SCRIPT_ANIMATION_REPLACEMENTS = {b"BOTH_SCARED1\0": b"BOTH_CROUCH3\0", b"BOTH_DEADFORWARD1\0": b"BOTH_DEAD1\0"}
+PATCH_FILE = Path(__file__).with_name("jo-patches.json")
+
+
+def patch_entities(data, recipe):
+    """Apply checked entity edits without changing the map geometry."""
+    entities = [dict(re.findall(r'"([^"]*)"\s*"([^"]*)"', block))
+                for block in re.findall(r'\{(?:[^{}"]|"[^"]*")*\}', data.decode("cp1252"))]
+    def matches(entity, selector):
+        return all(entity.get(key) == value for key, value in selector.items())
+    for edit in recipe.get("edit", []):
+        selected = [entity for entity in entities if matches(entity, edit["match"])
+                    and not (edit.get("exclude") and matches(entity, edit["exclude"]))]
+        if len(selected) != edit["expect"]:
+            raise ValueError(f"JO patch expected {edit['expect']} matches for {edit['match']}, found {len(selected)}")
+        for entity in selected:
+            entity.update(edit.get("set", {}))
+            for key in edit.get("remove", []):
+                entity.pop(key, None)
+    entities.extend(recipe.get("add", []))
+    return ("\n".join("{\n" + "\n".join(f'"{key}" "{value}"' for key, value in entity.items())
+                      + "\n}" for entity in entities) + "\n").encode("cp1252")
 
 
 def index_assets(root, stack):
@@ -241,7 +262,10 @@ def convert_script(data, aliases):
     return output
 
 
-def build_overlay(ja, jo, output):
+def build_overlay(ja, jo, output, patches=None):
+    if patches is None:
+        patches = json.loads(PATCH_FILE.read_text())
+    patched_paths = {f"maps/{name}.ent" for name in patches}
     with ExitStack() as stack:
         academy = index_assets(ja, stack)
         outcast = index_assets(jo, stack)
@@ -259,7 +283,7 @@ def build_overlay(ja, jo, output):
             roots = ("maps/", "scripts/", "textures/", "sound/", "music/",
                      "video/", "effects/", "models/", "gfx/", "menu/", "levelshots/")
             for name in sorted(outcast):
-                if not name.startswith(roots) or name.startswith((humanoid, "models/weapons2/")):
+                if name in patched_paths or not name.startswith(roots) or name.startswith((humanoid, "models/weapons2/")):
                     continue
                 if name in academy and name.startswith(UI_PREFIXES):
                     continue
@@ -273,6 +297,16 @@ def build_overlay(ja, jo, output):
                 elif name.endswith("/animation.cfg"):
                     data = cinematic_animation_config(data, aliases)
                 dest.writestr(name, data)
+
+            for mapname, recipe in patches.items():
+                path = f"maps/{mapname}.ent"
+                if path in outcast:
+                    entities = read(outcast, path)
+                else:
+                    bsp = read(outcast, f"maps/{mapname}.bsp")
+                    start, size = struct.unpack_from("<ii", bsp, 8)
+                    entities = bsp[start:start + size].rstrip(b"\0")
+                dest.writestr(path, patch_entities(entities, recipe))
 
             write_shaders(dest, academy, outcast)
             dest.writestr("ext_data/dms.dat", read(outcast, "ext_data/dms.dat"))
@@ -326,7 +360,7 @@ def main():
     for root in (args.academy, args.outcast):
         if args.profile.resolve().is_relative_to(root.resolve()):
             parser.error("The import profile must be outside the original game directories")
-    signature = hashlib.sha256(Path(__file__).read_bytes() + json.dumps(
+    signature = hashlib.sha256(Path(__file__).read_bytes() + PATCH_FILE.read_bytes() + json.dumps(
         [(str(p.resolve()), p.stat().st_size, p.stat().st_mtime_ns) for p in sources]).encode()).hexdigest()
     folder = args.profile / "OpenJK"
     folder.mkdir(parents=True, exist_ok=True)

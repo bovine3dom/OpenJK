@@ -29,6 +29,7 @@ cmake --install build/sp --prefix "$stage" > "$stage/install.log"
 package="$stage/JediAcademy"
 cp scripts/launch-sp.sh "$package/launch-sp.sh"
 cp scripts/import-jo.py "$package/import-jo.py"
+cp scripts/jo-patches.json "$package/"
 cp scripts/audition-barks.py "$package/"
 cp scripts/setup-atmosphere-review.py "$package/"
 cp scripts/atmosphere_profiles.py "$package/"
@@ -47,6 +48,7 @@ cp docs/materials-sp.md "$package/"
 cp docs/glass-presentation.md "$package/"
 cp docs/debrief-sp.md "$package/"
 cp docs/jo-campaign.md "$package/"
+cp docs/jo-campaign-patches.md "$package/"
 cp docs/jo-compatibility.md "$package/"
 cp docs/jo-cinematics.md "$package/"
 cp docs/jo-statistics.md "$package/"
@@ -135,8 +137,10 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         python3 scripts/test-jo-sp.py --package "$package" --content | tee "$package/jo-content-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-cinematics.py --package "$package" | tee "$package/jo-cinematics-result.txt"
-    python3 scripts/test-jo-cinematics.py --package "$package" --case boarding --renderer rdsp-rend2 \
-        | tee "$package/jo-boarding-rdsp-rend2-result.txt"
+    for case in boarding jan-door; do
+        python3 scripts/test-jo-cinematics.py --package "$package" --case "$case" --renderer rdsp-rend2 \
+            | tee "$package/jo-$case-rdsp-rend2-result.txt"
+    done
     for renderer in rdsp-vanilla rdsp-rend2; do
         python3 scripts/test-jo-stats.py --package "$package" --renderer "$renderer" \
             | tee "$package/jo-stats-$renderer-result.txt"

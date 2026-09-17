@@ -28,12 +28,16 @@ def fixture(profile, assets):
     values = (b"SET_MISSION_STATUS_SCREEN\0", b"true\0")
     script = b"IBI\0" + struct.pack("<fiiB", 1.57, 26, 2, 0)
     script += b"".join(struct.pack("<ii", 4, len(v)) + v for v in values)
-    with ExitStack() as stack, zipfile.ZipFile(folder / "zzz_stats_test.pk3", "w") as dest:
+    patches = json.loads(jo.PATCH_FILE.read_text())
+    with ExitStack() as stack, zipfile.ZipFile(folder / "zz_test_stats.pk3", "w") as dest:
         index = jo.index_assets(assets, stack)
         for name in ("kejim_post", "kejim_base"):
             data = jo.read(index, f"maps/{name}.bsp")
             offset, size = struct.unpack_from("<ii", data, 8)
-            text = data[offset:offset + size].rstrip(b"\0").decode("cp1252")
+            entities = data[offset:offset + size].rstrip(b"\0")
+            if name in patches:
+                entities = jo.patch_entities(entities, patches[name])
+            text = entities.decode("cp1252")
             # Exercise an explicit carry boundary without changing retail assets.
             if name == "kejim_base":
                 start, end = text.index("{"), text.index("}")

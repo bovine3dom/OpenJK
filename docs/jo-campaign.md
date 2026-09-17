@@ -59,7 +59,7 @@ Python 3.9 or later is required on the test machine. On the first JO launch,
 the importer creates `OpenJK/zz_jo_campaign.pk3` in the JO profile. This file
 contains selected and converted assets from your local installations. The
 package transfer does not include these assets. Leave both installations in
-place. Later launches reuse the import unless the importer or source archives
+place. Later launches reuse the import unless the importer, campaign recipes, or source archives
 change. Allow approximately 1 GB of free space for the import and its temporary
 file.
 
@@ -67,6 +67,9 @@ JA keeps its existing profile path. JO uses `campaigns/jo` below that path.
 The worktree option also retains its existing profile separation. The launcher
 prints the selected profile. JO imports, settings, and saves stay in that
 profile. Do not use original JO saves or copy JA saves into it.
+
+See [JO Campaign Patches](jo-campaign-patches.md) for the optional entity patch
+system and the revised conditions for Jan's door sequence in Kejim Post.
 
 ## Controls and Diagnostics
 

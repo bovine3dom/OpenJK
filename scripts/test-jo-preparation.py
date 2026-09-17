@@ -4,6 +4,7 @@
 import argparse
 from contextlib import ExitStack
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -32,12 +33,15 @@ def fixture(profile, assets):
         "bespin_undercity": "cairn_bay", "cairn_bay": "doom_comm",
         "doom_comm": "yavin_swamp", "yavin_swamp": "yavin_canyon",
     }
-    with ExitStack() as stack, zipfile.ZipFile(folder / "zzz_preparation_test.pk3", "w") as output:
+    patches = json.loads(jo.PATCH_FILE.read_text())
+    with ExitStack() as stack, zipfile.ZipFile(folder / "zz_test_preparation.pk3", "w") as output:
         assets = jo.index_assets(assets, stack)
         for source, target in exits.items():
             data = jo.read(assets, f"maps/{source}.bsp")
             start, size = struct.unpack_from("<ii", data, 8)
             entities = data[start:start + size].rstrip(b"\0")
+            if source in patches:
+                entities = jo.patch_entities(entities, patches[source])
             # Add only a test exit. Keep retail map geometry, NPCs, and startup scripts.
             entities += ('\n{\n"classname" "target_level_change"\n"targetname" "prep_test_exit"\n'
                          f'"mapname" "{target}"\n}}\n').encode()

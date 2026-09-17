@@ -16,12 +16,12 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MAPS = {"cctv": "kejim_base", "artus": "artus_mine", "topside": "artus_topside",
-        "office": "kejim_base", "bar": "ns_streets", "rescue": "doom_detention", "shrine": "valley", "trial": "yavin_trial", "boarding": "ns_starpad"}
+        "office": "kejim_base", "bar": "ns_streets", "rescue": "doom_detention", "shrine": "valley", "trial": "yavin_trial", "boarding": "ns_starpad", "jan-door": "kejim_post"}
 ACTORS = {"cctv": ("cinematic2_kyle", "cinematic_galak", "cinematic_officer4"), "artus": ("cinematic4_kyle",),
           "topside": ("cinematic9_tavion", "cinematic9_jan", "cinematic9_desann", "cinematic9_kyle"),
           "office": ("cinematic3_kyle", "cinematic3_jan", "cinematic3_mon_mothma"),
           "bar": ("cinematic15_kyle", "cinematic15_bartender"), "rescue": ("cinematic29_kyle", "cinematic29_jan"),
-          "shrine": ("cinematic10_kyle", "cinematic10_morgan"), "trial": ("cinematic13_kyle", "cinematic13_luke"), "boarding": ("lando",)}
+          "shrine": ("cinematic10_kyle", "cinematic10_morgan"), "trial": ("cinematic13_kyle", "cinematic13_luke"), "boarding": ("lando",), "jan-door": ("jan", "jo_test_bridge")}
 
 
 def run_case(package, case, renderer, saved):
@@ -29,6 +29,34 @@ def run_case(package, case, renderer, saved):
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=f"{case}.{renderer}.", dir=output))
     profile = run / "profile"
+    if case == "jan-door" and not saved:
+        folder = profile / "campaigns/jo/OpenJK"
+        subprocess.run([sys.executable, str(package / "import-jo.py"),
+                        os.environ.get("OJK_ASSETS", str(ROOT / "GameData")),
+                        os.environ.get("OJK_JO_ASSETS", str(ROOT / "GameData_JO")), str(folder.parent)], check=True)
+        with zipfile.ZipFile(folder / "zz_jo_campaign.pk3") as archive:
+            entities = archive.read("maps/kejim_post.ent").decode()
+        # Give only the bridge guard a unique test name. Keep all death targets intact.
+        entities, count = re.subn(r'\{[^}]*"origin" "188 -252 360"[^}]*\}',
+            lambda m: m[0].replace('"NPC_targetname" "outside"', '"NPC_targetname" "jo_test_bridge"'), entities)
+        assert count == 1
+        entities, count = re.subn(r'\{[^}]*"origin" "-532 -236 32"[^}]*\}',
+            lambda m: m[0].replace('"NPC_targetname" "outside"', '"NPC_targetname" "jo_test_last_ground"'), entities)
+        assert count == 1
+        with zipfile.ZipFile(folder / "zz_test_jan.pk3", "w") as archive:
+            archive.writestr("maps/kejim_post.ent", entities)
+            # Isolate the courtyard encounter from the introductory crouched approach.
+            for name, settings in {
+                "jan_courtyard": (("SET_ORIGIN", "-248 -136 32"), ("SET_CROUCHED", "false")),
+                "keep_guard": (("SET_INVINCIBLE", "true"),),
+            }.items():
+                script = b"IBI\0" + struct.pack("<f", 1.57)
+                for key, value in settings:
+                    script += struct.pack("<iiB", 26, 2, 0)
+                    for text in (key, value):
+                        member = text.encode() + b"\0"
+                        script += struct.pack("<ii", 4, len(member)) + member
+                archive.writestr(f"scripts/tests/{name}.ibi", script)
     if case == "boarding" and not saved:
         folder = profile / "campaigns/jo/OpenJK"
         folder.mkdir(parents=True)
@@ -126,6 +154,16 @@ def run_case(package, case, renderer, saved):
                 if not saved:
                     cmd("helpusobi 1; god; use hangardoors; wait 120")
                     cmd("setviewpos 220 460 -584 270; use run_lando_enter_ship")
+            elif case == "jan-door":
+                cmd("helpusobi 1; god; exitview; wait 200; use outside_troops; wait 20")
+                cmd("runscript jo_test_last_ground tests/keep_guard; wait 5")
+                cmd("runscript jan tests/jan_courtyard; wait 10")
+                cmd("setviewpos -72 -800 80 90; npc kill st_alert1; npc kill st_alert2; wait 20")
+                cmd("npc kill st_alert3; npc kill imp_alert; npc kill outside; wait 20")
+                before = cmd("cinematic_status jan; nav doors tower_door")
+                assert "origin=208.00,-472.00" not in before, "Jan checked the door before all ground guards died"
+                assert re.search(r"navdoor .* name=tower_door .* closed=1", before), before
+                cmd("npc kill jo_test_last_ground; wait 5")
             history = []
             captured = False
             seen_camera = False
@@ -133,6 +171,7 @@ def run_case(package, case, renderer, saved):
             poses_captured = set()
             query = f"wait {1 if case == 'artus' else 10}; " + "; ".join("cinematic_status " + actor for actor in ACTORS[case])
             if case == "boarding": query += "; campaign_status"
+            if case == "jan-door": query += "; nav doors tower_door"
             deadline = time.monotonic() + 300
             while time.monotonic() < deadline:
                 state = cmd(query)
@@ -143,6 +182,10 @@ def run_case(package, case, renderer, saved):
                     assert bone and float(bone[2]) > 0.1, "Officer walk animation is nearly frozen"
                     walking_frames.append(float(bone[1]))
                 history.extend(current)
+                if case == "jan-door":
+                    bridge = re.search(r"cinematic_combat name=jo_test_bridge health=(\d+)", state)
+                    assert bridge and int(bridge[1]) > 0, "The bridge guard died before Jan finished"
+                    if re.search(r"navdoor .* name=tower_door .* closed=0", state): break
                 if case == "boarding" and "objective=NS_STARPAD_OBJ3 status=0" in state and "objective=NS_STARPAD_OBJ4 status=0" in state:
                     break
                 if case == "topside":
@@ -260,6 +303,11 @@ def run_case(package, case, renderer, saved):
                 assert all(s.get("noclip") == "0" for s in history), "Lando bypassed collision"
                 assert float(history[-1]["origin"].split(",")[2]) > -530, "Lando did not reach the cockpit"
                 cmd("setviewpos 150 110 -480 270; wait 20")
+            elif case == "jan-door":
+                jan = [s for s in history if s["name"] == "jan"]
+                assert any(s.get("torso") == "BOTH_ATTACK3" for s in jan), "Jan did not shoot the door"
+                assert any(s.get("voice") == "1" for s in jan), "Jan did not give her door dialogue"
+                assert any(math.dist(tuple(map(float, s["origin"].split(","))), (208, -472, 32)) < 60 for s in jan), "Jan did not reach the door"
             capture("completed")
             stdin.write("quit\n")
             stdin.flush()
@@ -268,7 +316,7 @@ def run_case(package, case, renderer, saved):
             traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
                       for line in text.splitlines() if "cinematic_animation actor=" in line]
             staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
-            assert (staged or case == "boarding") and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert (staged or case in ("boarding", "jan-door")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
             assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)

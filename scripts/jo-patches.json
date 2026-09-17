@@ -1,0 +1,26 @@
+{
+  "kejim_post": {
+    "description": "Jan checks the door after the six ground guards die. The bridge guard is optional.",
+    "edit": [
+      {
+        "match": {"NPC_target": "st_death"},
+        "exclude": {"origin": "188 -252 360"},
+        "expect": 6,
+        "set": {"NPC_target": "jo_ground_death"}
+      },
+      {
+        "match": {"classname": "target_counter", "targetname": "st_death", "target": "run_check_door", "count": "7"},
+        "expect": 1,
+        "set": {"targetname": "jo_ground_death", "count": "6"}
+      }
+    ],
+    "add": [
+      {
+        "classname": "target_relay",
+        "targetname": "jo_ground_death",
+        "target": "st_death",
+        "origin": "276 -444 28"
+      }
+    ]
+  }
+}

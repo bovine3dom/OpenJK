@@ -2,7 +2,9 @@
 """Check asset selection and conversion with synthetic game archives."""
 
 import importlib.util
+import json
 from pathlib import Path
+import re
 import struct
 import tempfile
 import unittest
@@ -19,6 +21,32 @@ def script(value):
 
 
 class ImportTests(unittest.TestCase):
+    def test_kejim_door_patch_excludes_only_bridge_guard(self):
+        guards = [f'{{"classname" "NPC_Stormtrooper" "NPC_target" "st_death" "origin" "{i} 0 32"}}' for i in range(6)]
+        bridge = '{"classname" "NPC_Stormtrooper" "NPC_target" "st_death" "origin" "188 -252 360"}'
+        door = '{"classname" "target_counter" "targetname" "st_death" "target" "run_check_door" "count" "7"}'
+        fight = '{"classname" "target_counter" "targetname" "st_death" "Usescript" "kejim_post/jan_fight" "count" "2"}'
+        recipe = json.loads(jo.PATCH_FILE.read_text())["kejim_post"]
+        result = jo.patch_entities("\n".join([*guards, bridge, door, fight]).encode(), recipe).decode()
+        entities = [dict(re.findall(r'"([^"]*)"\s*"([^"]*)"', block)) for block in re.findall(r'\{[^}]*\}', result)]
+        self.assertEqual([e["NPC_target"] for e in entities[:6]], ["jo_ground_death"] * 6)
+        self.assertEqual(entities[6]["NPC_target"], "st_death")
+        self.assertEqual((entities[7]["targetname"], entities[7]["count"]), ("jo_ground_death", "6"))
+        self.assertEqual((entities[8]["targetname"], entities[8]["count"]), ("st_death", "2"))
+        self.assertEqual(entities[9]["classname"], "target_relay")
+        self.assertEqual((entities[9]["targetname"], entities[9]["target"]), ("jo_ground_death", "st_death"))
+
+    def test_entity_patch_checks_source_and_retains_quoted_braces(self):
+        data = b'{"classname" "worldspawn" "message" "A {room}" "old" "1"}'
+        edit = {"match": {"classname": "worldspawn"}, "expect": 2, "remove": ["old"], "set": {"music": "test"}}
+        with self.assertRaisesRegex(ValueError, "expected 2 matches"):
+            jo.patch_entities(data, {"edit": [edit]})
+        edit["expect"] = 1
+        result = jo.patch_entities(data, {"edit": [edit]})
+        self.assertIn(b'"message" "A {room}"', result)
+        self.assertIn(b'"music" "test"', result)
+        self.assertNotIn(b'"old"', result)
+
     def test_legacy_jedi_have_sabers_and_force_data(self):
         source = 'Desann\n{\nclass desann\nsaberColor red\n}\nKyle\n{\nclass kyle\nsaberColor blue\n}\n'
         converted = jo.convert_npcs(source)
@@ -152,7 +180,9 @@ class ImportTests(unittest.TestCase):
                 archive.writestr("textures/kejim/wall.tga", b"patched")
             original = {p: p.read_bytes() for p in root.glob("*/base/*.pk3")}
             overlay = root / "overlay.pk3"
-            jo.build_overlay(ja, source, overlay)
+            patches = {"kejim_post": {"edit": [{"match": {"NPC_targetname": "cinematic1_kyle"},
+                        "expect": 1, "set": {"message": "patched"}}]}}
+            jo.build_overlay(ja, source, overlay, patches=patches)
             with zipfile.ZipFile(overlay) as archive:
                 names = archive.namelist()
                 self.assertEqual(len(names), len(set(names)))
@@ -170,7 +200,9 @@ class ImportTests(unittest.TestCase):
                 glm = archive.read("models/players/jo_cinematic_kyle/model.glm")
                 gla = archive.read("models/players/jo_cinematic/jo_cinematic.gla")
                 self.assertEqual(glm[72:136].rstrip(b"\0") + b".gla", gla[8:72].rstrip(b"\0"))
-                self.assertNotIn("maps/kejim_post.ent", names)
+                self.assertIn(b'"message" "patched"', archive.read("maps/kejim_post.ent"))
+                self.assertEqual(archive.read("maps/kejim_post.bsp"), bsp)
+                self.assertNotIn("maps/kejim_base.ent", names)
                 self.assertIn(b"playerModel jo_cinematic_kyle", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertIn(b"class CLASS_KYLE", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertIn(b"playerModel jo_cinematic_galak", archive.read("ext_data/jo/npcs.cfg"))
