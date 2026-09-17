@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import struct
 import subprocess
 import tempfile
 import time
@@ -26,6 +27,7 @@ def main():
     parser.add_argument("--acoustics", action="store_true", help="Capture indoor and outdoor indirect sound on Kejim Post")
     parser.add_argument("--burst", action="store_true", help="Check headroom with four simultaneous blaster shots")
     parser.add_argument("--flyby", action="store_true", help="Check left and right close-pass cue auditions")
+    parser.add_argument("--audit-freeze", action="store_true", help="Check that script freezing holds and releases a queued task")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -35,12 +37,18 @@ def main():
     profile = home / ("campaigns/jo/OpenJK" if args.campaign == "jo" else "OpenJK")
     profile.mkdir(parents=True)
     settings = dict(cl_renderer="rdsp-vanilla", r_mode=-1, r_customwidth=640, r_customheight=480,
-                    r_fullscreen=0, s_initsound=1, s_musicvolume=0, com_maxfps=60,
+                    r_fullscreen=0, s_initsound=1, s_musicvolume=0, s_volume=0.8, com_maxfps=60,
                     r_ignoreGLErrors=1, developer=1, s_khz=args.rate,
                     s_sdlDevSamps=args.device_samples)
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("")
     (profile / "audio-file-test.cfg").write_text("echo AUDIO_FILE_READ\n")
+    (profile / "flyby-burst.cfg").write_text("testflyby left\n" + "s_steam_emit sound/weapons/blaster/fire.wav\n" * 4)
+    if args.audit_freeze:
+        (profile / "scripts").mkdir()
+        message = b"!AUDIO_FREEZE_RELEASED\0"
+        (profile / "scripts/audio-audit-freeze-check.IBI").write_bytes(
+            b"IBI\0" + struct.pack("<fiiBii", 1.57, 29, 1, 0, 4, len(message)) + message)
     env = dict(os.environ, OJK_PROFILE=str(home), OJK_JO_ASSETS=str(root / "GameData_JO"),
                SDL_AUDIODRIVER=args.audio_driver, SDL_VIDEODRIVER="offscreen", EGL_PLATFORM="surfaceless")
     log = run / "console.log"
@@ -108,7 +116,8 @@ def main():
             assert continuity, result
             records.setdefault("captures", []).append(dict(
                 file=match[1], continuous=continuous, overlap_frames=int(continuity[1]), gap_frames=int(continuity[2]),
-                peak=peak, wet=wet, clipped_samples=sum(s in (-32768, 32767) for s in samples)))
+                peak=peak, energy=sum(s*s for s in samples), wet=wet,
+                clipped_samples=sum(s in (-32768, 32767) for s in samples)))
             if continuous:
                 assert continuity.groups() == ("0", "0"), continuity[0]
                 if args.burst and not wet:
@@ -140,7 +149,18 @@ def main():
         try:
             wait("AUDIO_READY")
             cmd("exitview; wait 200; helpusobi 1; god; notarget; d_npcfreeze 1; con_notifytime -1")
+            if args.audit_freeze:
+                assert "icarus_freeze active=1" in cmd("ICARUS freeze 1")
+                assert "AUDIO_FREEZE_RELEASED" not in cmd("runscript audio-audit-freeze-check; wait 60")
+                assert "AUDIO_FREEZE_RELEASED" in cmd("ICARUS freeze 0; wait 60")
+                records["script_freeze"] = "held-and-released"
             initial = status("initial")
+            # ROQ movies can suspend the acoustic backend after the game-camera skip.
+            for _ in range(90 if args.rate == 44 else 0):
+                if initial["active"] == "1":
+                    break
+                time.sleep(1)
+                initial = status("initial")
             if args.rate == 22:
                 assert initial["active"] == "0", initial
                 capture(continuous=False)
@@ -154,9 +174,22 @@ def main():
                 return
             assert initial["active"] == "1" and int(initial["triangles"]) > 100, initial
             if args.flyby:
-                cmd("set cg_boltFlyby 2; set cg_thirdPerson 0")
-                capture(play="testflyby left")
+                cmd("set cg_boltFlyby 2; set cg_thirdPerson 0; set s_steamAuditSound sound/weapons/blaster/reflect1; wait 100")
+                for volume in (96, 192):
+                    cmd(f"set cg_boltFlybyVolume {volume}; wait 100")
+                    capture(play="testflyby left")
+                old, new = records["captures"][-2:]
+                records["flyby_energy_ratio"] = new["energy"] / old["energy"]
+                assert 3.6 < records["flyby_energy_ratio"] < 4.5, records["flyby_energy_ratio"]
                 capture(play="testflyby right")
+                cmd("set s_musicvolume 1; wait 100")
+                for active in (0, 1):
+                    cmd(f"set s_steamAudio {active}; set s_steamAuditEntity 0; wait 100")
+                    capture(continuous=bool(active), signal=False, play="testflyby left")
+                cmd('set s_musicvolume 0; set s_steamAuditSound ""; set s_steamAuditEntity -1; wait 100')
+                capture(play="exec flyby-burst.cfg")
+                assert records["captures"][-1]["clipped_samples"] == 0
+                status("flyby_burst")
             if args.first_use:
                 cmd("s_steam_status reset")
                 assert "AUDIO_FILE_READ" in cmd("exec audio-file-test.cfg")
@@ -175,15 +208,19 @@ def main():
                 source = alarm()
                 original = [s for s in source if s["pos"] == "56.0,160.0,472.0"]
                 assert len(original) == 1 and float(original[0]["occlusion"]) < .1, source
-                assert float(original[0]["transmission"].split(",")[1]) >= .119, source
+                assert float(original[0]["transmission"].split(",")[1]) >= .239, source
                 assert len(source) == 3 and len({s["entity"] for s in source}) == 3, source
                 records["alarm"] = source
                 cmd("set cg_alarmRelays 0; wait 40")
                 assert len(alarm()) == 1
-                cmd("set cg_alarmRelays 1; setviewpos -16 160 480 180; wait 100")
+                cmd("set cg_alarmRelays 1; setviewpos -32 160 528 180; wait 100")
                 assert any(float(s["occlusion"]) > .9 and s["pos"] != "56.0,160.0,472.0" for s in alarm())
                 cmd("save audio_alarm_test; load audio_alarm_test; wait 100")
                 assert len(alarm()) == 3, "Alarm relays did not survive save/load"
+                if args.burst:
+                    capture()
+                    records["alarm_burst_capture"] = records["captures"][-1]
+                    status("alarm_burst")
                 cmd("use defense_alarm_sound; wait 40")
                 assert not alarm(), "Scripted alarm stop was ignored"
                 initial = status("after_alarm")

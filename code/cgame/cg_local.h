@@ -618,6 +618,7 @@ extern	vmCvar_t		cg_footsteps;
 extern	vmCvar_t		cg_spatialAmbience;
 extern	vmCvar_t		cg_alarmRelays;
 extern	vmCvar_t		cg_boltFlyby;
+extern	vmCvar_t		cg_boltFlybyVolume;
 extern	vmCvar_t		cg_addMarks;
 extern	vmCvar_t		cg_drawGun;
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;

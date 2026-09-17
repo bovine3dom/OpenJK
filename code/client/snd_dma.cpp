@@ -1996,7 +1996,7 @@ void S_AddLoopSounds (void)
 	loopFrame++;
 	for ( i = 0 ; i < numLoopSounds ; i++) {
 		loop = &loopSounds[i];
-		if ( loop->mergeFrame == loopFrame ) {
+		if ( loop->mergeFrame == loopFrame || !S_SteamAuditSelected(loop->entnum,loop->sfx) ) {
 			continue;	// already merged into an earlier sound
 		}
 
@@ -2006,7 +2006,7 @@ void S_AddLoopSounds (void)
 		for ( j = i ; j < numLoopSounds ; j++) {
 			loop2 = &loopSounds[j];
 			if(S_SteamActive() && j!=i) continue; // Separate emitters need separate acoustic paths.
-			if ( loop2->sfx != loop->sfx ) {
+			if ( loop2->sfx != loop->sfx || !S_SteamAuditSelected(loop2->entnum,loop2->sfx) ) {
 				continue;
 			}
 			loop2->mergeFrame = loopFrame;	// don't check this again later

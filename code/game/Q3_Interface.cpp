@@ -7812,6 +7812,14 @@ void CQuake3GameInterface::Svcmd( void )
 {
 	char	*cmd = gi.argv( 1 );
 
+	if ( Q_stricmp( cmd, "freeze" ) == 0 )
+	{
+		if ( gi.argc() == 3 && (!Q_stricmp(gi.argv(2),"0") || !Q_stricmp(gi.argv(2),"1")) )
+			stop_icarus = gi.argv(2)[0]=='1' ? qtrue : qfalse;
+		Com_Printf("icarus_freeze active=%d (ICARUS freeze 0|1)\n",stop_icarus);
+		return;
+	}
+
 	if ( Q_stricmp( cmd, "log" ) == 0 )
 	{
 		g_ICARUSDebug->integer = WL_DEBUG;

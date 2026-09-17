@@ -1130,6 +1130,10 @@ Ghoul2 Insert End
 CG_Missile
 ===============
 */
+static int CG_FlybyVolume(float distance) {
+	return int(Com_Clampi(0,255,cg_boltFlybyVolume.integer)*std::max(0.0f,1-distance/72));
+}
+
 static bool CG_PlayFlyby(const vec3_t point,int entity,int variant,int volume) {
 	if(volume<=0 || !cgs.media.boltFlybySound[variant]) return false;
 	trace_t trace;
@@ -1149,7 +1153,7 @@ void CG_TestFlyby_f(void) {
 	vec3_t point;
 	const bool right=!Q_stricmp(CG_Argv(1),"right");
 	VectorMA(cg.refdef.vieworg,right ? -4.0f : 4.0f,cg.refdef.viewaxis[1],point);
-	const bool played=CG_PlayFlyby(point,ENTITYNUM_WORLD,0,72);
+	const bool played=CG_PlayFlyby(point,ENTITYNUM_WORLD,0,CG_FlybyVolume(4));
 	CG_Printf("bolt_flyby audition=%d side=%s\n",played,right ? "right" : "left");
 }
 
@@ -1173,7 +1177,7 @@ static void CG_BoltFlyby(centity_t *cent,const weaponInfo_t *weapon) {
 	if(!SteamSound::NearPass(previous,current,cg.refdef.vieworg,72,point) || DistanceSquared(point,state.pos.trBase)<128*128) return;
 	cent->flybyPlayed=qtrue;
 	if(cg.time<cg.nextFlybyTime) return;
-	const int volume=int(96*(1-Distance(point,cg.refdef.vieworg)/72));
+	const int volume=CG_FlybyVolume(Distance(point,cg.refdef.vieworg));
 	const int variant=(unsigned(state.number)+unsigned(state.pos.trTime))%3;
 	if(CG_PlayFlyby(point,state.number,variant,volume)) {
 		cg.nextFlybyTime=cg.time+150;

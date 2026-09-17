@@ -291,7 +291,7 @@ void S_PaintChannels( int endtime ) {
 		}
 
 		// clear the paint buffer to either music or zeros
-		if ( s_rawend < s_paintedtime ) {
+		if ( s_rawend < s_paintedtime || S_SteamAuditActive() ) {
 			if ( s_rawend ) {
 				//Com_DPrintf ("background sound underrun\n");
 			}

@@ -2,8 +2,30 @@
 
 ## Next Work: Campaign Audibility Audit
 
-**Stop point:** the user requested a handoff before implementation. This work has
-not started beyond inspection of the existing code and audit tools.
+**Progress:** static inventories now cover all 34 JA and 26 JO campaign maps.
+Controlled PCM tests are available. Sparse samples do not establish complete
+campaign audibility. Desktop listening and full mission-state coverage remain open.
+
+See [the audit guide](docs/audio-audit.md) for commands, settings, report fields,
+and limits. The static reports are `build/audio-audit/ja-final-inventory.json`
+and `build/audio-audit/jo-final-inventory.json`. They contain 2,463 and 2,856
+sound-related entity candidates, plus 993 and 1,356 reachable scripts.
+Literal resolution found 20 JA and 21 JO missing-sound references. It also found
+15 JA and 7 JO unresolved script references, one JO unresolved sound set, and
+one JO dynamic sound reference. These counts include repeated references.
+They are review candidates, not confirmed audible defects.
+
+The runtime sampler records actual listener coordinates, orientation, motion,
+source state, search paths, package hashes, PCM metrics, and rejected positions.
+The audit filters now mute raw music and video streams as well as other channels.
+Legacy capture removes repeated paint frames. Steam Audio must have no repeated
+or missing frames. Script freezing and camera controls support fixed comparisons.
+Four static tests and five measurement tests pass.
+
+A measured Kejim alarm loss led to a cue-specific transmission change. The fly-by
+cue now has an archived volume control and a higher default. Material and send
+experiments are complete; no material or reverb defaults changed. The remaining
+unchecked tasks below include work that these sparse tests do not cover.
 
 ### Latest User Requirements
 
@@ -21,57 +43,58 @@ not started beyond inspection of the existing code and audit tools.
 
 ### Audit Tasks
 
-- [ ] Inventory speakers, local sound sets, loops, global ambient beds, and
-  scripted sound references in every campaign map. Record activation and stop
+- [x] Inventory static speakers, local sound sets, loops, global ambient beds,
+  and literal scripted sound references in every campaign map. Record activation and stop
   targets, positions, brush-model bounds, sound assets, radii, and channel types.
 - [ ] Check asset resolution against the files that the runtime uses, including
   the JO import overlay. Report missing assets and unresolved references.
-- [ ] Find candidate listener positions near emitters, activation controls,
+- [x] Find candidate listener positions near emitters, activation controls,
   navigable connections, and both sides of doors. Reject solid positions. Record
   unsampled areas and sampling limits; do not label sparse coverage as complete.
 - [ ] Establish the legacy audible footprint at those positions. Account for
   snapshot membership, distance curves, local-set volume, and activation state.
   Test scripted-off and scripted-on states separately.
-- [ ] Compare matching legacy and Steam Audio runs. Hold the camera, source event,
+- [x] Compare matching legacy and Steam Audio runs. Hold the camera, source event,
   master volume, and other mix settings fixed. Record the visibility, relay,
   limiter, reflection, pathing, and bake settings explicitly.
-- [ ] Measure source-isolated or otherwise controlled PCM, including RMS level,
+- [x] Measure source-isolated or otherwise controlled PCM, including RMS level,
   peak level, onset, and tail energy. Compare gain in dB against the legacy result.
   Use configurable thresholds for a strong legacy signal and an acceptable loss.
   A proposed starting limit is 3 dB of loss at strong legacy listening positions;
   validate that limit before treating it as an acceptance rule.
-- [ ] Run the report across both campaigns. List results by campaign, map, emitter,
+- [x] Run the sparse report across both campaigns. List results by campaign, map, emitter,
   listener position, and tested state. Include reproduction commands, settings,
   source provenance, skipped cases, and local A/B capture paths. Rank large losses,
   abrupt changes over short distances, duplicates, clipping, and stale sounds.
-- [ ] Use `kejim_post` as a focused regression: test the perimeter control panel,
+- [x] Use `kejim_post` as a focused regression: test the perimeter control panel,
   gun emplacement, nearby exterior routes, and relevant interior positions. Verify
   the original alarm and relays together, including activation, stop, and save/load.
 - [ ] Fix high-priority losses with appropriate source placement, coverage, or
   cue-specific treatment. Preserve useful wall filtering and check mix headroom.
-- [ ] Keep generated game audio and extracted acoustic data local under `build`.
+- [x] Keep generated game audio and extracted acoustic data local under `build`.
   Automated measurements identify candidates; desktop listening must judge balance
   and whether a cue belongs in a particular area.
 
 ### Reflection and Fly-by Follow-up
 
-- [ ] Explain and test existing controls: `s_steamReverb` (0.2 overall wet gain),
+- [x] Explain and test existing controls: `s_steamReverb` (0.2 overall wet gain),
   `s_steamTransientReverb` (2.5 one-shot send multiplier), `s_steamTransmission`
   (0.12 minimum blocked-path mid-band gain), `s_steamReflections`, `s_steamPathing`,
   and `s_steamLimiter`.
-- [ ] Check the material presets in `code/client/snd_steam.cpp`. Solid metal uses
+- [x] Check the material presets in `code/client/snd_steam.cpp`. Solid metal uses
   absorption `{0.20, 0.07, 0.06}` and scattering `0.1`. Concrete uses
   `{0.05, 0.07, 0.08}` and scattering `0.2`. Flat surfaces with low absorption and
   low scattering can produce strong, distinct echoes; this is an investigation
   target, not a confirmed cause of the user's report.
-- [ ] Evaluate useful tuning controls for early reflections versus late reverb,
+- [x] Evaluate useful tuning controls for early reflections versus late reverb,
   high-frequency damping, scattering, and decay. The current early window is
   hard-coded to 0.6 seconds in `shared/sound/steam_audio.cpp`. Material changes must
   invalidate or rebuild affected scene and probe caches.
-- [ ] Raise and expose the fly-by cue level. Current maximum pass volume is 96/255,
-  with linear falloff to zero at 72 game units; audition volume is 72/255. These
-  values are hard-coded in `code/cgame/cg_ents.cpp`. Keep ownership checks, wall
-  checks, the once-per-trajectory rule, and the 150 ms shared interval.
+- [x] Raise and expose the fly-by cue level. `cg_boltFlybyVolume` defaults to
+  192/255, twice the old maximum. Live and audition cues use the same linear
+  falloff to zero at 72 game units. Ownership checks, wall checks, the
+  once-per-trajectory rule, and the 150 ms shared interval remain unchanged.
+  The feature stays off by default. Desktop combat listening remains open.
 
 Useful starting points: `scripts/test-steam-audio-sp.py` supplies headless launches,
 captures, and focused checks. `scripts/audit-jo.py` parses ICARUS blocks, and
@@ -80,7 +103,76 @@ assumes JA RBSP files and `assets0.pk3` through `assets3.pk3`; extend or replace
 those assumptions for a two-campaign audit. `s_steam_status sources` gives source
 positions, channel gains, snapshot membership, and smoothed acoustic parameters.
 
-## Current Status
+## Latest Controlled Checks
+
+The brush-loader regression used engine package
+`build/packages/20260917T221954645398246-fdfba103`. Both renderer smoke tests
+passed. The final combined check also passed in
+`build/smoke/steam-audio.5cr43cw7`, using package
+`20260917T224440979818610-fdfba103`. The earlier measurements below used package
+`20260917T214842018561262-fdfba103` or an identical local copy.
+
+The wider scan found that `bespin_undercity` could not initialize Steam Audio.
+Four valid retail brushes have 166 to 170 sides. The audio loader rejected
+brushes above 128 sides. It now uses the actual side-lump bounds and retains
+the other bounds checks. The corrected scene has 166,242 triangles.
+`build/smoke/steam-audio.w7owb6gr` passed the map regression. Two valid A/B samples
+are in `build/audio-audit/measure.qb45ly0o`; one still has a blocked-path loss.
+The sampler now rejects a requested Steam mode if the backend is not active.
+
+- `build/audio-audit/measure.b77vb146`: all 11 Kejim alarm positions, baked
+  probes, 10-second captures, legacy, Steam, and original-source-only modes.
+  Exterior-route gain was -0.09 dB; upper-door-west gain was +0.02 dB.
+  The panel gain was +10.08 dB and needs a desktop balance check. All samples
+  had valid motion and continuity checks. The stopped capture was silent.
+- `build/smoke/steam-audio.8xi4jdpo`: alarm activation, save/load, stop, bake,
+  first-use, and simultaneous alarm plus four blaster shots passed.
+- `build/smoke/steam-audio.no31btfg`: script freeze and resume, source isolation
+  with music enabled, fly-by gain, dense fire, first-use, and restart passed.
+- `build/smoke/steam-audio.5skjs4s6`: 22050 Hz legacy fallback and restart passed.
+- `build/smoke/steam-audio.6l0f8x_5`: JA ambient submission and baked probes passed.
+- `tests/steam_audio.cpp`, `tests/steam_audio_materials.cpp`,
+  `tests/steam_audio_perf.cpp`, `tests/near_pass.cpp`, and
+  `tests/mix_limiter.cpp` passed. The 32-source test measured 1.73 ms mean and
+  3.82 ms peak DSP time per 5.80 ms block on this host. This is not a desktop
+  performance limit.
+
+Earlier campaign pilots exposed listener motion, forced saber-camera offsets,
+and music leakage. Do not use their loss rankings as acceptance results.
+The measurement tool now supplies firearm ammunition, disables camera damping,
+checks actual position, and rejects movement during each capture. Some loaded
+mission states still reject the requested camera position. Record these as
+untested positions, not passes.
+
+### Remaining Audit Work
+
+The sparse JA sweep considered all 34 maps and obtained 50 valid samples in
+25 maps, with 40 strong legacy signals and one loss candidate. Seven loaded
+states still need mission-selection input or script-state setup. Two maps had
+no supported loop-speaker or global-bed case. The JO sweep considered all
+26 maps and obtained 46 valid samples in 23 maps, with 31 strong legacy signals
+and three loss candidates. Its invalid Bespin samples are replaced by the later
+loader check. Yavin Temple also passed after the movie-readiness fix in
+`build/audio-audit/measure.5fb2un81`. With both replacements, JO has 50 valid
+samples in 25 maps, 35 strong legacy samples, and four loss candidates.
+See [the result table](docs/audio-audit.md#sparse-campaign-results)
+for focused losses, navigation checks, excluded samples, and report paths.
+
+Next work requires mission-state setup and listening, not a blanket gain increase:
+
+- Complete the JA loadout screens before a normal-state audit. The sampler now
+  reports an active selection screen as an error instead of sending blocked
+  movement commands. Early freezing can leave ambient beds silent.
+- Review the remaining losses in Taspir, Cairn, Bespin, and Doom Shields. Check
+  reachable player routes, doors, and intended warning coverage before a fix.
+- Test all eligible emitters, event-driven sounds, dynamic script branches,
+  and on/off/save/load states. The default one-case sweep does not cover these.
+- Check static missing references against active runtime calls and language
+  variants. A missing literal in an unused branch is not an audible defect.
+- Listen on the desktop to the louder Kejim panel, fly-by cues during combat,
+  and room reflections with the normal and reduced send levels.
+
+## Earlier Implementation Status
 
 An optional close-pass prototype is available with `cg_boltFlyby 1`. It uses
 quiet stock deflection clips, geometric closest-approach checks, wall checks,

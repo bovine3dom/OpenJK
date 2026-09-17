@@ -50,6 +50,7 @@ headphone HRTF processing for the direct mix.
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
 | `cg_alarmRelays` | `1` | Add Kejim Post perimeter-alarm relays at its control panel and gun base |
 | `cg_boltFlyby` | `0` | Enable prototype close-pass cues with `1`; `2` also prints diagnostics |
+| `cg_boltFlybyVolume` | `192` | Set the peak close-pass cue volume, from 0 to 255 |
 
 Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
@@ -96,6 +97,11 @@ existing defense hardware. They use the original alarm's live on/off state.
 They need no new game entities or save format. Only one visible control-panel
 variant emits sound. The relays require `cg_spatialAmbience 1` and stop when the
 original alarm stops. Set `cg_alarmRelays 0` for an original-source comparison.
+This alarm also uses twice the general transmission minimum, capped at one.
+At the default setting, its blocked-path minimum is `{0.48, 0.24, 0.06}` across
+the three frequency bands. This cue-specific treatment keeps useful exterior
+coverage without changing other world sounds. Clear paths are unchanged.
+Setting `s_steamTransmission 0` also disables this cue-specific minimum.
 
 The close-pass prototype uses quiet stock blaster-deflection clips. Use
 `testflyby left` and `testflyby right` to audition them. Enable `cg_boltFlyby 1`
@@ -105,7 +111,10 @@ blocks the cue. Each trajectory can play once, with a shared 150 ms interval.
 Player-owned shots, vehicle shots, and cinematics do not add these cues. Shots
 with an existing flight sound retain that sound. Purpose-recorded pass-by clips
 and desktop listening are still needed before enabling this prototype by default.
-Ambient one-shots use the normal reverb send, including these quiet cues.
+Ambient one-shots use the normal reverb send, including these cues.
+The default peak volume is twice the previous value of 96. This adds approximately
+6 dB before limiting. Volume falls linearly to zero at 72 units. Auditions use
+the same curve at a distance of four units. The limiter remains active.
 
 `cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
 transmission and indirect paths when enabled. Unpositioned global ambient sets
@@ -153,8 +162,12 @@ current profile. The second emits a world sound at the listener. Supply
 `x y z` after the sound name to place it elsewhere. Repeat with `s_steamAudio 0`
 for a legacy reference. Captures contain local game audio and stay in the profile.
 Capture output also reports overlapping and missing frames. Both counts must be
-zero during steady Steam Audio playback. Legacy captures can contain overlaps
-because the legacy mixer repaints its mix-ahead window.
+zero during steady Steam Audio playback. Legacy mixing can report overlaps
+because it repaints its mix-ahead window. The capture now stores each legacy
+frame only once. The overlap counter still reports those repaint operations.
+`listener_motion` is the maximum distance from the first captured listener
+position, in game units. `axis_motion` is the largest change in a listener basis
+vector. Use these values to reject A/B captures made with a moving camera.
 
 Use `s_steam_record 3 wet` to capture only reflections and indirect paths. This
 excludes dry sound, music, and global ambient beds. Record the same blaster sound
@@ -165,6 +178,71 @@ to one-shot effects, including blasters. Speech and loops keep their normal send
 Useful listening cases are a closed door in Kejim, a mine shaft on Artus,
 and a small passage connected to a large chamber on Yavin. Check both stationary
 and moving listeners. Check speech intelligibility as well as environmental sound.
+
+### Audit Commands
+
+Use these diagnostic commands with cheats enabled:
+
+```text
+s_steamAuditSound sound/ambience/prototype/alarm1
+s_steamAuditEntity -1
+s_musicvolume 0
+s_steam_status sources
+```
+
+The sound filter requires the registered name without its file extension.
+An empty name disables the sound filter. The entity filter uses a runtime entity
+number; `-1` includes all entities. Both filters apply to legacy and Steam Audio.
+Loop filtering occurs before legacy loop merging. An active audit filter also
+mutes the raw music and video stream in both mixers. Stream timing continues.
+
+A filter change clears the acoustic scene and its effect history. Local caches
+can then reload. Isolation changes channel pressure and reflection priority;
+a filtered capture is not a full-mix performance test.
+
+Use `s_steam_probe x y z` to test an eye position against current world and mover
+collision. It also tests a box from `{-15, -15, -48}` to `{15, 15, 8}` relative to
+that position and traces down 256 units. This is a sampling check, not a test of
+navigation reachability or all player stances. The source status report includes
+the actual listener position and orientation, channel type, master volume, and
+filter selection.
+
+See [the campaign audio audit](audio-audit.md) for report commands and limits.
+
+### Reflection Tuning
+
+Start with the send controls. Lower `s_steamTransientReverb` from `2.5` to `1`
+to reduce only the reflection send from one-shot world effects. This reduces
+that send by approximately 8 dB. It does not change speech, loops, or ambient
+one-shots. Lower `s_steamReverb` from `0.2` to `0.1` to reduce all reflection
+and room-reverb output by approximately 6 dB. These changes do not shorten echoes.
+Disable `s_steamPathing` when you compare reflection sends. Baked path output is
+separate from the reflection gain. Keep `s_steamLimiter 1` for full-mix checks.
+The transmission minimum changes blocked direct sound, not reflection decay.
+
+Surface shape and materials also affect echoes. Large flat surfaces with little
+scattering can produce distinct returns. Solid metal currently has absorption
+`{0.20, 0.07, 0.06}` and scattering `0.1`. Concrete has absorption
+`{0.05, 0.07, 0.08}` and scattering `0.2`. These low mid- and high-band absorption
+values are investigation targets, not confirmed causes of harsh indoor sound.
+Increasing absorption removes reflected energy. Increasing scattering distributes
+more reflected energy into different directions; it does not absorb that energy.
+The scene uses collision geometry, not all visible surface detail.
+
+There is no separate early-reflection gain, late-reverb gain, or damping console
+control in this version. The SDK supports three-band decay scaling for hybrid
+reverb. This can shorten the late high-frequency decay, but it does not directly
+remove a strong early echo. The current hybrid transition is 0.6 seconds, with
+a crossfade into the parametric tail. Do not shorten this window as a general
+indoor fix: the distant-cliff check requires a discrete return after 0.23 seconds.
+The renderer limits estimated decay times to 0.1–6 seconds.
+
+Material or reflection-model changes must change the cache version and rebuild
+the affected scenes and probes. Send-level changes do not require a new bake.
+
+The SDK definitions are in the [material reference](https://valvesoftware.github.io/steam-audio/doc/capi/scene.html),
+[simulation reference](https://valvesoftware.github.io/steam-audio/doc/capi/simulation.html),
+and [reflection effect reference](https://valvesoftware.github.io/steam-audio/doc/capi/reflections-effect.html).
 
 ## Runtime and Build Details
 
@@ -252,7 +330,10 @@ The ambient checks use stock console and generator emitters outside the visual
 snapshot. They check that each loop is submitted once, stops with snapshot-only
 submission, and returns when spatial ambience is enabled. The 32-source and
 large-mesh performance check is `tests/steam_audio_perf.cpp`; compile it with
-the same flags as the standalone check above.
+the same flags as the standalone check above. Use those flags for
+`tests/steam_audio_materials.cpp` to compare room size, scattering, and absorption
+in a synthetic room. That check does not select material defaults for campaign
+maps.
 
 References: [Steam Audio SDK](https://valvesoftware.github.io/steam-audio/doc/capi/index.html),
 [integration guide](https://valvesoftware.github.io/steam-audio/doc/capi/integration.html),
