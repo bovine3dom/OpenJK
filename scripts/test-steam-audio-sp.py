@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--map")
     parser.add_argument("--bake", action="store_true")
     parser.add_argument("--ambient", action="store_true", help="Check emitters outside the visual snapshot on the default map")
+    parser.add_argument("--first-use", action="store_true", help="Check that runtime file access preserves queued audio")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -35,6 +36,7 @@ def main():
                     s_sdlDevSamps=args.device_samples)
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("")
+    (profile / "audio-file-test.cfg").write_text("echo AUDIO_FILE_READ\n")
     env = dict(os.environ, OJK_PROFILE=str(home), OJK_JO_ASSETS=str(root / "GameData_JO"),
                SDL_AUDIODRIVER=args.audio_driver, SDL_VIDEODRIVER="offscreen", EGL_PLATFORM="surfaceless")
     log = run / "console.log"
@@ -138,6 +140,13 @@ def main():
                 print("PASS: 22050 Hz legacy fallback and sound restart")
                 return
             assert initial["active"] == "1" and int(initial["triangles"]) > 100, initial
+            if args.first_use:
+                cmd("s_steam_status reset")
+                assert "AUDIO_FILE_READ" in cmd("exec audio-file-test.cfg")
+                output = cmd("s_steam_status")
+                clears = re.search(r"buffer_clears=(\d+)", output)
+                records["fileio_buffer_clears"] = int(clears[1]) if clears else None
+                assert clears and clears[1] == "0", output
             if args.ambient:
                 assert not args.map, "Ambient fixtures use the default map"
                 ambient()

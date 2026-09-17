@@ -61,6 +61,8 @@ The next status report includes:
   mix. This counter cannot detect multiple complete DMA-buffer wraps.
 - `scene_peak_us`: the longest background scene commit since level initialization.
   This counter is retained by `s_steam_status reset`.
+- `buffer_clears`: explicit buffer clears while Steam Audio is active. Runtime
+  file access must not increase this counter. A sound stop can increase it.
 
 These are mixer and callback measurements. They do not measure driver underruns.
 
@@ -140,6 +142,10 @@ and brush models. Door movement updates this small instance hierarchy. It does
 not rebuild the static BSP hierarchy. Hybrid convolution processes the first
 0.15 seconds; parametric reverb supplies the late tail.
 
+Runtime file access preserves queued Steam Audio output. The legacy filesystem
+buffer clear erased the mix-ahead window on first asset access. This caused an
+audio gap without a mixer underrun. Explicit sound stops still clear the buffer.
+
 The initial packaged backend supports Linux x86-64 at 44100 Hz. The SDK also
 supports 48000 Hz, but the current SDL rate selector does not select that rate.
 The default HRTF does not initialize at 22050 Hz. Lower output rates use legacy
@@ -165,6 +171,7 @@ build/steam-audio-test
 python3 scripts/test-steam-audio-sp.py --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --bake --device-samples 256
 python3 scripts/test-steam-audio-sp.py --rate 22
+python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --first-use --bake
 python3 scripts/test-steam-audio-sp.py --ambient --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
 python3 scripts/test-doors-sp.py --case ordinary --audio

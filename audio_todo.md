@@ -2,6 +2,14 @@
 
 ## Current Status
 
+The remaining first-use gap had a separate cause: filesystem operations cleared
+the queued DMA audio. Steam Audio retained its advanced paint cursor, so the
+erased window stayed silent. This did not count as a mixer underrun. Runtime file
+access now preserves that output. Explicit sound stops still clear the buffer.
+The Kejim Post file-access regression failed before the fix with one buffer clear
+and passed after it with zero. The passing baked run is
+`build/smoke/steam-audio.v3pmryij`; the failing run is `steam-audio.3e66jzlw`.
+
 The user confirms that almost all crackling is gone. Brief sound gaps on first
 use and frame-time peaks near doors remain. Work now targets those stalls and
 environmental emitters that stop outside the visible room.

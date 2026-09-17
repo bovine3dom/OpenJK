@@ -1707,12 +1707,16 @@ float S_GetSampleLengthInMilliSeconds( sfxHandle_t sfxHandle)
 
 /*
 ==================
-S_ClearSoundBuffer
+S_PrepareForFileIO
 
-If we are about to perform file access, clear the buffer
-so sound doesn't stutter.
+Keep queued DSP output during file access. A stateful mixer cannot repaint
+an erased window. Legacy mixing can clear and repaint its buffer.
 ==================
 */
+void S_PrepareForFileIO( void ) {
+	if (!S_SteamActive()) S_ClearSoundBuffer();
+}
+
 void S_ClearSoundBuffer( void ) {
 	int		clear;
 
@@ -1726,6 +1730,7 @@ void S_ClearSoundBuffer( void ) {
 	// clear out the lip synching override array
 	memset(s_entityWavVol, 0,sizeof(s_entityWavVol));
 #endif
+	S_SteamBufferCleared();
 	s_rawend = 0;
 
 #ifdef USE_OPENAL
@@ -4171,7 +4176,7 @@ static qboolean S_StartBackgroundTrack_Actual( MusicInfo_t *pMusicInfo, qboolean
 			{
 				pMusicInfo->pLoadedData = (byte *) Z_Malloc(pMusicInfo->iLoadedDataLen, TAG_SND_DYNAMICMUSIC, qfalse);
 
-				S_ClearSoundBuffer();
+				S_PrepareForFileIO();
 				FS_Read(pMusicInfo->pLoadedData, pMusicInfo->iLoadedDataLen, pMusicInfo->s_backgroundFile);
 				Q_strncpyz(pMusicInfo->sLoadedDataName, name, sizeof(pMusicInfo->sLoadedDataName));
 			}
