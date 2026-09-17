@@ -1,5 +1,85 @@
 # Audio Handoff
 
+## Next Work: Campaign Audibility Audit
+
+**Stop point:** the user requested a handoff before implementation. This work has
+not started beyond inspection of the existing code and audit tools.
+
+### Latest User Requirements
+
+- Build an emitter inventory and audibility report for **both JO and JA**.
+- Establish where each sound is clearly audible with legacy audio. Steam Audio
+  must keep it highly audible in at least those places. Source presence alone is
+  not a pass condition.
+- The user suspects that the current `kejim_post` alarm still fails this test,
+  even with the extra emitters. Earlier gain and relay tests do not establish
+  adequate audible coverage.
+- Indoor echoes sound too harsh. Investigate surface shape, material absorption,
+  scattering, reflection timing, and send levels. Explain the available controls.
+- The fly-by prototype is promising but too quiet. Increase its useful level and
+  check it during combat, with the limiter active.
+
+### Audit Tasks
+
+- [ ] Inventory speakers, local sound sets, loops, global ambient beds, and
+  scripted sound references in every campaign map. Record activation and stop
+  targets, positions, brush-model bounds, sound assets, radii, and channel types.
+- [ ] Check asset resolution against the files that the runtime uses, including
+  the JO import overlay. Report missing assets and unresolved references.
+- [ ] Find candidate listener positions near emitters, activation controls,
+  navigable connections, and both sides of doors. Reject solid positions. Record
+  unsampled areas and sampling limits; do not label sparse coverage as complete.
+- [ ] Establish the legacy audible footprint at those positions. Account for
+  snapshot membership, distance curves, local-set volume, and activation state.
+  Test scripted-off and scripted-on states separately.
+- [ ] Compare matching legacy and Steam Audio runs. Hold the camera, source event,
+  master volume, and other mix settings fixed. Record the visibility, relay,
+  limiter, reflection, pathing, and bake settings explicitly.
+- [ ] Measure source-isolated or otherwise controlled PCM, including RMS level,
+  peak level, onset, and tail energy. Compare gain in dB against the legacy result.
+  Use configurable thresholds for a strong legacy signal and an acceptable loss.
+  A proposed starting limit is 3 dB of loss at strong legacy listening positions;
+  validate that limit before treating it as an acceptance rule.
+- [ ] Run the report across both campaigns. List results by campaign, map, emitter,
+  listener position, and tested state. Include reproduction commands, settings,
+  source provenance, skipped cases, and local A/B capture paths. Rank large losses,
+  abrupt changes over short distances, duplicates, clipping, and stale sounds.
+- [ ] Use `kejim_post` as a focused regression: test the perimeter control panel,
+  gun emplacement, nearby exterior routes, and relevant interior positions. Verify
+  the original alarm and relays together, including activation, stop, and save/load.
+- [ ] Fix high-priority losses with appropriate source placement, coverage, or
+  cue-specific treatment. Preserve useful wall filtering and check mix headroom.
+- [ ] Keep generated game audio and extracted acoustic data local under `build`.
+  Automated measurements identify candidates; desktop listening must judge balance
+  and whether a cue belongs in a particular area.
+
+### Reflection and Fly-by Follow-up
+
+- [ ] Explain and test existing controls: `s_steamReverb` (0.2 overall wet gain),
+  `s_steamTransientReverb` (2.5 one-shot send multiplier), `s_steamTransmission`
+  (0.12 minimum blocked-path mid-band gain), `s_steamReflections`, `s_steamPathing`,
+  and `s_steamLimiter`.
+- [ ] Check the material presets in `code/client/snd_steam.cpp`. Solid metal uses
+  absorption `{0.20, 0.07, 0.06}` and scattering `0.1`. Concrete uses
+  `{0.05, 0.07, 0.08}` and scattering `0.2`. Flat surfaces with low absorption and
+  low scattering can produce strong, distinct echoes; this is an investigation
+  target, not a confirmed cause of the user's report.
+- [ ] Evaluate useful tuning controls for early reflections versus late reverb,
+  high-frequency damping, scattering, and decay. The current early window is
+  hard-coded to 0.6 seconds in `shared/sound/steam_audio.cpp`. Material changes must
+  invalidate or rebuild affected scene and probe caches.
+- [ ] Raise and expose the fly-by cue level. Current maximum pass volume is 96/255,
+  with linear falloff to zero at 72 game units; audition volume is 72/255. These
+  values are hard-coded in `code/cgame/cg_ents.cpp`. Keep ownership checks, wall
+  checks, the once-per-trajectory rule, and the 150 ms shared interval.
+
+Useful starting points: `scripts/test-steam-audio-sp.py` supplies headless launches,
+captures, and focused checks. `scripts/audit-jo.py` parses ICARUS blocks, and
+`scripts/import-jo.py` indexes retail archives. `scripts/inspect-map.py` currently
+assumes JA RBSP files and `assets0.pk3` through `assets3.pk3`; extend or replace
+those assumptions for a two-campaign audit. `s_steam_status sources` gives source
+positions, channel gains, snapshot membership, and smoothed acoustic parameters.
+
 ## Current Status
 
 An optional close-pass prototype is available with `cg_boltFlyby 1`. It uses
