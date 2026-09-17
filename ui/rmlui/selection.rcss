@@ -1,0 +1,41 @@
+/* The original JA design is 640 by 480. DP units keep its proportions at every aspect ratio. */
+body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: black;
+    font-family: IBM Plex Sans; font-weight: 600; font-size: 14dp; color: white; }
+#canvas { position: absolute; width: 640dp; height: 480dp; left: 50%; top: 50%;
+    margin-left: -320dp; margin-top: -240dp; overflow: hidden; }
+.page, .backdrop { position: absolute; left: 0; top: 0; width: 640dp; height: 480dp; }
+ja-shader, star-wars-text { display: block; position: absolute; pointer-events: none; }
+button { position: absolute; padding: 0; border-width: 0; background-color: transparent;
+    font-family: IBM Plex Sans; font-weight: 600; font-size: 20dp; color: #ffae00; tab-index: auto; }
+button:hover, button:focus { color: white; }
+button:disabled { color: #666666; }
+.grid-button { color: transparent; }
+.title { position: absolute; left: 0; width: 640dp; height: 22dp; font-size: 16dp; text-align: center; }
+#force-title { top: 5dp; }
+#force-title.points { font-family: IBM Plex Mono; font-size: 14dp; }
+#weapon-title { top: 15dp; }
+.description { position: absolute; white-space: pre-wrap; overflow-y: auto; line-height: 14dp; }
+#force-preview { left: 30dp; top: 265dp; width: 128dp; height: 128dp; }
+#force-description { left: 157dp; top: 264dp; width: 460dp; height: 100dp; }
+#force-level { left: 157dp; top: 364dp; width: 460dp; height: 60dp; line-height: 13dp; }
+#weapon-preview { left: 20dp; top: 200dp; width: 128dp; height: 128dp; }
+#weapon-description { left: 138dp; top: 187dp; width: 482dp; height: 165dp; line-height: 16dp; }
+.footer { top: 447dp; height: 24dp; text-align: left; }
+#force-help, #weapon-help { left: 30dp; width: 140dp; }
+#force-undo, #weapon-back { left: 183dp; width: 140dp; }
+#force-next { left: 336dp; width: 140dp; }
+#weapon-begin { left: 400dp; width: 220dp; }
+.hint { position: absolute; left: 0; top: 424dp; width: 640dp; height: 19dp;
+    color: #ffae00; text-align: center; font-size: 13dp; }
+#scanlines { left: 0; top: 0; width: 640dp; height: 640dp; }
+#help-panel { position: absolute; left: 140dp; top: 70dp; width: 350dp; height: 375dp;
+    box-sizing: border-box; background-color: #04043a; border: 5dp #6365ec; }
+#help-title { position: absolute; top: 20dp; left: 0; width: 340dp;
+    font-size: 20dp; color: #8cdaff; text-align: center; }
+#help-text { left: 20dp; top: 75dp; width: 300dp; height: 230dp; line-height: 13dp; }
+#help-close { left: 0; top: 310dp; width: 340dp; height: 24dp; }
+#help-okay { left: 0; top: 0; width: 340dp; height: 24dp; }
+#selection-cursor { width: 48dp; height: 48dp; }
+scrollbarvertical { width: 10dp; }
+scrollbarvertical slidertrack { background-color: #11152b; }
+scrollbarvertical sliderbar { background-color: #7c84aa; min-height: 12dp; }

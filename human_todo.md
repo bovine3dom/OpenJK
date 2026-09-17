@@ -162,6 +162,8 @@ enablement, diffuse compensation, and parallax enablement require a restart.
 
 ## Jedi Outcast Campaign
 
+- [ ] Load the `ns_starpad` save where Lando stopped inside the ship. Confirm that he reaches the cockpit console and gives the roof and fuel instructions.
+- [ ] Check the new Force and weapon screens at the desktop resolution. Compare the artwork, Plex text, and Star Wars help label with the original screens.
 - [ ] At a true mission boundary, choose two main weapons and one explosive type. Check mouse and keyboard controls.
 - [ ] Choose a JA concussion rifle and optional Force ranks. Reload the entry autosave and check the equipment and powers.
 - [ ] Check that connected maps do not open preparation. Confirm that JO powers still advance with the story.

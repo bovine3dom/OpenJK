@@ -105,7 +105,21 @@ def main():
             subprocess.run(["xdotool", "windowfocus", window, *event], check=True, timeout=10)
 
         def click(x, y):
-            input_event("mousemove", str(x), str(y), "click", "1")
+            if not rml:
+                input_event("mousemove", str(x), str(y), "click", "1")
+                cmd("wait 15")
+                return
+            for _ in range(20):
+                ui = fields(cmd("rml_selection_status"), "rml_selection")
+                left, top, _, _ = map(float, ui["viewport"].split(","))
+                cx, cy = map(float, ui["cursor"].split(","))
+                dx, dy = round(left + x * float(ui["scale"]) - cx), round(top + y * float(ui["scale"]) - cy)
+                if abs(dx) <= 1 and abs(dy) <= 1: break
+                input_event("mousemove_relative", "--", str(max(-100, min(100, dx))), str(max(-100, min(100, dy))))
+                cmd("wait 2")
+            else:
+                raise AssertionError(f"Menu pointer did not reach {x},{y}: {log}")
+            input_event("click", "1")
             cmd("wait 15")
 
         def capture(name):
@@ -148,6 +162,7 @@ def main():
 
         try:
             wait("PREPARATION_READY")
+            rml = "RmlUi: JA selection menus ready" in log.read_text(errors="replace")
             cmd("helpusobi 1; exitview; wait 150; god; notarget")
             assert "rejected" in cmd("jo_prepare begin")
             leave("kejim_base")
@@ -168,7 +183,7 @@ def main():
             assert int(data["primary"]) == (1 << 13) | (1 << 9) and data["explosive"] == "12", data
             after = re.search(r"forcelevels [^\n]+", text)
             assert after and after[0] == before[0], "A story-controlled power changed"
-            click(590, 278)
+            click(*((240, 228) if rml else (590, 278)))
             assert status()[1]["sense"][1] == 1, "Mouse upgrade did not work"
             cmd("jo_prepare force sense 1; jo_prepare force rage 1")
             data, powers, _ = status()
@@ -176,8 +191,11 @@ def main():
             cmd("use end_level")
             assert status()[1]["sense"] == (0, 2, 0), "A repeated exit reset the draft"
             clock = fields(cmd("missionstats_status"), "missionstats live")["time"]
-            console = cmd("toggleconsole; wait 15; forcewheel_status")
-            assert int(fields(console, "forcewheel")["catcher"]) & 1, "Preparation repeatedly closed the console"
+            cmd("toggleconsole; wait 15")
+            start = len(log.read_text(errors="replace"))
+            input_event("type", "--clearmodifiers", "echo PREP_CONSOLE_INPUT")
+            input_event("key", "Return")
+            wait("PREP_CONSOLE_INPUT", start)
             cmd("set cl_paused 0; wait 15; toggleconsole")
             assert fields(cmd("missionstats_status"), "missionstats live")["time"] == clock, "Preparation let the finished mission advance"
             cmd("jo_prepare force sense -1; jo_prepare force sense 1; vid_restart; wait 60")
@@ -185,7 +203,16 @@ def main():
             cmd("save pending_preparation")
             assert not (profile / "campaigns/jo/OpenJK/saves/pending_preparation.sav").exists()
             capture("optional_force_and_weapons")
-            input_event("key", "Up", "Return")
+            if rml:
+                click(405, 459)
+                capture("weapons")
+                click(240, 459)
+                assert fields(cmd("rml_selection_status"), "rml_selection")["page"] == "1"
+                assert status()[1]["sense"] == (0, 2, 0), "Switching pages changed the draft"
+                click(405, 459)
+                click(510, 459)
+            else:
+                input_event("key", "Up", "Return")
             ready("ns_streets")
             cmd("helpusobi 1; exitview; wait 100")
             data, powers, text = status()
@@ -204,8 +231,8 @@ def main():
             ammo = int(fields(cmd("jo_prepare status"), "jo_loadout")["ammo"])
             cmd("+attack; wait 10; -attack; wait 30")
             assert int(fields(cmd("jo_prepare status"), "jo_loadout")["ammo"]) < ammo, "JA concussion rifle did not fire"
-            sight = cmd("force_sight; wait 15; forcewheel_status")
-            assert int(fields(sight, "forcewheel")["active"]) & (1 << 15), "Purchased Sense did not activate"
+            sight = cmd("force_sight; wait 15; jo_prepare status")
+            assert int(fields(sight, "jo_loadout")["force_active"]) & (1 << 15), "Purchased Sense did not activate"
             cmd("force_sight; wait 15")
 
             for destination, budget, upgrades in (("bespin_undercity", 3, ("sense",)),

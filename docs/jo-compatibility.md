@@ -84,6 +84,27 @@ Run `python3 scripts/test-jo-sp.py --bouncers` to check the two native bar bounc
 The check activates their retail spawner, checks surface flags, captures both actors,
 and checks save/load. It passes in vanilla and Rend2.
 
+## Lando Ship Boarding
+
+JO waypoints use the character origin. JA route checks used bounds measured from
+the floor. The extra height made the ship stair route in `ns_starpad` appear
+blocked by its ceiling. Lando stopped inside the entrance while his script
+waited for him to reach the cockpit.
+
+JO route checks now use bounds relative to the character origin. The navigation
+cache version has changed so existing routes are calculated again. The retail
+boarding scripts complete and show the roof and fuel objectives. This also
+passes with a save made while Lando was stuck.
+
+```bash
+python3 scripts/test-jo-cinematics.py --case boarding --renderer rdsp-vanilla
+python3 scripts/test-jo-cinematics.py --case boarding --renderer rdsp-rend2
+```
+
+The test starts Lando at the ship ramp. It retains the retail geometry, routes,
+collision, and scripts. It checks his console animation, speech, and both new
+objectives. Use `--save PATH` to check recovery from a saved boarding sequence.
+
 ## Artus Topside Handoff
 
 Desann uses scripted noclip movement to reach his dialogue position. JA's newer

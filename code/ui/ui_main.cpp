@@ -35,6 +35,9 @@ USER INTERFACE MAIN
 #include "../server/exe_headers.h"
 
 #include "ui_local.h"
+#ifdef USE_RMLUI
+#include "../client/selection_menu.h"
+#endif
 
 #include "menudef.h"
 
@@ -496,6 +499,9 @@ void _UI_Refresh( int realtime )
 		}
 	}
 
+	#ifdef USE_RMLUI
+	UI_SelectionRestore();
+	#endif
 	if ( !( Key_GetCatcher() & KEYCATCH_UI ) )
 	{
 		return;
@@ -534,6 +540,9 @@ void _UI_Refresh( int realtime )
 	}
 
 	UI_UpdateCvars();
+	#ifdef USE_RMLUI
+	if (CL_RmlSelectionDraw()) return;
+	#endif
 
 	if (Menu_Count() > 0)
 	{
@@ -4033,6 +4042,9 @@ static bool UI_AutomapFocused() {
 
 void _UI_MouseEvent( int dx, int dy )
 {
+	#ifdef USE_RMLUI
+	if (CL_RmlSelectionMouse(dx, dy)) return;
+	#endif
 	const float oldX=uiInfo.uiDC.cursorx, oldY=uiInfo.uiDC.cursory;
 	// update mouse screen position
 	uiInfo.uiDC.cursorx += dx;
@@ -4077,6 +4089,9 @@ UI_KeyEvent
 */
 void _UI_KeyEvent( int key, qboolean down )
 {
+	#ifdef USE_RMLUI
+	if (CL_RmlSelectionKey(key, down != qfalse)) return;
+	#endif
 #ifndef JK2_MODE
 	if (!UI_AutomapFocused()) UI_CancelAutomapDrag();
 	if (key==A_MOUSE1) {

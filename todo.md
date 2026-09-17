@@ -20,6 +20,8 @@ remain in `human_todo.md`.
 - [x] Keep JO completion statistics visible until a click or Enter. Pause the next map while the player reads them.
 - [x] Restore the vestless Rodian back panel. Check native bar bouncers and save/load in both renderers.
 - [x] Add weapon selection, including JA-only weapons, at true mission boundaries. Do not open setup on internal map transitions.
+- [x] Use the shared RmlUi Force and weapon screens for JA and JO. Check input, display proportions, and saved choices in both renderers.
+- [x] Correct JO route-check bounds so Lando can use the ship stairs in `ns_starpad`. Check the roof and fuel objectives and recovery from a stuck save.
 - [x] Keep all JO powers story-controlled. Allow seven total points for the five JA-only powers, with three ranks each.
 - [x] Check two-main-weapon and one-explosive limits, full saves, entry autosaves, story upgrades, and earlier-save restoration in both renderers.
 - [x] Fix the Rend2 fog-array overflow found while checking the Yavin transition. Use the map-format limit in CPU and shader blocks.

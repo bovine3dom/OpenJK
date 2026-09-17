@@ -50,6 +50,7 @@ cp docs/jo-compatibility.md "$package/"
 cp docs/jo-cinematics.md "$package/"
 cp docs/jo-statistics.md "$package/"
 cp docs/jo-mission-preparation.md "$package/"
+cp docs/rmlui-selection.md "$package/"
 cp docs/raster-features-sp.md "$package/"
 cp docs/torch-sp.md "$package/"
 cp docs/hud-reveal-sp.md "$package/"
@@ -112,6 +113,12 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \
     bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-rend2-result.txt"
+if $integration && grep -q '^BuildRmlUi:BOOL=ON$' build/sp/CMakeCache.txt; then
+    for renderer in rdsp-vanilla rdsp-rend2; do
+        python3 scripts/test-rmlui-selection.py --package "$package" --renderer "$renderer" \
+            | tee "$package/rmlui-selection-$renderer-result.txt"
+    done
+fi
 if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
     python3 scripts/audit-jo.py --academy "${OJK_ASSETS:-$root/GameData}" \
         --outcast "${OJK_JO_ASSETS:-$root/GameData_JO}" | tee "$package/jo-audit-result.txt"
@@ -127,6 +134,8 @@ if $integration && [[ -d ${OJK_JO_ASSETS:-$root/GameData_JO}/base ]]; then
         python3 scripts/test-jo-sp.py --package "$package" --content | tee "$package/jo-content-result.txt"
     OJK_JO_ASSETS=${OJK_JO_ASSETS:-$root/GameData_JO} \
         python3 scripts/test-jo-cinematics.py --package "$package" | tee "$package/jo-cinematics-result.txt"
+    python3 scripts/test-jo-cinematics.py --package "$package" --case boarding --renderer rdsp-rend2 \
+        | tee "$package/jo-boarding-rdsp-rend2-result.txt"
     for renderer in rdsp-vanilla rdsp-rend2; do
         python3 scripts/test-jo-stats.py --package "$package" --renderer "$renderer" \
             | tee "$package/jo-stats-$renderer-result.txt"

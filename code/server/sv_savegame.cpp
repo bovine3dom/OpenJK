@@ -1115,7 +1115,7 @@ static void SG_WriteScreenshot(qboolean qbAutosave, const char *psMapName)
 
 qboolean SG_GameAllowedToSaveHere(qboolean inCamera)
 {
-	if (Cvar_VariableIntegerValue("jo_prep_pending")) return qfalse;
+	if (Cvar_VariableIntegerValue("jo_prep_pending") || Cvar_VariableIntegerValue("ui_rmlSelectionActive")) return qfalse;
 	if (!inCamera) {
 		if ( !com_sv_running || !com_sv_running->integer )
 		{

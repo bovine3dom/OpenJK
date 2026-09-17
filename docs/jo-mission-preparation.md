@@ -1,11 +1,13 @@
 # JO Mission Preparation
 
 At the end of a combat mission, continue from the statistics screen to mission
-preparation. Select two main weapons and one explosive type. Select optional
-Force upgrades, then choose **Begin mission**. The next map loads after this step.
+preparation. Select optional Force upgrades, then select **Weapons**. Select two
+main weapons and one explosive type. Choose **Begin mission** to load the next map.
+Before Force training, preparation starts on the weapon screen.
 
-The screen uses the shared JA menu system. Click an item to select it. Use Up,
-Down, or Tab to move keyboard focus, and Enter to activate the focused item.
+The screens use the shared [RmlUi selection layout](rmlui-selection.md).
+Click an item to select it. Use the arrow keys or Tab to move keyboard focus,
+and Enter to activate the focused item.
 To replace a selected main weapon, clear its selection first.
 
 ## Mission Boundaries
@@ -64,8 +66,8 @@ purchased ranks by the final mission: just under half of the total.
 
 The total budget rises to 2, 3, 4, 5, and 7 at the post-training mission boundaries.
 Points are unavailable before Force training. Unspent points remain available
-at later preparation screens. The minus buttons undo changes on the current
-screen; they do not refund purchases from earlier missions.
+at later preparation screens. Select a power and use **Undo upgrade** to remove
+a change from the current selection. This does not refund an earlier purchase.
 
 The budget is a story limit, not a reward added on every transition. Returning
 to an earlier save or repeating a transition does not increase it.
@@ -82,8 +84,10 @@ Finish preparation before saving. A pending selection is temporary and cannot
 be saved as a completed mission state. Renderer restarts preserve the draft.
 
 Mission groups, budgets, and allowed choices are in `code/game/g_jo_missions.cpp`.
-The menu is `ui/jo_preparation.menu`. Use `jo_prepare status` to inspect a pending
-selection and the player's current optional ranks.
+The layout is in `ui/rmlui/selection.rml` and `selection.rcss`. Builds without
+RmlUi use `ui/jo_preparation.menu`. Use `jo_prepare status` to inspect a pending
+selection and the player's current optional ranks. Use `rml_selection_status`
+to inspect the active RmlUi page and its controls.
 
 ## Verification
 

@@ -3,13 +3,15 @@
 ## Scope
 
 `BuildRmlUi` is ON by default when `BuildSPEngine` is ON. It adds the RmlUi
-reticle to the Jedi Academy single-player client only. Set `BuildRmlUi=OFF`
-to omit the integration and its dependencies. Jedi Outcast and multiplayer
-targets do not link these libraries.
+reticle, selection wheels, and mission preparation screens to the shared
+single-player client. This client runs both JA and JO campaigns.
+Set `BuildRmlUi=OFF` to omit the integration and its dependencies. The separate
+Jedi Outcast executable and multiplayer targets do not link these libraries.
 
-The MVP uses RML embedded in `code/client/cl_rmlui.cpp`. The reticle uses geometry
-only. The Force wheel label uses FreeType and the bundled IBM Plex Mono font.
-The package includes the font, license, and source record from `ui/fonts/plex`.
+The reticle and selection wheels use embedded RML. Mission preparation loads
+`ui/rmlui/selection.rml` and `selection.rcss` through the game file system.
+The reticle uses geometry only. Text uses FreeType and the bundled IBM Plex fonts.
+The package includes the fonts, license, and source record from `ui/fonts/plex`.
 No desktop font installation or separate asset download is required.
 
 ## Source Archives

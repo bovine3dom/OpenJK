@@ -217,6 +217,10 @@ Called before parsing a gamestate
 =====================
 */
 void CL_ClearState (void) {
+#ifdef USE_RMLUI
+	extern void CL_RmlSelectionReset();
+	CL_RmlSelectionReset();
+#endif
 	if (Cvar_VariableIntegerValue("cl_joStatsState") == 1 || Cvar_VariableIntegerValue("cl_joStatsState") == 3)
 		Cvar_Set("cl_paused", "0");
 	Cvar_Set("cl_joStatsState", "0");

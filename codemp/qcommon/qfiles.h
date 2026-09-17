@@ -507,6 +507,7 @@ typedef struct dsurface_s {
 
 // Must match define in stmparse.h
 #define STYLE_DROPSHADOW	0x80000000
+#define STYLE_PIXEL			0x20000000 // Pixel-coordinate UI text in the shared SP font renderer.
 #define STYLE_BLINK			0x40000000
 #define	SET_MASK			0x00ffffff
 

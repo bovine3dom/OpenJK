@@ -8,6 +8,7 @@
 #include <RmlUi/Core/FontEffectInstancer.h>
 #include <RmlUi/Core/FontEffect.h>
 #include "client.h"
+#include "selection_menu.h"
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -38,6 +39,37 @@ public:
 		Com_Printf("RmlUi: %s\n", message.c_str());
 		return true;
 	}
+};
+
+class GameFiles final : public Rml::FileInterface {
+	struct File { void* bytes; size_t size, position; };
+public:
+	Rml::FileHandle Open(const Rml::String& path) override {
+		void* data = nullptr;
+		const int length = FS_ReadFile(path.c_str(), &data);
+		return length < 0 ? 0 : reinterpret_cast<Rml::FileHandle>(new File{data, size_t(length), 0});
+	}
+	void Close(Rml::FileHandle handle) override {
+		auto* file = reinterpret_cast<File*>(handle);
+		FS_FreeFile(file->bytes);
+		delete file;
+	}
+	size_t Read(void* buffer, size_t size, Rml::FileHandle handle) override {
+		auto& file = *reinterpret_cast<File*>(handle);
+		const size_t count = std::min(size, file.size - file.position);
+		memcpy(buffer, static_cast<byte*>(file.bytes) + file.position, count);
+		file.position += count;
+		return count;
+	}
+	bool Seek(Rml::FileHandle handle, long offset, int origin) override {
+		auto& file = *reinterpret_cast<File*>(handle);
+		if (origin != SEEK_SET && origin != SEEK_CUR && origin != SEEK_END) return false;
+		const auto position = int64_t(origin == SEEK_SET ? 0 : origin == SEEK_CUR ? file.position : file.size) + offset;
+		if (position < 0 || uint64_t(position) > file.size) return false;
+		file.position = size_t(position);
+		return true;
+	}
+	size_t Tell(Rml::FileHandle handle) override { return reinterpret_cast<File*>(handle)->position; }
 };
 
 class ReticleRenderer final : public Rml::RenderInterface {
@@ -191,6 +223,7 @@ Rml::ElementInstancerGeneric<SelectionWheelElement> wheelInstancer;
 Rml::ElementInstancerGeneric<ResourceRings> resourceInstancer;
 ReticleHud::Activity activity;
 ReticleSystem systemInterface;
+GameFiles fileInterface;
 ReticleRenderer renderInterface;
 Rml::Context* context = nullptr;
 Rml::ElementDocument* document = nullptr;
@@ -218,6 +251,7 @@ cvar_t* hudEnabled = nullptr;
 
 void CL_RmlUiShutdown() {
 	CL_AtmosphereEditorShutdown();
+	CL_RmlSelectionShutdown();
 	CL_CancelHudReveal();
 	CL_SelectionWheelsCancel();
 	textOutlines.clear();
@@ -251,6 +285,7 @@ void CL_RmlUiInit() {
 	scale = Cvar_Get("cg_rmluiReticleScale", "0.75", CVAR_ARCHIVE);
 	hudEnabled = Cvar_Get("cg_rmluiHud", "1", CVAR_ARCHIVE);
 	Rml::SetSystemInterface(&systemInterface);
+	Rml::SetFileInterface(&fileInterface);
 	Rml::SetRenderInterface(&renderInterface);
 	initialized = Rml::Initialise();
 	if (initialized) {
@@ -294,6 +329,7 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 	}
 	document->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 	wheelDocument->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+	CL_RmlSelectionInit();
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
 	CL_AtmosphereEditorInit();
 }

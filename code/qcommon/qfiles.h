@@ -423,6 +423,7 @@ typedef enum //# hunkAllocType_e
 
 // Must match define in stmparse.h
 #define STYLE_DROPSHADOW	0x80000000
+#define STYLE_PIXEL			0x20000000 // Pixel coordinates and uniform font scaling for RmlUi elements.
 #define STYLE_BLINK			0x40000000
 #define	SET_MASK			0x00ffffff
 

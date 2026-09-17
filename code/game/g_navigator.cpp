@@ -89,7 +89,7 @@ extern vec3_t		playerMaxs;
 ////////////////////////////////////////////////////////////////////////////////////////
 // Defines
 ////////////////////////////////////////////////////////////////////////////////////////
-#define		NAV_VERSION						1.3f
+#define		NAV_VERSION						1.4f
 #define		NEIGHBORING_DIST				200.0f
 #define		SAFE_NEIGHBORINGPOINT_DIST		400.0f
 #define		SAFE_AT_NAV_DIST_SQ				6400.0f			//80*80
@@ -1264,6 +1264,12 @@ bool			NAV::TestEdge( TNodeHandle NodeA, TNodeHandle NodeB, qboolean IsDebugEdge
 	Mins[0] = Mins[1] = (radius) * -1.0f;
 	Maxs[0] = Maxs[1] = (radius);
 	Maxs[2] =			(height);
+	if (G_IsOutcast())
+	{
+		// JO waypoints use the actor origin, not the floor position.
+		Mins[2] = -24.0f + STEPSIZE;
+		Maxs[2] -= 24.0f;
+	}
 
 
 	// If Either Start Or End Points Are Too Small, Don' Bother At This Size

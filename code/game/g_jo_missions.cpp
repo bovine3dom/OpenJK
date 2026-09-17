@@ -76,6 +76,13 @@ int Remaining() {
 }
 
 void UpdateLabels() {
+	gi.cvar_set("ui_jo_primary", va("%d", prep.primary));
+	gi.cvar_set("ui_jo_explosive", va("%d", prep.explosive));
+	gi.cvar_set("ui_jo_remaining", va("%d", Remaining()));
+	for (int i = 0; i < ARRAY_LEN(powers); ++i) {
+		gi.cvar_set(va("ui_jo_level_%s", powers[i].key), va("%d", prep.levels[i]));
+		gi.cvar_set(va("ui_jo_original_%s", powers[i].key), va("%d", prep.original[i]));
+	}
 	gi.cvar_set("ui_jo_prep_title", va("Prepare for %s", missions[prep.mission].name));
 	gi.cvar_set("ui_jo_prep_count", va("Main weapons: %d / 2", PrimaryCount()));
 	gi.cvar_set("ui_jo_prep_points", va("Optional Force points: %d available (%d / %d unlocked)", Remaining(), prep.budget, missions[ARRAY_LEN(missions) - 1].points));
@@ -92,6 +99,7 @@ void UpdateLabels() {
 }
 
 void Begin() {
+	if (!prep.editing) gi.cvar_set("ui_rmlSelectionPage", prep.budget ? "force" : "weapons");
 	prep.editing = true;
 	UpdateLabels();
 	gi.cvar_set("cl_joStatsState", "3");
@@ -154,7 +162,7 @@ void G_JoPreparationCommand() {
 				level.clients ? level.clients[0].ps.forcePowerLevel[powers[i].power] : 0);
 		if (level.clients) {
 			const auto &ps = level.clients[0].ps;
-			gi.Printf("jo_loadout weapons=%d active=%d ammo=%d\n", ps.stats[STAT_WEAPONS], ps.weapon, ps.ammo[weaponData[ps.weapon].ammoIndex]);
+			gi.Printf("jo_loadout weapons=%d active=%d ammo=%d force_active=%d\n", ps.stats[STAT_WEAPONS], ps.weapon, ps.ammo[weaponData[ps.weapon].ammoIndex], ps.forcePowersActive);
 		}
 		return;
 	}

@@ -1,0 +1,38 @@
+<rml>
+<head><title>Mission preparation</title><link type="text/rcss" href="selection.rcss"/></head>
+<body>
+    <div id="canvas">
+        <div id="force-page" class="page">
+            <ja-shader class="backdrop" src="gfx/menus/forcemenu_back"/>
+            <div id="force-title" class="title"/>
+            <div id="force-grid"/>
+            <ja-shader id="force-preview"/>
+            <div id="force-description" class="description"/>
+            <div id="force-level" class="description"/>
+            <div id="force-hint" class="hint"/>
+            <button id="force-help" class="footer" data-action="help"/>
+            <button id="force-undo" class="footer" data-action="undo"/>
+            <button id="force-next" class="footer" data-action="weapons"/>
+        </div>
+        <div id="weapon-page" class="page">
+            <ja-shader class="backdrop" src="gfx/menus/weaponmenu_back"/>
+            <div id="weapon-title" class="title"/>
+            <div id="weapon-grid"/>
+            <ja-shader id="weapon-preview"/>
+            <div id="weapon-description" class="description"/>
+            <div id="chosen-weapons"/>
+            <div id="weapon-hint" class="hint"/>
+            <button id="weapon-help" class="footer" data-action="help"/>
+            <button id="weapon-back" class="footer" data-action="force"/>
+            <button id="weapon-begin" class="footer" data-action="begin"/>
+        </div>
+        <ja-shader id="scanlines" src="gfx/menus/scanlines"/>
+        <div id="help-panel">
+            <div id="help-title"/>
+            <div id="help-text" class="description"/>
+            <button id="help-close" data-action="dismiss"><star-wars-text id="help-okay"/></button>
+        </div>
+    </div>
+    <ja-shader id="selection-cursor" src="cursor" outside="true"/>
+</body>
+</rml>

@@ -434,6 +434,7 @@ if(MakeApplicationBundles AND BuildSPEngine)
 endif()
 install(FILES "${CMAKE_SOURCE_DIR}/ui/jo_preparation.menu" "${CMAKE_SOURCE_DIR}/ui/jo_preparation.txt"
 	DESTINATION "${JoUiInstallDir}" COMPONENT ${JKASPClientComponent})
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/ui/rmlui" DESTINATION "${JoUiInstallDir}" COMPONENT ${JKASPClientComponent})
 set_target_properties(${SPGame} PROPERTIES INCLUDE_DIRECTORIES "${SPGameIncludeDirectories}")
 set_target_properties(${SPGame} PROPERTIES PROJECT_LABEL "SP Game Library")
 # no libraries used

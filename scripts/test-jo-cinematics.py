@@ -7,19 +7,21 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MAPS = {"cctv": "kejim_base", "artus": "artus_mine", "topside": "artus_topside",
-        "office": "kejim_base", "bar": "ns_streets", "rescue": "doom_detention", "shrine": "valley", "trial": "yavin_trial"}
+        "office": "kejim_base", "bar": "ns_streets", "rescue": "doom_detention", "shrine": "valley", "trial": "yavin_trial", "boarding": "ns_starpad"}
 ACTORS = {"cctv": ("cinematic2_kyle", "cinematic_galak", "cinematic_officer4"), "artus": ("cinematic4_kyle",),
           "topside": ("cinematic9_tavion", "cinematic9_jan", "cinematic9_desann", "cinematic9_kyle"),
           "office": ("cinematic3_kyle", "cinematic3_jan", "cinematic3_mon_mothma"),
           "bar": ("cinematic15_kyle", "cinematic15_bartender"), "rescue": ("cinematic29_kyle", "cinematic29_jan"),
-          "shrine": ("cinematic10_kyle", "cinematic10_morgan"), "trial": ("cinematic13_kyle", "cinematic13_luke")}
+          "shrine": ("cinematic10_kyle", "cinematic10_morgan"), "trial": ("cinematic13_kyle", "cinematic13_luke"), "boarding": ("lando",)}
 
 
 def run_case(package, case, renderer, saved):
@@ -27,6 +29,19 @@ def run_case(package, case, renderer, saved):
     output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=f"{case}.{renderer}.", dir=output))
     profile = run / "profile"
+    if case == "boarding" and not saved:
+        folder = profile / "campaigns/jo/OpenJK"
+        folder.mkdir(parents=True)
+        with zipfile.ZipFile(Path(os.environ.get("OJK_JO_ASSETS", ROOT / "GameData_JO")) / "base/assets0.pk3") as archive:
+            data = archive.read("maps/ns_starpad.bsp")
+        start, size = struct.unpack_from("<ii", data, 8)
+        entities = data[start:start + size].rstrip(b"\0").decode()
+        # Start at the ramp. Keep the retail route, geometry, and boarding scripts.
+        entities, count = re.subn(r'\{[^}]*"targetname" "lando_fuelship"[^}]*\}',
+            lambda m: re.sub(r'"origin" "[^"]*"', '"origin" "128 920 -736"', m[0]), entities)
+        assert count == 1
+        with zipfile.ZipFile(folder / "zzz_boarding_test.pk3", "w") as archive:
+            archive.writestr("maps/ns_starpad.ent", entities)
     if saved:
         saves = profile / "campaigns/jo/OpenJK/saves"
         saves.mkdir(parents=True)
@@ -107,12 +122,17 @@ def run_case(package, case, renderer, saved):
                 cmd("helpusobi 1; wait 150; use jan_jail_door")
             elif case == "trial":
                 cmd("helpusobi 1; wait 150; use cinematic13script")
+            elif case == "boarding":
+                if not saved:
+                    cmd("helpusobi 1; god; use hangardoors; wait 120")
+                    cmd("setviewpos 220 460 -584 270; use run_lando_enter_ship")
             history = []
             captured = False
             seen_camera = False
             walking_frames = []
             poses_captured = set()
             query = f"wait {1 if case == 'artus' else 10}; " + "; ".join("cinematic_status " + actor for actor in ACTORS[case])
+            if case == "boarding": query += "; campaign_status"
             deadline = time.monotonic() + 300
             while time.monotonic() < deadline:
                 state = cmd(query)
@@ -123,6 +143,8 @@ def run_case(package, case, renderer, saved):
                     assert bone and float(bone[2]) > 0.1, "Officer walk animation is nearly frozen"
                     walking_frames.append(float(bone[1]))
                 history.extend(current)
+                if case == "boarding" and "objective=NS_STARPAD_OBJ3 status=0" in state and "objective=NS_STARPAD_OBJ4 status=0" in state:
+                    break
                 if case == "topside":
                     for sample in current:
                         pose = sample.get("legs")
@@ -233,6 +255,11 @@ def run_case(package, case, renderer, saved):
                 assert any(s.get("legs") == "BOTH_WALK1" and math.hypot(*map(float, s["velocity"].split(",")[:2])) > 10
                            for s in history), "No walking actor was observed"
                 assert "camera=0" in cmd("campaign_status"), "Scene did not return control"
+            elif case == "boarding":
+                assert any(s.get("legs") == "BOTH_CONSOLE1" and s.get("voice") == "1" for s in history), "Lando did not give the roof and fuel instructions"
+                assert all(s.get("noclip") == "0" for s in history), "Lando bypassed collision"
+                assert float(history[-1]["origin"].split(",")[2]) > -530, "Lando did not reach the cockpit"
+                cmd("setviewpos 150 110 -480 270; wait 20")
             capture("completed")
             stdin.write("quit\n")
             stdin.flush()
@@ -241,7 +268,7 @@ def run_case(package, case, renderer, saved):
             traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
                       for line in text.splitlines() if "cinematic_animation actor=" in line]
             staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
-            assert staged and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert (staged or case == "boarding") and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
             assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)

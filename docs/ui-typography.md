@@ -41,6 +41,7 @@ screen width. Color codes and alpha fades remain available.
 
 The gameplay font route is scoped to gameplay. The datapad now has a separate
 Sans route, described below. Mission-complete screens use this route also.
+Force and weapon selection use the separate RmlUi route described below.
 Other menu text, credits, and the open console retain their existing fonts.
 Loading screens also retain their existing path. Asian-language text keeps the legacy
 font fallback because this bundled font does not supply those character sets.
@@ -65,6 +66,13 @@ No separate UI or text scale setting is added.
 
 Large text meshes are split into complete triangle batches within renderer
 limits. Font textures and effects are released before renderer shutdown.
+
+## Force and Weapon Selection
+
+The shared JA and JO selection screens use IBM Plex Sans for standard text.
+The JO point counter uses IBM Plex Mono. The help confirmation label keeps the
+original `anewhope` display font and its joined Star Wars letters.
+See [Force and Weapon Selection](rmlui-selection.md) for the layout and checks.
 
 ## Checks
 

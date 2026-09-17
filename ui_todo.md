@@ -64,7 +64,8 @@ Keep existing screens available during migration.
 - [ ] Separate settings definitions, validation, Apply/Discard, and restart rules from presentation.
 - [ ] Migrate settings screens, then main and pause menus.
 - [ ] Migrate HUD components individually. Disable the old drawing path for each replaced component.
-- [ ] Migrate character creation, Force allocation, mission selection, and datapad screens after their game bindings are covered.
+- [x] Move JA and JO Force allocation and weapon selection to RmlUi. Keep the original artwork and display font. Use Plex for standard text.
+- [ ] Migrate character creation, mission selection, and datapad screens after their game bindings are covered.
 - [ ] Retire the legacy framework only after its remaining responsibilities have replacements.
 
 ## Dependency Policy

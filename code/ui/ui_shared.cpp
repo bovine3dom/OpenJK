@@ -5401,6 +5401,7 @@ Menus_ActivateByName
 void Menu_HandleMouseMove(menuDef_t *menu, float x, float y);
 menuDef_t *Menus_ActivateByName(const char *p)
 {
+	bool rmlSelection = false;
 	int i;
 	menuDef_t *m = NULL;
 	menuDef_t *focus = Menu_GetFocused();
@@ -5411,7 +5412,12 @@ menuDef_t *Menus_ActivateByName(const char *p)
 		if (Q_stricmp(Menus[i].window.name, p) == 0)
 		{
 			m = &Menus[i];
-			Menus_Activate(m);
+			#ifdef USE_RMLUI
+			extern bool UI_SelectionOpen(const char *);
+			rmlSelection = UI_SelectionOpen(p);
+			#endif
+			if (rmlSelection) m->window.flags |= WINDOW_HASFOCUS | WINDOW_VISIBLE;
+			else Menus_Activate(m);
 			if (openMenuCount < MAX_OPEN_MENUS && focus != NULL)
 			{
 				menuStack[openMenuCount++] = focus;
@@ -5449,6 +5455,7 @@ menuDef_t *Menus_ActivateByName(const char *p)
 		}
 	}
 
+	if (rmlSelection) return m;
 	// First time, show force select instructions
 	if (!Q_stricmp( p, "ingameForceSelect" ) )
 	{
