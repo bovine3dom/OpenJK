@@ -48,6 +48,8 @@ struct Engine::Impl {
 		bool active=false, reflected=false, hasReflection=false, hasPath=false, fresh=true;
 		bool discardPending=false, reflectionUpdated=false;
 		int tail=0;
+		float reflectionBlend=0;
+		bool reflectionRouted=false;
 	};
 	std::array<Source,Voices+1> sources;
 	IPLAudioSettings audio={};
@@ -146,7 +148,7 @@ struct Engine::Impl {
 			if(s.discardPending) {
 				// Consume a published IR before the SDK can publish the replacement.
 				if(pending[i]) {
-					s.output.reflections=output.reflections; s.hasReflection=true; s.tail=1;
+					s.output.reflections=output.reflections; s.hasReflection=true; s.reflectionUpdated=true; s.tail=1;
 					float silence[Block]={},left[Block]={},right[Block]={};
 					Reflect(s,silence,0,left,right); iplReflectionEffectReset(s.reflection);
 					s.hasReflection=false; s.tail=0;
@@ -173,12 +175,15 @@ struct Engine::Impl {
 		const bool audible=s.tail>0;
 		// Drain new IRs even while quiet so the first shot uses the current room.
 		if(!audible && !s.reflectionUpdated) return;
-		s.reflectionUpdated=false;
+		const bool updated=s.reflectionUpdated; s.reflectionUpdated=false;
 		if(audible) --s.tail;
 		float reflected[Channels][Block]={},stereo[2][Block]={};
 		float *in[]={input},*ambi[]={reflected[0],reflected[1],reflected[2],reflected[3]},*out[]={stereo[0],stereo[1]};
 		IPLAudioBuffer ib={1,Block,in},ab={Channels,Block,ambi},ob={2,Block,out};
-		iplReflectionEffectApply(s.reflection,&params,&ib,&ab,nullptr);
+		// Let the SDK retire convolution partitions after input stops.
+		const auto state=(signal || updated) ? iplReflectionEffectApply(s.reflection,&params,&ib,&ab,nullptr) :
+			iplReflectionEffectGetTail(s.reflection,&ab,nullptr);
+		if(state==IPL_AUDIOEFFECTSTATE_TAILCOMPLETE) s.tail=0;
 		if(!audible) return;
 		IPLAmbisonicsDecodeEffectParams decode={}; decode.order=Order; decode.orientation=listener; decode.binaural=IPL_FALSE;
 		iplAmbisonicsDecodeEffectApply(s.decode,&decode,&ab,&ob);
@@ -297,7 +302,9 @@ void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSp
 	if(dx*dx+dy*dy+dz*dz>1) p->cachedRoom=true;
 	p->listener=listener; p->info.active=p->info.reflected=0;
 	std::array<int,Voices> order; std::iota(order.begin(),order.end(),0);
-	std::stable_sort(order.begin(),order.end(),[&](int a,int b){return voices[a].priority>voices[b].priority;});
+	std::stable_sort(order.begin(),order.end(),[&](int a,int b){
+		return voices[a].priority*(p->sources[a].reflected ? 1.1f : 1) > voices[b].priority*(p->sources[b].reflected ? 1.1f : 1);
+	});
 	for(auto &s:p->sources) { s.reflected=false; s.hasPath=false; }
 	for(int j=0;j<4;++j) p->sources[order[j]].reflected=reflections && voices[order[j]].active;
 	for(int i=0;i<=Voices;++i) {
@@ -344,6 +351,8 @@ void Engine::ResetVoice(int index) {
 	// Effects are mixer-owned. Do not wait for, or consume, the previous occupant's simulation.
 	s.discardPending=p->job.valid(); s.reflected=false; s.output.direct=s.smooth=NeutralDirect();
 	s.reflectionUpdated=false;
+	s.reflectionBlend=0;
+	s.reflectionRouted=false;
 	std::fill(s.pathSH,s.pathSH+Channels,0); s.output.pathing.shCoeffs=s.pathSH;
 }
 void Engine::Begin() { p->room.fill(0); p->indirectLeft.fill(0); p->indirectRight.fill(0); }
@@ -371,14 +380,23 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 		iplPathEffectApply(s.path,&params,&ib,&pathOut);
 		for(int i=0;i<Block;++i) { wetLeft[i]+=stereo[0][i]*gain*(1-smooth.occlusion); wetRight[i]+=stereo[1][i]*gain*(1-smooth.occlusion); }
 	}
-	if(s.reflected && s.hasReflection) p->Reflect(s,in[0],gain*wet*reverbSend,wetLeft,wetRight);
-	else {
-		float silence[Block]={};
-		if(s.hasReflection && (s.tail>0 || s.reflectionUpdated)) p->Reflect(s,silence,gain*wet*reverbSend,wetLeft,wetRight);
-		// A listener-room reverb must not bypass a barrier or the source's distance falloff.
-		const float roomGain=std::min(gain,std::hypot(left,right))*reverbSend;
-		for(int i=0;i<Block;++i) p->room[i]+=filtered[i]*roomGain;
+	const float targetBlend=s.reflected && s.hasReflection ? 1.0f : 0.0f;
+	if(!s.reflectionRouted) {
+		s.reflectionBlend=targetBlend;
+		if(wet>0 && gain>0) for(int i=0;i<Block;++i) s.reflectionRouted|=std::abs(input[i])>1e-6f;
 	}
+	const float previous=s.reflectionBlend;
+	const float step=Block/(.1f*p->audio.samplingRate);
+	s.reflectionBlend=std::max(previous-step,std::min(previous+step,targetBlend));
+	float reflectedInput[Block];
+	// Crossfade sends, not tails, when a voice gains or loses a reflection slot.
+	const float roomGain=std::min(gain,std::hypot(left,right))*reverbSend;
+	for(int i=0;i<Block;++i) {
+		const float blend=previous+(s.reflectionBlend-previous)*(i+1)/Block;
+		reflectedInput[i]=input[i]*blend;
+		p->room[i]+=filtered[i]*roomGain*(1-blend);
+	}
+	if(s.hasReflection) p->Reflect(s,reflectedInput,gain*wet*reverbSend,wetLeft,wetRight);
 }
 void Engine::End(float wet,float *left,float *right) {
 	p->Reflect(p->sources[Voices],p->room.data(),wet,p->indirectLeft.data(),p->indirectRight.data());

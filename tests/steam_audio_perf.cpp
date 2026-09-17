@@ -39,6 +39,7 @@ int main() {
 	for(int block=0;block<512;++block) {
 		if(block && block%64==0) {
 			voices[0].position.z+=.1f;
+			for(int i=0;i<Voices;++i) voices[i].priority=(i/4==block/64) ? 2 : 1;
 			engine.Update(voices,listener,true,false,true); engine.Wait();
 		}
 		float input[Block],left[Block]={},right[Block]={};

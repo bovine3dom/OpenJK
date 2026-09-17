@@ -2,6 +2,16 @@
 
 ## Current Status
 
+The user confirms that the first-use gap is gone. A dense-fire check then found
+159 full-scale samples with four simultaneous blaster shots. A stereo-linked
+lookahead limiter now controls the combined mix. The same capture passed without
+full-scale samples in `build/smoke/steam-audio.z2uez6_f`.
+
+Reflection selection now uses pan-independent priority and hysteresis. Source
+and room sends crossfade over 100 ms. The SDK tail API retires empty convolution
+history. In the rotating 32-source test, mean DSP time fell from 3.12 ms to
+2.03 ms per 5.80 ms block after the tail change.
+
 The room-entry stutter is resolved in the user's report. Acoustic rendering now
 uses 256-sample blocks and a 0.6-second early-reflection window. The previous
 0.15-second window could not preserve distant canyon echoes. A synthetic cliff

@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--first-use", action="store_true", help="Check that runtime file access preserves queued audio")
     parser.add_argument("--alarm", action="store_true", help="Check the Kejim Post perimeter alarm behind a wall")
     parser.add_argument("--acoustics", action="store_true", help="Capture indoor and outdoor indirect sound on Kejim Post")
+    parser.add_argument("--burst", action="store_true", help="Check headroom with four simultaneous blaster shots")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -83,10 +84,14 @@ def main():
             timing = re.search(r"steam_audio timing ([^\n]+)", result)
             assert timing, result
             records[name + "_timing"] = dict(word.split("=", 1) for word in timing[1].split())
+            limiter = re.search(r"steam_audio limiter ([^\n]+)", result)
+            if limiter:
+                records[name + "_limiter"] = dict(word.split("=", 1) for word in limiter[1].split())
             return value
         def capture(continuous=True, wet=False, signal=True):
             start = len(text())
-            cmd(f"s_steam_record 2{' wet' if wet else ''}; s_steam_emit sound/weapons/blaster/fire.wav")
+            shots = "; ".join(["s_steam_emit sound/weapons/blaster/fire.wav"] * (4 if args.burst and not wet else 1))
+            cmd(f"s_steam_record 2{' wet' if wet else ''}; {shots}")
             result = wait("Steam Audio capture continuity:", start)
             match = re.search(r"Steam Audio capture: (\S+)", result)
             assert match
@@ -103,6 +108,8 @@ def main():
                 peak=peak, wet=wet, clipped_samples=sum(s in (-32768, 32767) for s in samples)))
             if continuous:
                 assert continuity.groups() == ("0", "0"), continuity[0]
+                if args.burst and not wet:
+                    assert records["captures"][-1]["clipped_samples"] == 0, records["captures"][-1]
         def ambient():
             def sources():
                 return [dict(word.split("=", 1) for word in line.split())

@@ -44,6 +44,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamPathing` | `1` | Use cached propagation paths when available |
 | `s_steamReverb` | `0.2` | Set reflection and reverb gain, from 0 to 1 |
 | `s_steamTransientReverb` | `2.5` | Reflection send multiplier for one-shot world effects; `1` restores the previous send level |
+| `s_steamLimiter` | `1` | Limit combined mix peaks with about 3 ms of lookahead; `0` bypasses peak control |
 | `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain; `0` uses the raw material result |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
@@ -67,6 +68,11 @@ The next status report includes:
   file access must not increase this counter. A sound stop can increase it.
 
 These are mixer and callback measurements. They do not measure driver underruns.
+
+The limiter report gives the input peak, minimum gain, and number of reduced
+frames since the last reset. Stereo channels share one gain envelope. Quiet
+signals retain their gain. Dense effects can reduce gain smoothly to keep the
+combined mix below full scale. Wet-only captures precede the limiter.
 
 Use `s_steam_status sources` to list mixed sources, entity numbers, loop state,
 channel gains, and sound names. `visible=0` means that the source entity is absent
@@ -166,6 +172,11 @@ listener-room response until their source response is ready. Voice reset does
 not wait for the worker. Results from the previous channel occupant are discarded.
 The mixer accepts updated impulse responses during silence. This prevents an
 unread SDK buffer from preserving the previous room's response for the next shot.
+Reflection priority uses total channel gain with a small preference for current
+sources. Head rotation does not select a different source merely because panning
+changes. A 100 ms send crossfade connects source reflections and room reverb.
+Existing tails continue through that crossfade. The SDK tail API stops convolution
+work when its history is empty.
 
 Runtime file access preserves queued Steam Audio output. The legacy filesystem
 buffer clear erased the mix-ahead window on first asset access. This caused an
@@ -199,6 +210,7 @@ python3 scripts/test-steam-audio-sp.py --rate 22
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --first-use --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --alarm --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --acoustics --bake
+python3 scripts/test-steam-audio-sp.py --burst --first-use
 python3 scripts/test-steam-audio-sp.py --ambient --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
 python3 scripts/test-doors-sp.py --case ordinary --audio
