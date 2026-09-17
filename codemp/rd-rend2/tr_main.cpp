@@ -1723,23 +1723,22 @@ static QINLINE void R_Radix( int byte, int size, drawSurf_t *source, drawSurf_t 
 ===============
 R_RadixSort
 
-Radix sort with 4 byte size buckets
+Radix sort over the complete draw-surface key
 ===============
 */
 static void R_RadixSort( drawSurf_t *source, int size )
 {
   static drawSurf_t scratch[ MAX_DRAWSURFS ];
+  for (int byte = 0; byte < (int)sizeof(drawSurfSort_t); byte += 2)
+  {
 #ifdef Q3_LITTLE_ENDIAN
-  R_Radix( 0, size, source, scratch );
-  R_Radix( 1, size, scratch, source );
-  R_Radix( 2, size, source, scratch );
-  R_Radix( 3, size, scratch, source );
+    R_Radix(byte, size, source, scratch);
+    R_Radix(byte + 1, size, scratch, source);
 #else
-  R_Radix( 3, size, source, scratch );
-  R_Radix( 2, size, scratch, source );
-  R_Radix( 1, size, source, scratch );
-  R_Radix( 0, size, scratch, source );
-#endif //Q3_LITTLE_ENDIAN
+    R_Radix(sizeof(drawSurfSort_t) - 1 - byte, size, source, scratch);
+    R_Radix(sizeof(drawSurfSort_t) - 2 - byte, size, scratch, source);
+#endif
+  }
 }
 
 //==========================================================================================
@@ -1760,7 +1759,7 @@ bool R_IsPostRenderEntity ( const trRefEntity_t *refEntity )
 R_DecomposeSort
 =================
 */
-void R_DecomposeSort( uint32_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender )
+void R_DecomposeSort( drawSurfSort_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender )
 {
 	*shader = tr.sortedShaders[ ( sort >> QSORT_SHADERNUM_SHIFT ) & QSORT_SHADERNUM_MASK ];
 	*postRender = (sort >> QSORT_POSTRENDER_SHIFT ) & QSORT_POSTRENDER_MASK;
@@ -1768,14 +1767,14 @@ void R_DecomposeSort( uint32_t sort, int *entityNum, shader_t **shader, int *cub
 	*cubemap = (sort >> QSORT_CUBEMAP_SHIFT ) & QSORT_CUBEMAP_MASK;
 }
 
-uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
+drawSurfSort_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender)
 {
-	uint32_t key = 0;
+	drawSurfSort_t key = 0;
 
-	key |= (sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
-	key |= (cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
-	key |= (postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
-	key |= (entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
+	key |= drawSurfSort_t(sortedShaderIndex & QSORT_SHADERNUM_MASK) << QSORT_SHADERNUM_SHIFT;
+	key |= drawSurfSort_t(cubemapIndex & QSORT_CUBEMAP_MASK) << QSORT_CUBEMAP_SHIFT;
+	key |= drawSurfSort_t(postRender & QSORT_POSTRENDER_MASK) << QSORT_POSTRENDER_SHIFT;
+	key |= drawSurfSort_t(entityNum & QSORT_ENTITYNUM_MASK) << QSORT_ENTITYNUM_SHIFT;
 
 	return key;
 }

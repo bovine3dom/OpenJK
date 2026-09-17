@@ -37,6 +37,7 @@ def main():
     parser.add_argument("--package", type=Path, default=ROOT / "build/ready")
     parser.add_argument("--campaign", choices=("ja", "jo", "both"), default="both")
     parser.add_argument("--mode", choices=("automatic", "manual", "combined", "fallback"), default="automatic")
+    parser.add_argument("--manual-count", type=int, default=1, help="Pad authored probes to exercise high automatic probe indices")
     parser.add_argument("--probe-budget", type=int, default=48)
     parser.add_argument("--expect-fallback", action="store_true", help="Check a deliberately insufficient probe budget")
     parser.add_argument("--models", action="store_true", help="Check rotated and scaled MD3 windows in vjun2")
@@ -44,8 +45,8 @@ def main():
     args = parser.parse_args()
     automatic = args.mode in ("automatic", "combined")
     manual = args.mode in ("manual", "combined")
-    if not 1 <= args.probe_budget <= 63 or (args.expect_fallback and not automatic):
-        parser.error("Use a probe budget from 1 to 63; budget fallback requires automatic probes")
+    if not 1 <= args.probe_budget <= 255 or not 1 <= args.manual_count <= 255 or (args.expect_fallback and not automatic):
+        parser.error("Use probe counts from 1 to 255; budget fallback requires automatic probes")
     package = args.package.resolve()
     output = ROOT / "build/smoke"
     output.mkdir(parents=True, exist_ok=True)
@@ -64,27 +65,31 @@ def main():
                         r_ignoreGLErrors=0, r_cubeMapping=int(manual),
                         r_glassProbes=int(automatic), r_glassProbeBudget=args.probe_budget,
                         r_glassExposure=2, r_glassDebug=0,
+                        r_glassPlanar=1,
                         r_ext_multisample=4 if args.msaa else 0,
                         r_glass=1, r_glassReflection=1, r_glassRoughness=0.12,
                         r_ssao=0, r_autoExposure=0, r_dynamicGlow=0,
-                        com_maxfps=60, s_initsound=0, developer=1)
+                        com_maxfps=60, s_initsound=0, developer=1, fx_freeze=2)
         (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
         (profile / "autoexec_sp.cfg").write_text("// Controlled window captures.\n")
         if manual:
             probes = profile / "cubemaps" / mapname
             probes.mkdir(parents=True)
             (probes / "env.json").write_text(json.dumps({"Cubemaps": [
-                {"Name": "window-test", "Position": probe, "Radius": 512}]}))
+                {"Name": f"window-test-{i}", "Position": probe, "Radius": 512}
+                for i in range(args.manual_count)]}))
         commands = ["wait 150", "exitview", "god", "notarget", "noclip", "d_npcfreeze 1",
                     "con_notifytime -1", "cg_draw2D 0", "cg_drawGun 0", "cg_thirdPerson 0",
                     "give weaponnum 3", "wait 90", "weapon 3", "wait 420", "r_glassReflection 1"]
         for index, view in enumerate(views):
-            commands += ["fixedtime 0", "setviewpos " + " ".join(map(str, view)), "wait 360", "fixedtime 1"]
+            commands += ["fixedtime 0", "setviewpos " + " ".join(map(str, view)), "wait 360", "r_we clear", "fixedtime 1"]
             for label, controls in (("stock", ["r_glass 0"]),
                                     ("thin", ["r_glass 1"]),
                                     ("open", ["r_glassReflection 0"]),
                                     ("restored", ["r_glassReflection 1"]),
                                     ("reflection", ["r_glassDebug 1"]),
+                                    ("reflection_mesh", ["r_glassPlanar 0"]),
+                                    ("reflection_restored", ["r_glassPlanar 1"]),
                                     ("rough", ["r_glassRoughness 0.8"]),
                                     ("rough_normal", ["r_glassDebug 0"]),
                                     ("assignment", ["r_glassDebug 2"]),
@@ -103,6 +108,9 @@ def main():
                             "--campaign", campaign, "+devmap", mapname, "+exec", "glass-test.cfg"],
                            env=env, stdout=log, stderr=subprocess.STDOUT, check=True)
         text = (suite / f"{campaign}.log").read_text(errors="replace")
+        saved = (profile / "openjk_sp.cfg").read_text()
+        if not re.search(rf'^seta r_glassProbeBudget "{args.probe_budget}"$', saved, re.M):
+            raise RuntimeError("The renderer clamped or failed to save the requested probe budget")
         if ("OJK_GLASS_DONE" not in text or "----- rdsp-rend2 -----" not in text or
                 re.search(r"trying to load fallback|GL_INVALID_|GL_OUT_OF_MEMORY|Couldn't compile|"
                           r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]", text, re.I)):
@@ -111,14 +119,19 @@ def main():
             raise RuntimeError("The model fixture did not discover MD3 windows")
         if automatic:
             stats = re.findall(r"Glass probes: (\d+) generated, (\d+) pane sides assigned \((\d+) shared\), (\d+) invalid, (\d+) budget fallback", text)
-            if not stats or not 0 < int(stats[-1][0]) <= min(args.probe_budget, 63):
+            if not stats or not 0 < int(stats[-1][0]) <= min(args.probe_budget, 255 - (args.manual_count if manual else 0)):
                 raise RuntimeError("Invalid automatic probe count")
             if args.expect_fallback and int(stats[-1][4]) == 0:
                 raise RuntimeError("The budget test did not exercise fallback")
             results[campaign + "_probes"] = dict(zip(("generated", "assigned", "shared", "invalid", "budget_fallback"), map(int, stats[-1])))
+            indices = [int(value) for value in re.findall(r"Glass probe (\d+):", text)]
+            if not indices or max(indices) > 255 or (manual and min(indices) <= args.manual_count):
+                raise RuntimeError("Automatic probe indices overlap authored slots or exceed the sort key")
+            results[campaign + "_probes"].update(first_index=min(indices), last_index=max(indices))
         for index in range(len(views)):
             images = {label: pixels(profile / "screenshots" / f"glass_{index}_{label}.png")
-                      for label in ("stock", "thin", "open", "restored", "reflection", "rough", "rough_normal", "assignment", "attenuation")}
+                      for label in ("stock", "thin", "open", "restored", "reflection", "reflection_mesh", "reflection_restored",
+                                    "rough", "rough_normal", "assignment", "attenuation")}
             if any(len(image) != 960 * 720 * 3 for image in images.values()):
                 raise RuntimeError("Unexpected capture dimensions")
             metrics = {"stock_to_open": difference(images["stock"], images["open"]),
@@ -127,6 +140,12 @@ def main():
             mask = [p for p in range(0, len(images["assignment"]), 3)
                     if images["assignment"][p + 1] > max(32, images["assignment"][p] * 2, images["assignment"][p + 2] * 2)
                     and sum(abs(images["assignment"][p + c] - images["thin"][p + c]) for c in range(3)) > 24]
+            if args.models:
+                # The player can occlude this close model fixture. Exclude its
+                # moving silhouette and compare only stable window interiors.
+                interior = set(mask)
+                mask = [p for p in mask if 8 <= p // 3 % 960 < 952 and 8 <= p // 2880 < 712
+                        and all(p + (dy * 960 + dx) * 3 in interior for dy in (-8, 0, 8) for dx in (-8, 0, 8))]
             if mask:
                 def masked(label):
                     return bytes(images[label][p + c] for p in mask for c in range(3))
@@ -135,6 +154,11 @@ def main():
                                roughness_effect=difference(masked("reflection"), masked("rough")),
                                normal_roughness_effect=difference(masked("thin"), masked("rough_normal")),
                                reflected_light=(sum(masked("thin")) - sum(masked("attenuation"))) / (3 * len(mask)))
+                metrics["planar_restore_error"] = difference(masked("reflection"), masked("reflection_restored"))
+                if args.models:
+                    metrics["curved_mapping_error"] = difference(masked("reflection"), masked("reflection_mesh"))
+                    if metrics["curved_mapping_error"] > 0.2:
+                        raise RuntimeError("Planar correction changed curved model reflections")
             print(campaign, index, metrics, flush=True)
             results[f"{campaign}_{index}"] = metrics
             if metrics["thin_to_open"] <= 0.01:
@@ -144,6 +168,8 @@ def main():
                 raise RuntimeError("Missing local probe, reflected detail, or roughness response")
             if metrics["restore_error"] > 0.2:
                 raise RuntimeError("Live glass controls did not restore the image")
+            if metrics.get("planar_restore_error", 0) > 0.2:
+                raise RuntimeError("Live planar control did not restore its reflection")
     (suite / "results.json").write_text(json.dumps(results, indent=2) + "\n")
     print("PASS: window reflection captures and live control restoration")
 

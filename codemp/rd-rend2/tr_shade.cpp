@@ -139,7 +139,7 @@ because a surface may be forced to perform a RB_End due
 to overflow.
 ==============
 */
-void RB_BeginSurface( shader_t *shader, int fogNum, int cubemapIndex ) {
+void RB_BeginSurface( shader_t *shader, int fogNum, int cubemapIndex, const float *glassPlane ) {
 
 	shader_t *state = (shader->remappedShader) ? shader->remappedShader : shader;
 
@@ -150,6 +150,7 @@ void RB_BeginSurface( shader_t *shader, int fogNum, int cubemapIndex ) {
 	tess.shader = state;
 	tess.fogNum = fogNum;
 	tess.cubemapIndex = cubemapIndex;
+	tess.glassPlane = glassPlane;
 	tess.dlightBits = 0;		// will be OR'd in by surface functions
 	tess.pshadowBits = 0;       // will be OR'd in by surface functions
 	tess.xstages = state->stages;
@@ -1568,6 +1569,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				(pStage->stateBits & GLS_SRCBLEND_BITS) == GLS_SRCBLEND_SRC_ALPHA ? 1.0f : 0.0f};
 			uniformDataWriter.SetUniformVec4(UNIFORM_GLASSPARAMS, params);
 			uniformDataWriter.SetUniformInt(UNIFORM_GLASSDEBUG, r_glassDebug->integer);
+			const vec4_t noPlane = {};
+			uniformDataWriter.SetUniformVec4(UNIFORM_GLASSPLANE,
+				r_glassPlanar->integer && input->glassPlane ? input->glassPlane : noPlane);
 		}
 
 		if ( input->fogNum ) {

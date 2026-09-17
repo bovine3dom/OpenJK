@@ -100,6 +100,8 @@ out vec4 var_Color;
 out vec3 var_WSPosition;
 #if defined(USE_GLASS)
 out vec3 var_WSNormal;
+flat out vec4 var_GlassPlane;
+uniform vec4 u_GlassPlane;
 #endif
 
 #if defined(USE_DEFORM_VERTEXES)
@@ -458,6 +460,10 @@ void main()
 	var_WSPosition = (u_ModelMatrix * vec4(position, 1.0)).xyz;
 #if defined(USE_GLASS)
 	var_WSNormal = transpose(inverse(mat3(u_ModelMatrix))) * normal;
+	vec3 planeNormal = transpose(inverse(mat3(u_ModelMatrix))) * u_GlassPlane.xyz;
+	float planeLength = length(planeNormal);
+	var_GlassPlane = planeLength > 0.0 ?
+		vec4(planeNormal, u_GlassPlane.w + dot(planeNormal, u_ModelMatrix[3].xyz)) / planeLength : vec4(0.0);
 #endif
 }
 
@@ -516,6 +522,7 @@ in vec4 var_Color;
 in vec3 var_WSPosition;
 #if defined(USE_GLASS)
 in vec3 var_WSNormal;
+flat in vec4 var_GlassPlane;
 uniform vec4 u_GlassParams; // strength, roughness, probe exposure, texture alpha
 uniform int u_GlassDebug;
 uniform vec4 u_DiffuseTexMatrix;
@@ -567,10 +574,22 @@ void main()
 {
 	vec4 color  = texture(u_DiffuseMap, var_DiffuseTex);
 	color.a *= var_Color.a;
+	vec3 surfacePosition = var_WSPosition;
 #if defined(USE_GLASS)
 	vec3 N = normalize(var_WSNormal);
-	vec3 viewDir = u_ViewOrigin - var_WSPosition;
-	vec3 V = normalize(viewDir);
+	vec3 V = normalize(u_ViewOrigin - var_WSPosition);
+	float planeDenominator = dot(var_GlassPlane.xyz, -V);
+	if (abs(planeDenominator) > 0.0001)
+	{
+		float distance = (var_GlassPlane.w - dot(var_GlassPlane.xyz, u_ViewOrigin)) / planeDenominator;
+		if (distance > 0.0)
+		{
+			// Intersect the pixel's view ray with one plane for the entire pane.
+			// Orthogonal projection of interpolated mesh positions still exposes tessellation.
+			surfacePosition = u_ViewOrigin - V * distance;
+			N = var_GlassPlane.xyz;
+		}
+	}
 	vec3 R = reflect(-V, N);
 	// Use a per-fragment reflection direction, not interpolated environment UVs.
 	vec2 st = R.yz * vec2(0.5, -0.5) + 0.5;
@@ -584,12 +603,12 @@ void main()
 #if defined(USE_CUBEMAP)
 	// Approximate room-box projection. Outside the box, use the direction alone.
 	vec3 sampleDirection = R;
-	if (all(greaterThanEqual(var_WSPosition, u_CubeMapMins - 2.0)) && all(lessThanEqual(var_WSPosition, u_CubeMapMaxs + 2.0)))
+	if (all(greaterThanEqual(surfacePosition, u_CubeMapMins - 2.0)) && all(lessThanEqual(surfacePosition, u_CubeMapMaxs + 2.0)))
 	{
 		vec3 safeR = mix(vec3(-1.0), vec3(1.0), greaterThanEqual(R, vec3(0.0))) * max(abs(R), vec3(0.0001));
-		vec3 farPlane = max((u_CubeMapMins - var_WSPosition) / safeR, (u_CubeMapMaxs - var_WSPosition) / safeR);
+		vec3 farPlane = max((u_CubeMapMins - surfacePosition) / safeR, (u_CubeMapMaxs - surfacePosition) / safeR);
 		float distance = max(0.0, min(farPlane.x, min(farPlane.y, farPlane.z)));
-		sampleDirection = var_WSPosition + R * distance - u_CubeMapInfo.xyz;
+		sampleDirection = surfacePosition + R * distance - u_CubeMapInfo.xyz;
 	}
 	color.rgb = textureLod(u_CubeMap, sampleDirection, u_GlassParams.y * u_CubeMapInfo.w).rgb * u_GlassParams.z;
 #else
@@ -628,11 +647,11 @@ void main()
 
 #if defined(USE_FOG)
 	Fog fog = u_Fogs[u_FogIndex];
-	float fogFactor = CalcFog(u_ViewOrigin, var_WSPosition, fog);
+	float fogFactor = CalcFog(u_ViewOrigin, surfacePosition, fog);
 	color *= vec4(1.0) - u_FogColorMask * fogFactor;
 #endif
 
-	out_Color = vec4(ApplyMapHaze(color.rgb * var_Color.rgb, u_ViewOrigin, var_WSPosition), color.a);
+	out_Color = vec4(ApplyMapHaze(color.rgb * var_Color.rgb, u_ViewOrigin, surfacePosition), color.a);
 #if defined(USE_GLASS)
 	// Premultiply after fog and haze. Transmission comes from the framebuffer once.
 	out_Color.rgb *= out_Color.a;

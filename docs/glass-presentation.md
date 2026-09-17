@@ -13,8 +13,9 @@ remain in use. Breakable-glass cues and gameplay are unchanged. Refraction is of
 | `r_glass` | `1` | Enable thin-window rendering. Zero restores the original optical stages. |
 | `r_glassReflection` | `1` | Scale reflection and its transmission loss. Range: zero to one. |
 | `r_glassRoughness` | `0.12` | Soften reflections. Range: zero to one. The transmitted image stays sharp. |
+| `r_glassPlanar` | `1` | Use one optical plane for a nominally flat BSP pane. Zero compares the original mesh-based mapping. |
 | `r_glassProbes` | `1` in SP | Generate local window probes at map load. Zero uses the previous reflection source selection. |
-| `r_glassProbeBudget` | `48` | Limit automatic probes per map. Range: 1 to 63. Authored probes also consume sort-key slots. |
+| `r_glassProbeBudget` | `48` | Limit automatic probes per map. Range: 1 to 255. A budget of 192 is supported. Authored probes also consume sort-key slots. |
 | `r_glassExposure` | `2` | Adjust probe reflection brightness in stops. Range: -2 to 4. Two stops gives four times the captured light. |
 | `r_glassDebug` | `0` | 1: reflection only. 2: green for a probe, red for fallback. 3: background attenuation without reflected light. |
 
@@ -35,6 +36,19 @@ is enabled. Without a valid assignment, the window uses the old reflection image
 at half brightness, weighted by Fresnel. Red and green reflection materials retain
 the texture fallback to preserve their authored colour.
 
+### Flat Window Mapping
+
+All triangles in a nominally flat BSP pane use one optical plane. The fragment
+shader intersects the pixel's view ray with this plane before reflection parallax
+correction. This prevents small mesh-position errors from producing triangular
+differences in the reflection. Each batch keeps its plane across buffer flushes;
+surfaces with different planes use separate batches.
+
+The plane uses the authored face normal and a reference vertex. Consistent vertex
+normals and a maximum plane error of two game units are required. Curved MD3
+windows retain their varying normals and positions. Rasterization and collision
+continue to use the authored mesh.
+
 ### Automatic Placement
 
 1. Find the supported BSP panes, inline brush models, and map-declared MD3 windows.
@@ -50,10 +64,16 @@ the texture fallback to preserve their authored colour.
 5. Assign probes to pane sides. Six directional traces supply approximate bounds
    for reflection parallax. Reject a saved assignment if its model moves or rotates.
 
-Large surfaces receive priority when the budget is limited. The sort key has 63
-probe slots, including authored probes. Each automatic HDR probe uses approximately
+Large surfaces receive priority when the budget is limited. The 64-bit draw-sort
+key has 255 probe slots, including authored probes. Entity and shader limits are
+preserved. The wider key uses eight radix passes. Each automatic HDR probe uses approximately
 1 MiB for six 128-by-128 faces and mipmaps. Capture uses shared 256-by-256 buffers.
 Automatic image slots are reused across direct world reloads.
+
+The default budget remains 48. To allow up to 192 automatic probes, use
+`r_glassProbeBudget 192`, then `vid_restart`. Only needed probes are generated.
+Increasing the budget increases memory use and load-time capture work when more
+probes are needed. It does not repair invalid capture positions.
 
 Generation is synchronous during loading. There is no disk cache or background
 scheduler yet. The log reports generated probes, assigned sides, shared probes,
@@ -85,6 +105,9 @@ python3 scripts/test-glass-sp.py --package build/ready --models
 python3 scripts/test-glass-sp.py --package build/ready --campaign ja --mode combined
 python3 scripts/test-glass-sp.py --package build/ready --campaign ja --probe-budget 1 --expect-fallback
 python3 scripts/test-glass-sp.py --package build/ready --campaign ja --mode fallback
+python3 scripts/test-glass-sp.py --package build/ready --campaign jo --probe-budget 192 --msaa
+python3 scripts/test-glass-mapping.py --package build/ready
+python3 scripts/test-glass-mapping.py --package build/ready --high-indices
 python3 scripts/test-rend2-sp.py --package build/ready --shadows 3 --buffer-storage
 ```
 
@@ -119,7 +142,29 @@ check isolates assigned window pixels. It requires reflected image detail, a
 roughness response in both diagnostic and normal rendering, and added reflected
 light relative to attenuation alone. Live restoration must remain within 0.2 mean
 RGB levels. Reflection-only captures show local ceilings, lights, and wall panels.
-Full campaign visual review and player approval of the default strength remain open.
+The user approved the probe reflection appearance. Full campaign visual review
+and desktop review of the planar correction remain open.
+
+### Planar and High-Index Regression Checks
+
+- A local `t1_sour` fixture compares flat panes with panes whose vertices have
+  alternating 1.25-unit position errors. Collision and topology are retained.
+  A fixed cubemap isolates reflection mapping from capture placement. With planar
+  mapping, the average image difference was 0.015 RGB levels; mesh-based mapping
+  produced 0.314 levels. Results: `build/smoke/glass-mapping.fb8w71u1`.
+- The high-index test reserves 239 authored slots, then generates the tower probes
+  in slots 240–255. Their reflected images matched the low-index reference within
+  0.007 RGB levels. It also checks that the requested budget of 192 is saved.
+  Results: `build/smoke/glass-mapping.ub6xlor0`. This stress test uses approximately
+  1 GiB for probe images because authored probes have 256-by-256 faces.
+- At a budget of 192, `kejim_post` generated 52 probes and assigned 155 sides,
+  with zero budget fallbacks. The 13 invalid positions remained. Results:
+  `build/smoke/glass.rnecoi30`.
+- Curved MD3 reflection captures were identical with planar mapping on and off.
+  Foreground effects and weather are disabled in the optical test, and moving
+  silhouette edges are excluded. Results: `build/smoke/glass.te_0b50v`.
+- SP and MP builds passed. Restart, save/load, and map-transition checks passed
+  with projected shadows and persistent buffers: `build/smoke/rend2.dv1p_99c`.
 
 ## Research
 

@@ -141,6 +141,7 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_SpecularScale", GLSL_VEC4, 1 },
 	{ "u_MaterialParams", GLSL_VEC4, 1 },
 	{ "u_GlassParams", GLSL_VEC4, 1 },
+	{ "u_GlassPlane", GLSL_VEC4, 1 },
 	{ "u_GlassDebug", GLSL_INT, 1 },
 	{ "u_CubeMapMins", GLSL_VEC3, 1 },
 	{ "u_CubeMapMaxs", GLSL_VEC3, 1 },

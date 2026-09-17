@@ -2461,6 +2461,25 @@ static	void R_LoadSurfaces( world_t *worldData, lump_t *surfs, lump_t *verts, lu
 #endif
 		R_MovePatchSurfacesToHunk(worldData);
 
+	for (int surfaceIndex = 0; surfaceIndex < worldData->numsurfaces; ++surfaceIndex)
+	{
+		msurface_t &surface = worldData->surfaces[surfaceIndex];
+		if (!surface.shader->windowGlass || (*surface.data != SF_FACE &&
+			*surface.data != SF_TRIANGLES && *surface.data != SF_GRID)) continue;
+		srfBspSurface_t &mesh = *(srfBspSurface_t *)surface.data;
+		VectorClear4(mesh.glassPlane);
+		if (!mesh.numVerts) continue;
+		vec4_t plane;
+		VectorCopy(*surface.data == SF_FACE ? mesh.cullPlane.normal : mesh.verts[0].normal, plane);
+		if (VectorNormalize(plane) < 0.001f) continue;
+		plane[3] = DotProduct(plane, mesh.verts[0].xyz);
+		bool planar = true;
+		for (int vertex = 0; vertex < mesh.numVerts; ++vertex)
+			if (fabsf(DotProduct(plane, mesh.verts[vertex].xyz) - plane[3]) > 2.0f ||
+				DotProduct(plane, mesh.verts[vertex].normal) < 0.995f) planar = false;
+		if (planar) VectorCopy4(plane, mesh.glassPlane);
+	}
+
 	ri.Printf( PRINT_ALL, "...loaded %d faces, %i meshes, %i trisurfs, %i flares\n",
 		numFaces, numMeshes, numTriSurfs, numFlares );
 }
@@ -3828,8 +3847,8 @@ static void R_MergeLeafSurfaces(world_t *worldData)
 			}
 
 			shader1 = surf1->shader;
-			// Each pane side has its own probe; merging would discard that assignment.
-			if (r_glassProbes->integer && shader1->windowGlass) continue;
+			// Keep each pane's optical plane and probe assignment, including without probes.
+			if (shader1->windowGlass) continue;
 
 			if(shader1->isSky)
 				continue;

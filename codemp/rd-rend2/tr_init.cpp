@@ -162,6 +162,7 @@ cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
 cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
 cvar_t *r_glass, *r_glassReflection, *r_glassRoughness;
 cvar_t *r_glassProbes, *r_glassProbeBudget, *r_glassExposure, *r_glassDebug;
+cvar_t *r_glassPlanar;
 cvar_t  *r_specularMapping;
 cvar_t  *r_deluxeMapping;
 cvar_t  *r_deluxeSpecular;
@@ -1653,13 +1654,15 @@ void R_Register( void )
 #else
 	r_glassProbes = ri.Cvar_Get("r_glassProbes", "0", CVAR_ARCHIVE | CVAR_LATCH, "Automatic window probes are supported by the SP renderer.");
 #endif
-	r_glassProbeBudget = ri.Cvar_Get("r_glassProbeBudget", "48", CVAR_ARCHIVE | CVAR_LATCH, "Maximum automatic window probes per map.");
+	r_glassProbeBudget = ri.Cvar_Get("r_glassProbeBudget", "192", CVAR_ARCHIVE | CVAR_LATCH, "Maximum automatic window probes per map.");
 	r_glassExposure = ri.Cvar_Get("r_glassExposure", "2", CVAR_ARCHIVE, "Exposure adjustment in stops for local window reflections.");
 	r_glassDebug = ri.Cvar_Get("r_glassDebug", "0", 0, "Window display: 0 normal, 1 reflection only, 2 probe assignment (green local, red fallback), 3 attenuation only.");
 	ri.Cvar_CheckRange(r_glassProbes, 0, 1, qtrue);
 	ri.Cvar_CheckRange(r_glassProbeBudget, 1, QSORT_CUBEMAP_MASK, qtrue);
 	ri.Cvar_CheckRange(r_glassExposure, -2, 4, qfalse);
 	ri.Cvar_CheckRange(r_glassDebug, 0, 3, qtrue);
+	r_glassPlanar = ri.Cvar_Get("r_glassPlanar", "1", CVAR_ARCHIVE, "Use a common optical plane for nominally flat BSP glass; zero compares the original mesh mapping.");
+	ri.Cvar_CheckRange(r_glassPlanar, 0, 1, qtrue);
 	for (cvar_t *control : {r_normalStrength, r_generatedNormalStrength, r_parallaxScale, r_specularStrength})
 		ri.Cvar_CheckRange(control, 0, 4, qfalse);
 	ri.Cvar_CheckRange(r_roughnessFloor, 0, 1, qfalse);

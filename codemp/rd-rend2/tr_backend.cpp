@@ -1205,7 +1205,6 @@ static void RB_SubmitDrawSurfsForDepthFill(
 {
 	shader_t *oldShader = nullptr;
 	int oldEntityNum = -1;
-	int oldSort = -1;
 	int oldDepthRange = 0;
 #ifndef REND2_SP
 	CBoneCache *oldBoneCache = nullptr;
@@ -1279,8 +1278,6 @@ static void RB_SubmitDrawSurfsForDepthFill(
 			oldShader = shader;
 		}
 
-		oldSort = drawSurf->sort;
-
 		// change the modelview matrix if needed
 		if ( entityNum != oldEntityNum )
 		{
@@ -1307,13 +1304,13 @@ static void RB_SubmitDrawSurfs(
 {
 	shader_t *oldShader = nullptr;
 	int oldEntityNum = -1;
-	int oldSort = -1;
 	int oldFogNum = -1;
 	int oldDepthRange = 0;
 	int oldDlighted = 0;
 	int oldPostRender = 0;
 	int oldCubemapIndex = -1;
 	bool oldSoftParticle = false;
+	const float *oldGlassPlane = nullptr;
 #ifndef REND2_SP
 	CBoneCache *oldBoneCache = nullptr;
 #endif
@@ -1334,6 +1331,13 @@ static void RB_SubmitDrawSurfs(
 			R_IsSoftParticle(backEnd.refdef.entities[entityNum].e);
 		fogNum = drawSurf->fogIndex;
 		dlighted = drawSurf->dlightBits;
+		const float *glassPlane = nullptr;
+		if (shader->windowGlass && (*drawSurf->surface == SF_FACE || *drawSurf->surface == SF_TRIANGLES ||
+			*drawSurf->surface == SF_GRID || *drawSurf->surface == SF_VBO_MESH))
+		{
+			const auto *mesh = (const srfBspSurface_t *)drawSurf->surface;
+			if (VectorLengthSquared(mesh->glassPlane) > 0.0f) glassPlane = mesh->glassPlane;
+		}
 		if (backEnd.sssFill && (fogNum || !R_IsSkinSurface(shader, drawSurf->surface))) continue;
 #ifdef REND2_SP
 		if (backEnd.sssFill && entityNum != REFENTITYNUM_WORLD &&
@@ -1361,6 +1365,7 @@ static void RB_SubmitDrawSurfs(
 				fogNum == oldFogNum &&
 				postRender == oldPostRender &&
 				cubemapIndex == oldCubemapIndex &&
+				glassPlane == oldGlassPlane &&
 				entityNum == oldEntityNum &&
 				dlighted == oldDlighted &&
 				backEnd.refractionFill == shader->useDistortion )
@@ -1369,8 +1374,6 @@ static void RB_SubmitDrawSurfs(
 			rb_surfaceTable[*drawSurf->surface](drawSurf->surface);
 			continue;
 		}
-
-		oldSort = drawSurf->sort;
 
 		//
 		// change the tess parameters if needed
@@ -1381,14 +1384,15 @@ static void RB_SubmitDrawSurfs(
 				dlighted != oldDlighted ||
 				postRender != oldPostRender ||
 				cubemapIndex != oldCubemapIndex ||
-				(entityNum != oldEntityNum && !shader->entityMergable)) )
+				glassPlane != oldGlassPlane ||
+				(entityNum != oldEntityNum && (!shader->entityMergable || glassPlane))) )
 		{
 			if ( oldShader != nullptr )
 			{
 				RB_EndSurface();
 			}
 
-			RB_BeginSurface(shader, fogNum, cubemapIndex);
+			RB_BeginSurface(shader, fogNum, cubemapIndex, glassPlane);
 			backEnd.pc.c_surfBatches++;
 			oldShader = shader;
 			oldFogNum = fogNum;
@@ -1396,6 +1400,7 @@ static void RB_SubmitDrawSurfs(
 			oldPostRender = postRender;
 			oldCubemapIndex = cubemapIndex;
 			oldSoftParticle = softParticle;
+			oldGlassPlane = glassPlane;
 		}
 
 		if ( entityNum != oldEntityNum )

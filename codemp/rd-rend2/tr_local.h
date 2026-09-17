@@ -193,6 +193,7 @@ extern cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
 extern cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
 extern cvar_t *r_glass, *r_glassReflection, *r_glassRoughness;
 extern cvar_t *r_glassProbes, *r_glassProbeBudget, *r_glassExposure, *r_glassDebug;
+extern cvar_t *r_glassPlanar;
 extern cvar_t  *r_specularMapping;
 extern cvar_t  *r_deluxeMapping;
 extern cvar_t  *r_deluxeSpecular;
@@ -1490,6 +1491,7 @@ typedef enum
 	UNIFORM_SPECULARSCALE,
 	UNIFORM_MATERIALPARAMS,
 	UNIFORM_GLASSPARAMS,
+	UNIFORM_GLASSPLANE,
 	UNIFORM_GLASSDEBUG,
 	UNIFORM_CUBEMAPMINS,
 	UNIFORM_CUBEMAPMAXS,
@@ -1720,11 +1722,11 @@ typedef enum surfaceType_e
 } surfaceType_t;
 
 /*
-the drawsurf sort data is packed into a single 32 bit value so it can be
+the drawsurf sort data is packed into a single 64 bit value so it can be
 compared quickly during the qsorting process
 */
 #define	QSORT_CUBEMAP_SHIFT		0
-#define QSORT_CUBEMAP_BITS		6
+#define QSORT_CUBEMAP_BITS		8
 #define QSORT_CUBEMAP_MASK		((1 << QSORT_CUBEMAP_BITS) - 1)
 
 #define QSORT_ENTITYNUM_SHIFT	(QSORT_CUBEMAP_SHIFT + QSORT_CUBEMAP_BITS)
@@ -1739,14 +1741,16 @@ compared quickly during the qsorting process
 #define QSORT_POSTRENDER_BITS	1
 #define QSORT_POSTRENDER_MASK	((1 << QSORT_POSTRENDER_BITS) - 1)
 
-#if QSORT_POSTRENDER_SHIFT >= 32
+#if QSORT_POSTRENDER_SHIFT + QSORT_POSTRENDER_BITS > 64
 	#error "Sort field needs to be expanded"
 #endif
 
+using drawSurfSort_t = uint64_t;
+
 typedef struct drawSurf_s {
-	uint32_t sort; // bit combination for fast compares
-	uint32_t dlightBits;
+	drawSurfSort_t sort; // bit combination for fast compares
 	surfaceType_t *surface; // any of surface*_t
+	uint32_t dlightBits;
 	int fogIndex;
 } drawSurf_t;
 
@@ -1859,6 +1863,7 @@ typedef struct srfBspSurface_s
 	vec3_t			cullOrigin;
 	float			cullRadius;
 	cplane_t        cullPlane;
+	vec4_t          glassPlane; // local reflection plane; zero for curved/non-glass surfaces
 
 	// indexes
 	int             numIndexes;
@@ -3036,8 +3041,8 @@ void R_GatherFrameViews(trRefdef_t *refdef);
 void R_AddMD3Surfaces( trRefEntity_t *e, int entityNum );
 void R_AddPolygonSurfaces( const trRefdef_t *refdef );
 
-void R_DecomposeSort( uint32_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender );
-uint32_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender);
+void R_DecomposeSort( drawSurfSort_t sort, int *entityNum, shader_t **shader, int *cubemap, int *postRender );
+drawSurfSort_t R_CreateSortKey(int entityNum, int sortedShaderIndex, int cubemapIndex, int postRender);
 void R_AddDrawSurf( surfaceType_t *surface, int entityNum, shader_t *shader,
 				   int fogIndex, int dlightMap, int postRender, int cubemap );
 bool R_IsPostRenderEntity ( const trRefEntity_t *refEntity );
@@ -3282,6 +3287,7 @@ struct shaderCommands_s
 	float		shaderTime;
 	int			fogNum;
 	int         cubemapIndex;
+	const float *glassPlane;
 #ifdef REND2_SP_MAYBE
 	bool		scale;		// uses texCoords[input->firstIndex] for storage
 #endif
@@ -3323,7 +3329,7 @@ struct drawState_t
 extern	shaderCommands_t	tess;
 extern	color4ub_t	styleColors[MAX_LIGHT_STYLES];
 
-void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex );
+void RB_BeginSurface(shader_t *shader, int fogNum, int cubemapIndex, const float *glassPlane = nullptr);
 void RB_SetHazeUniforms(class UniformDataWriter &writer, class SamplerBindingsWriter &samplers,
 	bool enabled, bool scatter, bool sky = false);
 void R_LoadAtmosphere(world_t *world);
