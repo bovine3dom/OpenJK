@@ -949,7 +949,13 @@ bool		MoveTrace(gentity_t* actor, const CVec3& goalPosition, bool IgnoreAllEnts=
 
 	Mins[2] += (STEPSIZE*1);
 
-	return MoveTrace(actor->currentOrigin, goalPosition, Mins, Maxs, actor->s.number, true, true, IgnoreAllEnts/*, actor->contents*/);
+	if (MoveTrace(actor->currentOrigin, goalPosition, Mins, Maxs, actor->s.number, true, true, IgnoreAllEnts))
+		return true;
+	// JO permits a blocked endpoint within the actor's horizontal radius.
+	// This lets script goals touch walls, as in NAV_CheckAhead.
+	return G_IsOutcast() && !mMoveTrace.startsolid && !mMoveTrace.allsolid
+		&& fabsf(actor->currentOrigin[2] - goalPosition[2]) <= 48.0f
+		&& Distance(mMoveTrace.endpos, goalPosition.v) <= Max(actor->maxs[0], actor->maxs[1]);
 }
 
 

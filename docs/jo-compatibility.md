@@ -105,6 +105,22 @@ The test starts Lando at the ship ramp. It retains the retail geometry, routes,
 collision, and scripts. It checks his console animation, speech, and both new
 objectives. Use `--save PATH` to check recovery from a saved boarding sequence.
 
+## Bespin Lift Droid
+
+The R5 goal in `bespin_undercity` is near a wall. JA required the route trace to
+reach the exact goal position. The trace stopped at the wall, so the droid stayed
+near the previous waypoint. JO route traces now use the original endpoint
+tolerance: the remaining distance must not exceed the actor's horizontal radius.
+
+The headless check opens the droid door and waits in the lift. It checks that the
+retail script moves the droid, enables the lift trigger, and loads `bespin_streets`.
+It passes with both renderers.
+
+```bash
+python3 scripts/test-jo-cinematics.py --case droid --renderer rdsp-vanilla
+python3 scripts/test-jo-cinematics.py --case droid --renderer rdsp-rend2
+```
+
 ## Artus Topside Handoff
 
 Desann uses scripted noclip movement to reach his dialogue position. JA's newer

@@ -24,6 +24,10 @@ ACTORS = {"cctv": ("cinematic2_kyle", "cinematic_galak", "cinematic_officer4"), 
           "shrine": ("cinematic10_kyle", "cinematic10_morgan"), "trial": ("cinematic13_kyle", "cinematic13_luke"), "boarding": ("lando",), "jan-door": ("jan", "jo_test_bridge")}
 
 
+MAPS["droid"] = "bespin_undercity"
+ACTORS["droid"] = ("droid",)
+
+
 def run_case(package, case, renderer, saved):
     output = ROOT / "build/jo-cinematics"
     output.mkdir(parents=True, exist_ok=True)
@@ -150,6 +154,9 @@ def run_case(package, case, renderer, saved):
                 cmd("helpusobi 1; wait 150; use jan_jail_door")
             elif case == "trial":
                 cmd("helpusobi 1; wait 150; use cinematic13script")
+            elif case == "droid":
+                if not saved:
+                    cmd("helpusobi 1; god; notarget; setviewpos 4660 200 13880 270; use droiddoor; wait 100")
             elif case == "boarding":
                 if not saved:
                     cmd("helpusobi 1; god; use hangardoors; wait 120")
@@ -170,9 +177,9 @@ def run_case(package, case, renderer, saved):
             walking_frames = []
             poses_captured = set()
             query = f"wait {1 if case == 'artus' else 10}; " + "; ".join("cinematic_status " + actor for actor in ACTORS[case])
-            if case == "boarding": query += "; campaign_status"
+            if case in ("boarding", "droid"): query += "; campaign_status"
             if case == "jan-door": query += "; nav doors tower_door"
-            deadline = time.monotonic() + 300
+            deadline = time.monotonic() + (90 if case == "droid" else 300)
             while time.monotonic() < deadline:
                 state = cmd(query)
                 current = samples(state)
@@ -182,6 +189,8 @@ def run_case(package, case, renderer, saved):
                     assert bone and float(bone[2]) > 0.1, "Officer walk animation is nearly frozen"
                     walking_frames.append(float(bone[1]))
                 history.extend(current)
+                if case == "droid" and "campaign=jo map=bespin_streets" in state:
+                    break
                 if case == "jan-door":
                     bridge = re.search(r"cinematic_combat name=jo_test_bridge health=(\d+)", state)
                     assert bridge and int(bridge[1]) > 0, "The bridge guard died before Jan finished"
@@ -213,7 +222,7 @@ def run_case(package, case, renderer, saved):
                     capture({"cctv": "galak", "office": "crystal", "bar": "bartender", "rescue": "hug"}.get(case, "walking"))
                     captured = True
                 completed = current[:2] if case == "cctv" else current
-                if completed and all(s.get("absent") == "1" for s in completed):
+                if case != "droid" and completed and all(s.get("absent") == "1" for s in completed):
                     break
             else:
                 raise TimeoutError(f"Cinematic did not complete: {log}")
@@ -298,6 +307,10 @@ def run_case(package, case, renderer, saved):
                 assert any(s.get("legs") == "BOTH_WALK1" and math.hypot(*map(float, s["velocity"].split(",")[:2])) > 10
                            for s in history), "No walking actor was observed"
                 assert "camera=0" in cmd("campaign_status"), "Scene did not return control"
+            elif case == "droid":
+                assert any(s.get("nav") == "1" for s in history), "Droid did not navigate to the lift"
+                assert all(s.get("noclip", "0") == "0" for s in history), "Droid bypassed collision"
+                assert "campaign=jo map=bespin_streets" in cmd("campaign_status"), "Lift did not complete the level"
             elif case == "boarding":
                 assert any(s.get("legs") == "BOTH_CONSOLE1" and s.get("voice") == "1" for s in history), "Lando did not give the roof and fuel instructions"
                 assert all(s.get("noclip") == "0" for s in history), "Lando bypassed collision"
@@ -316,7 +329,7 @@ def run_case(package, case, renderer, saved):
             traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
                       for line in text.splitlines() if "cinematic_animation actor=" in line]
             staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
-            assert (staged or case in ("boarding", "jan-door")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert (staged or case in ("boarding", "jan-door", "droid")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
             assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)
