@@ -8,6 +8,193 @@ Software-renderer tests already cover map loading, characters, sabers, 4K output
 renderer restarts, save migration, and selected shadow modes. They do not prove
 visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
 
+## Windows Launcher Test Handoff
+
+Use the existing GitHub Actions workflow to make the first Windows test package.
+A Linux package cannot run on Windows. GitHub Actions can build the Windows
+package without access to retail game data.
+
+### Prepare the Package
+
+1. Review the worktree. GitHub Actions can only build committed files. The
+   current worktree contains staged, unstaged, and untracked launcher files.
+
+   ```bash
+   git status --short
+   git diff --check
+   git diff --cached --check
+   ```
+
+2. Stage and commit only the intended source, launcher, documentation, and test
+   files. Do not add `GameData`, `GameData_JO`, retail PK3 files, or a generated
+   `zz_jo_campaign.pk3`.
+
+3. Push the `squad_ai` branch and start its build workflow.
+
+   ```bash
+   git push -u origin squad_ai
+   gh workflow run .github/workflows/build.yml --ref squad_ai
+   gh run list --workflow .github/workflows/build.yml --branch squad_ai --limit 1
+   gh run watch <run-id>
+   ```
+
+4. Download the `OpenJK-windows-x86_64-Release-Non-Portable` artifact. The
+   non-portable build is still relocatable. It stores user data in
+   `Documents\My Games\OpenJK` instead of the extracted application folder.
+
+5. Keep the complete installed `JediAcademy` folder together. Do not send only
+   the executable files. Make one ZIP that contains the launcher resources,
+   DLLs, engine, renderers, game module, licenses, and `launcher.md`.
+
+6. Confirm that the package contains these files and folders:
+
+   ```text
+   openjk-launcher.exe
+   openjk-import-jo.exe
+   openjk_sp.x86_64.exe
+   SDL2.dll
+   OpenJK\
+   launcher\
+   licenses\
+   launcher.md
+   ```
+
+7. Create and record a SHA-256 hash before distribution.
+
+   ```powershell
+   Get-FileHash .\OpenJK-launcher-win64-test.zip -Algorithm SHA256
+   ```
+
+Test the ZIP package before an NSIS installer. The ZIP test checks the launcher
+and its runtime dependencies. A later installer test must also check non-admin
+installation, removal, and the **Jedi Academy SP** Start Menu shortcut.
+
+### Run the Windows Test
+
+- [ ] Use a clean Windows 10 or Windows 11 computer without development tools.
+- [ ] Extract the complete ZIP to a path that contains spaces. If possible, use
+  a Windows account or path that contains non-ASCII characters.
+- [ ] Start `openjk-launcher.exe` from File Explorer. Record any Windows
+  SmartScreen or antivirus warning. The test build is not signed.
+- [ ] Select the tester's own Jedi Academy and Jedi Outcast data folders. Do not
+  copy or change the retail data for this test.
+- [ ] Start Jedi Academy with **Play**, then with **New Game**.
+- [ ] Start the first Jedi Outcast import. Check progress, cancellation, retry,
+  and successful completion.
+- [ ] Start Jedi Outcast with **Play**, then with **New Game**.
+- [ ] Start Jedi Outcast again. Confirm that the launcher reuses the valid
+  imported archive instead of rebuilding it.
+- [ ] Close and restart the launcher. Confirm that the selected folders and the
+  last campaign remain selected.
+- [ ] Confirm that Jedi Academy settings and saves use
+  `Documents\My Games\OpenJK`.
+- [ ] Confirm that Jedi Outcast settings and saves use
+  `Documents\My Games\OpenJK\campaigns\jo`.
+- [ ] Move the extracted application folder and start it again. Confirm that the
+  launcher still finds its bundled resources and engine.
+- [ ] Run all tests as a non-admin user.
+
+For each failure, record the Windows version, package hash, exact paths, exact
+steps, expected result, and actual result. Include a screenshot or short video.
+Include `bootstrap.ini` only after you remove private path information. The
+launcher does not create a persistent launcher log.
+
+## Linux Launcher Test Through `play-sp.sh`
+
+Use `play-sp.sh` to copy the current smoke-tested package from the build server
+to the Linux test computer. The script uses rsync for delta updates. It does not
+build the package on the test computer.
+
+### Publish and Configure
+
+1. In the `squad_ai` worktree on the build server, publish a package:
+
+   ```bash
+   bash scripts/build-sp.sh
+   ```
+
+2. Install the current updater on the Linux test computer. Replace
+   `BUILD_SERVER` with its SSH host alias or `user@hostname` value.
+
+   ```bash
+   mkdir -p ~/.local/bin
+   scp BUILD_SERVER:/home/olie/projects/worktrees/openjk-squad_ai/scripts/play-sp.sh ~/.local/bin/openjk-play
+   chmod +x ~/.local/bin/openjk-play
+   export PATH="$HOME/.local/bin:$PATH"
+   ```
+
+3. Configure the updater once with local retail-data folders:
+
+   ```bash
+   openjk-play --configure BUILD_SERVER /path/to/GameData /path/to/GameData_JO
+   ```
+
+   If Jedi Academy is already configured, add Jedi Outcast separately:
+
+   ```bash
+   openjk-play --configure-jo /path/to/GameData_JO
+   ```
+
+### Sync the Launcher Package
+
+The current updater starts `launch-sp.sh` after each transfer. It does not have
+a sync-only option. Pass `+quit` to let the engine exit after the rsync update:
+
+```bash
+openjk-play --worktree squad_ai +quit
+```
+
+Load the trusted local updater configuration and locate the managed package:
+
+```bash
+config=${OJK_DESKTOP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf}
+source "$config"
+package="${OJK_DESKTOP_DIR%/}/worktrees/openjk-squad_ai/build"
+test -x "$package/openjk-launcher"
+cat "$package/build-id.txt"
+```
+
+Do not put saves, settings, or personal files below `$package`. A later rsync
+update can delete files that are not part of the published package.
+
+### Test the Synced Launcher
+
+Use a separate XDG data folder so that this test does not change the normal
+OpenJK profile:
+
+```bash
+test_xdg="${XDG_DATA_HOME:-$HOME/.local/share}/openjk-launcher-test/squad_ai"
+XDG_DATA_HOME="$test_xdg" "$package/openjk-launcher" \
+  --headless-check --ja-path "$OJK_ASSETS" --jo-path "$OJK_JO_ASSETS"
+XDG_DATA_HOME="$test_xdg" "$package/openjk-launcher"
+```
+
+Both headless checks must report `ready`. The headless check does not save the
+paths. Select the same local folders in the graphical launcher.
+
+- [ ] Confirm that the launcher starts from the rsync-managed package.
+- [ ] Record the value from `build-id.txt`.
+- [ ] Check the native folder dialog and manual path fields.
+- [ ] Start Jedi Academy with **Play**, then with **New Game**.
+- [ ] Check the first Jedi Outcast import, cancellation, retry, and completion.
+- [ ] Start Jedi Outcast with **Play**, then with **New Game**.
+- [ ] Start Jedi Outcast again and confirm that it reuses the valid import.
+- [ ] Restart the launcher and confirm that its selections persist.
+- [ ] Confirm that the test profile is below `$test_xdg/openjk`, not below the
+  managed package or either retail-data folder.
+- [ ] Test the packaged desktop entry:
+
+  ```bash
+  XDG_DATA_HOME="$test_xdg" gio launch "$package/openjk-launcher.desktop"
+  ```
+
+- [ ] Exit the launcher and game. Publish another package, run the rsync command
+  again, and confirm that `build-id.txt` changes while launcher settings remain.
+
+Do not run `openjk-play` while the native launcher or its game process is open.
+The script lock protects the rsync and legacy launch session. The native
+launcher does not currently hold that script lock.
+
 ## Atmospheres: Check During Normal Play
 
 Review each map when you reach it in the campaign. A separate full-map tour is
