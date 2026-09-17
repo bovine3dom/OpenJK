@@ -1020,10 +1020,11 @@ static void AS_PlayLocalSet( vec3_t listener_origin, vec3_t origin, const ambien
 	//Determine the volume based on distance (NOTE: This sits on top of what SpatializeOrigin does)
 	float distScale = ( dist < ( set->radius * 0.5f ) ) ? 1 : ( set->radius - dist ) / ( set->radius * 0.5f );
 	unsigned char volume = ( distScale > 1.0f || distScale < 0.0f ) ? 0 : (unsigned char) ( set->masterVolume * distScale );
+	if(!volume) return;
 
 	//Add the looping sound
 	if ( set->loopedWave ) {
-		S_AddAmbientLoopingSound( origin, volume, set->loopedWave );
+		S_AddAmbientLoopingSound( origin, volume, set->loopedWave, entID );
 	}
 
 	//Check the time to start another one-shot subwave

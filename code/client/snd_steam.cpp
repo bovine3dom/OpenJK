@@ -169,6 +169,13 @@ void Status() {
 	Com_Printf("steam_audio active=%d map=%s triangles=%d movers=%d sources=%d reflections=%d probes=%d scene_cache=%d probe_cache=%d occlusion=%.3f transmission=%.3f rt60=%.3f simulation_ms=%d reflection_ms=%d mixed_blocks=%d\n",
 		S_SteamActive(),loadedMap.c_str(),info.triangles,int(objects.size()),info.active,info.reflected,info.probes,sceneCache,probeCache,info.occlusion,info.transmission,info.reverb,simulationMs,info.reflectionMs,mixedBlocks);
 	Com_Printf("steam_audio timing rate=%d mix_peak_us=%d mix_calls=%d underrun_frames=%d callbacks=%u callback_peak_us=%d lock_peak_us=%d scene_peak_us=%d\n",dma.speed,mixPeakUs,mixCalls,underrunFrames,device.callbacks,device.callbackPeakUs,device.lockPeakUs,info.scenePeakUs);
+	if(Cmd_Argc()==2 && !Q_stricmp(Cmd_Argv(1),"sources")) for(const auto &ch:s_channels) {
+		if(!ch.thesfx || (!ch.leftvol && !ch.rightvol)) continue;
+		bool visible=false;
+		for(int i=0;i<cl.frame.numEntities;++i)
+			visible|=cl.parseEntities[(cl.frame.parseEntitiesNum+i)&(MAX_PARSE_ENTITIES-1)].number==ch.entnum;
+		Com_Printf("steam_source entity=%d loop=%d visible=%d left=%d right=%d sound=%s\n",ch.entnum,ch.loopSound,visible,ch.leftvol,ch.rightvol,ch.thesfx->sSoundName);
+	}
 }
 void Bake() {
 	if(!S_SteamActive()) { Com_Printf("Steam Audio: load a level with sound enabled before baking.\n"); return; }

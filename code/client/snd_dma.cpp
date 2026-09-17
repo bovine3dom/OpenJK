@@ -1927,11 +1927,11 @@ void S_AddLoopingSound( int entityNum, const vec3_t origin, const vec3_t velocit
 S_AddAmbientLoopingSound
 ==================
 */
-void S_AddAmbientLoopingSound( const vec3_t origin, unsigned char volume, sfxHandle_t sfxHandle )
+void S_AddAmbientLoopingSound( const vec3_t origin, unsigned char volume, sfxHandle_t sfxHandle, int entityNum )
 {
 	/*const*/ sfx_t *sfx;
 
-	if ( !s_soundStarted || s_soundMuted ) {
+	if ( !s_soundStarted || s_soundMuted || !volume ) {
 		return;
 	}
 	if ( numLoopSounds >= MAX_LOOP_SOUNDS ) {
@@ -1965,6 +1965,8 @@ void S_AddAmbientLoopingSound( const vec3_t origin, unsigned char volume, sfxHan
 
 	//TODO: Calculate the distance falloff
 	loopSounds[numLoopSounds].volume = volume;
+	loopSounds[numLoopSounds].entnum = entityNum;
+	loopSounds[numLoopSounds].entchan = CHAN_AUTO;
 	numLoopSounds++;
 }
 
@@ -2026,6 +2028,7 @@ void S_AddLoopSounds (void)
 		ch->loopSound = qtrue;	// remove next frame
 		ch->thesfx = loop->sfx;
 		ch->master_vol=loop->volume; ch->entchannel=loop->entchan;
+		ch->entnum=loop->entnum;
 		ch->fixed_origin=qtrue; VectorCopy(loop->origin,ch->origin);
 
 		// you cannot use MP3 files here because they offer only streaming access, not random

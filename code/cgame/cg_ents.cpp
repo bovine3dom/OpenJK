@@ -159,6 +159,10 @@ CG_EntityEffects
 Add continuous entity effects, like local entity emission and lighting
 ==================
 */
+static bool CG_EnvironmentalSound(const gentity_t *ent) {
+	return !ent->client && (ent->s.eType==ET_GENERAL || ent->s.eType==ET_SPEAKER || ent->s.eType==ET_MOVER);
+}
+
 static void CG_EntityEffects( centity_t *cent ) {
 
 	// update sound origins
@@ -166,7 +170,7 @@ static void CG_EntityEffects( centity_t *cent ) {
 	VectorCopy(*CG_SetEntitySoundPosition( cent ),v3Origin);
 
 	// add loop sound
-	if ( cent->currentState.loopSound )
+	if ( cent->currentState.loopSound && (!cg_spatialAmbience.integer || !CG_EnvironmentalSound(cent->gent)) )
 	{
 		soundChannel_t chan = CHAN_AUTO;
 
@@ -873,8 +877,8 @@ CG_Speaker
 Speaker entities can automatically play sounds
 ==================
 */
-static void CG_Speaker( centity_t *cent ) {
-	if ( ! cent->currentState.clientNum ) {	// FIXME: use something other than clientNum...
+static void CG_Speaker( centity_t *cent, const entityState_t &state ) {
+	if ( ! state.clientNum ) {	// FIXME: use something other than clientNum...
 		return;		// not auto triggering
 	}
 
@@ -882,11 +886,11 @@ static void CG_Speaker( centity_t *cent ) {
 		return;
 	}
 
-	cgi_S_StartSound (NULL, cent->currentState.number, CHAN_ITEM, cgs.sound_precache[cent->currentState.eventParm] );
+	cgi_S_StartSound (NULL, state.number, CHAN_ITEM, cgs.sound_precache[state.eventParm] );
 
 	//	ent->s.frame = ent->wait * 10;
 	//	ent->s.clientNum = ent->random * 10;
-	cent->miscTime = (int)(cg.time + cent->currentState.frame * 100 + cent->currentState.clientNum * 100 * Q_flrand(-1.0f, 1.0f));
+	cent->miscTime = (int)(cg.time + state.frame * 100 + state.clientNum * 100 * Q_flrand(-1.0f, 1.0f));
 }
 
 /*
@@ -2367,7 +2371,8 @@ static void CG_AddCEntity( centity_t *cent )
 	CG_EntityEffects( cent );
 
 	// add local sound set if any
-	if ( cent->gent && cent->gent->soundSet && cent->gent->soundSet[0] && cent->currentState.eType != ET_MOVER )
+	if ( cent->gent && cent->gent->soundSet && cent->gent->soundSet[0] && cent->currentState.eType != ET_MOVER &&
+		(!cg_spatialAmbience.integer || !CG_EnvironmentalSound(cent->gent)) )
 	{
 		CG_AddLocalSet( cent );
 	}
@@ -2419,7 +2424,7 @@ Ghoul2 Insert End
 		{
 			break;
 		}
-		CG_Speaker( cent );
+		if(!cg_spatialAmbience.integer) CG_Speaker( cent, cent->currentState );
 		break;
 	case ET_THINKER:
 		CG_General( cent );
@@ -2511,6 +2516,32 @@ void CG_AddPacketEntities( qboolean isPortal ) {
 		{
 			CG_AddCEntity( cent );
 		}
+	}
+
+	// Submit environmental audio in entity order, independently of visual visibility.
+	// Do not change snapshot state or submit hidden geometry, effects, or actors.
+	if(cg_spatialAmbience.integer) for(num=1;num<ENTITYNUM_WORLD;++num) {
+		gentity_t *ent=&g_entities[num];
+		if(!ent->inuse || !ent->linked || (ent->svFlags&SVF_NOCLIENT) || !CG_EnvironmentalSound(ent)) continue;
+		const bool localSet=ent->s.eType!=ET_MOVER && ent->soundSet && ent->soundSet[0];
+		if(!ent->s.loopSound && !localSet && !(ent->s.eType==ET_SPEAKER && ent->s.clientNum)) continue;
+		vec3_t origin;
+		cent=&cg_entities[num];
+		if(cent->snapShotTime==cg.time) VectorCopy(*CG_SetEntitySoundPosition(cent),origin);
+		else {
+			VectorCopy(ent->currentOrigin,origin);
+			if(ent->s.solid==SOLID_BMODEL && ent->s.modelindex>0 && ent->s.modelindex<MAX_MODELS)
+				VectorAdd(origin,cgs.inlineModelMidpoints[ent->s.modelindex],origin);
+		}
+		// This exceeds the existing distance cutoff, including CHAN_LESS_ATTEN.
+		if(DistanceSquared(origin,cg.refdef.vieworg)>4096.0f*4096.0f) continue;
+		cgi_S_UpdateEntityPosition(num,origin);
+		if(ent->s.loopSound && !(ent->s.eFlags&EF_NODRAW)) {
+			const sfxHandle_t sound=ent->s.eType==ET_MOVER ? ent->s.loopSound : cgs.sound_precache[ent->s.loopSound];
+			cgi_S_AddLoopingSound(num,origin,vec3_origin,sound,(ent->s.eFlags&EF_LESS_ATTEN) ? CHAN_LESS_ATTEN : CHAN_AUTO);
+		}
+		if(localSet) ent->setTime=cgi_S_AddLocalSet(ent->soundSet,cg.refdef.vieworg,origin,num,ent->setTime);
+		if(!localSet && ent->s.eType==ET_SPEAKER) CG_Speaker(cent,ent->s);
 	}
 }
 

@@ -20,6 +20,20 @@ fell from about 41 ms to 1.05 ms. `s_steam_status` reports `scene_peak_us` for
 background scene commits. Door transmission and cached-world tests remain part
 of the regression checks.
 
+Environmental loops, local sound sets, and automatic speakers now have a sound
+pass independent of the visual snapshot. It uses live entity state in stable
+entity order. `cg_spatialAmbience 0` selects the old snapshot-only behavior.
+Local ambient loops retain their entity number and no longer inherit channel
+metadata from an earlier loop. Zero-volume local sets do not allocate channels.
+
+JA and JO ambient checks passed with baked probes. The checks kept a stock JA
+console (`sound/ambience/cp_17_lp`) and a JO generator
+(`sound/ambience/kejim/kejim_generator`) active outside the visual snapshot.
+Each emitter appeared once, stopped with snapshot-only submission, and returned
+when spatial ambience was enabled. Steam Audio captures had no overlapping or
+missing frames. Results are in `build/smoke/steam-audio.1atpgq8r` and
+`build/smoke/steam-audio.4_lhfnbu`. The audible result still needs desktop review.
+
 **A mixer timing defect is fixed. Clean device playback still needs a check.**
 The user reported severe crackling. The old mixer moved `s_paintedtime` backwards
 on each update. Steam Audio then processed overlapping samples with advanced

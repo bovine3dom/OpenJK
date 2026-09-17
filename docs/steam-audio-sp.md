@@ -26,6 +26,10 @@ music playback, and voice-completion timing remain in use.
 - Music, menu sounds, global voices, and announcer sounds bypass the effects.
   World WAV and MP3 sounds use the same processing path. Separate looping
   emitters keep separate acoustic paths.
+- Environmental loops, local sound sets, and automatic speakers continue outside
+  the visual snapshot. The sound pass uses the current server entity state and
+  submits each emitter once. Walls, distance, and scripted on/off state still
+  control the result. This does not add hidden models or NPCs to the render pass.
 
 The direct mix retains the game's distance curves and stereo panning. Indirect
 sound uses Steam Audio's stereo spatialization. This version does not enable
@@ -40,6 +44,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamPathing` | `1` | Use cached propagation paths when available |
 | `s_steamReverb` | `0.2` | Set reflection and reverb gain, from 0 to 1 |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
+| `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
 
 Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
@@ -58,6 +63,16 @@ The next status report includes:
   This counter is retained by `s_steam_status reset`.
 
 These are mixer and callback measurements. They do not measure driver underruns.
+
+Use `s_steam_status sources` to list mixed sources, entity numbers, loop state,
+channel gains, and sound names. `visible=0` means that the source entity is absent
+from the current visual snapshot. A local sound set retains its entity number
+even when another emitter uses the same sound asset.
+
+`cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
+transmission and indirect paths when enabled. Unpositioned global ambient sets
+still follow the map's ambient-set selection and crossfade. They do not define
+a fixed source in another room.
 
 ## Local Acoustic Caches
 
@@ -150,6 +165,9 @@ build/steam-audio-test
 python3 scripts/test-steam-audio-sp.py --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --bake --device-samples 256
 python3 scripts/test-steam-audio-sp.py --rate 22
+python3 scripts/test-steam-audio-sp.py --ambient --bake
+python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
+python3 scripts/test-doors-sp.py --case ordinary --audio
 ```
 
 The standalone check measures transmission through a moving barrier, reflection
@@ -162,6 +180,12 @@ The game window remains hidden. WAV captures still come from the internal mixer;
 they are not device-loopback recordings. These tests do not replace listening
 checks. Compare the internal capture with a desktop loopback recording if
 crackling continues.
+
+The ambient checks use stock console and generator emitters outside the visual
+snapshot. They check that each loop is submitted once, stops with snapshot-only
+submission, and returns when spatial ambience is enabled. The 32-source and
+large-mesh performance check is `tests/steam_audio_perf.cpp`; compile it with
+the same flags as the standalone check above.
 
 References: [Steam Audio SDK](https://valvesoftware.github.io/steam-audio/doc/capi/index.html),
 [integration guide](https://valvesoftware.github.io/steam-audio/doc/capi/integration.html),

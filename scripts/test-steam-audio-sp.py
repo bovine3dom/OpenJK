@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--campaign", choices=("ja", "jo"), default="ja")
     parser.add_argument("--map")
     parser.add_argument("--bake", action="store_true")
+    parser.add_argument("--ambient", action="store_true", help="Check emitters outside the visual snapshot on the default map")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -97,6 +98,30 @@ def main():
                 peak=max(map(abs, samples)), clipped_samples=sum(s in (-32768, 32767) for s in samples)))
             if continuous:
                 assert continuity.groups() == ("0", "0"), continuity[0]
+        def ambient():
+            def sources():
+                return [dict(word.split("=", 1) for word in line.split())
+                        for line in re.findall(r"steam_source ([^\n]+)", cmd("s_steam_status sources"))]
+            centers = ((6848, -3136, 600), (4376, -1816, 96)) if args.campaign == "ja" else (
+                (-4256, -288, -96), (-2992, -1728, 0))
+            cmd("noclip; set cg_spatialAmbience 1")
+            for center in centers:
+                for offset in ((0, 0, -128), (128, 0, 0), (-128, 0, 0), (0, 128, 0), (0, -128, 0), (0, 0, 128)):
+                    position = " ".join(str(a+b) for a, b in zip(center, offset))
+                    cmd(f"setviewpos {position} 0; wait 40")
+                    active = sources()
+                    hidden = [s for s in active if s["loop"] == "1" and s["visible"] == "0" and 0 < int(s["entity"]) < 1022]
+                    if not hidden:
+                        continue
+                    entity = hidden[0]["entity"]
+                    assert sum(s["entity"] == entity and s["loop"] == "1" for s in active) == 1
+                    cmd("set cg_spatialAmbience 0; wait 40")
+                    assert not any(s["entity"] == entity and s["loop"] == "1" for s in sources())
+                    cmd("set cg_spatialAmbience 1; wait 40")
+                    assert any(s["entity"] == entity and s["loop"] == "1" and s["visible"] == "0" for s in sources())
+                    records["ambient"] = dict(position=position, source=hidden[0])
+                    return
+            raise AssertionError("No audible emitter outside the visual snapshot was found")
         try:
             wait("AUDIO_READY")
             cmd("exitview; wait 200; helpusobi 1; god; notarget; d_npcfreeze 1; con_notifytime -1")
@@ -113,6 +138,9 @@ def main():
                 print("PASS: 22050 Hz legacy fallback and sound restart")
                 return
             assert initial["active"] == "1" and int(initial["triangles"]) > 100, initial
+            if args.ambient:
+                assert not args.map, "Ambient fixtures use the default map"
+                ambient()
             capture()
             assert int(status("mixed")["mixed_blocks"]) > int(initial["mixed_blocks"])
             if args.bake:
