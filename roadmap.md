@@ -367,3 +367,32 @@ constraints, but it does not remove the need to test campaign progression.
 - Thin-window rendering and automatic SP reflection probes are implemented for JA and JO. See
   [glass presentation](docs/glass-presentation.md) for controls, coverage, research,
   and tower capture results. Breakable-glass cues are deferred. Visual approval is open.
+
+
+
+---
+
+rough notes / todo
+
+- first video in jedi outcast is wrong - it's the JA one, not the JO one. the second video is correct (but there still need to be two!)
+- at the end of ns_starpad, the turret laser blasts are not visible, and there's a huge red column under the turret.
+- launcher needs lots of TLC.
+  - give play-sp an option to launch it.
+  - UX needs classic 'all text and buttons must be useful to users'
+  - more cohesive styling with rest of game
+  - should provide sensible defaults (i am not sure rend2-defaults actually gets executed? maybe we need to port it to the .cpp files?), esp desktop resolution
+  - it totally needs a star wars chip-tune
+  - 'continue' button to load most recent save
+  - JO and JA should swap positions, so JO always comes first
+- "new game" in JO mode should not make you make a character that is then not used
+- settings menu needs a refresh. lazy option would be to reuse the atmosphere_editor with descriptions from the variables
+- kejim_post doesn't have an atmosphere
+- ns_* have atmospheres even though it's night
+- ... would it be crazy to port single-player to multiplayer to allow for co-op?
+- first person lightsaber?
+- lightsaber + jolt?
+- JO force-picking screen needs story-progression powers to be more obviously marked. especially where they have gained levels
+- force-picking screen should have the blue-striped background expand across the whole screen rather than being a little box in the middle of a sea of black
+- speed up loading times
+- JO kyle's lightsaber is blue rather than yellow in the bespin cutscenes
+- JO: R5 droid on bespin_undercity stopped half way to the lift and so i couldn't finish the level
