@@ -126,7 +126,7 @@ rates to detect regressions, without expanding scope into a simulation rewrite.
 
 Compare `codemp/rd-rend2/` with `code/rd-vanilla/` and the renderer build targets.
 
-1. Complete: use native SP API 18 and Ghoul2 ownership with shared MP raster code. The first playable path uses CPU skinning in Rend2 dynamic buffers.
+1. Complete: use native SP API 23 and Ghoul2 ownership with shared MP raster code. Rend2 supports CPU and GPU skinning, with CPU fallbacks for unsupported surfaces.
 2. Complete: link, install, and load `rdsp-rend2_x86_64.so`. Pass the `t1_sour` baseline with both renderers and load `t2_wedge` with Rend2.
 3. Validate animated characters, sabers, transparent surfaces, particles, decals, UI, and cinematics before enabling additional visual effects.
 4. Add and measure raster lighting, shadows, and material features individually. Provide quality settings for expensive features. Do not add ray tracing.
@@ -147,13 +147,16 @@ Acceptance: the representative scene works without missing models, effects, or
 UI; the agreed performance target is met on the minimum GPU. Follow with campaign
 sampling before declaring the port complete. Track asset upgrades separately.
 
-## Deferred Rendering Work
+## Rendering Research
 
-The following work is deferred. Reuse stock art where possible, but allow
-generated caches and explicit material or map configuration.
+A bounded local-fog prototype is implemented. The other items remain deferred.
+Reuse stock art where possible, but allow generated caches and explicit material
+or map configuration.
 
-- [ ] Volumetric fog: derive initial media from existing fog volumes; provide
-  conservative density controls and preserve authored scene visibility.
+- [x] Add bounded local volumetric fog with map profiles, shadowed torch
+  scattering, and conservative controls.
+- [ ] Derive initial media from existing BSP fog volumes. Preserve authored
+  scene visibility and define portal and overlapping-volume behavior.
 - [ ] Volumetric clouds remain deferred. See the
   [cloud investigation](docs/volumetric-clouds.md) for the proposed Krildor scope.
 - [ ] Light shafts: use known light sources and shadow information. Do not infer
@@ -319,32 +322,45 @@ Research references for further investigation:
 
 ## Initial Sequence
 
-1. Establish reproducible camera, movement, and collision test cases.
-2. Prototype coordinated ranged enemies using existing groups and combat points.
-3. Prove a raster-only Rend2 port on a representative single-player map.
-4. Use those results to set implementation scope and revise the estimates.
+1. Open: establish reproducible camera, movement, and collision test cases.
+2. Complete for the bounded prototype: coordinated ranged enemies use existing
+   groups and combat points. Real campaign acceptance remains open.
+3. Complete for the functional port: Rend2 runs representative SP maps. Hardware,
+   effect, audio, and campaign acceptance remain open.
+4. Ongoing: use the prototype results to revise scope and acceptance checks.
 
 A focused 3-6 month phase could improve controls, movement, and selected encounters.
 Treat the renderer port as a separate effort. Dropping compatibility removes some
 constraints, but it does not remove the need to test campaign progression.
 
----
+## Unscheduled Backlog
 
-- autosaves every few minutes with i guess grandfather-father-son - need to make them off the main thread / async so they don't cause stutter
-- skybox improvements, i guess depth of field? volumetric fog? the problem is that screens are much higher resolution now than when they were first designed, so we can see every imperfection including seams. maybe volumetric fog?
-- have lightsabers cast shadows like the torch, but less distance?
-- check https://github.com/JKSunny/EternalJK for an already in-progress vulkan port
-- consider looking at https://github.com/taysta/TaystJK for features to cherry-pick
-- modern sound engine with attenuation etc through walls?
-- better glass materials? still visible as glass, but less ... ugly and white? (started in glass_test, but it looks bad; refraction looks terrible and the reflections are too white and shiny. do more research on how games make glass visibly glass)
-- Jolt handles Force push and pull. Regional control, physical Grip, and Lightning reactions are implemented; review their motion in normal play.
-- Defer saber reactions until the regional controller is established. See [Physical Melee Reactions](docs/jolt-melee-plan.md).
-- what are the tradeoffs/benefits from porting rend2 to vulkan?
-- animation: get the first physics-based ragdoll for a live stormtrooper working
-- jedi outcast: what's the current status of it and how plausible is it to make one kind of grand unified game that unifies the UI, logic, AI, weapons, force powers etc. etc... between JA and JO?
-- suppression: improve fire control of enemies - use real world rates of fire/bursts for standard troops, snipers, machine gunners. encourage enemies to suppress last known positions etc, particularly during manoeuvre
-- gameplay: make it easier to activate 'moves' like wall-running, katas, jump slash... make the combinations more forgiving timing wise
-- better glass materials? still visible as glass, but less ... ugly and white?
-- make jolt apply to pull/push force powers. consider how to integrate jolt with lightsabers?
-- more qol stuff: first person lightsaber, lean + shoot while leaning; in JO campaign add the extra JA force powers at logical places, or allow points to be spent like in JA?
-- chase down last stretched parts of in-game UI: weapon/inventory/ammo pickups, force hint icon on objects around reticule
+- [ ] Add periodic rotating autosaves. Define short-, medium-, and long-term
+  retention generations. Move file output off the main thread and measure save
+  stalls before enabling the feature by default.
+- [x] Add seamless high-resolution sky cubemaps with stock-art fallback. Continue
+  the map review and atmosphere work in `human_todo.md`.
+- [ ] Let lightsabers cast short-range scene shadows. Measure the added light and
+  shadow cost separately from the torch.
+- [x] Review the EternalJK and TaystJK Vulkan work. Keep implementation deferred
+  until target-hardware profiling shows a useful result.
+- [ ] Review non-Vulkan TaystJK features separately before selecting changes to port.
+- [ ] Investigate modern sound attenuation and obstruction through walls.
+- [ ] Define and test a less reflective stock-glass material. Keep refraction and
+  reflection changes separate during comparison.
+- [x] Add Jolt Push, Pull, Grip, Lightning, regional control, and the first live
+  humanoid physical reaction loop. Review normal-play motion in `human_todo.md`.
+- [ ] Add bounded physical saber reactions after normal-play review of the regional
+  controller. See [Physical Melee Reactions](docs/jolt-melee-plan.md).
+- [x] Assess a unified JA and JO runtime. Shared UI, gameplay, AI, weapons, Force
+  systems, and campaign import rules now support both campaigns. JO can allocate
+  the five JA-only powers at mission boundaries. Full JO play remains an
+  acceptance task.
+- [x] Add role-based fire control, bounded suppression of recent contact, and
+  pressure-driven cover movement. Keep the open playtests in `todo.md`.
+- [ ] Make wall runs, katas, jump slashes, and similar moves more tolerant of
+  input timing. Define each accepted input window before implementation.
+- [ ] Define the remaining first-person saber and lean-and-fire control gaps.
+  Existing view and lean code does not establish complete controls.
+- [ ] Finish the remaining stretched gameplay UI, including pickup notices and
+  Force hint art near the reticle.

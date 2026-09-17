@@ -88,7 +88,7 @@ def main():
     changed = sum(abs(a - b) > 16 for a, b in zip(images["before"], images["transition"]))
     if changed < len(images["before"]) * 0.1:
         raise RuntimeError(f"Map transition did not change the scene: {suite}")
-    print(f"PASS: Rend2 restart, format-3 load, NPC state, and map transition. Results: {suite}")
+    print(f"PASS: Rend2 restart, format-4 load, NPC state, and map transition. Results: {suite}")
 
 
 if __name__ == "__main__":

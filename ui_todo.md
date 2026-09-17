@@ -17,7 +17,7 @@
 - [x] Set the default dot scale to 0.75.
 - [x] Replace the bottom-right SP resource panel with contextual Force and ammo rings and a stance arc.
 - [x] Replace the bottom-left panel with paired health and shield arcs. Retain a faint critical-health arc at 25% or below.
-- [ ] Choose a status-check binding and add a held view with exact resource values.
+- [x] Bind V to a held status view with exact resource values, HUD panels, and ally bearings. Preserve an existing user binding.
 - [ ] Check ring size, opacity, fade timing, and stance readability during human play.
 
 - [x] Integrate RmlUi 6.3 into the Jedi Academy SP client with static dependencies.
@@ -28,9 +28,12 @@
 - [ ] Check collision movement, enemy/friendly colors, Force hints, vehicles, pickup animation, and reduced view size in gameplay.
 - [ ] Check the result on hardware graphics drivers.
 
-The MVP supports geometry, rectangular clipping, and generated font textures.
-General UI screens and image-file loading are not yet supported. MP, Jedi Outcast, turret
-artwork, and the Force corona still use their existing paths.
+The integration supports geometry, rectangular clipping, generated font textures,
+shared JA and JO Force and weapon selection screens, and the atmosphere editor.
+The selection screens use native game shaders for original artwork. General
+image-file loading is not supported. Settings, main, pause, character creation,
+mission selection, and datapad screens still use the legacy framework. MP,
+turret artwork, and the Force corona still use their existing paths.
 See [MVP use and tests](docs/rmlui-reticle.md) and
 [dependency records](docs/rmlui-dependencies.md).
 
@@ -52,13 +55,15 @@ default when free. Middle mouse can be assigned in the menu. See
 - [ ] Check datapad content and navigation during campaign play, including long localized objectives and move descriptions.
 - [ ] Review gameplay text sizes and line breaks during human play, including localized content.
 
-RmlUi is the leading candidate. Prove its integration before replacing many screens.
-Keep existing screens available during migration.
+RmlUi is integrated for the reticle, wheels, gameplay text, the atmosphere
+editor, and Force and weapon selection. Keep existing screens available during
+further migration.
 
-- [ ] Add a renderer-neutral drawing interface for vanilla and Rend2, with explicit clipping and resource lifetime.
-- [ ] Add filesystem, localization, font, and input adapters. Keep the existing event loop, cvar store, and binding store.
-- [ ] Give each screen one UI owner. Transfer focus explicitly between old and new menus.
-- [ ] Prove a simple test panel across resolutions, UI scales, focus changes, and `vid_restart`.
+- [x] Add a renderer-neutral drawing interface for vanilla and Rend2, with explicit clipping and resource lifetime.
+- [x] Add filesystem, localization, font, and input adapters. Keep the existing event loop, cvar store, and binding store.
+- [x] Give each migrated screen one UI owner. Transfer focus explicitly between old and new menus.
+- [x] Test selection screens at standard, wide, and tall resolutions and across `vid_restart`.
+- [ ] Test independent UI scales and keyboard focus traversal on the selection screens.
 - [x] Add the SP mouse Force wheel with a center dead zone, stable sector selection, and explicit select/cancel states.
 - [ ] Check Force wheel icon readability and mouse feel during human play.
 - [ ] Separate settings definitions, validation, Apply/Discard, and restart rules from presentation.
@@ -81,10 +86,11 @@ Leave existing SDL, OpenGL, and other established dependency choices unchanged.
 - [x] Select FreeType features explicitly. Do not silently use optional libraries found on one build machine.
 - [x] Disable unused Lua, Lottie, sample, profiling, and other optional components.
 - [ ] Add a pinned SVG dependency only if selected artwork needs it. Geometry does not require an SVG loader.
-- [ ] Version fonts, icons, layouts, and styles with their licenses and provenance. Do not rely on desktop-installed fonts.
+- [x] Version the current fonts, layouts, and styles with their licenses and provenance. Do not rely on desktop-installed fonts.
+- [ ] Record licenses and provenance for each new icon or art asset added during later migrations.
 - [x] Replace global language-standard flags with target-scoped requirements. RmlUi 6.3 requires C++17.
 - [x] Raise the CMake minimum to match the integration actually used.
-- [ ] Keep all builds, including dependency builds, at one job.
+- [ ] Keep all builds, including dependency builds, at one job. Local SP builds comply; GitHub workflows still use automatic job counts.
 
 Static UI libraries do not make the entire application static. Existing platform
 libraries and the graphics driver remain runtime dependencies. Fully reproducible
@@ -92,12 +98,15 @@ binaries also require a controlled compiler and system-library environment.
 
 ## Packaging and Tests
 
-- [ ] Include UI assets, third-party notices, dependency revisions, hashes, and build options in each package.
-- [ ] Keep the existing desktop pull-and-launch workflow. Do not install dependencies at game startup.
+- [x] Include UI assets, third-party notices, dependency revisions, hashes, and build options in each package.
+- [x] Keep the existing desktop pull-and-launch workflow. Do not install dependencies at game startup.
 - [ ] Treat dependency upgrades as explicit changes. Run regression tests before publication.
-- [ ] Automate input ownership, focus traversal, binding persistence, setting rollback, clipping, scale, aspect ratio, and restart tests.
-- [ ] Test slow-time ownership and all wheel exit paths. Selection must not activate a power or leave movement/attack input held.
-- [ ] Keep human checks for visual quality and interaction feel separate from automated correctness checks.
+- [x] Automate wheel input ownership and binding persistence, reticle scale and aspect, and selection-screen aspect and restart tests.
+- [ ] Add scissor-clipping and clipping-state restoration tests for both renderers.
+- [ ] Add keyboard focus-traversal, independent UI-scale, and setting-rollback tests.
+- [x] Test slow-time ownership and known wheel exit paths. Selection does not activate a power or leave movement or attack input held.
+- [ ] Test controller input and any new wheel exit paths added during later screen migration.
+- [x] Keep human checks for visual quality and interaction feel separate from automated correctness checks.
 
 ## References
 

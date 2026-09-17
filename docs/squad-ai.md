@@ -79,8 +79,9 @@ The dormant `ST_GetCPFlags` policy is unsafe to enable without a separate review
 These records do not validate that dormant policy.
 Shared group, CP, and voice hooks can report NPCs outside stormtrooper groups.
 The diagnostic records do not add random calls. Sight memory uses the existing
-fields, but tactical state adds serialized fields written in save format 2.
-Supported project v1 saves migrate on load; see `save-migration.md`.
+fields, but tactical state added serialized fields in save format 2. New saves
+use format 4. Supported project formats 1 through 3 migrate on load; see
+`save-migration.md`.
 
 This is not an engine-wide removal of hidden-target knowledge. Other NPC
 controllers and generic callers remain outside this scope. `SCF_NO_GROUPS`

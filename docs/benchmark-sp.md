@@ -123,15 +123,17 @@ case used three runs and ten measurement seconds. Results are in
 `build/benchmark-sp/rdsp-rend2.nhbt5ali` and `rdsp-rend2.88w6txpm`.
 This single scene does not establish the cost for every weapon or resolution.
 
-Only `--map t2_wedge` is supported. The controller selects a fixed natural
-view in the Krildor interior: `setviewpos 2688 640 -60 315`, third person,
-FOV 80, aspect adjustment on, and HUD off. God mode protects the player.
-Native NPCs stay active. The controller does not kill or add NPCs, freeze
-AI, fire weapons, or use `ai-memory.cfg`.
+The standard map mode supports `t2_wedge` and `t1_sour`. The default selects a
+fixed natural view in the Krildor interior: `setviewpos 2688 640 -60 315`, third
+person, FOV 80, aspect adjustment on, and HUD off. God mode protects the player.
+In this mode, native NPCs stay active. The controller does not kill or add NPCs,
+freeze AI, fire weapons, or use `ai-memory.cfg`.
 
 This is not a deterministic actor stress test. NPCs, scripts, projectiles,
 and player displacement can change the view. Check the final screenshot.
-A controlled character-count scene requires a separate fixture in future.
+The `--jolt-scene` mode uses `t1_sour` and creates controlled live-actor or corpse
+groups. See `jolt-performance.md`. These results include rendering and game-module
+work. They do not isolate physics cost or replace a renderer character stress scene.
 
 ## Measurement
 
@@ -252,7 +254,9 @@ tenfold load improvement or predict NVIDIA performance.
 - Add separate timers for shader compilation, linking, and uniform setup.
 - Measure character skinning and tangent generation by render pass.
 - Profile full-screen passes, frame-buffer copies, and fence waits separately.
-- Add controlled character-count scenes and camera routes with fixed inputs.
+- Add renderer character-count scenes and camera routes with fixed inputs. The
+  Jolt fixture measures total frame performance in controlled physical-reaction
+  scenes. A dedicated renderer stress test remains open.
 - Measure character worst cases and GPU times with GPU timers.
 - Record frame-boundary intervals with a high-resolution monotonic clock before making precise stutter claims.
 - Compare 640 x 360, 1280 x 720, and 1920 x 1080 under the same workload.

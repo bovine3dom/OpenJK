@@ -2,7 +2,8 @@
 
 ## Status
 
-Human testing is pending. These tasks do not block automated AI work.
+Most broad human acceptance tests are pending. Selected atmosphere and graphics
+calibrations are recorded as complete below. These tasks do not block automated AI work.
 Software-renderer tests already cover map loading, characters, sabers, 4K output,
 renderer restarts, save migration, and selected shadow modes. They do not prove
 visual quality, audio quality, campaign completion, or GTX 1080 Ti performance.
@@ -134,7 +135,15 @@ SSS eligibility gate. See `docs/raster-features-sp.md` for controls and limits.
 - [x] User confirmed that corrected SMAA looks good. SMAA now defaults to `1`.
 - [x] Audit the graphics defaults. Enable GTAO and capsule shadows, and select Rend2 in builds that include it. Keep MSAA and per-sample shading off.
 - [ ] Apply `exec rend2-defaults.cfg` in each existing campaign profile, then check normal gameplay with the approved graphics settings.
-- [ ] Measure effects separately before enabling them together. Record resolution, MSAA, build ID, and slow frame times. Capsule shadows, SSS, and SMAA currently start disabled.
+- [ ] Measure effects separately before enabling them together. Record resolution, MSAA, build ID, and slow frame times. GTAO, capsule shadows, SSS, and SMAA use the approved defaults; MSAA and sample shading remain disabled.
+
+## Jolt Reactions
+
+- [ ] Check Push and Pull knockdowns during normal JA and JO combat. Check recovery near walls, stairs, slopes, doors, and ledges.
+- [ ] Check Grip levels 1 through 3, carrying, release, death, and interrupted recovery. Look for stretched joints or feet that remain fixed in the air.
+- [ ] Check sustained Lightning, release, the contraction fade, protected targets, and repeated hits. Confirm that native damage and resistance still feel correct.
+- [ ] Check projectile and explosion reactions with several humanoids. Review balance steps, fall bracing, corpse settling, saber attacks on fallen NPCs, and movement past bodies.
+- [ ] Record motion problems with a save, video, build ID, `viewpos`, and the Jolt console-variable values. Keep saber-hit reactions separate because they remain deferred.
 
 ## Material Calibration Decisions
 

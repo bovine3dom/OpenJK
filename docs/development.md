@@ -57,7 +57,7 @@ python3 scripts/test-rend2-sp.py --package build/ready
 ```
 
 The strict Rend2 check requires its log identity and rejects vanilla fallback.
-The lifecycle test checks OpenGL errors, `vid_restart`, and format-3 save/load
+The lifecycle test checks OpenGL errors, `vid_restart`, and format-4 save/load
 in one process. It also checks the transition from `t2_wedge` to `t1_sour`.
 
 To check squad and bark diagnostics at levels 0, 3, and 4:
@@ -235,9 +235,9 @@ bash launch-sp.sh /path/to/GameData +devmap t1_sour +set d_npcai 3
 ```
 
 See `squad-ai.md` in the package or `docs/squad-ai.md` in the repository for trace
-details. Squad memory now uses recorded positions for lost-contact tracking;
-coordinated flank roles are not yet implemented. Fresh encounters are preferred
-over cross-build saves.
+details. Squad memory uses recorded positions for lost-contact tracking. The
+bounded tactical prototype assigns engage, flank, and reserve roles. Fresh
+encounters are preferred over cross-build saves.
 Add `+exec squad-smoke.cfg` for the diagnostic spawn fixture. It enables player
 invulnerability and adds three enemies; it is not a campaign playtest.
 
@@ -273,8 +273,9 @@ The fixtures and `nav memory` snapshot command are described in `squad-ai.md`.
 
 Run `python3 scripts/test-squad-tactics.py` for recruitment, concealed flanking,
 regrouping, interruption, and save/load checks. See `squad-tactics.md` in the
-package or `docs/squad-tactics.md` in the repository. Supported pre-tactics v1 saves
-now migrate on load; new saves use v2. See `save-migration.md` for scope and tests.
+package or `docs/squad-tactics.md` in the repository. Supported project formats
+1 through 3 migrate on load; new saves use format 4. See `save-migration.md` for
+scope and tests.
 
 Both machines are x86-64 Arch Linux, but runtime library versions still need a
 desktop check. The package includes source and runtime manifests, debug symbols,

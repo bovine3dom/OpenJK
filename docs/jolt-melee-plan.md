@@ -1,6 +1,7 @@
 # Physical Melee Reactions: Deferred Plan
 
-Status: research only. Implement regional control, Grip, and Lightning first.
+Status: deferred. Regional control, Grip, and Lightning are implemented and have
+automated checks. Complete their normal-play review before saber reactions start.
 
 ## Scope
 

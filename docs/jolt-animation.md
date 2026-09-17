@@ -322,6 +322,6 @@ with that test to supply another list of NPC types.
 
 Jolt 5.3.0 is pinned, linked statically, and packaged with its MIT licence.
 `-DUseJoltReactions=OFF` removes the dependency and game hooks. The SP game API
-is 13 and the renderer API is 22. See
+is 13 and the renderer API is 23. See
 [Reactive Character Control](reactive-animation-research.md) for the research
 and the remaining validation work.

@@ -7,7 +7,7 @@ Builds that include SP Rend2 now select it by default for new profiles.
 Vanilla remains available and is the fallback if the selected renderer library
 cannot load. Builds without SP Rend2 retain the vanilla default.
 
-The module uses native SP API 18 imports and exports. Native SP Ghoul2 retains
+The module uses native SP API 23 imports and exports. Native SP Ghoul2 retains
 ownership of arrays and handles. It supplies bone evaluation, collision, Ghoul2
 save data, inverse kinematics (IK), and ragdolls. Supported Ghoul2 surfaces now use
 GPU skinning by default, with CPU fallbacks for special cases. See
@@ -77,11 +77,11 @@ These checks passed with a Linux GCC build, Xvfb, and LLVMpipe:
 
 - The `t1_sour` baseline with vanilla and Rend2, and `t2_wedge` and `hoth2` with Rend2.
 - Rend2 screenshots that show NPCs, textured maps, the player, and a yellow saber.
-- The lifecycle test with OpenGL debug checks: `vid_restart`, format-2 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
+- The lifecycle test with OpenGL debug checks: `vid_restart`, format-4 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
 - Lifecycle checks with stencil and projected shadows, patch stitching disabled, and persistent buffers enabled.
 - A rendered, non-black 3840x2160 scene.
-- All nine squad-tactics cases, including save/load with an active tactic.
-- Genuine v1 save migration and a v2 save/load cycle with state checks. Files with valid checksums but invalid versions 0 and 3 were rejected.
+- The original nine-case squad-tactics baseline, including save/load with an active tactic.
+- The recorded v3-to-v4 migration with Rend2 and earlier staged migration checks. The current test writes v4 and rejects versions 0 and 5. See `save-migration.md` for the exact historical paths.
 
 For the migration command with `--renderer rdsp-rend2`, see `save-migration.md`
 in the package or `docs/save-migration.md` in the repository.

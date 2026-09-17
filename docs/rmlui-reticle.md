@@ -4,7 +4,7 @@
 
 The Jedi Academy SP client enables the RmlUi reticle by default. Both vanilla
 and Rend2 support it. Use matching client, game, and renderer binaries from
-the same package. The SP renderer API version is now 22.
+the same package. The SP renderer API version is now 23.
 
 Use these console settings:
 

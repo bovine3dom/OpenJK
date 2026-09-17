@@ -11,9 +11,9 @@ build and package locks; do not add global build or benchmark locks.
 
 Use one gameplay implementation for both campaigns. Campaign data controls
 characters, equipment, objectives, progression, and content compatibility.
-The next milestone is JO progression through Artus and Yavin training, followed
-by the known armoured Galak and world-collision gaps. Manual campaign results
-remain in `human_todo.md`.
+Automated checks now cover Artus, Yavin training, armoured Galak, and the known
+JO water-boundary gap. Fix the timed crossing. Then complete normal-play checks
+through Kejim and Yavin. Manual results remain in `human_todo.md`.
 
 ### Statistics, Bouncers, and Mission Preparation
 
@@ -90,7 +90,9 @@ separate manual checks; record any diagnostic trigger activation in automated te
 - [x] Complete the shrine scene and the Yavin Trial ending without skipping, in both renderers.
 - [x] Verify the fountain pulls, water and mover heights, and bridge load response in both renderers.
 - [ ] Resolve the intermittent timed-crossing failure. Focused runs passed in both renderers, but the full publication run failed all three crossing attempts. Evidence: `build/jo-tests/rdsp-vanilla.mv1m6219/console.log`.
-- [ ] Check older saves, publish the tested update, and commit this batch separately from the statistics work.
+- [x] Check older JO scene saves and retain the documented project migration paths without changing the source save.
+- [x] Keep the completed progression changes separate from the statistics work in Git history.
+- [ ] Publish the current update after the timed crossing and the required integration checks pass.
 
 ## Verified Prerequisites
 
@@ -147,9 +149,9 @@ this server over SSH. Prefer rsync and local execution over running from SSHFS.
 The user has confirmed that desktop update and launch work. No remote session
 was needed for the automated checks on the build machine.
 
-- [ ] Obtain the server SSH address and remote build path as seen from the desktop. Choose local build, asset, and profile directories.
-- [ ] Compare runtime library versions on both machines. Check that the executable and all native modules load on the desktop. Avoid server-specific CPU optimisation.
-- [ ] Copy game assets once, or use an existing desktop installation. Exclude assets from routine build transfers.
+- [x] Configure the server package path and the desktop build, asset, and profile directories.
+- [ ] Record runtime library versions for the current package. Check that the executable and all native modules load on the desktop. Avoid server-specific CPU optimisation.
+- [x] Reuse the existing desktop assets and exclude them from routine build transfers.
 - [x] Package `openjk_sp.x86_64`, `rdsp-vanilla_x86_64.so`, `rdsp-rend2_x86_64.so`, and `OpenJK/jagamex86_64.so` with a launcher and build manifest.
 - [x] Assign each package a unique identifier and source checksums, including uncommitted files. Publish only complete packages that passed both renderer smoke tests.
 - [x] Add a configured desktop pull-and-launch command in `scripts/play-sp.sh`. Reuse one managed directory for rsync delta updates, resolve a fixed server package, and refuse updates while the game is running.
@@ -188,7 +190,7 @@ was needed for the automated checks on the build machine.
 - [x] Verify 16 tactical cases: the baseline nine plus death, timeout, cinematic interruption, contested reservation, save-reservation, and non-tactical ownership checks.
 - [x] Clear movement speech and chance on tactic cancellation or group removal. Restore full-save CP occupancy from NPC claims, not autosaves. Release all NPC ownership claims and clear the ID when replacement fails.
 - [x] Verify `cp-low` and `cp-high`: release/reuse/save/load in both entity orders, failed replacement, and stale occupancy cleanup.
-- [ ] Add large-chain/range, mixed-team, grenade, and further lifecycle tests. Add a full pending ICARUS script and a native multi-squad encounter.
+- [ ] Add large-chain/range, mixed-team, grenade-preemption, and further lifecycle tests. Add a full pending ICARUS script and a native multi-squad encounter.
 - [ ] Extend perception with confidence and better direct sound/damage reports when needed.
 - [x] Coordinate autonomous thermal throws with recent recorded targets, group cooldowns, teammate checks, and arc rejection. Check normal combat release, hidden-target memory, stale records, and save/load in three headless cases.
 - [x] Add role-based fire control that counts actual releases. Check three firing profiles, bounded suppression, and stale-contact rejection.
@@ -226,22 +228,21 @@ raster-only Rend2 port now select it by default.
 
 ## Save Migration
 
-- [x] Add format 3 for the cover anchor. Keep v1/v2 import support. Verify real v2 migration, a v3 round trip, unchanged source files, and rejection of versions 0 and 4.
-
-- [x] Add read-time migration for known project v1 saves while retaining v2 output and strict parsing.
-- [x] Verify genuine v1 migration and a v2 save/load cycle under Rend2. Check state and source hashes. Reject files with valid checksums but invalid versions 0 and 3, then load a valid save.
-- [x] Repeat Rend2 migration and autosave-load checks after the CP ownership fixes. The save layout is unchanged.
+- [x] Read known project formats 1 through 3 and write format 4. Format 3 adds the cover anchor; format 4 extends the JO animation tables.
+- [x] Retain the recorded v1-to-v2, v2-to-v3, and v3-to-v4 migration checks. Verify state preservation and unchanged source files.
+- [x] Verify a format-4 round trip and rejection of versions 0 and 5.
+- [ ] Run direct v1-to-v4, v2-to-v4, and v3-to-v4 checks with the current package in both renderers after save-layout changes.
 - [ ] Qualify additional historical/modded save layouts separately; do not promise compatibility from the version number alone.
 
 ## Rend2 Port
 
 - [x] Replace the compile-only `BuildSPRend2Port` option with `BuildSPRend2`. Link and install `rdsp-rend2_x86_64.so` with shared MP raster code and one shader generator.
 - [x] Build both SP renderers with Linux GCC and one job. Rend2 is now the default; vanilla remains available.
-- [x] Adapt SP scene/entity submission and native API 18 imports and exports. Retain native SP Ghoul2 array and handle ownership, bones, collision, save data, IK, and ragdolls.
+- [x] Adapt SP scene/entity submission and native API 23 imports and exports. Retain native SP Ghoul2 array and handle ownership, bones, collision, save data, IK, and ragdolls.
 - [x] Add CPU skinning with packed normals and tangents in Rend2 dynamic buffers.
 - [x] Require both renderer smoke tests before publication. Verify Rend2 identity and reject vanilla fallback in strict tests.
 - [x] Pass `t1_sour` with both renderers and `t2_wedge` with Rend2. Check screenshots with NPCs, textured maps, the player, and a yellow saber.
-- [x] Pass OpenGL debug lifecycle checks for `vid_restart`, format-2 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
+- [x] Pass OpenGL debug lifecycle checks for `vid_restart`, format-4 save/load in one process, and the `t2_wedge` to `t1_sour` transition.
 - [x] Pass the baseline nine squad-tactics cases under Rend2, including active-tactic save/load. The expanded 16-case suite passes with vanilla; Rend2 lifecycle, autosave, and migration checks also pass with the AI changes.
 - [x] Pass the lifecycle test with persistent buffers enabled. Keep tag-only weapon models without GPU geometry.
 - [x] Fix projected shadows and pass lifecycle checks with stencil and projected shadows. Test with patch stitching disabled.

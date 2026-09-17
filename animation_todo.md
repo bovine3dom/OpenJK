@@ -21,7 +21,7 @@ handling need further work.
 
 - [x] Pin Jolt 5.3.0 and package its MIT license.
 - [x] Add an opt-in pelvis anchor with powered torso and head capsules.
-- [x] Estimate dimensions from stock bone positions and actor bounds.
+- [x] Estimate body lengths from stock bone positions. Use fixed initial radii and masses.
 - [x] Apply localized blaster impulses through the existing damage path.
 - [x] Add reaction rotations to the shared Ghoul2 skeleton.
 - [x] Use fixed game-time steps and interpolate display poses.
@@ -56,7 +56,7 @@ controllers. No replacement character art is required for the first prototype.
 
 | Library | Assessment |
 | --- | --- |
-| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Preferred candidate. MIT licence, C++17, Linux support, motors, powered ragdolls, and skeleton mapping. |
+| [Jolt Physics](https://github.com/jrouwe/JoltPhysics) | Integrated and pinned. MIT licence, C++17, Linux support, motors, powered ragdolls, and skeleton mapping. |
 | [Bullet](https://github.com/bulletphysics/bullet3) | Mature alternative under the zlib licence. Controllers and game integration are still required. |
 | [PhysX](https://github.com/NVIDIA-Omniverse/PhysX) | Capable articulations and rigid bodies. Check the pinned SDK and component licences; the core SDK uses BSD-style terms. |
 | [MuJoCo](https://github.com/google-deepmind/mujoco) | Apache 2.0; useful for articulated-body control research. Less direct as an incremental game integration. |
@@ -71,30 +71,31 @@ not provide an autonomous balance or recovery controller.
 
 - [x] Define one low-detail physics rig: capsule dimensions, masses, joint limits,
   motor strengths, and the mapping to stock humanoid bones.
-- [ ] Generate initial dimensions from the skeleton and mesh bounds, then inspect
-  them. Bone positions alone do not establish correct physical parameters.
+- [x] Generate initial body lengths from the skeleton for validated humanoid rigs.
+- [ ] Fit radii and masses to mesh bounds. Complete visual and anatomical calibration of bodies and joint limits.
 - [x] Build static collision from standard BSP collision data, including invisible clip
   brushes and patches. Represent doors and platforms as kinematic bodies.
-- [ ] Keep existing navigation and locomotion. Drive the physical rig toward the
+- [x] Keep existing navigation and locomotion. Drive the physical rig toward the
   current animation, with explicit ownership of the root transform.
 - [x] Add localised blaster-hit and upper-body reactions. Keep weapon aiming and
   saber timing under game control.
-- [ ] Blend into falls after strong Force pushes or loss of support.
+- [x] Blend into falls after strong Force pushes, explosions, or loss of support.
 - [x] Blend into an existing get-up clip after settling and a clearance check.
 - [x] Select the get-up clip from the settled orientation and align its start pose.
-- [ ] Add balance steps and bracing only after the first reaction/fall loop works.
+- [x] Add balance steps and surface-directed arm bracing after the first reaction/fall loop.
 
 ## Integration Requirements
 
 - [x] Use a fixed physics step in game time and interpolate display poses for reactions.
 - [ ] Keep collision and damage queries consistent with the visible pose.
-- [ ] Define transitions between navigation, animation, physics, and cinematics.
+- [x] Define transitions between navigation, animation, physics, and scripted pose control for the current prototype.
 - [x] Preserve previous project-save loading. The reaction rig has no serialized state.
-- [ ] Test Force powers, dismemberment, doors, slopes, stairs, and ledges.
-- [ ] Restrict the first implementation to the selected humanoid. Other species,
-  droids, vehicles, and large creatures need separate rig validation.
-- [ ] Measure one actor first, then a squad. Add distance-based simulation detail
-  and sleeping only after correctness checks pass.
+- [x] Test diagnostic falls, Grip, Lightning, save/load, and physical recovery in controlled scenes.
+- [ ] Test native Push and Pull reactions, doors, dismemberment, slopes, stairs, ledges, obstacles, and uneven ground.
+- [x] Restrict automatic activation to validated humanoid families and aliases.
+  Other species, unvalidated droid rigs, vehicles, and large creatures need separate rig validation.
+- [x] Measure one actor, a ten-actor group, and sleeping corpse groups.
+- [ ] Add distance-based simulation detail and qualify performance on the target desktop.
 
 Acceptance: the stormtrooper reacts to impacts, remains controllable during
 ordinary movement, falls without unstable joints, and returns to a valid

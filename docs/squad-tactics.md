@@ -11,8 +11,8 @@ cover, flank, and cover a retreat. Sith and other melee actors keep their own
 combat behaviour while sharing contact reports. Snipers retain their firing
 controller and use the common movement path for pressure retreats.
 
-Jedi Academy saves use format version 3. Supported project v1 and v2 saves migrate
-on load. The original file is not rewritten. See `save-migration.md`.
+Jedi Academy saves use format version 4. Supported project formats 1 through 3
+migrate on load. The original file is not rewritten. See `save-migration.md`.
 The unified JO campaign uses the same systems. See `encounter-kejim.md` for
 native NPC checks and the class-conversion fix.
 
