@@ -1554,7 +1554,7 @@ void R_Register( void )
 	r_seamlessSky = ri.Cvar_Get("r_seamlessSky", "1", CVAR_ARCHIVE, "Filter across sky cube edges. Independent of sky resolution and fog. Live toggle.");
 	r_highResSkies = ri.Cvar_Get("r_highResSkies", "1", CVAR_ARCHIVE, "Use selected reconstructed sky assets. Live toggle.");
 	r_mapHaze = ri.Cvar_Get("r_mapHaze", "1", CVAR_ARCHIVE, "Use bounded distance/height haze from map profiles.");
-	r_atmosphere = ri.Cvar_Get("r_atmosphere", "0", CVAR_ARCHIVE, "Map-authored procedural sky atmosphere. Live toggle; prototype.");
+	r_atmosphere = ri.Cvar_Get("r_atmosphere", "1", CVAR_ARCHIVE, "Map-authored procedural sky atmosphere. Live toggle; prototype.");
 	ri.Cvar_CheckRange(r_atmosphere, 0, 1, qtrue);
 	r_localFog = ri.Cvar_Get("r_localFog", "0", CVAR_ARCHIVE, "Prototype: 0 off, 1 local fog, 2 grid debug. Replaces map haze.");
 	ri.Cvar_CheckRange(r_localFog, 0, 2, qtrue);
