@@ -414,24 +414,14 @@ if(WIN32)
 		DESTINATION "${JKAInstallDir}/OpenJK"
 		COMPONENT ${JKASPClientComponent})
 else(WIN32)
-	if(MakeApplicationBundles AND BuildSPEngine)
-		install(TARGETS ${SPGame}
-			LIBRARY
-			DESTINATION "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK"
-			COMPONENT ${JKASPClientComponent})
-	else()
-		install(TARGETS ${SPGame}
-			LIBRARY
-			DESTINATION "${JKAInstallDir}/OpenJK"
-			COMPONENT ${JKASPClientComponent})
-	endif()
+	install(TARGETS ${SPGame}
+		LIBRARY
+		DESTINATION "${JKASPInstallDir}/OpenJK"
+		COMPONENT ${JKASPClientComponent})
 endif()
 
 set_target_properties(${SPGame} PROPERTIES COMPILE_DEFINITIONS "${SPGameDefines}")
-set(JoUiInstallDir "${JKAInstallDir}/OpenJK/ui")
-if(MakeApplicationBundles AND BuildSPEngine)
-	set(JoUiInstallDir "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK/ui")
-endif()
+set(JoUiInstallDir "${JKASPInstallDir}/OpenJK/ui")
 install(FILES "${CMAKE_SOURCE_DIR}/ui/jo_preparation.menu" "${CMAKE_SOURCE_DIR}/ui/jo_preparation.txt"
 	DESTINATION "${JoUiInstallDir}" COMPONENT ${JKASPClientComponent})
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/ui/rmlui" DESTINATION "${JoUiInstallDir}" COMPONENT ${JKASPClientComponent})

@@ -404,7 +404,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 				endif()
 			endif()
 		else(WIN32)
-			if(MakeApplicationBundles)
+			if(MakeApplicationBundles AND NOT (BuildLauncher AND ProjectName STREQUAL SPEngine))
 				set_source_files_properties(${SPDirName}/macosx/OpenJK.icns PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 				set(SPEngineFiles ${SPEngineFiles} ${SPDirName}/macosx/OpenJK.icns)
 				set_source_files_properties(${SPDirName}/macosx/English.lproj/InfoPlist.strings PROPERTIES MACOSX_PACKAGE_LOCATION Resources/English.lproj)
@@ -412,12 +412,12 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 
 				add_executable(${ProjectName} MACOSX_BUNDLE ${SPEngineFiles})
 				set_target_properties(${ProjectName} PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${SPDirName}/macosx/OpenJKInfo.plist")
-			else(MakeApplicationBundles)
+			else()
 				add_executable(${ProjectName} ${SPEngineFiles})
-			endif(MakeApplicationBundles)
+			endif()
 		endif(WIN32)
 
-		if(MakeApplicationBundles)
+		if(MakeApplicationBundles AND NOT (BuildLauncher AND ProjectName STREQUAL SPEngine))
 			install(CODE "
 				include(BundleUtilities)
 				set(BU_CHMOD_BUNDLE_ITEMS ON)
@@ -428,7 +428,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 				BUNDLE
 				DESTINATION ${InstallDir}
 				COMPONENT ${Component})
-		else(MakeApplicationBundles)
+		else()
 			install(TARGETS ${ProjectName}
 				RUNTIME
 				DESTINATION ${InstallDir}
@@ -438,7 +438,7 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 					DESTINATION ${InstallDir}
 					COMPONENT ${Component})
 			endif()
-		endif(MakeApplicationBundles)
+		endif()
 
 		set_target_properties(${ProjectName} PROPERTIES COMPILE_DEFINITIONS "${SPEngineDefines}")
 
@@ -452,7 +452,11 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 		endif(SPEngineLibraries)
 	endfunction(add_sp_project)
 	if(BuildSPEngine)
-		add_sp_project(${SPEngine} "SP Client" ${SPDir} ${JKAInstallDir} ${JKASPClientComponent})
+		set(SPEngineInstallDir ${JKAInstallDir})
+		if(APPLE AND MakeApplicationBundles AND BuildLauncher)
+			set(SPEngineInstallDir ${JKASPInstallDir})
+		endif()
+		add_sp_project(${SPEngine} "SP Client" ${SPDir} ${SPEngineInstallDir} ${JKASPClientComponent})
 		if(BuildRmlUi)
 			target_sources(${SPEngine} PRIVATE "${SPDir}/client/cl_rmlui.cpp" "${SPDir}/client/cl_forcewheel.cpp" "${SPDir}/client/cl_weaponwheel.cpp")
 			target_sources(${SPEngine} PRIVATE "${SPDir}/client/cl_atmosphere_editor.cpp")

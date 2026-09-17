@@ -19,6 +19,15 @@
 # Subdirectories to package JK2 and JKA into
 set(JKAInstallDir "JediAcademy")
 set(JK2InstallDir "JediOutcast")
+set(JKASPInstallDir "${JKAInstallDir}")
+if(APPLE AND MakeApplicationBundles)
+	if(BuildLauncher)
+		set(JKASPBundleName "OpenJK Launcher")
+	else()
+		set(JKASPBundleName "${SPEngine}")
+	endif()
+	set(JKASPInstallDir "${JKAInstallDir}/${JKASPBundleName}.app/Contents/MacOS")
+endif()
 
 # Install components
 set(JKAMPCoreComponent "JKAMPCore")
@@ -99,13 +108,19 @@ if(WIN32)
 	endif()
 
 	if(BuildSPEngine)
-		string(REPLACE "/" "\\\\" ICON "${SPDir}/win32/starwars.ico")
+		if(BuildLauncher)
+			set(SP_SHORTCUT_TARGET "$INSTDIR\\\\${JKAInstallDir}\\\\openjk-launcher.exe")
+			set(SP_SHORTCUT_ICON "$INSTDIR\\\\${JKAInstallDir}\\\\openjk-launcher.exe")
+		else()
+			set(SP_SHORTCUT_TARGET "$INSTDIR\\\\${JKAInstallDir}\\\\${SPEngine}.exe")
+			set(SP_SHORTCUT_ICON "$INSTDIR\\\\${JKAInstallDir}\\\\${SPEngine}.exe")
+		endif()
 		set(CPACK_NSIS_CREATE_ICONS_EXTRA
 			"${CPACK_NSIS_CREATE_ICONS_EXTRA}
 			CreateShortCut '$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Jedi Academy SP.lnk' \\\\
-				'$INSTDIR\\\\${SPEngine}.exe' \\\\
+				'${SP_SHORTCUT_TARGET}' \\\\
 				'' \\\\
-				'${ICON}'")
+				'${SP_SHORTCUT_ICON}'")
 
 		set(CPACK_NSIS_DELETE_ICONS_EXTRA
 			"${CPACK_NSIS_DELETE_ICONS_EXTRA}
@@ -118,6 +133,11 @@ if(WIN32)
 		install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
 				DESTINATION ${JKAInstallDir}
 				COMPONENT ${JKASPClientComponent})
+	endif()
+	if(BuildLauncher AND NOT BuildSPEngine)
+		install(PROGRAMS ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+			DESTINATION ${JKASPInstallDir}
+			COMPONENT ${JKASPClientComponent})
 	endif()
 
 	# Don't run this for now until we have JK2 SP working

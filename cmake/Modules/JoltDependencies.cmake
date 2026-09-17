@@ -16,5 +16,5 @@ function(openjk_add_jolt)
 		EXCLUDE_FROM_ALL)
 	FetchContent_MakeAvailable(jolt)
 	install(FILES "${jolt_SOURCE_DIR}/LICENSE"
-		DESTINATION "${JKAInstallDir}/licenses/jolt" COMPONENT ${JKASPClientComponent})
+		DESTINATION "${JKASPInstallDir}/licenses/jolt" COMPONENT ${JKASPClientComponent})
 endfunction()

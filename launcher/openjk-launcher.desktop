@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OpenJK
+GenericName=Jedi Knight game launcher
+Comment=Configure and start Jedi Academy or Jedi Outcast
+Exec=sh -c "exec \"\\$(dirname \"\\$1\")/openjk-launcher\"" openjk-launcher %k
+Icon=applications-games
+Terminal=false
+Categories=Game;ActionGame;
+StartupNotify=true

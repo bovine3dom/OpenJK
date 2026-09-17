@@ -17,7 +17,14 @@ file(READ "${smaa_SOURCE_DIR}/SMAA.hlsl" SMAA_HEADER)
 configure_file(smaa.glsl.in "${CMAKE_CURRENT_BINARY_DIR}/smaa.glsl" @ONLY)
 list(APPEND Rend2GLSLFiles "${CMAKE_CURRENT_BINARY_DIR}/smaa.glsl")
 set(SMAAIncludeDir "${smaa_SOURCE_DIR}" CACHE INTERNAL "Pinned SMAA source directory")
-install(FILES "${smaa_SOURCE_DIR}/LICENSE.txt" DESTINATION "${JKAInstallDir}/licenses" RENAME SMAA.txt)
+if(BuildSPRend2)
+	install(FILES "${smaa_SOURCE_DIR}/LICENSE.txt" DESTINATION "${JKASPInstallDir}/licenses"
+		RENAME SMAA.txt COMPONENT ${JKASPClientComponent})
+endif()
+if(BuildMPRend2)
+	install(FILES "${smaa_SOURCE_DIR}/LICENSE.txt" DESTINATION "${JKAInstallDir}/licenses"
+		RENAME SMAA.txt COMPONENT ${JKAMPClientComponent})
+endif()
 add_custom_command(
 	OUTPUT glsl_shaders.cpp glsl_shaders.h
 	COMMAND compact_glsl

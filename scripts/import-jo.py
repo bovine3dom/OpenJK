@@ -233,7 +233,8 @@ def write_shaders(dest, academy, outcast):
                 definitions[name] = body
     # Shadow the source files so duplicate names in other files cannot win by load order.
     for path in sorted(paths):
-        dest.writestr(path, b"// Definitions merged into jo_campaign.shader\n")
+        if path != "shaders/jo_campaign.shader":
+            dest.writestr(path, b"// Definitions merged into jo_campaign.shader\n")
     dest.writestr("shaders/jo_campaign.shader", b"\n\n".join(definitions.values()) + b"\n")
 
 

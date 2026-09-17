@@ -2,18 +2,19 @@
 
 ## Asset Separation
 
-Campaign changes are stored as edit recipes in `scripts/jo-patches.json`.
-A recipe contains entity names, expected values, and changes. The package
-contains these recipes and the importer. It does not contain JO maps or scripts.
+Campaign changes are specified as edit recipes in `scripts/jo-patches.json`.
+A recipe contains entity names, expected values, and changes. The native
+importer contains matching checked edits. The package does not contain JO maps,
+scripts, Python, or the source recipe file.
 
 The launcher runs the importer only for `--campaign jo`. The importer reads the
 player's local JO installation and writes `OpenJK/zz_jo_campaign.pk3` in the
 separate `campaigns/jo` profile. Patched entity files go into that archive.
 They are not installed in the shared JA game directory.
 
-JA-only players need only JA assets. They can launch JA without a JO asset path,
-the JO importer, or the recipe file. Building the normal package does not read
-JO assets. The optional JO integration tests require those assets.
+JA-only players need only JA assets. They can launch JA without a JO asset path.
+Building the normal package does not read JO assets. The optional JO integration
+tests require those assets.
 
 ## Recipe Format
 
@@ -36,9 +37,9 @@ The importer uses an existing JO `.ent` file when available. Otherwise, it reads
 the BSP entity list. It writes `maps/MAP_NAME.ent` and keeps the original BSP
 geometry. No map compiler or engine change is required for these entity edits.
 
-The import cache includes the recipe file, importer, and source archive records.
-An update to the recipes causes the next JO launch to rebuild the local archive.
-Original game files remain unchanged.
+The import cache includes a native format version and source archive records.
+Increase that version when a native patch changes. The next JO launch then
+rebuilds the local archive. Original game files remain unchanged.
 
 ## Kejim Post: Jan at the Door
 
@@ -60,8 +61,9 @@ rewrite those save records.
 
 ## Checks and New Patches
 
-For a new patch, add a checked recipe, a synthetic importer test, and a focused
-runtime test. Keep unrelated entities and story triggers intact.
+For a new patch, update the source recipe and the matching checked native edit.
+Increase the native import format version. Add a synthetic importer test and a
+focused runtime test. Keep unrelated entities and story triggers intact.
 
 ```bash
 python3 scripts/test-import-jo.py

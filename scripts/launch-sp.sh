@@ -81,7 +81,7 @@ if [[ -n $review ]]; then profile="${profile%/}/atmosphere-review"; fi
 if [[ $campaign == jo ]]; then
     profile="${profile%/}/campaigns/jo"
     jo_assets=$(realpath -e -- "${OJK_JO_ASSETS:?Set OJK_JO_ASSETS to the Jedi Outcast GameData directory}")
-    python3 "$package/import-jo.py" "$assets" "$jo_assets" "$profile"
+    "$package/openjk-import-jo" "$assets" "$jo_assets" "$profile"
 fi
 mkdir -p -- "$profile"
 profile=$(realpath -- "$profile")

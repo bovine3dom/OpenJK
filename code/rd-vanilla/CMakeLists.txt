@@ -168,7 +168,8 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 				DESTINATION ${InstallDir}
 				COMPONENT ${Component})
 		else(WIN32)
-			if(MakeApplicationBundles AND (BuildSPEngine OR BuildJK2SPEngine))
+			if(MakeApplicationBundles AND (BuildSPEngine OR BuildJK2SPEngine) AND NOT
+				(BuildLauncher AND ProjectName STREQUAL SPRDVanillaRenderer))
 				install(TARGETS ${ProjectName}
 					LIBRARY
 					DESTINATION "${InstallDir}/${EngineName}.app/Contents/MacOS/"
@@ -193,7 +194,11 @@ if(BuildSPRdVanilla OR BuildJK2SPRdVanilla)
 	endfunction(add_sp_renderer_project)
 
 	if(BuildSPRdVanilla)
-		add_sp_renderer_project(${SPRDVanillaRenderer} "SP Vanilla Renderer" ${SPEngine} ${JKAInstallDir} ${JKASPClientComponent})
+		set(SPVanillaInstallDir ${JKAInstallDir})
+		if(APPLE AND MakeApplicationBundles AND BuildLauncher)
+			set(SPVanillaInstallDir ${JKASPInstallDir})
+		endif()
+		add_sp_renderer_project(${SPRDVanillaRenderer} "SP Vanilla Renderer" ${SPEngine} ${SPVanillaInstallDir} ${JKASPClientComponent})
 	endif(BuildSPRdVanilla)
 	if(BuildJK2SPRdVanilla)
 		set(SPRDVanillaDefines ${SPRDVanillaDefines} "JK2_MODE")

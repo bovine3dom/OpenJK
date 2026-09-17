@@ -1,0 +1,69 @@
+<rml>
+<head>
+    <title>OpenJK / Campaign Control</title>
+    <link type="text/rcss" href="launcher.rcss" />
+</head>
+<body>
+    <div id="console">
+        <div class="header">
+            <div class="eyebrow">OPENJK // FLIGHT CONTROL</div>
+            <h1>Choose your campaign.</h1>
+            <div class="subtitle">Locate your game files. Check the system. Begin the mission.</div>
+            <div id="last" class="technical">LAST CAMPAIGN / Reading profile</div>
+        </div>
+        <div class="campaigns">
+            <div class="card academy">
+                <div class="designation">01 / ACADEMY</div>
+                <div class="rule"></div>
+                <div class="series">STAR WARS / JEDI KNIGHT</div>
+                <h2>Jedi Academy</h2>
+                <div class="requirement">Requires Jedi Academy game files.</div>
+                <label for="ja-path">ACADEMY FILE LOCATION</label>
+                <input id="ja-path" type="text" value="" />
+                <div class="tools">
+                    <input id="ja-locate" type="button" value="Locate Files" />
+                    <input id="ja-check" type="button" value="Check Again" />
+                </div>
+                <div class="readiness">
+                    <div id="ja-state" class="state">Not checked</div>
+                    <div id="ja-detail" class="detail">Enter a path or select Locate Files.</div>
+                </div>
+                <div class="launch">
+                    <input id="ja-play" class="primary" type="button" value="Play" />
+                    <input id="ja-new" type="button" value="New Game" />
+                </div>
+            </div>
+            <div class="card outcast">
+                <div class="designation">02 / OUTCAST</div>
+                <div class="rule"></div>
+                <div class="series">STAR WARS / JEDI KNIGHT II</div>
+                <h2>Jedi Outcast</h2>
+                <div class="requirement">Requires Outcast files. Jedi Academy is also required.</div>
+                <label for="jo-path">OUTCAST FILE LOCATION</label>
+                <input id="jo-path" type="text" value="" />
+                <div class="tools">
+                    <input id="jo-locate" type="button" value="Locate Files" />
+                    <input id="jo-check" type="button" value="Check Again" />
+                </div>
+                <div class="readiness">
+                    <div id="jo-state" class="state">Not checked</div>
+                    <div id="jo-detail" class="detail">Files are imported into a separate campaign profile.</div>
+                </div>
+                <div class="launch">
+                    <input id="jo-play" class="primary" type="button" value="Play" />
+                    <input id="jo-new" type="button" value="New Game" />
+                </div>
+            </div>
+        </div>
+        <div class="telemetry">
+            <div class="eyebrow">SYSTEM / OPERATIONS</div>
+            <div id="progress">Validating / Loading profile</div>
+            <div id="status">Loading saved paths.</div>
+        </div>
+        <div class="profile-line">
+            <div class="technical">PROFILE / LOCAL STORAGE</div>
+            <div id="profile">Reading profile location</div>
+        </div>
+    </div>
+</body>
+</rml>

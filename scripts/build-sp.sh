@@ -2,14 +2,21 @@
 set -euo pipefail
 
 integration=false
-if [[ $# == 1 && $1 == --integration ]]; then
-    integration=true
-elif [[ $# != 0 ]]; then
-    printf 'Usage: build-sp.sh [--integration]\n' >&2; exit 1
-fi
+local_sky_assets=false
+for option in "$@"; do
+    case "$option" in
+        --integration) integration=true ;;
+        --local-sky-assets) local_sky_assets=true ;;
+        *) printf 'Usage: build-sp.sh [--integration] [--local-sky-assets]\n' >&2; exit 1 ;;
+    esac
+done
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$root"
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
+    printf 'build-sp.sh supports Linux x86-64 packages only\n' >&2
+    exit 1
+}
 mkdir -p build/sp build/packages
 # Do not allow a second invocation to mix objects or staged modules.
 exec 9>build/sp/build.lock
@@ -20,6 +27,7 @@ cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DBuildMPGame=OFF -DBuildMPCGame=OFF -DBuildMPUI=OFF -DBuildMPRend2=OFF \
     -DBuildSPEngine=ON -DBuildSPGame=ON -DBuildSPRdVanilla=ON -DBuildSPRend2=ON \
     -DBuildJK2SPEngine=OFF -DBuildJK2SPGame=OFF -DBuildJK2SPRdVanilla=OFF \
+    -DBuildLauncher=ON -DBuildRmlUi=ON \
     -DBuildTests=OFF > build/sp/configure.log 2>&1
 printf 'Building with one job. Log: %s/build/sp/build.log\n' "$root"
 cmake --build build/sp --parallel 1 > build/sp/build.log 2>&1
@@ -28,8 +36,6 @@ stage=$(mktemp -d "$root/build/packages/.candidate.XXXXXXXX")
 cmake --install build/sp --prefix "$stage" > "$stage/install.log"
 package="$stage/JediAcademy"
 cp scripts/launch-sp.sh "$package/launch-sp.sh"
-cp scripts/import-jo.py "$package/import-jo.py"
-cp scripts/jo-patches.json "$package/"
 cp scripts/audition-barks.py "$package/"
 cp scripts/setup-atmosphere-review.py "$package/"
 cp scripts/atmosphere_profiles.py "$package/"
@@ -71,7 +77,9 @@ cp docs/procedural-atmosphere-plan.md "$package/"
 cp docs/atmosphere-sp.md "$package/"
 cp docs/atmosphere-editor.md "$package/"
 cp docs/atmosphere-review.md docs/atmosphere-map-audit.md docs/volumetric-clouds.md "$package/"
-python3 scripts/build-sky-assets.py "${OJK_ASSETS:-$root/GameData}" "$package/OpenJK/sky-hd.pk3"
+if $local_sky_assets; then
+    python3 scripts/build-sky-assets.py "${OJK_ASSETS:-$root/GameData}" "$package/OpenJK/sky-hd.pk3"
+fi
 mkdir -p "$package/OpenJK/maps"
 cp scripts/maps/*.haze "$package/OpenJK/maps/"
 cp scripts/maps/*.volfog "$package/OpenJK/maps/"
@@ -107,11 +115,17 @@ cp build/sp/CMakeCache.txt "$package/CMakeCache.txt"
 {
     uname -sm
     c++ --version
-    for binary in "$package/openjk_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/rdsp-rend2_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
+    for binary in "$package/openjk-launcher" "$package/openjk-import-jo" "$package/openjk_sp.x86_64" "$package/rdsp-vanilla_x86_64.so" "$package/rdsp-rend2_x86_64.so" "$package/OpenJK/jagamex86_64.so"; do
         ldd "$binary"
         sha256sum "$binary"
     done
 } > "$package/runtime-manifest.txt"
+
+test -s "$package/launcher/launcher.rml"
+test -s "$package/launcher/launcher.rcss"
+test -x "$package/openjk-launcher.desktop"
+"$package/openjk-launcher" --headless-check --profile "$stage/launcher-profile" \
+    --ja-path "${OJK_ASSETS:-$root/GameData}" > "$package/launcher-check.txt"
 
 OJK_SMOKE_RENDERER=rdsp-vanilla bash scripts/smoke-sp.sh "$package" | tee "$package/smoke-result.txt"
 OJK_SMOKE_RENDERER=rdsp-rend2 OJK_SMOKE_TIMEOUT=${OJK_SMOKE_TIMEOUT:-600} \

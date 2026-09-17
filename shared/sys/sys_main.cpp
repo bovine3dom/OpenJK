@@ -23,6 +23,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include <cstdlib>
 #include <cstdarg>
 #include <cstdio>
+#include <string>
+#include <vector>
 #include <sys/stat.h>
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -752,7 +754,7 @@ char *Sys_StripAppBundle( char *dir )
 int main ( int argc, char* argv[] )
 {
 	int		i;
-	char	commandLine[ MAX_STRING_CHARS ] = { 0 };
+	std::string commandLine;
 
 	Sys_PlatformInit( argc, argv );
 	CON_Init();
@@ -772,19 +774,20 @@ int main ( int argc, char* argv[] )
 	// Concatenate the command line for passing to Com_Init
 	for( i = 1; i < argc; i++ )
 	{
-		const bool containsSpaces = (strchr(argv[i], ' ') != NULL);
-		if (containsSpaces)
-			Q_strcat( commandLine, sizeof( commandLine ), "\"" );
-
-		Q_strcat( commandLine, sizeof( commandLine ), argv[ i ] );
-
-		if (containsSpaces)
-			Q_strcat( commandLine, sizeof( commandLine ), "\"" );
-
-		Q_strcat( commandLine, sizeof( commandLine ), " " );
+		const bool command = argv[i][0] == '+';
+		if (!command)
+			commandLine += '"';
+		commandLine += argv[i];
+		if (!command)
+			commandLine += '"';
+		commandLine += ' ';
 	}
+	if (commandLine.size() >= BIG_INFO_STRING)
+		Sys_Error("Command line is too long (maximum %d bytes).", BIG_INFO_STRING - 1);
 
-	Com_Init (commandLine);
+	std::vector<char> mutableCommandLine(commandLine.begin(), commandLine.end());
+	mutableCommandLine.push_back('\0');
+	Com_Init (mutableCommandLine.data());
 
 #ifndef DEDICATED
 	SDL_version compiled;

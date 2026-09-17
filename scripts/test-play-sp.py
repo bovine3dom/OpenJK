@@ -96,10 +96,10 @@ class DesktopUpdateTests(unittest.TestCase):
         package = (server / "build/packages" if server else self.packages) / name
         (package / "OpenJK").mkdir(parents=True)
         (package / "launch-sp.sh").write_bytes((ROOT / "scripts/launch-sp.sh").read_bytes())
-        (package / "import-jo.py").write_text(
-            'import json, os, sys\nfrom pathlib import Path\n'
+        (package / "openjk-import-jo").write_text(
+            '#!/usr/bin/env python3\nimport json, os, sys\nfrom pathlib import Path\n'
             'Path(os.environ["OJK_TEST_LAUNCH"] + ".import").write_text(json.dumps(sys.argv[1:]))\n')
-        (package / "jo-patches.json").write_text("{}\n")
+        (package / "openjk-import-jo").chmod(0o755)
         (package / "openjk_sp.x86_64").write_text(GAME)
         (package / "openjk_sp.x86_64").chmod(0o755)
         (package / "rdsp-vanilla_x86_64.so").write_bytes(bytes(range(256)) * 8192)
@@ -112,9 +112,8 @@ class DesktopUpdateTests(unittest.TestCase):
         (package / "jo-mvp-result.txt").write_text("PASS: JO opening, wheels, weapon switching, save/load, and Kejim transition (rdsp-vanilla)\n")
         return package
 
-    def test_ja_does_not_need_jo_assets_or_patch_files(self):
-        (self.first / "import-jo.py").unlink()
-        (self.first / "jo-patches.json").unlink()
+    def test_ja_does_not_need_jo_assets_or_importer(self):
+        (self.first / "openjk-import-jo").unlink()
         shutil.rmtree(self.jo_assets)
         self.run_play("--campaign", "ja", OJK_JO_ASSETS=str(self.jo_assets))
         self.assertFalse(Path(str(self.launch) + ".import").exists())

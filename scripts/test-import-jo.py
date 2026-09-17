@@ -3,9 +3,12 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import struct
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -133,12 +136,21 @@ class ImportTests(unittest.TestCase):
             base_strings = b'REFERENCE EXISTING\nLANG_ENGLISH "Keep this JA label"\n'
             with zipfile.ZipFile(ja / "base/assets0.pk3", "w") as archive:
                 archive.writestr(human + "animation.cfg", b"BOTH_STAND1 10 2 0 20\n")
+                archive.writestr("maps/yavin1.bsp", b"synthetic map")
                 archive.writestr("strings/english/sp_ingame.str", base_strings)
                 archive.writestr("ui/newgame.menu", b"open characterMenu ;")
                 archive.writestr("shaders/ui.shader", b"gfx/menus/scanlines { { map scan blendFunc add } }\ngfx/hud/vehicle_frame { { map frame blendFunc blend } }")
                 archive.writestr("shaders/desert.shader", b"textures/kejim/panel { { map wrong } }")
                 archive.writestr("gfx/menus/scanlines.tga", b"JA image")
-            entities = ('{\n"classname" "NPC_Kyle"\n"NPC_targetname" "cinematic1_kyle"\n}\n').encode()
+            entities = ['{\n"classname" "NPC_Kyle"\n"NPC_targetname" "cinematic1_kyle"\n}']
+            entities.extend(f'{{"classname" "NPC_Stormtrooper" "NPC_target" "st_death" "origin" "{i} 0 32"}}'
+                            for i in range(6))
+            entities.extend((
+                '{"classname" "NPC_Stormtrooper" "NPC_target" "st_death" "origin" "188 -252 360"}',
+                '{"classname" "target_counter" "targetname" "st_death" "target" "run_check_door" "count" "7"}',
+                '{"classname" "target_counter" "targetname" "st_death" "Usescript" "kejim_post/jan_fight" "count" "2"}',
+            ))
+            entities = "\n".join(entities).encode()
             bsp = b"RBSP" + struct.pack("<iii", 1, 16, len(entities) + 1) + entities + b"\0"
             text = b'INDEX 0\n{\n REFERENCE KEJIM_POST_OBJ1\n TEXT_LANGUAGE1 "Investigate."\n}\n'
             presentation = {
@@ -175,14 +187,17 @@ class ImportTests(unittest.TestCase):
                 archive.writestr("textures/kejim/wall.tga", b"original")
                 archive.writestr("shaders/ui.shader", b"console { { map menu/new/title } }")
                 archive.writestr("shaders/imperial.shader", b"textures/kejim/panel { { map correct } }")
+                archive.writestr("shaders/jo_campaign.shader", b"textures/kejim/generated { { map merged } }")
                 archive.writestr("gfx/menus/scanlines.tga", b"JO image")
             with zipfile.ZipFile(source / "base/assets2.pk3", "w") as archive:
                 archive.writestr("textures/kejim/wall.tga", b"patched")
+            for directory, numbers in ((ja, (1, 2, 3)), (source, (1, 5))):
+                for number in numbers:
+                    with zipfile.ZipFile(directory / f"base/assets{number}.pk3", "w"):
+                        pass
             original = {p: p.read_bytes() for p in root.glob("*/base/*.pk3")}
             overlay = root / "overlay.pk3"
-            patches = {"kejim_post": {"edit": [{"match": {"NPC_targetname": "cinematic1_kyle"},
-                        "expect": 1, "set": {"message": "patched"}}]}}
-            jo.build_overlay(ja, source, overlay, patches=patches)
+            jo.build_overlay(ja, source, overlay)
             with zipfile.ZipFile(overlay) as archive:
                 names = archive.namelist()
                 self.assertEqual(len(names), len(set(names)))
@@ -200,7 +215,9 @@ class ImportTests(unittest.TestCase):
                 glm = archive.read("models/players/jo_cinematic_kyle/model.glm")
                 gla = archive.read("models/players/jo_cinematic/jo_cinematic.gla")
                 self.assertEqual(glm[72:136].rstrip(b"\0") + b".gla", gla[8:72].rstrip(b"\0"))
-                self.assertIn(b'"message" "patched"', archive.read("maps/kejim_post.ent"))
+                patched_entities = archive.read("maps/kejim_post.ent")
+                self.assertEqual(patched_entities.count(b'"NPC_target" "jo_ground_death"'), 6)
+                self.assertIn(b'"targetname" "jo_ground_death"', patched_entities)
                 self.assertEqual(archive.read("maps/kejim_post.bsp"), bsp)
                 self.assertNotIn("maps/kejim_base.ent", names)
                 self.assertIn(b"playerModel jo_cinematic_kyle", archive.read("ext_data/jo/npcs.cfg"))
@@ -224,6 +241,94 @@ class ImportTests(unittest.TestCase):
                 self.assertNotIn("gfx/menus/scanlines.tga", names)
                 for path in ("shaders/ui.shader", "shaders/desert.shader", "shaders/imperial.shader"):
                     self.assertEqual(list(jo.shader_definitions(archive.read(path))), [])
+            native_importer = os.environ.get("OPENJK_IMPORT_JO")
+            if native_importer:
+                profile = root / "profile"
+                subprocess.run((native_importer, ja, source, profile), check=True, text=True, capture_output=True)
+                with zipfile.ZipFile(overlay) as expected, zipfile.ZipFile(profile / "OpenJK/zz_jo_campaign.pk3") as actual:
+                    self.assertEqual(actual.namelist(), expected.namelist())
+                    for name in expected.namelist():
+                        self.assertEqual(actual.read(name), expected.read(name), name)
+                cached = subprocess.run((native_importer, ja, source, profile), check=True, text=True, capture_output=True)
+                self.assertIn("Using cached archive", cached.stdout)
+                target = profile / "OpenJK/zz_jo_campaign.pk3"
+                imported = target.read_bytes()
+                damaged = source / "base/assets2.pk3"
+                damaged.write_bytes(b"not a PK3")
+                failed = subprocess.run((native_importer, ja, source, profile), text=True, capture_output=True)
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertEqual(target.read_bytes(), imported)
+                damaged.write_bytes(original[damaged])
+            launcher = os.environ.get("OPENJK_LAUNCHER")
+            if launcher:
+                archive_path = ja / "base/assets0.pk3"
+                damaged_archive = bytearray(archive_path.read_bytes())
+                damaged_archive[:4] = b"BAD!"
+                archive_path.write_bytes(damaged_archive)
+                damaged_check = subprocess.run((launcher, "--headless-check", "--ja-path", ja),
+                    text=True, capture_output=True)
+                self.assertNotEqual(damaged_check.returncode, 0)
+                self.assertIn("damaged_archive", damaged_check.stdout)
+                archive_path.write_bytes(original[archive_path])
+                overlap = subprocess.run((launcher, "--print-launch", "--ja-path", ja,
+                    "--profile", ja / "profile", "--engine", sys.executable), text=True, capture_output=True)
+                self.assertNotEqual(overlap.returncode, 0)
+                self.assertIn("outside", overlap.stderr)
+                linked_profile = root / "linked-profile"
+                linked_profile.mkdir()
+                try:
+                    (linked_profile / "OpenJK").symlink_to(ja, target_is_directory=True)
+                except OSError:
+                    pass
+                else:
+                    linked = subprocess.run((launcher, "--print-launch", "--ja-path", ja,
+                        "--profile", linked_profile, "--engine", sys.executable), text=True, capture_output=True)
+                    self.assertNotEqual(linked.returncode, 0)
+                    self.assertIn("outside", linked.stderr)
+                alias_profile = root / "alias-profile"
+                shared_output = alias_profile / "shared"
+                shared_output.mkdir(parents=True)
+                try:
+                    (alias_profile / "OpenJK").symlink_to(shared_output, target_is_directory=True)
+                    (alias_profile / "campaigns/jo").mkdir(parents=True)
+                    (alias_profile / "campaigns/jo/OpenJK").symlink_to(shared_output, target_is_directory=True)
+                except OSError:
+                    pass
+                else:
+                    alias = subprocess.run((launcher, "--print-launch", "--ja-path", ja, "--jo-path", source,
+                        "--profile", alias_profile, "--engine", sys.executable, "--campaign", "jo"),
+                        text=True, capture_output=True)
+                    self.assertNotEqual(alias.returncode, 0)
+                    self.assertIn("separate", alias.stderr)
+                launcher_profile = root / "profile with = \N{LATIN SMALL LETTER E WITH ACUTE}"
+                printed = subprocess.run((launcher, "--print-launch", "--ja-path", ja / "base",
+                    "--jo-path", source, "--profile", launcher_profile, "--engine", sys.executable,
+                    "--campaign", "ja", "--new-game", "--", "+set", "quoted value"),
+                    check=True, text=True, capture_output=True)
+                arguments = [json.loads(line) for line in printed.stdout.splitlines()]
+                expected = [str(Path(sys.executable).absolute()), "+set", "fs_basepath", str(Path(launcher).resolve().parent),
+                    "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath", str(launcher_profile),
+                    "+set", "fs_game", "OpenJK", "+set", "com_outcast", "0", "+map", "yavin1",
+                    "+set", "quoted value"]
+                self.assertEqual(arguments, expected)
+                checked = subprocess.run((launcher, "--headless-check", "--profile", launcher_profile),
+                    check=True, text=True, capture_output=True)
+                self.assertIn("JA: ready", checked.stdout)
+                self.assertIn("JO: ready", checked.stdout)
+                printed = subprocess.run((launcher, "--print-launch", "--profile", launcher_profile,
+                    "--engine", sys.executable, "--campaign", "jo", "--new-game"),
+                    check=True, text=True, capture_output=True)
+                arguments = [json.loads(line) for line in printed.stdout.splitlines()]
+                expected = [str(Path(sys.executable).absolute()), "+set", "fs_basepath", str(Path(launcher).resolve().parent),
+                    "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath",
+                    str(launcher_profile / "campaigns/jo"), "+set", "fs_game", "OpenJK", "+set",
+                    "com_outcast", "1", "+map", "kejim_post"]
+                self.assertEqual(arguments, expected)
+                with zipfile.ZipFile(overlay) as expected, zipfile.ZipFile(
+                        launcher_profile / "campaigns/jo/OpenJK/zz_jo_campaign.pk3") as actual:
+                    self.assertEqual(actual.namelist(), expected.namelist())
+                    for name in expected.namelist():
+                        self.assertEqual(actual.read(name), expected.read(name), name)
             for path, data in original.items():
                 self.assertEqual(path.read_bytes(), data)
 

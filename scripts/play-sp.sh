@@ -110,8 +110,7 @@ done
 test "$(cat "$package/build-id.txt")" = "${package##*/}"
 grep -Fxq 'PASS: t1_sour' "$package/smoke-result.txt"
 if [ "$3" = jo ]; then
-    test -s "$package/import-jo.py"
-    test -s "$package/jo-patches.json"
+    test -x "$package/openjk-import-jo"
 fi
 printf '%s\n' "$package"
 REMOTE

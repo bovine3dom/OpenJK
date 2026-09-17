@@ -8,4 +8,6 @@ FetchContent_MakeAvailable(automap_recast)
 file(GLOB AutomapRecastSources CONFIGURE_DEPENDS "${automap_recast_SOURCE_DIR}/Recast/Source/*.cpp")
 add_library(automap_recast STATIC ${AutomapRecastSources})
 target_include_directories(automap_recast PUBLIC "${automap_recast_SOURCE_DIR}/Recast/Include")
-install(FILES "${automap_recast_SOURCE_DIR}/License.txt" DESTINATION "JediAcademy/licenses/recast")
+install(FILES "${automap_recast_SOURCE_DIR}/License.txt"
+	DESTINATION "${JKASPInstallDir}/licenses/recast"
+	COMPONENT ${JKASPClientComponent})

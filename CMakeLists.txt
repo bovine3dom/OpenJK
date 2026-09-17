@@ -56,11 +56,12 @@ option(BuildJK2SPGame "Whether to create projects for the jk2 sp gamecode mod (j
 option(BuildJK2SPRdVanilla "Whether to create projects for the jk2 sp renderer (rdjosp-vanilla_x86.dll)" OFF)
 
 option(BuildTests "Whether to build automatic unit tests (requires Boost)" OFF)
+option(BuildLauncher "Whether to build the OpenJK launcher and data importer" ON)
 option(UseAddressSanitizer "Whether to enable runtime address sanitizer" OFF)
 option(UseUndefinedSanitizer "Whether to enable runtime Undefined Behavior sanitizer" OFF)
 
 include(CMakeDependentOption)
-cmake_dependent_option(BuildRmlUi "Build the Academy SP RmlUi reticle" ON "BuildSPEngine" OFF)
+cmake_dependent_option(BuildRmlUi "Build the Academy SP RmlUi interfaces" ON "BuildSPEngine OR BuildLauncher" OFF)
 cmake_dependent_option(BuildSymbolServer "Build WIP Windows Symbol Server (experimental and unused)" OFF "NOT WIN32 OR NOT MSVC" OFF)
 
 # Configure the use of bundled libraries.  By default, we assume the user is on
@@ -427,6 +428,9 @@ if(BuildSPRend2)
 	add_subdirectory(code/rd-rend2)
 endif()
 add_subdirectory(${SPDir})
+if(BuildLauncher)
+	add_subdirectory(launcher)
+endif()
 if(BuildJK2SPGame)
 	add_subdirectory("${JK2SPDir}/game")
 endif()

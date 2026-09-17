@@ -40,6 +40,7 @@ function(openjk_add_rmlui_dependencies)
 		URL_HASH SHA256=d977298bb6147610e5984d5db85ddf284020d655a8713913f6982074f1dbdede
 		EXCLUDE_FROM_ALL)
 	FetchContent_MakeAvailable(rmlui)
+	set(RMLUI_SOURCE_DIR "${rmlui_SOURCE_DIR}" PARENT_SCOPE)
 
 	file(SHA256 "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf" plex_hash)
 	if(NOT plex_hash STREQUAL "fe11304a5fe956d5744e9b6a246cc83d90425245e75a62230044966ca96a7f50")
@@ -53,10 +54,7 @@ function(openjk_add_rmlui_dependencies)
 	if(NOT plex_sans_hash STREQUAL "a20caf8286023a6a7a85e40b1d2a4ae9fc3e3b1f9eda8f4c542dd4986af67bb1")
 		message(FATAL_ERROR "IBM Plex Sans SemiBold does not match its pinned source hash")
 	endif()
-	set(font_install_dir "${JKAInstallDir}/OpenJK/ui/fonts")
-	if(APPLE AND MakeApplicationBundles)
-		set(font_install_dir "${JKAInstallDir}/${SPEngine}.app/Contents/MacOS/OpenJK/ui/fonts")
-	endif()
+	set(font_install_dir "${JKASPInstallDir}/OpenJK/ui/fonts")
 	install(DIRECTORY "${CMAKE_SOURCE_DIR}/ui/fonts/plex"
 		DESTINATION "${font_install_dir}" COMPONENT ${JKASPClientComponent})
 
@@ -65,12 +63,12 @@ function(openjk_add_rmlui_dependencies)
 		"${CMAKE_SOURCE_DIR}/docs/force-wheel.md"
 		"${CMAKE_SOURCE_DIR}/docs/weapon-wheel.md"
 		"${CMAKE_SOURCE_DIR}/docs/ui-typography.md"
-		DESTINATION "${JKAInstallDir}" COMPONENT ${JKASPClientComponent})
+		DESTINATION "${JKASPInstallDir}" COMPONENT ${JKASPClientComponent})
 	install(FILES "${rmlui_SOURCE_DIR}/LICENSE.txt"
-		DESTINATION "${JKAInstallDir}/licenses/rmlui" COMPONENT ${JKASPClientComponent})
+		DESTINATION "${JKASPInstallDir}/licenses/rmlui" COMPONENT ${JKASPClientComponent})
 	install(FILES "${freetype_SOURCE_DIR}/LICENSE.TXT"
 		"${freetype_SOURCE_DIR}/docs/FTL.TXT"
 		"${freetype_SOURCE_DIR}/docs/GPLv2.TXT"
 		"${freetype_SOURCE_DIR}/src/gzip/zlib.h"
-		DESTINATION "${JKAInstallDir}/licenses/freetype" COMPONENT ${JKASPClientComponent})
+		DESTINATION "${JKASPInstallDir}/licenses/freetype" COMPONENT ${JKASPClientComponent})
 endfunction()
