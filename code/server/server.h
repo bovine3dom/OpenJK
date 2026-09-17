@@ -307,6 +307,7 @@ qboolean SG_Append(unsigned int chid, const void *data, int length);
 int SG_Read			(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL);
 int SG_ReadOptional	(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL);
 void SG_Shutdown();
+void SG_PollSavegames(void);
 void SG_TestSave(void);
 //
 // note that this version number does not mean that a savegame with the same version can necessarily be loaded,

@@ -5,7 +5,11 @@
 
 #include "ojk_saved_game.h"
 #include <algorithm>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <memory>
+#include <utility>
 #include "ojk_saved_game_helper.h"
 #include "qcommon/qcommon.h"
 #include "server/server.h"
@@ -24,6 +28,14 @@ SavedGame::SavedGame() :
 		io_buffer_offset_(),
 		saved_io_buffer_offset_(),
 		rle_buffer_(),
+		chunks_(),
+		write_thread_(),
+		write_mutex_(),
+		write_condition_(),
+		write_jobs_(),
+		write_results_(),
+		write_worker_busy_(),
+		stop_write_worker_(),
 		is_readable_(),
 		is_writable_(),
 		is_failed_()
@@ -33,6 +45,16 @@ SavedGame::SavedGame() :
 SavedGame::~SavedGame()
 {
 	close();
+
+	{
+		std::lock_guard<std::mutex> lock(write_mutex_);
+		stop_write_worker_ = true;
+	}
+	write_condition_.notify_one();
+	if (write_thread_.joinable())
+	{
+		write_thread_.join();
+	}
 }
 
 bool SavedGame::open(
@@ -113,37 +135,11 @@ bool SavedGame::open(
 	return is_succeed;
 }
 
-bool SavedGame::create(
-	const std::string& base_file_name)
+bool SavedGame::create()
 {
 	close();
 
-
-	remove(
-		base_file_name);
-
-	const std::string file_path = generate_path(
-		base_file_name);
-
-	file_handle_ = ::FS_FOpenFileWrite(
-		file_path.c_str());
-
-	if (file_handle_ == 0)
-	{
-		const std::string error_message =
-			S_COLOR_RED "Failed to create a saved game file: \"" +
-			file_path + "\".";
-
-		::Com_Printf(
-			"%s\n",
-			error_message.c_str());
-
-		return false;
-	}
-
-
 	is_writable_ = true;
-
 	version_ = iSAVEGAME_VERSION;
 
 	SavedGameHelper sgsh(this);
@@ -158,6 +154,53 @@ bool SavedGame::create(
 		return false;
 	}
 
+	return true;
+}
+
+bool SavedGame::finish_write(
+	const std::string& base_file_name,
+	const std::vector<std::string>& rotation)
+{
+	if (!is_writable_ || is_failed_)
+	{
+		return false;
+	}
+
+	WriteJob job;
+	job.name = base_file_name;
+	job.compress = (::sv_compress_saved_games->integer != 0);
+
+	if (!get_write_path(base_file_name, job.target_path))
+	{
+		return false;
+	}
+	job.temporary_path = job.target_path + ".tmp";
+
+	for (const std::string& name : rotation)
+	{
+		std::string path;
+		if (!get_write_path(name, path))
+		{
+			return false;
+		}
+		job.rotation_paths.push_back(path);
+	}
+
+	job.chunks.swap(chunks_);
+	version_ = 0;
+	clear_error();
+	reset_buffer();
+	is_writable_ = false;
+
+	{
+		std::lock_guard<std::mutex> lock(write_mutex_);
+		if (!write_thread_.joinable())
+		{
+			write_thread_ = std::thread(&SavedGame::write_worker, this);
+		}
+		write_jobs_.push_back(std::move(job));
+	}
+	write_condition_.notify_one();
 	return true;
 }
 
@@ -178,9 +221,41 @@ void SavedGame::close()
 	saved_io_buffer_offset_ = 0;
 
 	rle_buffer_.clear();
+	chunks_.clear();
 
 	is_readable_ = false;
 	is_writable_ = false;
+}
+
+void SavedGame::poll_write_results()
+{
+	std::deque<WriteResult> results;
+	{
+		std::lock_guard<std::mutex> lock(write_mutex_);
+		results.swap(write_results_);
+	}
+
+	for (const WriteResult& result : results)
+	{
+		if (!result.error.empty())
+		{
+			::Com_Printf(
+				S_COLOR_RED "Failed to write saved game \"%s\": %s\n",
+				result.name.c_str(),
+				result.error.c_str());
+		}
+	}
+}
+
+void SavedGame::wait_for_writes()
+{
+	{
+		std::unique_lock<std::mutex> lock(write_mutex_);
+		write_condition_.wait(
+			lock,
+			[this]() { return write_jobs_.empty() && !write_worker_busy_; });
+	}
+	poll_write_results();
 }
 
 int SavedGame::get_version() const
@@ -399,176 +474,22 @@ bool SavedGame::write_chunk(
 		return false;
 	}
 
-	if (file_handle_ == 0)
+	if (!is_writable_)
 	{
 		is_failed_ = true;
 		error_message_ = "Not open or created.";
 		return false;
 	}
 
-
-	const std::string chunk_id_string = get_chunk_id_string(
-		chunk_id);
-
 	::Com_DPrintf(
 		"Attempting write of chunk %s\n",
-		chunk_id_string.c_str());
+		get_chunk_id_string(chunk_id).c_str());
 
-	if (::sv_testsave->integer != 0)
-	{
-		return true;
-	}
-
-	const int src_size = static_cast<int>(io_buffer_.size());
-
-	const uint32_t checksum = Com_BlockChecksum(
-		io_buffer_.data(),
-		src_size);
-
-	uint32_t saved_chunk_size = ::FS_Write(
-		&chunk_id,
-		static_cast<int>(sizeof(chunk_id)),
-		file_handle_);
-
-	int compressed_size = -1;
-
-	if (::sv_compress_saved_games->integer != 0)
-	{
-		compress(
-			io_buffer_,
-			rle_buffer_);
-
-		if (rle_buffer_.size() < io_buffer_.size())
-		{
-			compressed_size = static_cast<int>(rle_buffer_.size());
-		}
-	}
-
-#ifdef JK2_MODE
-	const uint32_t magic_value = get_jo_magic_value();
-#endif // JK2_MODE
-
-	if (compressed_size > 0)
-	{
-		const int size = -static_cast<int>(io_buffer_.size());
-
-		saved_chunk_size += ::FS_Write(
-			&size,
-			static_cast<int>(sizeof(size)),
-			file_handle_);
-
-#ifdef JK2_MODE
-		saved_chunk_size += ::FS_Write(
-			&checksum,
-			static_cast<int>(sizeof(checksum)),
-			file_handle_);
-#endif // JK2_MODE
-
-		saved_chunk_size += ::FS_Write(
-			&compressed_size,
-			static_cast<int>(sizeof(compressed_size)),
-			file_handle_);
-
-		saved_chunk_size += ::FS_Write(
-			rle_buffer_.data(),
-			compressed_size,
-			file_handle_);
-
-#ifdef JK2_MODE
-		saved_chunk_size += ::FS_Write(
-			&magic_value,
-			static_cast<int>(sizeof(magic_value)),
-			file_handle_);
-#else
-		saved_chunk_size += ::FS_Write(
-			&checksum,
-			static_cast<int>(sizeof(checksum)),
-			file_handle_);
-#endif // JK2_MODE
-
-		std::size_t ref_chunk_size =
-			sizeof(chunk_id) +
-			sizeof(size) +
-			sizeof(checksum) +
-			sizeof(compressed_size) +
-			compressed_size;
-
-#ifdef JK2_MODE
-		ref_chunk_size += sizeof(magic_value);
-#endif // JK2_MODE
-
-		if (saved_chunk_size != ref_chunk_size)
-		{
-			is_failed_ = true;
-
-			error_message_ = "Failed to write " + chunk_id_string + " chunk.";
-
-			::Com_Printf(
-				"%s%s\n",
-				S_COLOR_RED,
-				error_message_.c_str());
-
-			return false;
-		}
-	}
-	else
-	{
-		const uint32_t size = static_cast<uint32_t>(io_buffer_.size());
-
-		saved_chunk_size += ::FS_Write(
-			&size,
-			static_cast<int>(sizeof(size)),
-			file_handle_);
-
-#ifdef JK2_MODE
-		saved_chunk_size += ::FS_Write(
-			&checksum,
-			static_cast<int>(sizeof(checksum)),
-			file_handle_);
-#endif // JK2_MODE
-
-		saved_chunk_size += ::FS_Write(
-			io_buffer_.data(),
-			size,
-			file_handle_);
-
-#ifdef JK2_MODE
-		saved_chunk_size += ::FS_Write(
-			&magic_value,
-			static_cast<int>(sizeof(magic_value)),
-			file_handle_);
-#else
-		saved_chunk_size += ::FS_Write(
-			&checksum,
-			static_cast<int>(sizeof(checksum)),
-			file_handle_);
-#endif // JK2_MODE
-
-		std::size_t ref_chunk_size =
-			sizeof(chunk_id) +
-			sizeof(size) +
-			sizeof(checksum) +
-			size;
-
-#ifdef JK2_MODE
-		ref_chunk_size += sizeof(magic_value);
-#endif // JK2_MODE
-
-		if (saved_chunk_size != ref_chunk_size)
-		{
-			is_failed_ = true;
-
-			error_message_ = "Failed to write " + chunk_id_string + " chunk.";
-
-			::Com_Printf(
-				"%s%s\n",
-				S_COLOR_RED,
-				error_message_.c_str());
-
-			return false;
-		}
-	}
-
+	Chunk chunk;
+	chunk.id = chunk_id;
+	chunk.data.swap(io_buffer_);
+	chunks_.push_back(std::move(chunk));
+	io_buffer_offset_ = 0;
 	return true;
 }
 
@@ -640,7 +561,7 @@ bool SavedGame::write(
 		return false;
 	}
 
-	if (file_handle_ == 0)
+	if (!is_writable_)
 	{
 		is_failed_ = true;
 		error_message_ = "Not open or created.";
@@ -698,13 +619,6 @@ bool SavedGame::skip(
 {
 	if (is_failed_)
 	{
-		return false;
-	}
-
-	if (file_handle_ == 0)
-	{
-		is_failed_ = true;
-		error_message_ = "Not open or created.";
 		return false;
 	}
 
@@ -775,32 +689,11 @@ int SavedGame::get_buffer_size() const
 	return static_cast<int>(io_buffer_.size());
 }
 
-void SavedGame::rename(
-	const std::string& old_base_file_name,
-	const std::string& new_base_file_name)
-{
-	const std::string old_path = generate_path(
-		old_base_file_name);
-
-	const std::string new_path = generate_path(
-		new_base_file_name);
-
-	const int rename_result = ::FS_MoveUserGenFile(
-		old_path.c_str(),
-		new_path.c_str());
-
-	if (rename_result == 0)
-	{
-		::Com_Printf(
-			S_COLOR_RED "Error during savegame-rename."
-				" Check \"%s\" for write-protect or disk full!\n",
-			new_path.c_str());
-	}
-}
-
 void SavedGame::remove(
 	const std::string& base_file_name)
 {
+	get_instance().wait_for_writes();
+
 	const std::string path = generate_path(
 		base_file_name);
 
@@ -896,6 +789,177 @@ void SavedGame::compress(
 
 	dst_buffer.resize(
 		dst_index);
+}
+
+bool SavedGame::get_write_path(
+	const std::string& base_file_name,
+	std::string& path)
+{
+	char os_path[MAX_OSPATH];
+	const std::string file_path = generate_path(base_file_name);
+	if (!::FS_GetUserGenPath(file_path.c_str(), os_path, sizeof(os_path)))
+	{
+		error_message_ = "Failed to create the saved game path.";
+		is_failed_ = true;
+		return false;
+	}
+
+	path = os_path;
+	return true;
+}
+
+void SavedGame::write_worker()
+{
+	for (;;)
+	{
+		WriteJob job;
+		{
+			std::unique_lock<std::mutex> lock(write_mutex_);
+			write_condition_.wait(
+				lock,
+				[this]() { return stop_write_worker_ || !write_jobs_.empty(); });
+			if (stop_write_worker_ && write_jobs_.empty())
+			{
+				return;
+			}
+
+			job = std::move(write_jobs_.front());
+			write_jobs_.pop_front();
+			write_worker_busy_ = true;
+		}
+
+		WriteResult result;
+		result.name = job.name;
+		write_job(job, result.error);
+
+		{
+			std::lock_guard<std::mutex> lock(write_mutex_);
+			write_results_.push_back(std::move(result));
+			write_worker_busy_ = false;
+		}
+		write_condition_.notify_all();
+	}
+}
+
+bool SavedGame::write_job(
+	const WriteJob& job,
+	std::string& error)
+{
+	FILE* file = std::fopen(job.temporary_path.c_str(), "wb");
+	if (!file)
+	{
+		error = std::strerror(errno);
+		return false;
+	}
+
+	auto write_data = [file](const void* data, std::size_t size)
+	{
+		return std::fwrite(data, 1, size, file) == size;
+	};
+
+	Buffer compressed;
+	for (const Chunk& chunk : job.chunks)
+	{
+		const uint32_t checksum = ::Com_BlockChecksum(
+			chunk.data.data(),
+			static_cast<int>(chunk.data.size()));
+		const Buffer* data = &chunk.data;
+		int32_t size = static_cast<int32_t>(chunk.data.size());
+
+		if (job.compress)
+		{
+			compress(chunk.data, compressed);
+			if (compressed.size() < chunk.data.size())
+			{
+				data = &compressed;
+				size = -size;
+			}
+		}
+
+		const uint32_t data_size = static_cast<uint32_t>(size);
+		if (!write_data(&chunk.id, sizeof(chunk.id)) ||
+			!write_data(&data_size, sizeof(data_size)))
+		{
+			error = "I/O error while writing a chunk header.";
+			break;
+		}
+
+#ifdef JK2_MODE
+		if (!write_data(&checksum, sizeof(checksum)))
+		{
+			error = "I/O error while writing a chunk checksum.";
+			break;
+		}
+#endif
+
+		if (size < 0)
+		{
+			const uint32_t compressed_size = static_cast<uint32_t>(data->size());
+			if (!write_data(&compressed_size, sizeof(compressed_size)))
+			{
+				error = "I/O error while writing a compressed chunk size.";
+				break;
+			}
+		}
+
+		if (!write_data(data->data(), data->size()))
+		{
+			error = "I/O error while writing chunk data.";
+			break;
+		}
+
+#ifdef JK2_MODE
+		const uint32_t magic_value = get_jo_magic_value();
+		if (!write_data(&magic_value, sizeof(magic_value)))
+#else
+		if (!write_data(&checksum, sizeof(checksum)))
+#endif
+		{
+			error = "I/O error while finishing a chunk.";
+			break;
+		}
+	}
+
+	if (std::fclose(file) != 0 && error.empty())
+	{
+		error = std::strerror(errno);
+	}
+	if (!error.empty())
+	{
+		std::remove(job.temporary_path.c_str());
+		return false;
+	}
+
+	if (!job.rotation_paths.empty())
+	{
+		const std::string& oldest = job.rotation_paths.back();
+		if (std::remove(oldest.c_str()) != 0 && errno != ENOENT)
+		{
+			error = std::strerror(errno);
+			return false;
+		}
+
+		for (std::size_t i = job.rotation_paths.size() - 1; i > 0; --i)
+		{
+			if (std::rename(job.rotation_paths[i - 1].c_str(), job.rotation_paths[i].c_str()) != 0 && errno != ENOENT)
+			{
+				error = std::strerror(errno);
+				return false;
+			}
+		}
+	}
+	else if (std::remove(job.target_path.c_str()) != 0 && errno != ENOENT)
+	{
+		error = std::strerror(errno);
+		return false;
+	}
+
+	if (std::rename(job.temporary_path.c_str(), job.target_path.c_str()) != 0)
+	{
+		error = std::strerror(errno);
+		return false;
+	}
+	return true;
 }
 
 void SavedGame::decompress(

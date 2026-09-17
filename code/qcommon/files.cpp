@@ -640,6 +640,19 @@ void FS_DeleteUserGenFile( const char *filename ) {
 	FS_HomeRemove( filename );
 }
 
+qboolean FS_GetUserGenPath( const char *filename, char *path, int size ) {
+	FS_AssertInitialised();
+
+	char *ospath = FS_BuildOSPath( fs_homepath->string, fs_gamedir, filename );
+	FS_CheckFilenameIsMutable( ospath, __func__ );
+	if ( FS_CreatePath( ospath ) ) {
+		return qfalse;
+	}
+
+	Q_strncpyz( path, ospath, size );
+	return qtrue;
+}
+
 // filenames are local (eg "saves/blah.sav")
 //
 // return: qtrue = OK

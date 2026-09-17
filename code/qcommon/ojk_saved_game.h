@@ -7,8 +7,12 @@
 #define OJK_SAVED_GAME_INCLUDED
 
 
+#include <condition_variable>
 #include <cstdint>
+#include <deque>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 #include "ojk_i_saved_game.h"
 
@@ -32,16 +36,26 @@ public:
 	virtual ~SavedGame();
 
 
-	// Creates a new saved game file for writing.
-	bool create(
-		const std::string& base_file_name);
+	// Starts a new saved game capture.
+	bool create();
 
 	// Opens an existing saved game file for reading.
 	bool open(
 		const std::string& base_file_name);
 
-	// Closes the current saved game file.
+	// Queues the capture for writing. Optional paths rotate before installation.
+	bool finish_write(
+		const std::string& base_file_name,
+		const std::vector<std::string>& rotation = std::vector<std::string>());
+
+	// Closes the current saved game file or discards an unfinished write.
 	void close();
+
+	// Reports completed write failures on the main thread.
+	void poll_write_results();
+
+	// Waits until all queued writes are complete.
+	void wait_for_writes();
 
 	// Returns the file format version, or 0 if no file is open.
 	int get_version() const override;
@@ -117,11 +131,6 @@ public:
 	void throw_error() override;
 
 
-	// Renames a saved game file.
-	static void rename(
-		const std::string& old_base_file_name,
-		const std::string& new_base_file_name);
-
 	// Remove a saved game file.
 	static void remove(
 		const std::string& base_file_name);
@@ -134,6 +143,30 @@ private:
 	using Buffer = std::vector<uint8_t>;
 	using BufferOffset = Buffer::size_type;
 	using Paths = std::vector<std::string>;
+
+	struct Chunk
+	{
+		uint32_t id;
+		Buffer data;
+	};
+
+	using Chunks = std::vector<Chunk>;
+
+	struct WriteJob
+	{
+		std::string name;
+		std::string target_path;
+		std::string temporary_path;
+		Paths rotation_paths;
+		Chunks chunks;
+		bool compress;
+	};
+
+	struct WriteResult
+	{
+		std::string name;
+		std::string error;
+	};
 
 
 	// Last error message.
@@ -160,6 +193,17 @@ private:
 	// RLE codec buffer.
 	Buffer rle_buffer_;
 
+	// Chunks captured for a pending write.
+	Chunks chunks_;
+
+	std::thread write_thread_;
+	std::mutex write_mutex_;
+	std::condition_variable write_condition_;
+	std::deque<WriteJob> write_jobs_;
+	std::deque<WriteResult> write_results_;
+	bool write_worker_busy_;
+	bool stop_write_worker_;
+
 	// True if saved game opened for reading.
 	bool is_readable_;
 
@@ -183,6 +227,16 @@ private:
 
 	static std::string generate_path(
 		const std::string& base_file_name);
+
+	bool get_write_path(
+		const std::string& base_file_name,
+		std::string& path);
+
+	void write_worker();
+
+	static bool write_job(
+		const WriteJob& job,
+		std::string& error);
 
 
 	// Returns a string representation of a chunk id.

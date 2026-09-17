@@ -519,6 +519,7 @@ void SV_Frame( int msec,float fractionMsec ) {
 		time_game = Sys_Milliseconds () - startTime;
 	}
 
+	SG_PollSavegames();
 	SG_TestSave();	// returns immediately if not active, used for fake-save-every-cycle to test (mainly) Icarus disk code
 
 	// check timeouts

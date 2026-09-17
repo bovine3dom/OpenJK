@@ -52,6 +52,8 @@ if(BuildSPEngine OR BuildJK2SPEngine)
 	include("${CMAKE_SOURCE_DIR}/cmake/Modules/AutomapNavigation.cmake")
 	list(APPEND SPEngineLibraries automap_recast)
 	include("${CMAKE_SOURCE_DIR}/cmake/Modules/SteamAudio.cmake")
+	find_package(Threads REQUIRED)
+	list(APPEND SPEngineLibraries Threads::Threads)
 
 	if (NOT WIN32)
 		# OpenGL

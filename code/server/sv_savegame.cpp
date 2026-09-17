@@ -123,6 +123,7 @@ void SG_Shutdown()
 {
 	ojk::SavedGame& saved_game = ojk::SavedGame::get_instance();
 
+	saved_game.wait_for_writes();
 	saved_game.close();
 
 	eSavedGameJustLoaded = eNO;
@@ -1173,7 +1174,7 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 
 	ojk::SavedGame& saved_game = ojk::SavedGame::get_instance();
 
-	if(!saved_game.create( "current" ))
+	if(!saved_game.create())
 	{
 		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to create savegame\n");
 		SG_WipeSavegame( "current" );
@@ -1218,21 +1219,13 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 	}
 	ge->WriteLevel(qbAutosave);	// always done now, but ent saver only does player if auto
 
-	bool is_write_failed = saved_game.is_failed();
-
-	saved_game.close();
-
-	if (is_write_failed)
+	if (saved_game.is_failed() || !saved_game.finish_write(psPathlessBaseName))
 	{
 		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to write savegame!\n");
-		SG_WipeSavegame( "current" );
+		saved_game.close();
 		sv_testsave->integer = iPrevTestSave;
 		return qfalse;
 	}
-
-	ojk::SavedGame::rename(
-		"current",
-		psPathlessBaseName);
 
 	sv_testsave->integer = iPrevTestSave;
 	return qtrue;
@@ -1255,6 +1248,8 @@ qboolean SG_ReadSavegame(
 		&saved_game);
 
 	const int iPrevTestSave = ::sv_testsave->integer;
+
+	saved_game.wait_for_writes();
 
 	ojk::ScopeGuard scope_guard(
 		[&]()
@@ -1350,6 +1345,11 @@ qboolean SG_ReadSavegame(
 		qbLoadTransition);
 
 	return qtrue;
+}
+
+void SG_PollSavegames(void)
+{
+	ojk::SavedGame::get_instance().poll_write_results();
 }
 
 void SG_TestSave(void)

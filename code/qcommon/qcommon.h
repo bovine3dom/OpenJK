@@ -548,6 +548,7 @@ qboolean FS_FilenameCompare( const char *s1, const char *s2 );
 //
 void		FS_DeleteUserGenFile( const char *filename );
 qboolean	FS_MoveUserGenFile  ( const char *filename_src, const char *filename_dst );
+qboolean	FS_GetUserGenPath   ( const char *filename, char *path, int size );
 
 qboolean FS_CheckDirTraversal(const char *checkdir);
 void FS_Rename( const char *from, const char *to );
