@@ -177,6 +177,8 @@ struct centity_s
 
 //	int				trailTime;		// so missile trails can handle dropped initial packets
 	int				miscTime;
+	int				flybyTrajectory;
+	qboolean		flybyPlayed;
 
 	playerEntity_t	pe;
 
@@ -346,6 +348,7 @@ typedef struct {
 	int			time;			// this is the time value that the client
 								// is rendering at.
 	int			oldTime;		// time at last frame, used for missile trails and prediction checking
+	int			nextFlybyTime;
 
 	int			timelimitWarnings;	// 5 min, 1 min, overtime
 
@@ -614,6 +617,7 @@ extern	vmCvar_t		cg_errorDecay;
 extern	vmCvar_t		cg_footsteps;
 extern	vmCvar_t		cg_spatialAmbience;
 extern	vmCvar_t		cg_alarmRelays;
+extern	vmCvar_t		cg_boltFlyby;
 extern	vmCvar_t		cg_addMarks;
 extern	vmCvar_t		cg_drawGun;
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
@@ -700,6 +704,7 @@ void CG_LoadMenus(const char *menuFile);
 // cg_view.c
 //
 void CG_TestModel_f (void);
+void CG_TestFlyby_f(void);
 void CG_TestParticle_f();
 void CG_Torch_f();
 void CG_TorchStatus_f();
@@ -1015,6 +1020,7 @@ int		cgi_CM_MarkFragments( int numPoints, const vec3_t *points,
 // normal sounds will have their volume dynamically changed as their entity
 // moves and the listener moves
 void	cgi_S_StartSound( const vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx );
+void cgi_S_StartAmbientSound(const vec3_t origin,int entityNum,unsigned char volume,sfxHandle_t sfx);
 void	cgi_S_StopSounds( void );
 
 // a local sound is always played full volume

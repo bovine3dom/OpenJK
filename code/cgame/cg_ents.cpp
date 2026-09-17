@@ -31,6 +31,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "FxScheduler.h"
 #include "../game/wp_saber.h"
 #include "../game/g_vehicles.h"
+#include "sound/near_pass.h"
+#include <algorithm>
 
 extern void CG_AddSaberBlade( centity_t *cent, centity_t *scent, refEntity_t *saber, int renderfx, int modelIndex, vec3_t origin, vec3_t angles);
 extern void CG_CheckSaberInWater( centity_t *cent, centity_t *scent, int saberNum, int modelIndex, vec3_t origin, vec3_t angles );
@@ -1128,6 +1130,57 @@ Ghoul2 Insert End
 CG_Missile
 ===============
 */
+static bool CG_PlayFlyby(const vec3_t point,int entity,int variant,int volume) {
+	if(volume<=0 || !cgs.media.boltFlybySound[variant]) return false;
+	trace_t trace;
+	CG_Trace(&trace,cg.refdef.vieworg,NULL,NULL,point,cg.snap->ps.clientNum,MASK_SOLID);
+	if(trace.startsolid || trace.allsolid || trace.fraction<1) {
+		if(cg_boltFlyby.integer>1) CG_Printf("bolt_flyby blocked=%d startsolid=%d fraction=%.3f listener=%.1f,%.1f,%.1f\n",trace.entityNum,trace.startsolid,trace.fraction,cg.refdef.vieworg[0],cg.refdef.vieworg[1],cg.refdef.vieworg[2]);
+		return false;
+	}
+	cgi_S_StartAmbientSound(point,entity,static_cast<unsigned char>(volume),cgs.media.boltFlybySound[variant]);
+	return true;
+}
+
+void CG_TestFlyby_f(void) {
+	if(!cg.snap || (cgi_Argc()==2 && Q_stricmp(CG_Argv(1),"left") && Q_stricmp(CG_Argv(1),"right")) || cgi_Argc()>2) {
+		CG_Printf("testflyby [left|right]\n"); return;
+	}
+	vec3_t point;
+	const bool right=!Q_stricmp(CG_Argv(1),"right");
+	VectorMA(cg.refdef.vieworg,right ? -4.0f : 4.0f,cg.refdef.viewaxis[1],point);
+	const bool played=CG_PlayFlyby(point,ENTITYNUM_WORLD,0,72);
+	CG_Printf("bolt_flyby audition=%d side=%s\n",played,right ? "right" : "left");
+}
+
+static void CG_BoltFlyby(centity_t *cent,const weaponInfo_t *weapon) {
+	if(!cg_boltFlyby.integer || in_camera || cg.frametime<=0) return;
+	const auto &state=cent->currentState;
+	if(cg.time<=state.pos.trTime || state.otherEntityNum2) return;
+	if(cent->gent->owner==&g_entities[cg.snap->ps.clientNum] ||
+		(cg.snap->ps.viewEntity>0 && cg.snap->ps.viewEntity<ENTITYNUM_WORLD && cent->gent->owner==&g_entities[cg.snap->ps.viewEntity])) return;
+	switch(state.weapon) {
+	case WP_BLASTER: case WP_BRYAR_PISTOL: case WP_BLASTER_PISTOL: case WP_TURRET: case WP_EMPLACED_GUN: break;
+	case WP_REPEATER: if(cent->gent->alt_fire) return; break;
+	default: return;
+	}
+	if(cent->gent->alt_fire ? weapon->alt_missileSound : weapon->missileSound) return;
+	if(cent->flybyTrajectory!=state.pos.trTime) { cent->flybyTrajectory=state.pos.trTime; cent->flybyPlayed=qfalse; }
+	if(cent->flybyPlayed) return;
+	vec3_t previous,current,point;
+	EvaluateTrajectory(&state.pos,std::max(state.pos.trTime,cg.time-cg.frametime),previous);
+	EvaluateTrajectory(&state.pos,cg.time,current);
+	if(!SteamSound::NearPass(previous,current,cg.refdef.vieworg,72,point) || DistanceSquared(point,state.pos.trBase)<128*128) return;
+	cent->flybyPlayed=qtrue;
+	if(cg.time<cg.nextFlybyTime) return;
+	const int volume=int(96*(1-Distance(point,cg.refdef.vieworg)/72));
+	const int variant=(unsigned(state.number)+unsigned(state.pos.trTime))%3;
+	if(CG_PlayFlyby(point,state.number,variant,volume)) {
+		cg.nextFlybyTime=cg.time+150;
+		if(cg_boltFlyby.integer>1) CG_Printf("bolt_flyby entity=%d volume=%d\n",state.number,volume);
+	}
+}
+
 static void CG_Missile( centity_t *cent ) {
 	refEntity_t			ent;
 	entityState_t		*s1;
@@ -1143,6 +1196,7 @@ static void CG_Missile( centity_t *cent ) {
 	}
 	weapon = &cg_weapons[s1->weapon];
 	wData = &weaponData[s1->weapon];
+	CG_BoltFlyby(cent,weapon);
 
 	if ( s1->pos.trType != TR_INTERPOLATE )
 	{

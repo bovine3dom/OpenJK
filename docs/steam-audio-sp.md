@@ -49,6 +49,7 @@ headphone HRTF processing for the direct mix.
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
 | `cg_alarmRelays` | `1` | Add Kejim Post perimeter-alarm relays at its control panel and gun base |
+| `cg_boltFlyby` | `0` | Enable prototype close-pass cues with `1`; `2` also prints diagnostics |
 
 Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
@@ -95,6 +96,16 @@ existing defense hardware. They use the original alarm's live on/off state.
 They need no new game entities or save format. Only one visible control-panel
 variant emits sound. The relays require `cg_spatialAmbience 1` and stop when the
 original alarm stops. Set `cg_alarmRelays 0` for an original-source comparison.
+
+The close-pass prototype uses quiet stock blaster-deflection clips. Use
+`testflyby left` and `testflyby right` to audition them. Enable `cg_boltFlyby 1`
+to test them in combat. A cue plays only when a foreign bolt passes within
+72 game units of the listener after travelling at least 128 units. A solid wall
+blocks the cue. Each trajectory can play once, with a shared 150 ms interval.
+Player-owned shots, vehicle shots, and cinematics do not add these cues. Shots
+with an existing flight sound retain that sound. Purpose-recorded pass-by clips
+and desktop listening are still needed before enabling this prototype by default.
+Ambient one-shots use the normal reverb send, including these quiet cues.
 
 `cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
 transmission and indirect paths when enabled. Unpositioned global ambient sets
@@ -218,6 +229,7 @@ python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --first-us
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --alarm --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --map kejim_post --acoustics --bake
 python3 scripts/test-steam-audio-sp.py --burst --first-use
+python3 scripts/test-steam-audio-sp.py --flyby --burst --first-use
 python3 scripts/test-steam-audio-sp.py --ambient --bake
 python3 scripts/test-steam-audio-sp.py --campaign jo --ambient --bake
 python3 scripts/test-doors-sp.py --case ordinary --audio

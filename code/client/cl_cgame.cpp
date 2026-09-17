@@ -907,6 +907,10 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 		}
 		S_StartSound( (float *) VMA(1), args[2], (soundChannel_t)args[3], args[4] );
 		return 0;
+	case CG_S_STARTAMBIENTSOUND:
+		if (!cls.cgameStarted) return 0;
+		S_StartAmbientSound((const float *)VMA(1),args[2],Com_Clampi(0,255,args[3]),args[4]);
+		return 0;
 	case CG_S_UPDATEAMBIENTSET:
 		// stops an ERR_DROP internally if called illegally from game side, but note that it also gets here
 		//	legally during level start where normally the internal s_soundStarted check would return. So ok to hit this.

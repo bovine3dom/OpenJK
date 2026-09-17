@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--alarm", action="store_true", help="Check the Kejim Post perimeter alarm behind a wall")
     parser.add_argument("--acoustics", action="store_true", help="Capture indoor and outdoor indirect sound on Kejim Post")
     parser.add_argument("--burst", action="store_true", help="Check headroom with four simultaneous blaster shots")
+    parser.add_argument("--flyby", action="store_true", help="Check left and right close-pass cue auditions")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
@@ -88,10 +89,12 @@ def main():
             if limiter:
                 records[name + "_limiter"] = dict(word.split("=", 1) for word in limiter[1].split())
             return value
-        def capture(continuous=True, wet=False, signal=True):
+        def capture(continuous=True, wet=False, signal=True, play=None):
             start = len(text())
             shots = "; ".join(["s_steam_emit sound/weapons/blaster/fire.wav"] * (4 if args.burst and not wet else 1))
-            cmd(f"s_steam_record 2{' wet' if wet else ''}; {shots}")
+            response = cmd(f"s_steam_record 2{' wet' if wet else ''}; {play or shots}")
+            if play:
+                assert "bolt_flyby audition=1" in response, response
             result = wait("Steam Audio capture continuity:", start)
             match = re.search(r"Steam Audio capture: (\S+)", result)
             assert match
@@ -150,6 +153,10 @@ def main():
                 print("PASS: 22050 Hz legacy fallback and sound restart")
                 return
             assert initial["active"] == "1" and int(initial["triangles"]) > 100, initial
+            if args.flyby:
+                cmd("set cg_boltFlyby 2; set cg_thirdPerson 0")
+                capture(play="testflyby left")
+                capture(play="testflyby right")
             if args.first_use:
                 cmd("s_steam_status reset")
                 assert "AUDIO_FILE_READ" in cmd("exec audio-file-test.cfg")

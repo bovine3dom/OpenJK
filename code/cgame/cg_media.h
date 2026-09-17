@@ -271,6 +271,7 @@ typedef struct {
 
 	sfxHandle_t	selectSound;
 	sfxHandle_t	selectSound2;
+	sfxHandle_t	boltFlybySound[3];
 	sfxHandle_t	overchargeSlowSound;
 	sfxHandle_t overchargeFastSound;
 	sfxHandle_t	overchargeLoopSound;

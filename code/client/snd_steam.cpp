@@ -327,7 +327,7 @@ bool S_SteamPaint(channel_t *channel,const short *samples,int count,int offset,i
 	for(int i=0;i<count;++i) slot.input[offset+i]=samples[i]/32768.0f;
 	slot.left=channel->leftvol*volume/65536.0f; slot.right=channel->rightvol*volume/65536.0f; slot.gain=channel->master_vol*volume/65536.0f;
 	const bool voice=channel->entchannel==CHAN_VOICE || channel->entchannel==CHAN_VOICE_ATTEN;
-	slot.reverbSend=channel->loopSound || voice ? 1 : transientReverb->value;
+	slot.reverbSend=channel->loopSound || voice || channel->entchannel==CHAN_AMBIENT ? 1 : transientReverb->value;
 	return true;
 }
 void S_SteamEndBlock(portable_samplepair_t *output,int count) {

@@ -269,6 +269,7 @@ static consoleCommand_t	commands[] = {
 	{ "testlistbones",		CG_ListModelBones_f},
 	{ "testlistsurfaces",	CG_ListModelSurfaces_f},
 	{ "testmodel",			CG_TestModel_f },
+	{ "testflyby",			CG_TestFlyby_f },
 	{ "testparticle", CG_TestParticle_f },
 	{ "torch", CG_Torch_f },
 	{ "torch_status", CG_TorchStatus_f },

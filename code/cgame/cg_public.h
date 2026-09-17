@@ -238,6 +238,7 @@ Ghoul2 Insert End
 	CG_R_DRAWWEAPONWHEEL,
 	CG_R_PLEXTEXT,
 	CG_R_AUTOMAP,
+	CG_S_STARTAMBIENTSOUND,
 } cgameImport_t;
 
 #ifdef JK2_MODE

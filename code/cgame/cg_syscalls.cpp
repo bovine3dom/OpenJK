@@ -187,6 +187,10 @@ void	cgi_S_StartSound( const vec3_t origin, int entityNum, int entchannel, sfxHa
 	Q_syscall( CG_S_STARTSOUND, origin, entityNum, entchannel, sfx );
 }
 
+void cgi_S_StartAmbientSound(const vec3_t origin,int entityNum,unsigned char volume,sfxHandle_t sfx) {
+	Q_syscall(CG_S_STARTAMBIENTSOUND,origin,entityNum,volume,sfx);
+}
+
 void	cgi_AS_ParseSets( void ) {
 	Q_syscall( CG_AS_PARSESETS );
 }

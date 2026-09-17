@@ -256,6 +256,7 @@ vmCvar_t	cg_shadowCullDistance;
 vmCvar_t	cg_footsteps;
 vmCvar_t	cg_spatialAmbience;
 vmCvar_t	cg_alarmRelays;
+vmCvar_t	cg_boltFlyby;
 vmCvar_t	cg_saberEntMarks;
 vmCvar_t	cg_paused;
 vmCvar_t	cg_drawTimer;
@@ -378,6 +379,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_footsteps, "cg_footsteps", "3", CVAR_ARCHIVE  },//1 = sounds, 2 = sounds & effects, 3 = sounds, effects & marks, 4 = always
 	{ &cg_spatialAmbience, "cg_spatialAmbience", "1", CVAR_ARCHIVE },
 	{ &cg_alarmRelays, "cg_alarmRelays", "1", CVAR_ARCHIVE },
+	{ &cg_boltFlyby, "cg_boltFlyby", "0", CVAR_ARCHIVE },
 	{ &cg_saberEntMarks, "cg_saberEntMarks", "1", CVAR_ARCHIVE  },
 
 	{ &cg_draw2D, "cg_draw2D", "1", CVAR_ARCHIVE  },
@@ -716,6 +718,7 @@ static void CG_RegisterSounds( void ) {
 
 	cgs.media.selectSound = cgi_S_RegisterSound( "sound/weapons/change.wav" );
 	cgs.media.selectSound2 = cgi_S_RegisterSound( "sound/interface/sub_select.wav" );
+	for(i=0;i<3;++i) cgs.media.boltFlybySound[i]=cgi_S_RegisterSound(va("sound/weapons/blaster/reflect%d.wav",i+1));
 //	cgs.media.useNothingSound = cgi_S_RegisterSound( "sound/items/use_nothing.wav" );
 
 	cgs.media.noAmmoSound = cgi_S_RegisterSound( "sound/weapons/noammo.wav" );

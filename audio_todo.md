@@ -2,6 +2,12 @@
 
 ## Current Status
 
+An optional close-pass prototype is available with `cg_boltFlyby 1`. It uses
+quiet stock deflection clips, geometric closest-approach checks, wall checks,
+and rate limits. `testflyby left|right` provides an audition. The default remains
+off while the cue character is evaluated. Ambient one-shots no longer receive
+the stronger gunshot reverb send.
+
 The perimeter alarm now has relays at its existing control panel and gun base.
 All three sources follow the original alarm state. The relay check verifies
 separate emitters, clear sound at the panel, save/load, and scripted stop.
