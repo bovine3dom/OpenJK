@@ -26,6 +26,10 @@ ACTORS = {"cctv": ("cinematic2_kyle", "cinematic_galak", "cinematic_officer4"), 
 
 MAPS["droid"] = "bespin_undercity"
 ACTORS["droid"] = ("droid",)
+MAPS["turret"] = "ns_starpad"
+ACTORS["turret"] = ("lady_luck_gun",)
+MAPS["saber"] = "bespin_undercity"
+ACTORS["saber"] = ("kyle_tube", "reborn_shaft")
 
 
 def run_case(package, case, renderer, saved):
@@ -154,6 +158,14 @@ def run_case(package, case, renderer, saved):
                 cmd("helpusobi 1; wait 150; use jan_jail_door")
             elif case == "trial":
                 cmd("helpusobi 1; wait 150; use cinematic13script")
+            elif case == "saber":
+                cmd("helpusobi 1; god; saberColor yellow; use t179; wait 20; use cin_firstreborn")
+            elif case == "turret":
+                cmd("helpusobi 1; god; notarget; exitview; wait 100; use run_gun_down; wait 100; exitview; setviewpos 256 -808 -648 150; wait 20")
+                capture("turret_external")
+                cmd("use run_enter_reelo; wait 500; exitview; setviewpos 128 -1800 -700 270; wait 20")
+                capture("reelo_turret")
+                cmd("use lady_luck_gun; +attack; wait 10")
             elif case == "droid":
                 if not saved:
                     cmd("helpusobi 1; god; notarget; setviewpos 4660 200 13880 270; use droiddoor; wait 100")
@@ -189,6 +201,11 @@ def run_case(package, case, renderer, saved):
                     assert bone and float(bone[2]) > 0.1, "Officer walk animation is nearly frozen"
                     walking_frames.append(float(bone[1]))
                 history.extend(current)
+                if case == "saber" and any(s.get("name") == "kyle_tube" and s.get("absent") != "1" for s in current):
+                    assert "cinematic_saber name=kyle_tube color=2" in state, state
+                    if not captured and re.search(r"cinematic_combat name=kyle_tube .*blade_active=1 blade_length=[1-9]", state):
+                        capture("yellow_saber")
+                        captured = True
                 if case == "droid" and "campaign=jo map=bespin_streets" in state:
                     break
                 if case == "jan-door":
@@ -214,14 +231,14 @@ def run_case(package, case, renderer, saved):
                     break
                 if case == "topside" and any(s.get("camera") == "0" and s.get("behavior") == "0" for s in current):
                     break
-                if not captured and any(s.get("legs", "").startswith("BOTH_CIN_") if case == "cctv"
+                if case != "saber" and not captured and any(s.get("legs", "").startswith("BOTH_CIN_") if case == "cctv"
                                         else s.get("legs") == "BOTH_EXAMINE2" if case == "office"
                                         else s.get("legs", "").startswith("BOTH_BARTENDER_") if case == "bar"
                                         else s.get("legs", "").startswith("BOTH_HUG") if case == "rescue"
                                         else s.get("nav") == "1" for s in current):
                     capture({"cctv": "galak", "office": "crystal", "bar": "bartender", "rescue": "hug"}.get(case, "walking"))
                     captured = True
-                completed = current[:2] if case == "cctv" else current
+                completed = current[:1] if case == "saber" else current[:2] if case == "cctv" else current
                 if case != "droid" and completed and all(s.get("absent") == "1" for s in completed):
                     break
             else:
@@ -307,6 +324,8 @@ def run_case(package, case, renderer, saved):
                 assert any(s.get("legs") == "BOTH_WALK1" and math.hypot(*map(float, s["velocity"].split(",")[:2])) > 10
                            for s in history), "No walking actor was observed"
                 assert "camera=0" in cmd("campaign_status"), "Scene did not return control"
+            elif case == "saber":
+                assert captured and seen_camera, "Kyle's active yellow saber was not observed in the cutscene"
             elif case == "droid":
                 assert any(s.get("nav") == "1" for s in history), "Droid did not navigate to the lift"
                 assert all(s.get("noclip", "0") == "0" for s in history), "Droid bypassed collision"
@@ -329,7 +348,7 @@ def run_case(package, case, renderer, saved):
             traces = [dict(word.split("=", 1) for word in line.split("cinematic_animation ", 1)[1].split())
                       for line in text.splitlines() if "cinematic_animation actor=" in line]
             staged = [s for s in traces if s["actor"].lower().startswith("cinematic")]
-            assert (staged or case in ("boarding", "jan-door", "droid")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
+            assert (staged or case in ("boarding", "jan-door", "droid", "turret", "saber")) and all(s["supported"] == "1" for s in staged), [s for s in staged if s["supported"] != "1"]
             assert all(s["profile"] == "jo_cinematic" for s in staged), staged
             assert not re.search(r"ERROR:|Error:|Unknown command|[Cc]ouldn't open music file|trying to load fallback renderer", text), log
             print(f"PASS: JO {case} cinematic ({renderer})", flush=True)

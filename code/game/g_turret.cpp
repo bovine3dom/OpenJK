@@ -2305,9 +2305,10 @@ void panel_turret_shoot( gentity_t *self, vec3_t org, vec3_t dir)
 	gentity_t *missile = CreateMissile( org, dir, self->speed, 10000, self );
 
 	missile->classname = "b_proj";
-	missile->s.weapon = WP_TIE_FIGHTER;
+	missile->s.weapon = G_IsOutcast() ? WP_EMPLACED_GUN : WP_TIE_FIGHTER;
 
-	VectorSet( missile->maxs, 9, 9, 9 );
+	const float size = G_IsOutcast() ? 7.0f : 9.0f;
+	VectorSet( missile->maxs, size, size, size );
 	VectorScale( missile->maxs, -1, missile->mins );
 
 	missile->bounceCount = 0;
@@ -2321,7 +2322,7 @@ void panel_turret_shoot( gentity_t *self, vec3_t org, vec3_t dir)
 
 	VectorMA( org, 32, dir, org );
 	org[2] -= 4;
-	G_PlayEffect( "ships/imp_blastermuzzleflash", org, dir );
+	G_PlayEffect( G_IsOutcast() ? "emplaced/muzzle_flash" : "ships/imp_blastermuzzleflash", org, dir );
 }
 
 //-----------------------------------------
@@ -2508,7 +2509,7 @@ void SP_misc_panel_turret( gentity_t *self )
 	self->soundPos2 = G_SoundIndex( "sound/movers/camera_off.mp3" );
 
 	G_SoundIndex( "sound/movers/objects/ladygun_fire" );
-	G_EffectIndex("ships/imp_blastermuzzleflash");
+	G_EffectIndex(G_IsOutcast() ? "emplaced/muzzle_flash" : "ships/imp_blastermuzzleflash");
 
 	G_SetOrigin( self, self->s.origin );
 	G_SetAngles( self, self->s.angles );

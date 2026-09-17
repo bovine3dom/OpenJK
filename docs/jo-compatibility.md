@@ -105,6 +105,23 @@ The test starts Lando at the ship ramp. It retains the retail geometry, routes,
 collision, and scripts. It checks his console animation, speech, and both new
 objectives. Use `--save PATH` to check recovery from a saved boarding sequence.
 
+## JO Cutscene Saber and Ship Gun
+
+JO Kyle actors now use the player's saber color when they spawn. The Bespin
+cutscene check verifies the yellow blade while it is active.
+
+The Lady Luck gun now uses JO's original projectile type, collision bounds, and
+muzzle effect. JA used a TIE fighter projectile, but the gun registered only the
+emplaced weapon. The headless capture shows the restored shot and muzzle flash.
+
+```bash
+python3 scripts/test-jo-cinematics.py --case saber --renderer rdsp-rend2
+python3 scripts/test-jo-cinematics.py --case turret --renderer rdsp-rend2
+```
+
+The reported red column has not been reproduced in these captures. Check a save
+from the affected encounter before marking that issue complete.
+
 ## Bespin Lift Droid
 
 The R5 goal in `bespin_undercity` is near a wall. JA required the route trace to

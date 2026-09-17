@@ -956,6 +956,7 @@ static void Svcmd_CinematicStatus_f(void)
 			ps.forcePower, ps.forcePowerMax, ps.forcePowersKnown, ps.forcePowersActive,
 			ps.saber[0].numBlades, ps.saber[0].blade[0].active, ps.saber[0].blade[0].length, ent->weaponModel[0],
 			ps.viewangles[YAW], ent->NPC->desiredYaw, ent->client->renderInfo.legsYaw, ent->NPC->scriptFlags);
+		gi.Printf("cinematic_saber name=%s color=%d\n", ent->targetname, ps.saber[0].blade[0].color);
 		if (ent->NPC->goalEntity)
 			gi.Printf("cinematic_goal name=%s origin=%.2f,%.2f,%.2f radius=%d waypoint=%d speed=%d\n", ent->targetname,
 				ent->NPC->goalEntity->currentOrigin[0], ent->NPC->goalEntity->currentOrigin[1], ent->NPC->goalEntity->currentOrigin[2],
