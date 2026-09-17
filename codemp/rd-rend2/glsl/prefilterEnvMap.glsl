@@ -133,9 +133,7 @@ void main()
 
 	float roughness = u_ViewInfo.w;
 
-	vec3 result = PrefilterEnvMap(roughness, normal);
-	if (roughness == 0.0)
-		result = textureLod(u_CubeMap, normal, 0.0).rgb;
+	vec3 result = roughness == 0.0 ? textureLod(u_CubeMap, normal, 0.0).rgb : PrefilterEnvMap(roughness, normal);
 
 	out_Color = vec4(result, 1.0);
 }

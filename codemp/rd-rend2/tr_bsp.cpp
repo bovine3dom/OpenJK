@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_cache.h"
 #include "tr_weather.h"
 #include <vector>
+#include <algorithm>
 
 #include <cmath>
 
@@ -3278,7 +3279,7 @@ void R_LoadEnvironmentJson(const char *baseName)
 		return;
 	}
 
-	tr.numCubemaps = JSON_ArrayGetIndex(environmentArrayJson, bufferEnd, NULL, 0);
+	tr.numCubemaps = MIN(JSON_ArrayGetIndex(environmentArrayJson, bufferEnd, NULL, 0), QSORT_CUBEMAP_MASK);
 	tr.cubemaps = (cubemap_t *)R_BSPAlloc(tr.numCubemaps * sizeof(*tr.cubemaps), h_low);
 
 	for (i = 0; i < tr.numCubemaps; i++)
@@ -3330,7 +3331,7 @@ void R_LoadCubemapEntities(const char *cubemapEntityName)
 	if (!numCubemaps)
 		return;
 
-	tr.numCubemaps = numCubemaps;
+	tr.numCubemaps = MIN(numCubemaps, QSORT_CUBEMAP_MASK);
 	tr.cubemaps = (cubemap_t *)R_BSPAlloc(tr.numCubemaps * sizeof(*tr.cubemaps), h_low);
 
 	numCubemaps = 0;
@@ -3363,7 +3364,7 @@ void R_LoadCubemapEntities(const char *cubemapEntityName)
 			}
 		}
 
-		if (isCubemap && originSet)
+		if (isCubemap && originSet && numCubemaps < tr.numCubemaps)
 		{
 			cubemap_t *cubemap = &tr.cubemaps[numCubemaps];
 			Q_strncpyz(cubemap->name, name, MAX_QPATH);
@@ -3373,6 +3374,7 @@ void R_LoadCubemapEntities(const char *cubemapEntityName)
 			numCubemaps++;
 		}
 	}
+	tr.numCubemaps = numCubemaps;
 }
 
 static void R_AssignCubemapsToWorldSurfaces(world_t *worldData)
@@ -3409,24 +3411,296 @@ static void R_AssignCubemapsToWorldSurfaces(world_t *worldData)
 }
 
 
+#ifdef REND2_SP
+static bool R_GlassProbeClear(const vec3_t start, const vec3_t end)
+{
+	trace_t trace;
+	ri.SV_Trace(&trace, start, vec3_origin, vec3_origin, end, ENTITYNUM_NONE,
+		CONTENTS_OPAQUE, G2_NOCOLLIDE, 0);
+	return !trace.startsolid && !trace.allsolid && trace.fraction == 1.0f;
+}
+
+static bool R_GlassProbePosition(const vec3_t center, const vec3_t normal, vec3_t position)
+{
+	vec3_t start;
+	VectorMA(center, 2.0f, normal, start);
+	for (float offset : {48.0f, 24.0f, 12.0f, 6.0f})
+	{
+		VectorMA(center, offset, normal, position);
+		if (!R_inPVS(position, position, nullptr) || !R_GlassProbeClear(start, position)) continue;
+		const vec3_t mins = {-2, -2, -2}, maxs = {2, 2, 2};
+		trace_t trace;
+		ri.SV_Trace(&trace, position, mins, maxs, position, ENTITYNUM_NONE,
+			CONTENTS_SOLID | CONTENTS_OPAQUE, G2_NOCOLLIDE, 0);
+		if (!trace.startsolid && !trace.allsolid) return true;
+	}
+	return false;
+}
+
+static void R_GlassProbeBounds(cubemap_t &probe)
+{
+	for (int axis = 0; axis < 3; ++axis)
+		for (int side = 0; side < 2; ++side)
+		{
+			vec3_t end;
+			VectorCopy(probe.origin, end);
+			end[axis] += side ? 2048.0f : -2048.0f;
+			trace_t trace;
+			ri.SV_Trace(&trace, probe.origin, vec3_origin, vec3_origin, end, ENTITYNUM_NONE,
+				CONTENTS_OPAQUE, G2_NOCOLLIDE, 0);
+			probe.bounds[side][axis] = trace.endpos[axis];
+		}
+}
+
+template<class Vertex>
+static float R_InitGlassAssignment(const Vertex *verts, int numVerts, const glIndex_t *indexes, int numIndexes,
+	const vec3_t origin, const vec3_t angles, const vec3_t scale, glassProbeAssignment_t &assignment, bool curved = false)
+{
+	if (numVerts < 3 || numIndexes < 3 || scale[0] <= 0 || scale[1] <= 0 || scale[2] <= 0) return 0;
+	float area = 0;
+	for (int triangle = 0; triangle < numIndexes; triangle += 3)
+	{
+		const float *a = verts[indexes[triangle]].xyz;
+		const float *b = verts[indexes[triangle + 1]].xyz;
+		const float *c = verts[indexes[triangle + 2]].xyz;
+		vec3_t ab, ac, cross;
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			ab[axis] = (b[axis] - a[axis]) * scale[axis];
+			ac[axis] = (c[axis] - a[axis]) * scale[axis];
+		}
+		CrossProduct(ab, ac, cross);
+		float weight = VectorLength(cross) * 0.5f;
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			assignment.localCenter[axis] += (a[axis] + b[axis] + c[axis]) * weight / 3.0f;
+			for (int corner = 0; corner < 3; ++corner)
+				assignment.localNormal[axis] += verts[indexes[triangle + corner]].normal[axis] * weight / 3.0f;
+		}
+		area += weight;
+	}
+	if (area < 16.0f || VectorNormalize(assignment.localNormal) < 0.001f) return 0;
+	VectorScale(assignment.localCenter, 1.0f / area, assignment.localCenter);
+	for (int vertex = 0; vertex < numVerts; ++vertex)
+	{
+		vec3_t delta;
+		VectorSubtract(verts[vertex].xyz, assignment.localCenter, delta);
+		if (!curved && fabsf(DotProduct(delta, assignment.localNormal)) > 2.0f) return -1;
+	}
+	vec3_t axes[3];
+	AnglesToAxis(angles, axes);
+	VectorCopy(origin, assignment.worldCenter);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		VectorMA(assignment.worldCenter, assignment.localCenter[axis] * scale[axis], axes[axis], assignment.worldCenter);
+		VectorMA(assignment.worldNormal, assignment.localNormal[axis] / scale[axis], axes[axis], assignment.worldNormal);
+	}
+	VectorNormalize(assignment.worldNormal);
+	return area;
+}
+
+static void R_GenerateGlassProbes(world_t *world)
+{
+	if (!r_glassProbes->integer) return;
+	const int startTime = ri.Milliseconds();
+	struct Transform { vec3_t origin, angles; };
+	std::vector<Transform> transforms(world->numBModels);
+	struct ModelPlacement { char name[MAX_QPATH]; Transform transform; vec3_t scale; float zOffset; bool isStatic; };
+	std::vector<ModelPlacement> models;
+	char chars[2048], *vars[MAX_SPAWN_VARS][2];
+	int numVars;
+	R_GetEntityToken(nullptr, -1);
+	while (R_ParseSpawnVars(chars, sizeof(chars), &numVars, vars))
+	{
+		int model = 0;
+		Transform transform = {};
+		const char *classname = "";
+		const char *modelName = "";
+		vec3_t scale = {1, 1, 1};
+		float uniformScale = 0;
+		float zOffset = 0;
+		for (int i = 0; i < numVars; ++i)
+		{
+			const char *key = vars[i][0], *value = vars[i][1];
+			if (!Q_stricmp(key, "model")) { modelName = value; if (value[0] == '*') model = atoi(value + 1); }
+			else if (!Q_stricmp(key, "origin")) sscanf(value, "%f %f %f", &transform.origin[0], &transform.origin[1], &transform.origin[2]);
+			else if (!Q_stricmp(key, "angles")) sscanf(value, "%f %f %f", &transform.angles[0], &transform.angles[1], &transform.angles[2]);
+			else if (!Q_stricmp(key, "angle")) transform.angles[YAW] = atof(value);
+			else if (!Q_stricmp(key, "classname")) classname = value;
+			else if (!Q_stricmp(key, "modelscale_vec")) sscanf(value, "%f %f %f", &scale[0], &scale[1], &scale[2]);
+			else if (!Q_stricmp(key, "modelscale")) uniformScale = atof(value);
+			else if (!Q_stricmp(key, "zoffset")) zOffset = atof(value);
+		}
+		// A sliding mover's angles specify its travel direction, not its orientation.
+		if (!Q_stricmp(classname, "func_door") || !Q_stricmp(classname, "func_plat") || !Q_stricmp(classname, "func_train"))
+			VectorClear(transform.angles);
+		if (model > 0 && model < world->numBModels) transforms[model] = transform;
+		if ((!Q_stricmp(classname, "misc_model_static") || !Q_stricmp(classname, "misc_model_breakable")) &&
+			!Q_stricmp(COM_GetExtension(modelName), "md3"))
+		{
+			ModelPlacement placement = {};
+			Q_strncpyz(placement.name, modelName, sizeof(placement.name));
+			placement.transform = transform;
+			placement.zOffset = zOffset;
+			placement.isStatic = !Q_stricmp(classname, "misc_model_static");
+			if (uniformScale != 0) VectorSet(scale, uniformScale, uniformScale, uniformScale);
+			VectorCopy(scale, placement.scale);
+			models.push_back(placement);
+		}
+	}
+
+	struct Pane { shader_t *shader; glassProbeAssignment_t *assignment; float area; };
+	std::vector<Pane> panes;
+	int rejected = 0;
+	for (int model = 0; model < world->numBModels; ++model)
+	{
+		const bmodel_t &bmodel = world->bmodels[model];
+		for (int index = bmodel.firstSurface; index < bmodel.firstSurface + bmodel.numSurfaces; ++index)
+		{
+			msurface_t &surface = world->surfaces[index];
+			if (!surface.shader->windowGlass) continue;
+			if (*surface.data != SF_FACE && *surface.data != SF_TRIANGLES && *surface.data != SF_GRID) continue;
+			const srfBspSurface_t &mesh = *(srfBspSurface_t *)surface.data;
+			glassProbeAssignment_t assignment = {};
+			const vec3_t scale = {1, 1, 1};
+			const float area = R_InitGlassAssignment(mesh.verts, mesh.numVerts, mesh.indexes, mesh.numIndexes,
+				transforms[model].origin, transforms[model].angles, scale, assignment);
+			if (area < 0) ++rejected;
+			if (area <= 0) continue;
+			surface.glassProbe = (glassProbeAssignment_t *)R_BSPAlloc(sizeof(assignment), h_low);
+			*surface.glassProbe = assignment;
+			panes.push_back({surface.shader, surface.glassProbe, area});
+		}
+	}
+	std::vector<refEntity_t> captureEntities;
+	for (const ModelPlacement &placement : models)
+	{
+		const int handle = RE_RegisterModel(placement.name);
+		const model_t *model = R_GetModelByHandle(handle);
+		if (!handle || model->type != MOD_MESH || !model->data.mdv[0]) continue;
+		if (placement.isStatic)
+		{
+			refEntity_t entity = {};
+			entity.reType = RT_MODEL;
+			entity.hModel = handle;
+			entity.renderfx = RF_LIGHTING_ORIGIN | RF_NOSHADOW;
+			VectorCopy(placement.transform.origin, entity.origin);
+			VectorCopy(entity.origin, entity.oldorigin);
+			VectorCopy(entity.origin, entity.lightingOrigin);
+			entity.lightingOrigin[2] += placement.zOffset + 1.0f;
+			AnglesToAxis(placement.transform.angles, entity.axis);
+			VectorCopy(placement.scale, entity.modelScale);
+			for (int axis = 0; axis < 3; ++axis) VectorScale(entity.axis[axis], placement.scale[axis], entity.axis[axis]);
+			entity.nonNormalizedAxes = qtrue;
+			captureEntities.push_back(entity);
+		}
+		const mdvModel_t &mesh = *model->data.mdv[0];
+		for (int index = 0; index < mesh.numSurfaces; ++index)
+		{
+			const mdvSurface_t &surface = mesh.surfaces[index];
+			if (!surface.numShaderIndexes) continue;
+			shader_t *shader = tr.shaders[surface.shaderIndexes[0]];
+			if (!shader->windowGlass) continue;
+			glassProbeAssignment_t assignment = {};
+			const float area = R_InitGlassAssignment(surface.verts, surface.numVerts, surface.indexes, surface.numIndexes,
+				placement.transform.origin, placement.transform.angles, placement.scale, assignment, true);
+			if (area < 0) ++rejected;
+			if (area <= 0) continue;
+			auto *pane = (glassModelPane_t *)R_BSPAlloc(sizeof(glassModelPane_t), h_low);
+			pane->model = handle;
+			pane->surface = index;
+			pane->assignment = assignment;
+			pane->next = world->glassModelPanes;
+			world->glassModelPanes = pane;
+			panes.push_back({shader, &pane->assignment, area});
+			ri.Printf(PRINT_DEVELOPER, "Glass model pane: %s surface %d at %.1f %.1f %.1f\n", placement.name, index,
+				assignment.worldCenter[0], assignment.worldCenter[1], assignment.worldCenter[2]);
+		}
+	}
+	world->numGlassCaptureEntities = (int)captureEntities.size();
+	if (world->numGlassCaptureEntities)
+	{
+		world->glassCaptureEntities = (refEntity_t *)R_BSPAlloc(world->numGlassCaptureEntities * sizeof(refEntity_t), h_low);
+		memcpy(world->glassCaptureEntities, captureEntities.data(), world->numGlassCaptureEntities * sizeof(refEntity_t));
+	}
+	// Spend the bounded probe budget on large panes before small trim surfaces.
+	std::stable_sort(panes.begin(), panes.end(), [](const Pane &a, const Pane &b) { return a.area > b.area; });
+	std::vector<cubemap_t> probes;
+	for (int i = 0; i < tr.numCubemaps; ++i) probes.push_back(tr.cubemaps[i]);
+	const int first = (int)probes.size();
+	const int limit = MIN(QSORT_CUBEMAP_MASK, first + r_glassProbeBudget->integer);
+	int assigned = 0, shared = 0, invalid = 0, budget = 0;
+	for (const Pane &pane : panes)
+	{
+		glassProbeAssignment_t &assignment = *pane.assignment;
+		for (int side = 0; side < 2; ++side)
+		{
+			const cullType_t cull = pane.shader->cullType;
+			if ((side == 1 && cull == CT_FRONT_SIDED) || (side == 0 && cull == CT_BACK_SIDED)) continue;
+			vec3_t normal, position;
+			VectorScale(assignment.worldNormal, side ? -1.0f : 1.0f, normal);
+			if (!R_GlassProbePosition(assignment.worldCenter, normal, position)) { ++invalid; continue; }
+			int selected = -1;
+			float nearest = 512.0f * 512.0f;
+			for (int i = first; i < (int)probes.size(); ++i)
+			{
+				vec3_t delta;
+				VectorSubtract(position, probes[i].origin, delta);
+				const float distance = VectorLengthSquared(delta);
+				if (distance > nearest || fabsf(delta[2]) > 96.0f) continue;
+				// A cubemap can serve differently angled panes in the same space, but
+				// both capture positions must remain on the correct side of both panes.
+				if (DotProduct(probes[i].origin, normal) - DotProduct(assignment.worldCenter, normal) < 2.0f ||
+					DotProduct(position, probes[i].glassNormal) - probes[i].glassPlaneDist < 2.0f) continue;
+				if (!R_inPVS(position, probes[i].origin, nullptr) || !R_GlassProbeClear(position, probes[i].origin)) continue;
+				selected = i;
+				nearest = distance;
+			}
+			if (selected >= 0) ++shared;
+			if (selected < 0)
+			{
+				if ((int)probes.size() == limit) { ++budget; continue; }
+				cubemap_t probe = {};
+				probe.glass = true;
+				VectorCopy(position, probe.origin);
+				VectorCopy(normal, probe.glassNormal);
+				probe.glassPlaneDist = DotProduct(normal, assignment.worldCenter);
+				R_GlassProbeBounds(probe);
+				selected = (int)probes.size();
+				Com_sprintf(probe.name, sizeof(probe.name), "glass-%d", selected);
+				probes.push_back(probe);
+				ri.Printf(PRINT_DEVELOPER, "Glass probe %d: %.1f %.1f %.1f normal %.2f %.2f %.2f\n", selected + 1,
+					position[0], position[1], position[2], normal[0], normal[1], normal[2]);
+			}
+			assignment.cubemap[side] = selected + 1;
+			++assigned;
+		}
+	}
+	tr.numCubemaps = (int)probes.size();
+	if (tr.numCubemaps > first)
+	{
+		tr.cubemaps = (cubemap_t *)R_BSPAlloc(tr.numCubemaps * sizeof(cubemap_t), h_low);
+		memcpy(tr.cubemaps, probes.data(), tr.numCubemaps * sizeof(cubemap_t));
+	}
+	ri.Printf(PRINT_ALL, "Glass probes: %d generated, %d pane sides assigned (%d shared), %d invalid, %d budget fallback, %d nonplanar, %d ms placement\n",
+		tr.numCubemaps - first, assigned, shared, invalid, budget, rejected, ri.Milliseconds() - startTime);
+}
+#endif
+
 static void R_RenderAllCubemaps()
 {
 	R_IssuePendingRenderCommands();
 	R_InitNextFrame();
 
-	GLenum cubemapFormat = GL_RGBA8;
-	if (r_hdr->integer)
-	{
-		cubemapFormat = GL_RGBA16F;
-	}
+	const int startTime = ri.Milliseconds();
 
 	for (int k = 0; k <= r_cubeMappingBounces->integer; k++)
 	{
 		bool bounce = k != 0;
-		// Limit number of Cubemaps per map
-		int maxCubemaps = MIN(tr.numCubemaps, 128);
+		int maxCubemaps = MIN(tr.numCubemaps, QSORT_CUBEMAP_MASK);
 		for (int i = 0; i < maxCubemaps; i++)
 		{
+			if (bounce && tr.cubemaps[i].glass) continue;
 			for (int j = 0; j < 6; j++)
 			{
 				R_RenderCubemapSide(i, j, bounce);
@@ -3436,6 +3710,7 @@ static void R_RenderAllCubemaps()
 			R_IssuePendingRenderCommands();
 		}
 	}
+	ri.Printf(PRINT_ALL, "Cubemap capture: %d probes, %d ms\n", tr.numCubemaps, ri.Milliseconds() - startTime);
 }
 
 
@@ -3553,6 +3828,8 @@ static void R_MergeLeafSurfaces(world_t *worldData)
 			}
 
 			shader1 = surf1->shader;
+			// Each pane side has its own probe; merging would discard that assignment.
+			if (r_glassProbes->integer && shader1->windowGlass) continue;
 
 			if(shader1->isSky)
 				continue;
@@ -4604,9 +4881,12 @@ void RE_LoadWorldMap( const char *name ) {
 	tr.world = world;
 
 	R_InitWeatherForMap();
+#ifdef REND2_SP
+	R_GenerateGlassProbes(world);
+#endif
 
 	// Render all cubemaps
-	if (r_cubeMapping->integer && tr.numCubemaps)
+	if ((r_cubeMapping->integer || r_glassProbes->integer) && tr.numCubemaps)
 	{
 		R_RenderAllCubemaps();
 	}

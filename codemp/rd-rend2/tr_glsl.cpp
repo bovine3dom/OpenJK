@@ -140,6 +140,10 @@ static uniformInfo_t uniformsInfo[] =
 	{ "u_NormalScale",   GLSL_VEC4, 1 },
 	{ "u_SpecularScale", GLSL_VEC4, 1 },
 	{ "u_MaterialParams", GLSL_VEC4, 1 },
+	{ "u_GlassParams", GLSL_VEC4, 1 },
+	{ "u_GlassDebug", GLSL_INT, 1 },
+	{ "u_CubeMapMins", GLSL_VEC3, 1 },
+	{ "u_CubeMapMaxs", GLSL_VEC3, 1 },
 	{ "u_SoftParticleParams", GLSL_VEC4, 1 },
 	{ "u_SSSParams", GLSL_VEC4, 1 },
 	{ "u_SkinBounds", GLSL_VEC4, 1 },
@@ -406,7 +410,7 @@ static size_t GLSL_GetShaderHeader(
 						fbufWidthScale,
 						fbufHeightScale));
 
-	if (r_cubeMapping->integer)
+	if (r_cubeMapping->integer || r_glassProbes->integer)
 	{
 		Q_strcat(dest, size, va("#define CUBEMAP_RESOLUTION float(%i)\n", CUBE_MAP_SIZE));
 		Q_strcat(dest, size, va("#define ROUGHNESS_MIPS float(%i)\n", CUBE_MAP_ROUGHNESS_MIPS));
@@ -1650,6 +1654,48 @@ static int GLSL_LoadGPUProgramGeneric(
 	return numPrograms;
 }
 
+static int GLSL_LoadGPUProgramGlass(ShaderProgramBuilder &builder, Allocator &scratchAlloc)
+{
+	Allocator allocator(scratchAlloc.Base(), scratchAlloc.GetSize());
+	const GPUProgramDesc *source = LoadProgramSource("glass", allocator, fallback_genericProgram);
+	int count = 0;
+	for (int i = 0; i < 12; ++i)
+	{
+		if ((i & 2) && !r_cubeMapping->integer && !r_glassProbes->integer) continue;
+		char defines[256] = "#define USE_GLASS\n#define USE_TCGEN\n#define USE_TCMOD\n#define USE_RGBAGEN\n";
+		uint32_t attribs = ATTR_POSITION | ATTR_NORMAL | ATTR_TEXCOORD0 | ATTR_COLOR;
+#ifdef REND2_SP
+		if (i / 4 == 1)
+		{
+			Q_strcat(defines, sizeof(defines), "#define USE_VERTEX_ANIMATION\n");
+			attribs |= ATTR_POSITION2 | ATTR_NORMAL2;
+		}
+#else
+		if (i / 4 == 1) continue;
+#endif
+		if (i / 4 == 2)
+		{
+			Q_strcat(defines, sizeof(defines), "#define USE_SKELETAL_ANIMATION\n");
+			attribs |= ATTR_BONE_INDEXES | ATTR_BONE_WEIGHTS;
+		}
+		if (i & 1) Q_strcat(defines, sizeof(defines), "#define USE_FOG\n");
+		if (i & 2) Q_strcat(defines, sizeof(defines), "#define USE_CUBEMAP\n");
+		shaderProgram_t *program = &tr.glassShader[i];
+		if (!GLSL_LoadGPUShader(builder, program, "glass", attribs,
+			NO_XFB_VARS, defines, *source))
+			ri.Error(ERR_FATAL, "Could not load glass shader!");
+		GLSL_InitUniforms(program);
+		qglUseProgram(program->program);
+		GLSL_SetUniformInt(program, UNIFORM_DIFFUSEMAP, TB_DIFFUSEMAP);
+		GLSL_SetUniformInt(program, UNIFORM_SCREENDEPTHMAP, TB_SHADOWMAP);
+		GLSL_SetUniformInt(program, UNIFORM_CUBEMAP, TB_CUBEMAP);
+		qglUseProgram(0);
+		GLSL_FinishGPUShader(program);
+		++count;
+	}
+	return count;
+}
+
 static int GLSL_LoadGPUProgramFogPass(
 	ShaderProgramBuilder& builder,
 	Allocator& scratchAlloc )
@@ -2549,6 +2595,7 @@ void GLSL_LoadGPUShaders()
 	int numLightShaders = 0;
 	int numEtcShaders = 0;
 	numGenShaders += GLSL_LoadGPUProgramGeneric(builder, allocator);
+	numEtcShaders += GLSL_LoadGPUProgramGlass(builder, allocator);
 	numLightShaders += GLSL_LoadGPUProgramLightAll(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramFogPass(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramRefraction(builder, allocator);
@@ -2578,7 +2625,7 @@ void GLSL_LoadGPUShaders()
 	numEtcShaders += GLSL_LoadGPUProgramCalcLuminanceLevel(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramSSAO(builder, allocator);
 	numEtcShaders += GLSL_LoadEnhancementPrograms(builder, allocator);
-	if (r_cubeMapping->integer)
+	if (r_cubeMapping->integer || r_glassProbes->integer)
 		numEtcShaders += GLSL_LoadGPUProgramPrefilterEnvMap(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramDepthBlur(builder, allocator);
 	numEtcShaders += GLSL_LoadGPUProgramGaussianBlur(builder, allocator);
@@ -2635,6 +2682,7 @@ void GLSL_ShutdownGPUShaders(qboolean destroyWindow)
 	activePrograms.clear();
 
 	GLSL_DeleteGPUShader(&tr.splashScreenShader);
+	for (auto &program : tr.glassShader) GLSL_DeleteGPUShader(&program);
 
 	for ( i = 0; i < GENERICDEF_COUNT; i++)
 		GLSL_DeleteGPUShader(&tr.genericShader[i]);

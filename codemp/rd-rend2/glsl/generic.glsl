@@ -98,6 +98,9 @@ uniform vec4 u_Disintegration; // origin, threshhold
 out vec2 var_DiffuseTex;
 out vec4 var_Color;
 out vec3 var_WSPosition;
+#if defined(USE_GLASS)
+out vec3 var_WSNormal;
+#endif
 
 #if defined(USE_DEFORM_VERTEXES)
 float GetNoiseValue( float x, float y, float z, float t )
@@ -453,6 +456,9 @@ void main()
 	}
 
 	var_WSPosition = (u_ModelMatrix * vec4(position, 1.0)).xyz;
+#if defined(USE_GLASS)
+	var_WSNormal = transpose(inverse(mat3(u_ModelMatrix))) * normal;
+#endif
 }
 
 
@@ -508,6 +514,19 @@ uniform int u_FogIndex;
 in vec2 var_DiffuseTex;
 in vec4 var_Color;
 in vec3 var_WSPosition;
+#if defined(USE_GLASS)
+in vec3 var_WSNormal;
+uniform vec4 u_GlassParams; // strength, roughness, probe exposure, texture alpha
+uniform int u_GlassDebug;
+uniform vec4 u_DiffuseTexMatrix;
+uniform vec4 u_DiffuseTexOffTurb;
+#if defined(USE_CUBEMAP)
+uniform samplerCube u_CubeMap;
+uniform vec4 u_CubeMapInfo;
+uniform vec3 u_CubeMapMins;
+uniform vec3 u_CubeMapMaxs;
+#endif
+#endif
 
 out vec4 out_Color;
 out vec4 out_Glow;
@@ -548,6 +567,42 @@ void main()
 {
 	vec4 color  = texture(u_DiffuseMap, var_DiffuseTex);
 	color.a *= var_Color.a;
+#if defined(USE_GLASS)
+	vec3 N = normalize(var_WSNormal);
+	vec3 viewDir = u_ViewOrigin - var_WSPosition;
+	vec3 V = normalize(viewDir);
+	vec3 R = reflect(-V, N);
+	// Use a per-fragment reflection direction, not interpolated environment UVs.
+	vec2 st = R.yz * vec2(0.5, -0.5) + 0.5;
+	st = vec2(dot(st, u_DiffuseTexMatrix.xz), dot(st, u_DiffuseTexMatrix.yw)) + u_DiffuseTexOffTurb.xy;
+	vec4 authored = texture(u_DiffuseMap, st, u_GlassParams.y * 3.0);
+	float coverage = var_Color.a * mix(1.0, authored.a, u_GlassParams.w);
+	float F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(N, V)), 0.0, 1.0), 5.0);
+	// Two interfaces of a thin sheet, including repeated internal reflection.
+	F = 2.0 * F / (1.0 + F);
+	color.a = clamp(coverage * F * u_GlassParams.x, 0.0, 1.0);
+#if defined(USE_CUBEMAP)
+	// Approximate room-box projection. Outside the box, use the direction alone.
+	vec3 sampleDirection = R;
+	if (all(greaterThanEqual(var_WSPosition, u_CubeMapMins - 2.0)) && all(lessThanEqual(var_WSPosition, u_CubeMapMaxs + 2.0)))
+	{
+		vec3 safeR = mix(vec3(-1.0), vec3(1.0), greaterThanEqual(R, vec3(0.0))) * max(abs(R), vec3(0.0001));
+		vec3 farPlane = max((u_CubeMapMins - var_WSPosition) / safeR, (u_CubeMapMaxs - var_WSPosition) / safeR);
+		float distance = max(0.0, min(farPlane.x, min(farPlane.y, farPlane.z)));
+		sampleDirection = var_WSPosition + R * distance - u_CubeMapInfo.xyz;
+	}
+	color.rgb = textureLod(u_CubeMap, sampleDirection, u_GlassParams.y * u_CubeMapInfo.w).rgb * u_GlassParams.z;
+#else
+	color.rgb = authored.rgb * 0.5;
+#endif
+	if (u_GlassDebug == 1 || u_GlassDebug == 2) color.a = 1.0;
+	if (u_GlassDebug == 2)
+#if defined(USE_CUBEMAP)
+		color.rgb = vec3(0.0, 1.0, 0.0);
+#else
+		color.rgb = vec3(1.0, 0.0, 0.0);
+#endif
+#endif
 #if defined(USE_ALPHA_TEST)
 	if (u_AlphaTestType == ALPHA_TEST_GT0)
 	{
@@ -578,6 +633,11 @@ void main()
 #endif
 
 	out_Color = vec4(ApplyMapHaze(color.rgb * var_Color.rgb, u_ViewOrigin, var_WSPosition), color.a);
+#if defined(USE_GLASS)
+	// Premultiply after fog and haze. Transmission comes from the framebuffer once.
+	out_Color.rgb *= out_Color.a;
+	if (u_GlassDebug == 3) out_Color.rgb = vec3(0.0);
+#endif
 	if (u_SoftParticleParams.x > 0.0)
 	{
 		float depth = texture(u_ScreenDepthMap, gl_FragCoord.xy / r_FBufScale).r;

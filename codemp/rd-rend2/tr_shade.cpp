@@ -1443,6 +1443,9 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 	UniformDataWriter uniformDataWriter;
 	SamplerBindingsWriter samplerBindingsWriter;
+	const bool windowGlass = r_glass->integer && !backEnd.comparisonBaseline &&
+		!backEnd.depthFill && !backEnd.refractionFill && !input->shader->useDistortion &&
+		!(backEnd.currentEntity->e.renderfx & (RF_DISTORTION | RF_DISINTEGRATE1 | RF_DISINTEGRATE2));
 
 	for ( int stage = 0; stage < MAX_SHADER_STAGES; stage++ )
 	{
@@ -1467,6 +1470,15 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		{
 			continue;
 		}
+		if (windowGlass && pStage->glass == shaderStage_t::GLASS_ATTENUATION)
+			continue;
+		const bool glass = windowGlass && pStage->glass == shaderStage_t::GLASS_REFLECTION;
+		bool enableCubeMaps = !backEnd.comparisonBaseline && (r_cubeMapping->integer || (glass && r_glassProbes->integer)) &&
+			!(backEnd.viewParms.flags & VPF_NOCUBEMAPS) && input->cubemapIndex > 0 &&
+			tr.cubemaps[input->cubemapIndex - 1].image && pStage->rgbGen != CGEN_LIGHTMAPSTYLE;
+		// Coloured stock reflections carry their colour in the authored image.
+		if (glass && (strstr(input->shader->name, "_red") || strstr(input->shader->name, "_green")))
+			enableCubeMaps = false;
 
 		stateBits = pStage->stateBits;
 		if (backEnd.sssFill && (pStage->glslShaderGroup != tr.lightallShader ||
@@ -1531,7 +1543,15 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		if (backEnd.viewParms.flags & VPF_POINTSHADOW)
 			stateBits |= GLS_POLYGON_OFFSET_FILL;
 
-		sp = SelectShaderProgram(stage, pStage, pStage->glslShaderGroup, useAlphaTestGE192, forceRefraction);
+		if (glass)
+			stateBits = (stateBits & ~(GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS | GLS_DEPTHMASK_TRUE)) |
+				GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA;
+		int glassIndex = (input->fogNum ? 1 : 0) | (enableCubeMaps ? 2 : 0) | (glState.skeletalAnimation ? 8 : 0);
+#ifdef REND2_SP
+		if (glState.vertexAnimation) glassIndex = (glassIndex & 3) | 4;
+#endif
+		sp = glass ? &tr.glassShader[glassIndex] :
+			SelectShaderProgram(stage, pStage, pStage->glslShaderGroup, useAlphaTestGE192, forceRefraction);
 		assert(sp);
 
 		uniformDataWriter.Start(sp);
@@ -1541,11 +1561,19 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		const bool additive = blend == (GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE) ||
 			blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE);
 		RB_SetHazeUniforms(uniformDataWriter, samplerBindingsWriter, !input->fogNum && !input->shader->isSky &&
-			input->shader->numUnfoggedPasses == 1 && (!blend || alphaBlend || additive), !additive);
+			(glass || input->shader->numUnfoggedPasses == 1) && (glass || !blend || alphaBlend || additive), !additive);
+		if (glass)
+		{
+			const vec4_t params = {r_glassReflection->value, r_glassRoughness->value, powf(2.0f, r_glassExposure->value),
+				(pStage->stateBits & GLS_SRCBLEND_BITS) == GLS_SRCBLEND_SRC_ALPHA ? 1.0f : 0.0f};
+			uniformDataWriter.SetUniformVec4(UNIFORM_GLASSPARAMS, params);
+			uniformDataWriter.SetUniformInt(UNIFORM_GLASSDEBUG, r_glassDebug->integer);
+		}
 
 		if ( input->fogNum ) {
 			vec4_t fogColorMask;
 			ComputeFogColorMask(pStage, fogColorMask);
+			if (glass) VectorSet4(fogColorMask, 0, 0, 0, 1);
 			uniformDataWriter.SetUniformVec4(UNIFORM_FOGCOLORMASK, fogColorMask);
 			uniformDataWriter.SetUniformInt(UNIFORM_FOGINDEX, input->fogNum - 1);
 		}
@@ -1571,6 +1599,13 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			else
 #endif
 				ComputeShaderColors(pStage, baseColor, vertColor, stateBits, &forceRGBGen, &forceAlphaGen);
+			// Legacy constant alpha controls fake-reflection intensity. Fresnel now
+			// supplies that weight; texture masks and entity fades still apply.
+			if (glass && pStage->alphaGen == AGEN_CONST)
+			{
+				baseColor[3] = 1.0f;
+				vertColor[3] = 0.0f;
+			}
 
 			if ((backEnd.refdef.colorScale != 1.0f) && !(backEnd.refdef.rdflags & RDF_NOWORLDMODEL))
 			{
@@ -1744,10 +1779,6 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		//
 		// do multitexture
 		//
-		bool enableCubeMaps = (	!backEnd.comparisonBaseline && r_cubeMapping->integer
-								&& !(backEnd.viewParms.flags & VPF_NOCUBEMAPS)
-								&& input->cubemapIndex > 0
-								&& pStage->rgbGen != CGEN_LIGHTMAPSTYLE );
 		bool enableDLights = (	tess.dlightBits
 								&& tess.shader->sort <= SS_OPAQUE
 								&& !(tess.shader->surfaceFlags & (SURF_NODLIGHT | SURF_SKY))
@@ -1917,12 +1948,27 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			cubemap_t *cubemap = &tr.cubemaps[input->cubemapIndex - 1];
 
 			samplerBindingsWriter.AddStaticImage(cubemap->image, TB_CUBEMAP);
-			samplerBindingsWriter.AddStaticImage(tr.envBrdfImage, TB_ENVBRDFMAP);
+			if (!glass) samplerBindingsWriter.AddStaticImage(tr.envBrdfImage, TB_ENVBRDFMAP);
 
-			VectorSubtract(cubemap->origin, backEnd.viewParms.ori.origin, vec);
-			vec[3] = 1.0f;
-
-			VectorScale4(vec, 1.0f / cubemap->parallaxRadius, vec);
+			if (glass)
+			{
+				VectorCopy(cubemap->origin, vec);
+				vec[3] = cubemap->glass ? 5.0f : (float)CUBE_MAP_ROUGHNESS_MIPS;
+				vec3_t mins, maxs;
+				for (int axis = 0; axis < 3; ++axis)
+				{
+					mins[axis] = cubemap->glass ? cubemap->bounds[0][axis] : cubemap->origin[axis] - MAX(1.0f, cubemap->parallaxRadius);
+					maxs[axis] = cubemap->glass ? cubemap->bounds[1][axis] : cubemap->origin[axis] + MAX(1.0f, cubemap->parallaxRadius);
+				}
+				uniformDataWriter.SetUniformVec3(UNIFORM_CUBEMAPMINS, mins);
+				uniformDataWriter.SetUniformVec3(UNIFORM_CUBEMAPMAXS, maxs);
+			}
+			else
+			{
+				VectorSubtract(cubemap->origin, backEnd.viewParms.ori.origin, vec);
+				vec[3] = 1.0f;
+				VectorScale4(vec, 1.0f / MAX(1.0f, cubemap->parallaxRadius), vec);
+			}
 
 			uniformDataWriter.SetUniformVec4(UNIFORM_CUBEMAPINFO, vec);
 		}

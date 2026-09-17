@@ -320,9 +320,34 @@ static int R_PshadowSurface( msurface_t *surf, int pshadowBits ) {
 
 /*
 ======================
-R_AddWorldSurface
+R_GlassCubemapForAssignment
 ======================
 */
+int R_GlassCubemapForAssignment(const glassProbeAssignment_t &probe, const trRefEntity_t *entity)
+{
+	vec3_t center, normal, delta;
+	VectorCopy(probe.localCenter, center);
+	VectorCopy(probe.localNormal, normal);
+	if (entity)
+	{
+		VectorCopy(entity->e.origin, center);
+		VectorClear(normal);
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			VectorMA(center, probe.localCenter[axis], entity->e.axis[axis], center);
+			float lengthSquared = VectorLengthSquared(entity->e.axis[axis]);
+			if (lengthSquared <= 0.0f) return 0;
+			VectorMA(normal, probe.localNormal[axis] / lengthSquared, entity->e.axis[axis], normal);
+		}
+		VectorNormalize(normal);
+	}
+	VectorSubtract(center, probe.worldCenter, delta);
+	// A moved/rotated model must not retain a reflection from its old room.
+	if (VectorLengthSquared(delta) >= 64.0f || DotProduct(normal, probe.worldNormal) < 0.99f) return 0;
+	VectorSubtract(tr.viewParms.ori.origin, center, delta);
+	return probe.cubemap[DotProduct(delta, normal) < 0.0f ? 1 : 0];
+}
+
 static void R_AddWorldSurface(
 	msurface_t *surf,
 	const trRefEntity_t *entity,
@@ -358,8 +383,15 @@ static void R_AddWorldSurface(
 		isPostRenderEntity = R_IsPostRenderEntity(entity);
 	}
 
+	int cubemap = surf->cubemapIndex;
+	if (r_glassProbes->integer && surf->shader->windowGlass)
+	{
+		cubemap = 0;
+		if (const glassProbeAssignment_t *probe = surf->glassProbe)
+			cubemap = R_GlassCubemapForAssignment(*probe, entityNum == REFENTITYNUM_WORLD ? nullptr : entity);
+	}
 	R_AddDrawSurf( surf->data, entityNum, surf->shader, surf->fogIndex,
-			dlightBits, isPostRenderEntity, surf->cubemapIndex );
+			dlightBits, isPostRenderEntity, cubemap );
 
 	for ( int i = 0, numSprites = surf->numSurfaceSprites;
 			i < numSprites; ++i )

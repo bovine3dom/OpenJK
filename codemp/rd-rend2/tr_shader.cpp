@@ -3938,6 +3938,51 @@ Returns a freshly allocated shader with all the needed info
 from the current global working shader
 =========================
 */
+static void FinishWindowGlass(int numStages)
+{
+	// JO windows often have no material flag. Restrict conversion to the stock
+	// window families and validate the stages, rather than treating all Glass as windows.
+	const char *name = shader.name;
+	if (!strstr(name, "glass") ||
+		shader.isPortal || shader.useDistortion || shader.numDeforms ||
+		strstr(name, "opaque") || strstr(name, "crystal"))
+		return;
+	if (Q_stricmpn(name, "textures/common/", 16) && Q_stricmpn(name, "textures/tests/", 15) &&
+		Q_stricmp(name, "textures/kejim/glass") && Q_stricmp(name, "textures/factory/env_glass") &&
+		Q_stricmp(name, "models/map_objects/factory/glass") && Q_stricmp(name, "models/map_objects/factory/glass_b") &&
+		Q_stricmp(name, "textures/rbettenbergtest/rbettenbergtest_glass1"))
+		return;
+	int reflection = -1;
+	for (int i = 0; i < numStages; ++i)
+	{
+		const shaderStage_t &stage = stages[i];
+		const int blend = stage.stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS);
+		if (!blend || stage.alphaTestType != ALPHA_TEST_NONE || stage.glow ||
+			stage.bundle[0].isLightmap || stage.glslShaderGroup == tr.lightallShader)
+			return;
+		if (stage.bundle[0].tcGen == TCGEN_ENVIRONMENT_MAPPED &&
+			(blend == (GLS_SRCBLEND_ONE | GLS_DSTBLEND_ONE) ||
+			 blend == (GLS_SRCBLEND_SRC_ALPHA | GLS_DSTBLEND_ONE_MINUS_SRC_ALPHA)))
+		{
+			if (reflection >= 0) return;
+			reflection = i;
+		}
+	}
+	if (reflection < 0) return;
+	shader.windowGlass = true;
+	ri.Printf(PRINT_DEVELOPER, "Thin window: %s (reflection stage %d)\n", name, reflection);
+	stages[reflection].glass = shaderStage_t::GLASS_REFLECTION;
+	for (int i = 0; i < numStages; ++i)
+	{
+		shaderStage_t &stage = stages[i];
+		if (stage.bundle[0].tcGen == TCGEN_TEXTURE &&
+			stage.bundle[0].image[0] == stages[reflection].bundle[0].image[0] &&
+			(stage.stateBits & (GLS_SRCBLEND_BITS | GLS_DSTBLEND_BITS)) ==
+			(GLS_SRCBLEND_ZERO | GLS_DSTBLEND_ONE_MINUS_SRC_COLOR))
+			stage.glass = shaderStage_t::GLASS_ATTENUATION;
+	}
+}
+
 static shader_t *FinishShader( void ) {
 	R_InitSkinProfile(shader);
 	int stage;
@@ -4206,6 +4251,7 @@ static shader_t *FinishShader( void ) {
 	// look for multitexture potential
 	//
 	stage = CollapseStagesToGLSL();
+	FinishWindowGlass(stage);
 
 	if ( shader.lightmapIndex[0] >= 0 && !hasLightmapStage ) {
 		ri.Printf( PRINT_DEVELOPER, "WARNING: shader '%s' has lightmap but no lightmap stage!\n", shader.name );

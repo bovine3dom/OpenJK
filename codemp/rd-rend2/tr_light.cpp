@@ -509,6 +509,8 @@ int R_CubemapForPoint( const vec3_t point )
 
 		for (i = 0; i < tr.numCubemaps; i++)
 		{
+			// Window probes are assigned to pane sides, never to unrelated materials.
+			if (tr.cubemaps[i].glass) continue;
 			vec3_t diff;
 			float length;
 

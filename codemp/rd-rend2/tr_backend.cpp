@@ -2058,6 +2058,9 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 	qglGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 	qglBindTexture(GL_TEXTURE_CUBE_MAP, 0);
 
+	// Reuse bounded automatic-probe image slots across direct world reloads.
+	if (cmd->cubemap->glass)
+		cmd->cubemap->image = tr.glassProbeImages[cmd->cubemapId];
 	if (!cmd->cubemap->image)
 	{
 		GLenum cubemapFormat = GL_RGBA8;
@@ -2067,24 +2070,26 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 		}
 		// FIX ME: Only allocate needed mip level!
 		cmd->cubemap->image = R_CreateImage(
-			va("*cubeMap%d", cmd->cubemapId),
+			va(cmd->cubemap->glass ? "*glassCube%d" : "*cubeMap%d", cmd->cubemapId),
 			NULL,
-			CUBE_MAP_SIZE,
-			CUBE_MAP_SIZE,
+			cmd->cubemap->glass ? 128 : CUBE_MAP_SIZE,
+			cmd->cubemap->glass ? 128 : CUBE_MAP_SIZE,
 			IMGTYPE_COLORALPHA,
 			IMGFLAG_NO_COMPRESSION |
 			IMGFLAG_CLAMPTOEDGE |
 			IMGFLAG_MIPMAP |
 			IMGFLAG_CUBEMAP,
 			cubemapFormat);
+		if (cmd->cubemap->glass)
+			tr.glassProbeImages[cmd->cubemapId] = cmd->cubemap->image;
 	}
 	assert(cmd->cubemap->image);
 
 	int width = cmd->cubemap->image->width;
 	int height = cmd->cubemap->image->height;
-	float roughnessMips = (float)CUBE_MAP_ROUGHNESS_MIPS;
+	float roughnessMips = cmd->cubemap->glass ? 5.0f : (float)CUBE_MAP_ROUGHNESS_MIPS;
 
-	for (int level = 0; level <= CUBE_MAP_ROUGHNESS_MIPS; level++)
+	for (int level = 0; level <= (int)roughnessMips; level++)
 	{
 		FBO_Bind(tr.filterCubeFbo);
 		qglFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, cmd->cubemap->image->texnum, level);

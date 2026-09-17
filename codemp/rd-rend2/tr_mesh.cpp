@@ -416,8 +416,19 @@ void R_AddMD3Surfaces( trRefEntity_t *ent, int entityNum ) {
 		if(!personalModel)
 		{
 			srfVBOMDVMesh_t *vboSurface = &model->vboSurfaces[i];
+			int surfaceCubemap = cubemapIndex;
+			if (r_glassProbes->integer && shader->windowGlass && tr.world)
+			{
+				surfaceCubemap = 0;
+				for (const glassModelPane_t *pane = tr.world->glassModelPanes; pane; pane = pane->next)
+					if (pane->model == tr.currentModel->index && pane->surface == i)
+					{
+						surfaceCubemap = R_GlassCubemapForAssignment(pane->assignment, ent);
+						if (surfaceCubemap) break;
+					}
+			}
 
-			R_AddDrawSurf((surfaceType_t *)vboSurface, entityNum, shader, fogNum, dlightBits, R_IsPostRenderEntity(ent), cubemapIndex );
+			R_AddDrawSurf((surfaceType_t *)vboSurface, entityNum, shader, fogNum, dlightBits, R_IsPostRenderEntity(ent), surfaceCubemap );
 			//R_AddDrawSurf((surfaceType_t *)vboSurface, entityNum, shader, fogNum, qfalse, R_IsPostRenderEntity(ent), cubemapIndex );
 		}
 
@@ -425,6 +436,5 @@ void R_AddMD3Surfaces( trRefEntity_t *ent, int entityNum ) {
 	}
 
 }
-
 
 

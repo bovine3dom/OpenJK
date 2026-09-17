@@ -1796,6 +1796,7 @@ void R_AddDrawSurf(
 {
 	int index;
 	drawSurf_t *surf;
+	if ((tr.viewParms.flags & VPF_GLASS_CAPTURE) && (shader->windowGlass || *surface == SF_WEATHER)) return;
 
 #ifndef REND2_SP
 	if (tr.refdef.rdflags & RDF_NOFOG)
@@ -2477,6 +2478,13 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 	}
 
 	RE_BeginFrame(STEREO_CENTER);
+	RE_ClearScene();
+	if (tr.cubemaps[cubemapIndex].glass && tr.world)
+		for (int i = 0; i < tr.world->numGlassCaptureEntities; ++i)
+		{
+			const refEntity_t &entity = tr.world->glassCaptureEntities[i];
+			if (R_inPVS(refdef.vieworg, entity.lightingOrigin, nullptr)) RE_AddRefEntityToScene(&entity);
+		}
 
 	RE_BeginScene(&refdef);
 
@@ -2484,6 +2492,8 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 
 	for (int i = 0; i < tr.numCachedViewParms; i++)
 	{
+		if (tr.cubemaps[cubemapIndex].glass)
+			tr.cachedViewParms[i].flags |= VPF_GLASS_CAPTURE | VPF_NOCUBEMAPS;
 		if (!tr.cachedViewParms[i].targetFbo)
 		{
 			tr.cachedViewParms[i].targetFbo = tr.renderCubeFbo[cubemapSide];

@@ -1,5 +1,8 @@
 # Material Calibration
 
+For window controls, coverage, and capture tests, see
+[Window Glass Presentation](glass-presentation.md).
+
 Rend2 can read authored normal maps or generate normals from diffuse textures.
 Generated normals infer height from image brightness. Painted details and baked
 shadows can therefore become false surface relief.

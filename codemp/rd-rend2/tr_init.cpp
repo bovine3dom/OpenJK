@@ -160,6 +160,8 @@ cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 cvar_t  *r_normalMapping;
 cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
 cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
+cvar_t *r_glass, *r_glassReflection, *r_glassRoughness;
+cvar_t *r_glassProbes, *r_glassProbeBudget, *r_glassExposure, *r_glassDebug;
 cvar_t  *r_specularMapping;
 cvar_t  *r_deluxeMapping;
 cvar_t  *r_deluxeSpecular;
@@ -1640,6 +1642,24 @@ void R_Register( void )
 	r_roughnessFloor = ri.Cvar_Get("r_roughnessFloor", "0", CVAR_ARCHIVE, "Minimum material roughness; higher values broaden highlights.");
 	r_generatedNormalBrighten = ri.Cvar_Get("r_generatedNormalBrighten", "0", CVAR_ARCHIVE | CVAR_LATCH, "Diffuse brightening for generated normals: 0 original, 1 legacy compensation.");
 	r_normalMapCache = ri.Cvar_Get("r_normalMapCache", "1", CVAR_ARCHIVE, "Read and write the local generated-normal cache.");
+	r_glass = ri.Cvar_Get("r_glass", "1", CVAR_ARCHIVE, "Thin window glass; zero restores the authored optical stages.");
+	r_glassReflection = ri.Cvar_Get("r_glassReflection", "1", CVAR_ARCHIVE, "Window reflection strength, including its transmission loss.");
+	r_glassRoughness = ri.Cvar_Get("r_glassRoughness", "0.2", CVAR_ARCHIVE, "Window reflection roughness; does not blur the transmitted scene.");
+	ri.Cvar_CheckRange(r_glass, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_glassReflection, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_glassRoughness, 0, 1, qfalse);
+#ifdef REND2_SP
+	r_glassProbes = ri.Cvar_Get("r_glassProbes", "1", CVAR_ARCHIVE | CVAR_LATCH, "Generate local window reflection probes at map load.");
+#else
+	r_glassProbes = ri.Cvar_Get("r_glassProbes", "0", CVAR_ARCHIVE | CVAR_LATCH, "Automatic window probes are supported by the SP renderer.");
+#endif
+	r_glassProbeBudget = ri.Cvar_Get("r_glassProbeBudget", "48", CVAR_ARCHIVE | CVAR_LATCH, "Maximum automatic window probes per map.");
+	r_glassExposure = ri.Cvar_Get("r_glassExposure", "2", CVAR_ARCHIVE, "Exposure adjustment in stops for local window reflections.");
+	r_glassDebug = ri.Cvar_Get("r_glassDebug", "0", 0, "Window display: 0 normal, 1 reflection only, 2 probe assignment (green local, red fallback), 3 attenuation only.");
+	ri.Cvar_CheckRange(r_glassProbes, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_glassProbeBudget, 1, QSORT_CUBEMAP_MASK, qtrue);
+	ri.Cvar_CheckRange(r_glassExposure, -2, 4, qfalse);
+	ri.Cvar_CheckRange(r_glassDebug, 0, 3, qtrue);
 	for (cvar_t *control : {r_normalStrength, r_generatedNormalStrength, r_parallaxScale, r_specularStrength})
 		ri.Cvar_CheckRange(control, 0, 4, qfalse);
 	ri.Cvar_CheckRange(r_roughnessFloor, 0, 1, qfalse);

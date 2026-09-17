@@ -364,3 +364,6 @@ constraints, but it does not remove the need to test campaign progression.
   Existing view and lean code does not establish complete controls.
 - [ ] Finish the remaining stretched gameplay UI, including pickup notices and
   Force hint art near the reticle.
+- Thin-window rendering and automatic SP reflection probes are implemented for JA and JO. See
+  [glass presentation](docs/glass-presentation.md) for controls, coverage, research,
+  and tower capture results. Breakable-glass cues are deferred. Visual approval is open.

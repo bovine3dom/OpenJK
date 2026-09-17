@@ -3652,7 +3652,7 @@ void R_CreateBuiltinImages( void ) {
 			IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, GL_R8);
 	}
 
-	if (r_cubeMapping->integer)
+	if (r_cubeMapping->integer || r_glassProbes->integer)
 	{
 		tr.renderCubeImage = R_CreateImage(
 			"*renderCube", NULL, CUBE_MAP_SIZE, CUBE_MAP_SIZE,

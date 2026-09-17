@@ -191,6 +191,8 @@ extern cvar_t  *r_ssaoViewModelRadius;
 extern cvar_t  *r_normalMapping;
 extern cvar_t *r_normalStrength, *r_generatedNormalStrength, *r_parallaxScale;
 extern cvar_t *r_specularStrength, *r_roughnessScale, *r_roughnessFloor, *r_generatedNormalBrighten, *r_normalMapCache;
+extern cvar_t *r_glass, *r_glassReflection, *r_glassRoughness;
+extern cvar_t *r_glassProbes, *r_glassProbeBudget, *r_glassExposure, *r_glassDebug;
 extern cvar_t  *r_specularMapping;
 extern cvar_t  *r_deluxeMapping;
 extern cvar_t  *r_deluxeSpecular;
@@ -437,6 +439,10 @@ typedef struct cubemap_s {
 	vec3_t origin;
 	float parallaxRadius;
 	image_t *image;
+	bool glass;
+	vec3_t glassNormal;
+	float glassPlaneDist;
+	vec3_t bounds[2];
 } cubemap_t;
 
 typedef struct dlight_s {
@@ -949,6 +955,8 @@ typedef struct {
 	qboolean		isDetail;
 	qboolean		glow;
 	qboolean		cloth;
+	// Optical window stages only; authored surface overlays remain ordinary stages.
+	enum { GLASS_NONE, GLASS_REFLECTION, GLASS_ATTENUATION } glass;
 
 	AlphaTestType	alphaTestType;
 
@@ -1063,6 +1071,7 @@ typedef struct shader_s {
 	qboolean	isHDRLit;
 	qboolean	useSimpleDepthShader;
 	qboolean	useDistortion;
+	bool windowGlass;
 
 	float clampTime;                                  // time this shader is clamped to
 	float timeOffset;                                 // current time offset for this shader
@@ -1480,6 +1489,10 @@ typedef enum
 	UNIFORM_NORMALSCALE,
 	UNIFORM_SPECULARSCALE,
 	UNIFORM_MATERIALPARAMS,
+	UNIFORM_GLASSPARAMS,
+	UNIFORM_GLASSDEBUG,
+	UNIFORM_CUBEMAPMINS,
+	UNIFORM_CUBEMAPMAXS,
 	UNIFORM_SOFTPARTICLEPARAMS,
 	UNIFORM_SSSPARAMS,
 	UNIFORM_SKINBOUNDS,
@@ -1632,6 +1645,7 @@ enum viewParmFlag_t {
 	VPF_POINTSHADOW		= 0x80,// Rendering pointlight shadow
 	VPF_SHADOWCASCADES	= 0x100,// Rendering sun shadow cascades
 	VPF_NOCLEAR			= 0x200,
+	VPF_GLASS_CAPTURE  = 0x400,
 };
 using viewParmFlags_t = uint32_t;
 
@@ -2002,10 +2016,23 @@ typedef struct cullinfo_s {
 	cplane_t        plane;
 } cullinfo_t;
 
+struct glassProbeAssignment_t {
+	vec3_t localCenter, localNormal;
+	vec3_t worldCenter, worldNormal;
+	int cubemap[2];
+};
+
+struct glassModelPane_t {
+	int model, surface;
+	glassProbeAssignment_t assignment;
+	glassModelPane_t *next;
+};
+
 typedef struct msurface_s {
 	struct shader_s		*shader;
 	int					fogIndex;
 	int                 cubemapIndex;
+	glassProbeAssignment_t *glassProbe;
 	cullinfo_t          cullinfo;
 
 	int					numSurfaceSprites;
@@ -2083,6 +2110,9 @@ typedef struct {
 
 	int			numsurfaces;
 	msurface_t	*surfaces;
+	glassModelPane_t *glassModelPanes;
+	int numGlassCaptureEntities;
+	refEntity_t *glassCaptureEntities;
 	int         *surfacesViewCount;
 	int         *surfacesDlightBits;
 	int			*surfacesPshadowBits;
@@ -2629,6 +2659,7 @@ typedef struct trGlobals_s {
 
 	int                     numCubemaps;
 	cubemap_t               *cubemaps;
+	image_t                 *glassProbeImages[QSORT_CUBEMAP_MASK];
 
 	trRefEntity_t			worldEntity;		// point currentEntity at this when rendering world
 	model_t					*currentModel;
@@ -2640,6 +2671,7 @@ typedef struct trGlobals_s {
 	//
 	shaderProgram_t splashScreenShader;
 	shaderProgram_t genericShader[GENERICDEF_COUNT];
+	shaderProgram_t glassShader[12]; // fog bit 0, cubemap bit 1, animation: static/vertex/skeletal
 	shaderProgram_t refractionShader[REFRACTIONDEF_COUNT];
 	shaderProgram_t textureColorShader;
 	shaderProgram_t skyCubeShader;
@@ -3359,6 +3391,7 @@ int R_LightForPoint( vec3_t point, vec3_t ambientLight, vec3_t directedLight, ve
 int R_LightDirForPoint( vec3_t point, vec3_t lightDir, vec3_t normal, world_t *world );
 int R_DLightsForPoint(const vec3_t point, const float radius);
 int R_CubemapForPoint( const vec3_t point );
+int R_GlassCubemapForAssignment(const glassProbeAssignment_t &probe, const trRefEntity_t *entity);
 
 /*
 ============================================================
