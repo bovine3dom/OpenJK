@@ -374,8 +374,6 @@ constraints, but it does not remove the need to test campaign progression.
 
 rough notes / todo
 
-- first video in jedi outcast is wrong - it's the JA one, not the JO one. the second video is correct (but there still need to be two!)
-- at the end of ns_starpad, the turret laser blasts are not visible, and there's a huge red column under the turret.
 - launcher needs lots of TLC.
   - give play-sp an option to launch it.
   - UX needs classic 'all text and buttons must be useful to users'
@@ -384,15 +382,16 @@ rough notes / todo
   - it totally needs a star wars chip-tune
   - 'continue' button to load most recent save
   - JO and JA should swap positions, so JO always comes first
-- "new game" in JO mode should not make you make a character that is then not used
 - settings menu needs a refresh. lazy option would be to reuse the atmosphere_editor with descriptions from the variables
-- kejim_post doesn't have an atmosphere
-- ns_* have atmospheres even though it's night
 - ... would it be crazy to port single-player to multiplayer to allow for co-op?
 - first person lightsaber?
 - lightsaber + jolt?
 - JO force-picking screen needs story-progression powers to be more obviously marked. especially where they have gained levels
 - force-picking screen should have the blue-striped background expand across the whole screen rather than being a little box in the middle of a sea of black
 - speed up loading times
-- JO kyle's lightsaber is blue rather than yellow in the bespin cutscenes
-- JO: R5 droid on bespin_undercity stopped half way to the lift and so i couldn't finish the level
+- low-key kind of mad but ... use gamefaqs walkthroughs or interest peaks on youtube walkthroughs to identify confusing bits of the game and improve them somehow? we can more or less change anything we want. my shortlist of examples:
+	- bespin 'lift' at the beginning once you break the vent that is timed perfectly to kill you, or confuse you by not being there
+	- artus mines, having to drop down to the tiny platform that sticks out, to get under the
+	- kejim_port, having to read and find the codes
+	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
+	- having to jump through the glass ceiling on ns_streets after the bridge explodes
