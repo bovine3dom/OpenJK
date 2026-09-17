@@ -54,6 +54,8 @@ The next status report includes:
   operating-system scheduling can increase this interval.
 - `underrun_frames`: frames by which the device cursor passed the last completed
   mix. This counter cannot detect multiple complete DMA-buffer wraps.
+- `scene_peak_us`: the longest background scene commit since level initialization.
+  This counter is retained by `s_steam_status reset`.
 
 These are mixer and callback measurements. They do not measure driver underruns.
 
@@ -116,6 +118,12 @@ faster updates for changing sources. Steam Audio uses its Embree CPU backend
 when available. Geometry and simulation inputs are held stable while the worker
 runs. The audio mixer continues with the previous
 completed parameters. Sound stop, restart, and level changes release the scene.
+
+Acoustic scene creation runs during level loading. The static BSP has its own
+scene and acceleration structure. The main scene contains instances of the BSP
+and brush models. Door movement updates this small instance hierarchy. It does
+not rebuild the static BSP hierarchy. Hybrid convolution processes the first
+0.15 seconds; parametric reverb supplies the late tail.
 
 The initial packaged backend supports Linux x86-64 at 44100 Hz. The SDK also
 supports 48000 Hz, but the current SDL rate selector does not select that rate.

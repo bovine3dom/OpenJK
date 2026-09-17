@@ -25,6 +25,9 @@ int main() {
 	IPLMatrix4x4 transform={}; for(int i=0;i<4;++i) transform.elements[i][i]=1;
 	std::array<Voice,Voices> voices={}; voices[0].active=true; voices[0].priority=1; voices[0].position={-2,1.5f,0};
 	IPLCoordinateSpace3 listener={}; listener.origin={2,1.5f,0}; listener.right={1,0,0}; listener.up={0,1,0}; listener.ahead={0,0,-1};
+	voices[0].position.x=-8;
+	engine.Update(voices,listener,false,false,false); engine.Wait(); assert(engine.Status().occlusion<0.01f);
+	voices[0].position.x=-2;
 	engine.Update(voices,listener,false,false,false); engine.Wait(); assert(engine.Status().occlusion>0.99f);
 	float input[Block],left[Block]={},right[Block]={};
 	for(int i=0;i<Block;++i) input[i]=0.1f*std::sin(i*0.5f);
@@ -77,7 +80,9 @@ int main() {
 		for(float v:left) {assert(std::isfinite(v)); routed+=v*v;}
 	}
 	assert(routed>0.000001f); // Only the indirect path can reach the output in this test.
-	assert(restored.AddModel(door,material));
+	// Extend past the room edges so probe rays cannot pass along a shared boundary.
+	Mesh sealedDoor; Quad(sealedDoor,{0,-1,-7},{0,5,-7},{0,5,7},{0,-1,7});
+	assert(restored.AddModel(sealedDoor,material));
 	restored.Object(1,2,transform,true); restored.Update(voices,listener,false,true,false); restored.Wait();
 	float sealed=0;
 	for(int n=0;n<100;++n) {
@@ -85,7 +90,7 @@ int main() {
 		restored.Begin(); restored.Mix(0,input,0,0,1,0,left,right); restored.End(0,left,right);
 		if(n>20) for(float v:left) {assert(std::isfinite(v)); sealed+=v*v;}
 	}
+	std::cout << "sealed=" << sealed << " routed=" << routed << std::endl;
 	assert(sealed<routed*0.01f); // A closed barrier invalidates the baked route.
-	std::cout << "around_corner=" << routed << '\n';
 	std::cout << "PASS: Steam Audio direct transmission, moving barrier, reflection tail, and cached probes\n";
 }

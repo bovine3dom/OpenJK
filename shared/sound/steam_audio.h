@@ -20,6 +20,7 @@ struct Voice {
 struct Info {
 	int triangles=0, probes=0, active=0, reflected=0;
 	int reflectionMs=0;
+	int scenePeakUs=0;
 	float occlusion=1, transmission=1, reverb=0;
 };
 class Engine {

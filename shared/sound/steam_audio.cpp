@@ -22,6 +22,8 @@ struct Engine::Impl {
 	IPLEmbreeDevice embree=nullptr;
 	IPLSceneType sceneType=IPL_SCENETYPE_DEFAULT;
 	IPLScene scene=nullptr;
+	IPLScene world=nullptr;
+	IPLInstancedMesh worldInstance=nullptr;
 	IPLScene serialScene=nullptr;
 	IPLStaticMesh serialMesh=nullptr;
 	IPLSimulator simulator=nullptr;
@@ -49,6 +51,7 @@ struct Engine::Impl {
 	unsigned worldTriangles=0;
 	std::future<void> job;
 	std::atomic<int> reflectionMs{0};
+	std::atomic<int> scenePeakUs{0};
 	std::array<bool,Voices+1> pending={};
 	bool cachedRoom=true, pendingBaked=false;
 	IPLVector3 bakedOrigin={};
@@ -64,6 +67,7 @@ struct Engine::Impl {
 		if(iplEmbreeDeviceCreate(context,&embreeSettings,&embree)==IPL_STATUS_SUCCESS) sceneType=IPL_SCENETYPE_EMBREE;
 		IPLSceneSettings sceneSettings={}; sceneSettings.type=sceneType; sceneSettings.embreeDevice=embree;
 		if (iplSceneCreate(context,&sceneSettings,&scene)!=IPL_STATUS_SUCCESS) return;
+		if (iplSceneCreate(context,&sceneSettings,&world)!=IPL_STATUS_SUCCESS) return;
 		sceneSettings.type=IPL_SCENETYPE_DEFAULT; sceneSettings.embreeDevice=nullptr;
 		if (iplSceneCreate(context,&sceneSettings,&serialScene)!=IPL_STATUS_SUCCESS) return;
 		IPLSimulationSettings settings={}; settings.flags=All; settings.sceneType=sceneType;
@@ -109,13 +113,22 @@ struct Engine::Impl {
 		if(simulator) iplSimulatorRelease(&simulator);
 		if(probes) iplProbeBatchRelease(&probes);
 		for(auto &o:objects) if(o.second.mesh) iplInstancedMeshRelease(&o.second.mesh);
+		if(worldInstance) iplInstancedMeshRelease(&worldInstance);
 		if(scene) iplSceneRelease(&scene);
+		if(world) iplSceneRelease(&world);
 		if(serialMesh) iplStaticMeshRelease(&serialMesh);
 		if(serialScene) iplSceneRelease(&serialScene);
 		for(auto &model:models) if(model) iplSceneRelease(&model);
 		if(hrtf) iplHRTFRelease(&hrtf);
 		if(embree) iplEmbreeDeviceRelease(&embree);
 		if(context) iplContextRelease(&context);
+	}
+	bool AttachWorld() {
+		// Door movement must rebuild only the instance hierarchy, not the static BSP.
+		IPLInstancedMeshSettings settings={}; settings.subScene=world;
+		for(int i=0;i<4;++i) settings.transform.elements[i][i]=1;
+		if(iplInstancedMeshCreate(scene,&settings,&worldInstance)!=IPL_STATUS_SUCCESS) return false;
+		iplInstancedMeshAdd(worldInstance,scene); iplSceneCommit(scene); return true;
 	}
 	void Finish() {
 		if(!job.valid()) return;
@@ -166,10 +179,11 @@ bool Engine::AddModel(const Mesh &mesh,const std::vector<IPLMaterial> &materials
 	ms.vertices=const_cast<IPLVector3*>(mesh.vertices.data()); ms.triangles=const_cast<IPLTriangle*>(mesh.triangles.data());
 	ms.materialIndices=const_cast<int*>(mesh.materials.data()); ms.materials=const_cast<IPLMaterial*>(materials.data());
 	IPLStaticMesh object=nullptr;
-	IPLScene target=p->models.size()==1 ? p->scene : sub;
+	IPLScene target=p->models.size()==1 ? p->world : sub;
 	if(iplStaticMeshCreate(target,&ms,&object)!=IPL_STATUS_SUCCESS) return false;
 	iplStaticMeshAdd(object,target); iplStaticMeshRelease(&object); iplSceneCommit(target);
 	if(p->models.size()==1) {
+		if(!p->AttachWorld()) return false;
 		p->worldTriangles=unsigned(mesh.triangles.size());
 		// The SDK serializes its default scene format, not Embree's acceleration data.
 		if(iplStaticMeshCreate(p->serialScene,&ms,&p->serialMesh)!=IPL_STATUS_SUCCESS) return false;
@@ -197,10 +211,10 @@ bool Engine::LoadWorld(const std::vector<unsigned char> &data) {
 	IPLSerializedObject object=nullptr; IPLSerializedObjectSettings os={}; os.data=const_cast<unsigned char*>(data.data()+sizeof(unsigned)); os.size=data.size()-sizeof(unsigned);
 	if(iplSerializedObjectCreate(p->context,&os,&object)!=IPL_STATUS_SUCCESS) return false;
 	IPLStaticMesh loaded=nullptr;
-	const bool ok=iplStaticMeshLoad(p->scene,object,nullptr,nullptr,&loaded)==IPL_STATUS_SUCCESS &&
+	bool ok=iplStaticMeshLoad(p->world,object,nullptr,nullptr,&loaded)==IPL_STATUS_SUCCESS &&
 		iplStaticMeshLoad(p->serialScene,object,nullptr,nullptr,&p->serialMesh)==IPL_STATUS_SUCCESS;
 	iplSerializedObjectRelease(&object);
-	if(ok) { iplStaticMeshAdd(loaded,p->scene); iplSceneCommit(p->scene); p->worldTriangles=triangles; p->info.triangles=int(triangles); }
+	if(ok) { iplStaticMeshAdd(loaded,p->world); iplSceneCommit(p->world); ok=p->AttachWorld(); p->worldTriangles=triangles; p->info.triangles=int(triangles); }
 	if(loaded) iplStaticMeshRelease(&loaded);
 	return ok;
 }
@@ -227,25 +241,19 @@ bool Engine::Bake(const IPLVector3 &low,const IPLVector3 &high) {
 	Wait();
 	if(p->probes) return true;
 	// Bake the open static space; runtime path validation handles moving barriers.
-	struct RestoreObjects {
-		Impl *p;
-		~RestoreObjects() { for(auto &o:p->objects) if(o.second.enabled) iplInstancedMeshAdd(o.second.mesh,p->scene); iplSceneCommit(p->scene); }
-	} restore={p.get()};
-	for(auto &o:p->objects) if(o.second.enabled) iplInstancedMeshRemove(o.second.mesh,p->scene);
-	iplSceneCommit(p->scene); p->sceneDirty=false;
 	IPLProbeArray probes=nullptr;
 	if(iplProbeArrayCreate(p->context,&probes)!=IPL_STATUS_SUCCESS) return false;
 	IPLProbeGenerationParams gen={}; gen.type=IPL_PROBEGENERATIONTYPE_UNIFORMFLOOR; gen.spacing=4; gen.height=1.5f;
 	gen.transform.elements[0][0]=high.x-low.x; gen.transform.elements[1][1]=high.y-low.y; gen.transform.elements[2][2]=high.z-low.z;
 	gen.transform.elements[0][3]=(high.x+low.x)/2; gen.transform.elements[1][3]=(high.y+low.y)/2; gen.transform.elements[2][3]=(high.z+low.z)/2; gen.transform.elements[3][3]=1;
-	do { iplProbeArrayGenerateProbes(probes,p->scene,&gen); gen.spacing*=1.5f; } while(iplProbeArrayGetNumProbes(probes)>256);
+	do { iplProbeArrayGenerateProbes(probes,p->world,&gen); gen.spacing*=1.5f; } while(iplProbeArrayGetNumProbes(probes)>256);
 	if(!iplProbeArrayGetNumProbes(probes) || iplProbeBatchCreate(p->context,&p->probes)!=IPL_STATUS_SUCCESS) { iplProbeArrayRelease(&probes); return false; }
 	iplProbeBatchAddProbeArray(p->probes,probes); iplProbeArrayRelease(&probes); iplProbeBatchCommit(p->probes);
-	IPLPathBakeParams path={}; path.scene=p->scene; path.probeBatch=p->probes; path.identifier.type=IPL_BAKEDDATATYPE_PATHING;
+	IPLPathBakeParams path={}; path.scene=p->world; path.probeBatch=p->probes; path.identifier.type=IPL_BAKEDDATATYPE_PATHING;
 	path.identifier.variation=IPL_BAKEDDATAVARIATION_DYNAMIC; path.numSamples=1; path.radius=0.25f; path.threshold=0.5f; path.visRange=20; path.pathRange=100; path.numThreads=1;
 	auto progress=[](float,void*) {};
 	iplPathBakerBake(p->context,&path,progress,nullptr);
-	IPLReflectionsBakeParams reverb={}; reverb.scene=p->scene; reverb.probeBatch=p->probes; reverb.sceneType=p->sceneType;
+	IPLReflectionsBakeParams reverb={}; reverb.scene=p->world; reverb.probeBatch=p->probes; reverb.sceneType=p->sceneType;
 	reverb.identifier.type=IPL_BAKEDDATATYPE_REFLECTIONS; reverb.identifier.variation=IPL_BAKEDDATAVARIATION_REVERB;
 	reverb.bakeFlags=static_cast<IPLReflectionsBakeFlags>(IPL_REFLECTIONSBAKEFLAGS_BAKECONVOLUTION|IPL_REFLECTIONSBAKEFLAGS_BAKEPARAMETRIC);
 	reverb.numRays=2048; reverb.numDiffuseSamples=16; reverb.numBounces=16; reverb.simulatedDuration=Duration; reverb.savedDuration=Duration;
@@ -296,7 +304,12 @@ void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSp
 	p->pendingBaked=reflect && p->probes && p->cachedRoom; if(p->pendingBaked) p->bakedOrigin=listener.origin;
 	auto *state=p.get();
 	p->job=std::async(std::launch::async,[state,reflect,pathing] {
-		if(state->sceneDirty) { iplSceneCommit(state->scene); state->sceneDirty=false; }
+		if(state->sceneDirty) {
+			const auto start=std::chrono::steady_clock::now();
+			iplSceneCommit(state->scene); state->sceneDirty=false;
+			const int elapsed=int(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
+			state->scenePeakUs=std::max(state->scenePeakUs.load(),elapsed);
+		}
 		iplSimulatorRunDirect(state->simulator);
 		if(pathing && state->probes) iplSimulatorRunPathing(state->simulator);
 		if(reflect) {
@@ -339,5 +352,5 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 	}
 }
 void Engine::End(float wet,float *left,float *right) { p->Reflect(p->sources[Voices],p->room.data(),wet,left,right); }
-Info Engine::Status() const { auto info=p->info; info.reflectionMs=p->reflectionMs.load(); return info; }
+Info Engine::Status() const { auto info=p->info; info.reflectionMs=p->reflectionMs.load(); info.scenePeakUs=p->scenePeakUs.load(); return info; }
 }

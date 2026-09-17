@@ -20,6 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--case", choices=cases)
+    parser.add_argument("--audio", action="store_true")
     args = parser.parse_args()
     output = root / "build/smoke"
     output.mkdir(parents=True, exist_ok=True)
@@ -27,16 +28,22 @@ def main():
     for case in ([args.case] if args.case else cases):
         start, goal, model, traversable = cases[case]
         env = dict(os.environ, OJK_SMOKE_ROOT=str(suite / case))
+        if args.audio:
+            env["OJK_SMOKE_SOUND"] = "1"
+        # Leave room for the launcher's commands within the engine's 32-line limit.
         command = ["bash", str(root / "scripts/smoke-sp.sh"), str(args.package.resolve()),
                    "t2_wedge", "+set", "com_maxfps", "10", "+exec", "krildor-traverse.cfg",
                    "+nav", "doors", "+nav", "test", "8000", *map(str, start), *map(str, goal),
-                   "+wait", "40", "+nav", "doors", "+wait", "160", "+nav", "doors"]
+                   "+wait", "40", "+nav", "doors"]
         subprocess.run(command, env=env, check=True)
         logs = list((suite / case).glob("t2_wedge.*/console.log"))
         if len(logs) != 1:
             raise RuntimeError(f"Missing log: {suite / case}")
         records, doors = [], []
-        for line in logs[0].read_text(errors="replace").splitlines():
+        text = logs[0].read_text(errors="replace")
+        if args.audio and "steam_audio active=1" not in text:
+            raise RuntimeError(f"Steam Audio did not run: {logs[0]}")
+        for line in text.splitlines():
             if "routetest event=" in line:
                 records.append(dict(word.split("=", 1) for word in line.split("routetest ", 1)[1].split()))
             if "navdoor " in line:

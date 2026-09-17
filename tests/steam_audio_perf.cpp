@@ -60,7 +60,10 @@ int main() {
 		const auto start=Clock::now();
 		engine.Object(1,1,transform,true); engine.Update(voices,listener,false,false,false); engine.Wait();
 		const double elapsed=Micros(start); moveTotal+=elapsed; movePeak=std::max(movePeak,elapsed);
+		if(i==0) assert(engine.Status().occlusion<.01f);
+		if(i==39) assert(engine.Status().occlusion>.99f);
 	}
 	std::cout<<"voices="<<Voices<<" mix_mean_us="<<total/512<<" mix_peak_us="<<peak
-		<<" reset_peak_us="<<resetPeak<<" door_mean_us="<<moveTotal/40<<" door_peak_us="<<movePeak<<'\n';
+		<<" reset_peak_us="<<resetPeak<<" door_mean_us="<<moveTotal/40<<" door_peak_us="<<movePeak
+		<<" scene_peak_us="<<engine.Status().scenePeakUs<<'\n';
 }

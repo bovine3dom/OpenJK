@@ -10,6 +10,8 @@ assets=${OJK_ASSETS:-$root/GameData}
 display=${OJK_SMOKE_DISPLAY:-640x480}
 wait_count=${OJK_SMOKE_WAIT:-100}
 timeout_seconds=${OJK_SMOKE_TIMEOUT:-120}
+sound=${OJK_SMOKE_SOUND:-0}
+[[ "$sound" == 0 || "$sound" == 1 ]] || { printf 'Invalid smoke sound setting\n' >&2; exit 1; }
 [[ "$display" =~ ^[1-9][0-9]{1,4}x[1-9][0-9]{1,4}$ && "$wait_count" =~ ^[1-9][0-9]{0,3}$ && "$timeout_seconds" =~ ^[1-9][0-9]{0,3}$ ]] || {
     printf 'Invalid smoke display size, wait count, or timeout\n' >&2
     exit 1
@@ -37,7 +39,7 @@ command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run -a -s "-screen 0
     OJK_PROFILE="$run/profile" bash "$package/launch-sp.sh" "$assets" \
     --campaign "$campaign" \
     +safe +set r_fullscreen 0 +set r_mode 3 +set r_swapInterval 0 \
-    +set com_maxfps 60 +set s_initsound 0 +set developer 1 \
+    +set com_maxfps 60 +set s_initsound "$sound" +set developer 1 \
     +set logfile 2 +devmap "$map" "$@" "${renderer_args[@]}" \
     +wait "$wait_count" +screenshot_png smoke +wait 10 +quit)
 printf '%q ' "${command[@]}" > "$run/command.txt"

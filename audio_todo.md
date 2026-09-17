@@ -14,6 +14,12 @@ its sample time. `tests/steam_audio_perf.cpp` checks 32 sources, repeated reflec
 updates, and a moving door against a large static mesh. The initial comparison
 reduced mean DSP time from 1.83 ms to 0.40 ms per 128-sample block on this host.
 
+The static BSP now has a separate acceleration structure. Moving doors update
+the parent instance hierarchy. In the large-mesh test, mean door-update time
+fell from about 41 ms to 1.05 ms. `s_steam_status` reports `scene_peak_us` for
+background scene commits. Door transmission and cached-world tests remain part
+of the regression checks.
+
 **A mixer timing defect is fixed. Clean device playback still needs a check.**
 The user reported severe crackling. The old mixer moved `s_paintedtime` backwards
 on each update. Steam Audio then processed overlapping samples with advanced
