@@ -171,6 +171,7 @@ extern	cvar_t	*sv_mapChecksum;
 extern	cvar_t	*sv_serverid;
 extern  cvar_t	*sv_testsave;
 extern  cvar_t	*sv_compress_saved_games;
+extern  cvar_t	*sv_autosave_interval;
 
 //===========================================================
 
@@ -308,6 +309,7 @@ int SG_Read			(unsigned int chid, void *pvAddress, int iLength, void **ppvAddres
 int SG_ReadOptional	(unsigned int chid, void *pvAddress, int iLength, void **ppvAddressPtr = NULL);
 void SG_Shutdown();
 void SG_PollSavegames(void);
+void SV_AutosaveFrame(void);
 void SG_TestSave(void);
 //
 // note that this version number does not mean that a savegame with the same version can necessarily be loaded,

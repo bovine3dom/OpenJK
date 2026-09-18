@@ -1380,4 +1380,18 @@ qboolean GameAllowedToSaveHere(void)
 	return (qboolean)(!in_camera&&!killPlayerTimer);
 }
 
+qboolean PlayerSafeForAutosave(void)
+{
+	if (!GameAllowedToSaveHere() || !G_PlayerSpawned())
+	{
+		return qfalse;
+	}
+
+	const gentity_t& player = g_entities[0];
+	return (qboolean)(player.client
+		&& player.client->ps.groundEntityNum != ENTITYNUM_NONE
+		&& level.dmState != DM_ACTION
+		&& level.dmState != DM_BOSS);
+}
+
 //////////////////// eof /////////////////////

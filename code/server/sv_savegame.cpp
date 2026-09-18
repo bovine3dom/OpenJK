@@ -22,6 +22,8 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // Filename:-	sv_savegame.cpp
 #include <memory>
+#include <string>
+#include <vector>
 #include "../server/exe_headers.h"
 
 #define JPEG_IMAGE_QUALITY 95
@@ -159,7 +161,7 @@ void SV_WipeGame_f(void)
 */
 void SG_StoreSaveGameComment(const char *sComment)
 {
-	memmove(saveGameComment,sComment,iSG_COMMENT_SIZE);
+	Q_strncpyz(saveGameComment, sComment, sizeof(saveGameComment));
 }
 
 qboolean SV_TryLoadTransition( const char *mapname )
@@ -1150,7 +1152,10 @@ qboolean SG_GameAllowedToSaveHere(qboolean inCamera)
 	return ge->GameAllowedToSaveHere();
 }
 
-qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
+static qboolean SG_WriteSavegameInternal(
+	const char *psPathlessBaseName,
+	qboolean qbAutosave,
+	const std::vector<std::string>& rotation)
 {
 	if (!qbAutosave && !SG_GameAllowedToSaveHere(qfalse))	//full check
 		return qfalse;	// this prevents people saving via quick-save now during cinematics
@@ -1219,7 +1224,7 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 	}
 	ge->WriteLevel(qbAutosave);	// always done now, but ent saver only does player if auto
 
-	if (saved_game.is_failed() || !saved_game.finish_write(psPathlessBaseName))
+	if (saved_game.is_failed() || !saved_game.finish_write(psPathlessBaseName, rotation))
 	{
 		Com_Printf (GetString_FailedToOpenSaveGame("current",qfalse));//S_COLOR_RED "Failed to write savegame!\n");
 		saved_game.close();
@@ -1229,6 +1234,54 @@ qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
 
 	sv_testsave->integer = iPrevTestSave;
 	return qtrue;
+}
+
+qboolean SG_WriteSavegame(const char *psPathlessBaseName, qboolean qbAutosave)
+{
+	return SG_WriteSavegameInternal(
+		psPathlessBaseName,
+		qbAutosave,
+		std::vector<std::string>());
+}
+
+void SV_AutosaveFrame(void)
+{
+	static int next_save_time;
+	static int previous_server_time;
+	static int previous_server_id;
+
+	const int interval = sv_autosave_interval->integer * 1000;
+	if (sv.state != SS_GAME || interval <= 0)
+	{
+		next_save_time = 0;
+		previous_server_time = 0;
+		previous_server_id = 0;
+		return;
+	}
+
+	if (!next_save_time || sv.time < previous_server_time || sv.serverId != previous_server_id)
+	{
+		next_save_time = sv.time + interval;
+	}
+	previous_server_time = sv.time;
+	previous_server_id = sv.serverId;
+
+	if (sv.time < next_save_time || !ge || !ge->PlayerSafeForAutosave())
+	{
+		return;
+	}
+
+	static const std::vector<std::string> rotation = {
+		"autosave_son",
+		"autosave_father",
+		"autosave_grandfather"
+	};
+	SG_StoreSaveGameComment("");
+	if (SG_WriteSavegameInternal(rotation.front().c_str(), qfalse, rotation))
+	{
+		next_save_time = sv.time + interval;
+		Com_Printf(S_COLOR_CYAN "Autosaved game.\n");
+	}
 }
 
 qboolean SG_ReadSavegame(

@@ -25,7 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define __G_PUBLIC_H__
 // g_public.h -- game module information visible to server
 
-#define	GAME_API_VERSION	13
+#define	GAME_API_VERSION	14
 
 // entity->svFlags
 // the server does not know how to interpret most of the values
@@ -404,6 +404,7 @@ typedef struct {
 	void		(*WriteLevel) (qboolean qbAutosave);
 	void		(*ReadLevel)  (qboolean qbAutosave, qboolean qbLoadTransition);
 	qboolean	(*GameAllowedToSaveHere)(void);
+	qboolean	(*PlayerSafeForAutosave)(void);
 
 	// return NULL if the client is allowed to connect, otherwise return
 	// a text string with the reason for denial

@@ -406,6 +406,7 @@ void SV_Init (void) {
 	sv_mapChecksum = Cvar_Get ("sv_mapChecksum", "", CVAR_ROM);
 	sv_testsave = Cvar_Get ("sv_testsave", "0", 0);
 	sv_compress_saved_games = Cvar_Get ("sv_compress_saved_games", "1", 0);
+	sv_autosave_interval = Cvar_Get ("sv_autosaveInterval", "180", CVAR_ARCHIVE);
 
 	// Only allocated once, no point in moving it around and fragmenting
 	// create a heap for Ghoul2 to use for game side model vertex transforms used in collision detection

@@ -50,6 +50,7 @@ cvar_t	*sv_mapChecksum;
 cvar_t	*sv_serverid;
 cvar_t	*sv_testsave;			// Run the savegame enumeration every game frame
 cvar_t	*sv_compress_saved_games;	// compress the saved games on the way out (only affect saver, loader can read both)
+cvar_t	*sv_autosave_interval;
 
 /*
 =============================================================================
@@ -520,6 +521,7 @@ void SV_Frame( int msec,float fractionMsec ) {
 	}
 
 	SG_PollSavegames();
+	SV_AutosaveFrame();
 	SG_TestSave();	// returns immediately if not active, used for fake-save-every-cycle to test (mainly) Icarus disk code
 
 	// check timeouts

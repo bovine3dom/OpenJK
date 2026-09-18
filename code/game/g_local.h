@@ -714,6 +714,8 @@ extern char *G_NewString( const char *string );
 void WriteLevel(qboolean qbAutosave);
 void ReadLevel(qboolean qbAutosave, qboolean qbLoadTransition);
 qboolean GameAllowedToSaveHere(void);
+qboolean PlayerSafeForAutosave(void);
+qboolean G_PlayerSpawned(void);
 
 extern qboolean G_ActivateBehavior( gentity_t *ent, int bset );
 

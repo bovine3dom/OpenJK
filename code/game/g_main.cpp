@@ -908,6 +908,7 @@ extern "C" Q_EXPORT game_export_t* QDECL GetGameAPI( game_import_t *import ) {
 	globals.WriteLevel = WriteLevel;
 	globals.ReadLevel = ReadLevel;
 	globals.GameAllowedToSaveHere = GameAllowedToSaveHere;
+	globals.PlayerSafeForAutosave = PlayerSafeForAutosave;
 
 	globals.ClientThink = ClientThink;
 	globals.ClientConnect = ClientConnect;
