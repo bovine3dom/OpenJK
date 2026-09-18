@@ -11018,6 +11018,12 @@ void ForceLightningDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, flo
 	{
 		return;
 	}
+	if ( traceEnt->NPC && traceEnt->client
+		&& !TIMER_Done( traceEnt, "lightningEvasion" )
+		&& !PM_InKnockDown( &traceEnt->client->ps ) )
+	{
+		return;
+	}
 
 	if ( traceEnt && traceEnt->takedamage )
 	{
@@ -11158,7 +11164,7 @@ void ForceLightningDamage( gentity_t *self, gentity_t *traceEnt, vec3_t dir, flo
 			{
 				G_Damage( traceEnt, self, self, dir, impactPoint, dmg, 0, MOD_FORCE_LIGHTNING );
 			}
-			if ( traceEnt->client )
+			if ( traceEnt->client && dmg )
 			{
 				if ( !Q_irand( 0, 2 ) )
 				{
@@ -11314,7 +11320,7 @@ void ForceShootLightning( gentity_t *self )
 				&& traceEnt->client
 				&& traceEnt->client->ps.forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0 )//&& traceEnt->NPC
 			{//FIXME: need a more reliable way to know we hit a jedi?
-				if ( !Jedi_DodgeEvasion( traceEnt, self, &tr, HL_NONE ) )
+				if ( Jedi_DodgeEvasion( traceEnt, self, &tr, HL_NONE ) )
 				{//act like we didn't even hit him
 					VectorCopy( tr.endpos, start );
 					ignore = tr.entityNum;

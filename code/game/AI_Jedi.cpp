@@ -2054,6 +2054,17 @@ static qboolean Jedi_Strafe( int strafeTimeMin, int strafeTimeMax, int nextStraf
 	return qfalse;
 }
 
+static void Jedi_StartLightningEvasion( gentity_t *self, const gentity_t *attacker )
+{
+	if ( attacker && attacker->client
+		&& (attacker->client->ps.forcePowersActive&(1<<FP_LIGHTNING))
+		&& TIMER_Done( self, "lightningEvasionDebounce" ) )
+	{
+		TIMER_Set( self, "lightningEvasion", Q_irand( 600, 800 ) );
+		TIMER_Set( self, "lightningEvasionDebounce", Q_irand( 1800, 2500 ) );
+	}
+}
+
 /*
 static void Jedi_FaceEntity( gentity_t *self, gentity_t *other, qboolean doPitch )
 {
@@ -2212,6 +2223,7 @@ qboolean Jedi_DodgeEvasion( gentity_t *self, gentity_t *shooter, trace_t *tr, in
 				self->client->ps.forceJumpCharge = 320;//FIXME: calc this intelligently?
 				WP_ForcePowerStop( self, FP_GRIP );
 			}
+			Jedi_StartLightningEvasion( self, shooter );
 			return qtrue;
 		}
 		break;
@@ -2305,6 +2317,7 @@ qboolean Jedi_DodgeEvasion( gentity_t *self, gentity_t *shooter, trace_t *tr, in
 				Jedi_Aggression( self, 10 );
 			}
 		}
+		Jedi_StartLightningEvasion( self, shooter );
 		return qtrue;
 	}
 	return qfalse;
@@ -4183,7 +4196,32 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 	{//enemy is shooting lightning
 		enemy_attacking = qtrue;
 		shooting_lightning = qtrue;
-		evasionChance = 50;
+		evasionChance = 70 + g_spskill->integer * 10;
+
+		if ( TIMER_Get( NPC, "lightningPushDelay" ) == -1 )
+		{
+			int reactionTime = Q_irand( 600, 1000 ) - g_spskill->integer * 150;
+			TIMER_Set( NPC, "lightningPushDelay", reactionTime );
+		}
+		else if ( TIMER_Done( NPC, "lightningPushDelay" ) )
+		{
+			TIMER_Remove( NPC, "lightningPushDelay" );
+			if ( NPCInfo->rank > RANK_LT_JG
+				&& TIMER_Done( NPC, "lightningPushDebounce" )
+				&& enemy_dist < forcePushPullRadius[NPC->client->ps.forcePowerLevel[FP_PUSH]] - 16
+				&& InFront( NPC->enemy->currentOrigin, NPC->currentOrigin, NPC->client->ps.viewangles, 0.3f )
+				&& WP_ForcePowerUsable( NPC, FP_PUSH, 0 )
+				&& !Q_irand( 0, 2 - g_spskill->integer ) )
+			{
+				ForceThrow( NPC, qfalse );
+				TIMER_Set( NPC, "lightningPushDebounce", Q_irand( 4000, 7000 ) );
+				return;
+			}
+		}
+	}
+	else
+	{
+		TIMER_Remove( NPC, "lightningPushDelay" );
 	}
 
 	if ( NPC->enemy->client->ps.saberInFlight
@@ -4358,7 +4396,8 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 			default:
 				//Evade!
 				//start a strafe left/right if not already
-				if ( !Q_irand( 0, 5 ) || !Jedi_Strafe( 300, 1000, 0, 1000, qfalse ) )
+				if ( (!shooting_lightning && !Q_irand( 0, 5 ))
+					|| !Jedi_Strafe( shooting_lightning ? 600 : 300, shooting_lightning ? 1200 : 1000, 0, 1000, qfalse ) )
 				{//certain chance they will pick an alternative evasion
 					//if couldn't strafe, try a different kind of evasion...
 					if ( Jedi_DecideKick() && G_CanKickEntity(NPC, NPC->enemy ) && G_PickAutoKick( NPC, NPC->enemy, qtrue ) != LS_NONE )
@@ -4374,7 +4413,8 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 							{//FIXME: check forcePushRadius[NPC->client->ps.forcePowerLevel[FP_PUSH]]
 								ForceThrow( NPC, qfalse );
 							}
-							else if ( (NPCInfo->rank==RANK_CREWMAN||NPCInfo->rank>RANK_LT_JG)
+							else if ( ( (shooting_lightning && NPC->client->ps.forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0)
+									|| NPCInfo->rank == RANK_CREWMAN || NPCInfo->rank > RANK_LT_JG )
 								&& !(NPCInfo->scriptFlags&SCF_NO_ACROBATICS)
 								&& NPC->client->ps.forceRageRecoveryTime < level.time
 								&& !(NPC->client->ps.forcePowersActive&(1<<FP_RAGE))
@@ -4394,6 +4434,7 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 									ucmd.forwardmove = -127;
 									VectorClear( NPC->client->ps.moveDir );
 								}
+								Jedi_StartLightningEvasion( NPC, NPC->enemy );
 								//FIXME: if this jump is cleared, we can't block... so pick a random lower block?
 								if ( Q_irand( 0, 1 ) )//FIXME: make intelligent
 								{
@@ -4413,6 +4454,10 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 				}
 				else
 				{//strafed
+					if ( shooting_lightning )
+					{
+						Jedi_StartLightningEvasion( NPC, NPC->enemy );
+					}
 					if ( d_JediAI->integer )
 					{
 						gi.Printf( "def strafe\n" );
@@ -4420,9 +4465,10 @@ static void Jedi_EvasionSaber( vec3_t enemy_movedir, float enemy_dist, vec3_t en
 					if ( !(NPCInfo->scriptFlags&SCF_NO_ACROBATICS)
 						&& NPC->client->ps.forceRageRecoveryTime < level.time
 						&& !(NPC->client->ps.forcePowersActive&(1<<FP_RAGE))
-						&& (NPCInfo->rank == RANK_CREWMAN || NPCInfo->rank > RANK_LT_JG )
+						&& ( (shooting_lightning && NPC->client->ps.forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0)
+							|| NPCInfo->rank == RANK_CREWMAN || NPCInfo->rank > RANK_LT_JG )
 						&& !PM_InKnockDown( &NPC->client->ps )
-						&& !Q_irand( 0, 5 ) )
+						&& !Q_irand( 0, shooting_lightning ? 2 : 5 ) )
 					{//FIXME: make this a function call?
 						//FIXME: check for clearance, safety of landing spot?
 						if ( NPC->client->NPC_class == CLASS_BOBAFETT
@@ -6119,7 +6165,7 @@ void NPC_Jedi_Pain( gentity_t *self, gentity_t *inflictor, gentity_t *other, con
 				{
 					if ( Q_irand( 0, self->NPC->rank ) > RANK_ENSIGN )
 					{
-						if ( !Q_irand( 0, 5 ) )
+						if ( !Q_irand( 0, mod == MOD_FORCE_LIGHTNING ? 1 : 5 ) )
 						{
 							ForceAbsorb( self );
 						}

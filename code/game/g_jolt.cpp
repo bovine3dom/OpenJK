@@ -109,7 +109,7 @@ struct Actor {
 	bool dead = false;
 	bool sleepingPose = false;
 	int gripLevel = 0, gripCaster = -1;
-	int lightningCaster = -1;
+	int lightningCaster = -1, lightningContactStart = 0;
 	JoltReaction::Part gripPose[JoltReaction::PartCount];
 	int riseStart = 0;
 	float handoffError = 0;
@@ -711,7 +711,7 @@ void Actor::Reset(bool restoreOrigin) {
 	engaged = false;
 	sleepingPose = false;
 	gripLevel = 0; gripCaster = -1;
-	lightningCaster = -1;
+	lightningCaster = -1; lightningContactStart = 0;
 	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
@@ -774,6 +774,7 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 		(!Projectile(mod) && !G_JoltExplosion(mod) && mod != MOD_FORCE_LIGHTNING)) return;
 	const bool blast = G_JoltExplosion(mod);
 	const bool lightning = mod == MOD_FORCE_LIGHTNING;
+	const bool jediPoise = lightning && ent->health > 0 && ent->NPC && ent->s.weapon == WP_SABER;
 	if (dead && fall && !fall->Awake() && !BodyRoom(this)) return;
 	const int part = hitLoc == HL_HEAD ? 2 : hitLoc == HL_ARM_LT || hitLoc == HL_HAND_LT ? 3 :
 		hitLoc == HL_ARM_RT || hitLoc == HL_HAND_RT ? 5 : hitLoc == HL_LEG_LT || hitLoc == HL_FOOT_LT ? 7 :
@@ -781,13 +782,21 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 	if (!engaged && (ExternalPoseOwner(ent) || (ent->health > 0 && !blast && !lightning && !Active(ent)))) return;
 	if (recoverStart) CancelRecovery(ent);
 	if (prepareStart) { prepareStart = 0; fall->ReleaseControl(); nextRecoverAttempt = level.time+500; }
+	if (lightning) {
+		const int caster = attacker && attacker->client && (attacker->client->ps.forcePowersActive & (1 << FP_LIGHTNING)) ? attacker->s.number : -1;
+		if (lastHitMod != mod || lightningCaster != caster || level.time-lastHit > 250) lightningContactStart = level.time;
+		lightningCaster = caster;
+	}
 	lastHit = level.time; lastHitMod = mod;
+	if (jediPoise) {
+		const int poiseTime = 300 + ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE] * 100 + ent->NPC->rank * 25;
+		if (level.time-lightningContactStart < poiseTime) { ++hits; return; }
+	}
 	if (!reactionPose->integer && !engaged) { ++hits; return; }
 	if ((ent->s.weapon != WP_SABER || engaged || blast || lightning || ent->health <= 0) && PrepareRig(ent)) {
 		Engage(ent);
 		fall->SetVitality(float(std::max(0, ent->health)) / std::max(1, ent->client->ps.stats[STAT_MAX_HEALTH]));
 		if (lightning) {
-			lightningCaster = attacker && attacker->client && (attacker->client->ps.forcePowersActive & (1 << FP_LIGHTNING)) ? attacker->s.number : -1;
 			const int power = attacker && attacker->client ? std::max(1, std::min(3, attacker->client->ps.forcePowerLevel[FP_LIGHTNING])) : 1;
 			float acceleration = 0;
 			vec3_t horizontal = {direction[0], direction[1], 0};
@@ -800,7 +809,12 @@ void Actor::Hit(gentity_t* ent, const float* direction, const float* point, int 
 				// Partially resisted hits retain a reduced shove.
 				acceleration *= std::min(1.0f, lightningKnockback/(power == 3 ? 4.0f : 2.0f));
 			}
-			fall->Electrocute(std::min(1.0f, .45f+.18f*(power-1)+std::min(.15f, damage*.025f)), horizontal, acceleration);
+			float intensity = std::min(1.0f, .45f+.18f*(power-1)+std::min(.15f, damage*.025f));
+			if (jediPoise) {
+				const float resistance = std::min(.45f, ent->client->ps.forcePowerLevel[FP_SABER_DEFENSE] * .1f + ent->NPC->rank * .025f);
+				intensity *= 1-resistance;
+			}
+			fall->Electrocute(intensity, horizontal, acceleration);
 		} else if (blast) {
 			// Native damage already supplied distance-scaled knockback. Do not add it twice.
 			if (!dead && (damage >= 5 || fall->Speed() > 1.5f)) { fall->ReleaseControl(); fallStart = level.time; }
