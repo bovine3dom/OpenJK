@@ -466,7 +466,7 @@ void S_Init( void ) {
 	s_show              = Cvar_Get( "s_show",              "0",       CVAR_CHEAT );
 	s_testsound         = Cvar_Get( "s_testsound",         "0",       CVAR_CHEAT );
 	s_volume            = Cvar_Get( "s_volume",            "0.5",     CVAR_ARCHIVE );
-	s_footstepsVolume   = Cvar_Get( "s_footstepsVolume",   "1",       CVAR_ARCHIVE );
+	s_footstepsVolume   = Cvar_Get( "s_footstepsVolume",   "1.5",       CVAR_ARCHIVE );
 	Cvar_CheckRange( s_footstepsVolume, 0, 5, qtrue );
 	s_volumeVoice       = Cvar_Get( "s_volumeVoice",       "1.0",     CVAR_ARCHIVE );
 
