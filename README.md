@@ -25,6 +25,12 @@ ui:
 - map on datapad with over-my-head algorithms to automatically detect separate floors. lifts, travelling platforms and ...some... switches shown.
 - compass added on V with allies marked. including ones off-screen that the game is just holding there for fun.
 
+audio:
+- steam audio sdk (cool free thing from valve, nothing to do with the store) integration for...
+- echos/reverb based on environment
+- surround sound for headphones
+- occlusion of sound through walls
+
 animations:
 - experimental jolt physics ragdoll - enemies stumble and fall when damaged
 
