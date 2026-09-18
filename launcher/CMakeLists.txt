@@ -108,7 +108,7 @@ if(BuildRmlUi)
 	FetchContent_MakeAvailable(nfd)
 
 	target_sources(openjk-launcher PRIVATE ui.cpp ui.h ui_backend.cpp ui_backend.h
-		music_synth.cpp music_synth.h music_player.cpp music_player.h
+		music_synth.cpp music_synth.h music_player.cpp music_player.h band_animation.h
 		"${RMLUI_SOURCE_DIR}/Backends/RmlUi_Platform_SDL.cpp"
 		"${RMLUI_SOURCE_DIR}/Backends/RmlUi_Renderer_GL2.cpp")
 	target_include_directories(openjk-launcher PRIVATE "${RMLUI_SOURCE_DIR}/Backends")
@@ -146,17 +146,18 @@ if(BuildRmlUi)
 	endif()
 	set_property(TARGET openjk-launcher APPEND PROPERTY LINK_DEPENDS
 		"${launcher_music}" "${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rml"
-		"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${CMAKE_CURRENT_SOURCE_DIR}/music/CREDITS.md")
+		"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${CMAKE_CURRENT_SOURCE_DIR}/ui/cantina-player.tga"
+		"${CMAKE_CURRENT_SOURCE_DIR}/music/CREDITS.md")
 	add_custom_command(TARGET openjk-launcher POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${launcher_build_resource_dir}/fonts"
 		COMMAND ${CMAKE_COMMAND} -E rm -f "${launcher_build_resource_dir}/cantina-band.wav"
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rml"
-			"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${launcher_music}"
+			"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${CMAKE_CURRENT_SOURCE_DIR}/ui/cantina-player.tga" "${launcher_music}"
 			"${CMAKE_CURRENT_SOURCE_DIR}/music/CREDITS.md" "${launcher_build_resource_dir}"
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexSans-SemiBold.ttf"
 			"${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf" "${launcher_build_resource_dir}/fonts")
 	if(NOT (APPLE AND MakeApplicationBundles))
-		install(FILES ui/launcher.rml ui/launcher.rcss "${launcher_music}" music/CREDITS.md
+		install(FILES ui/launcher.rml ui/launcher.rcss ui/cantina-player.tga "${launcher_music}" music/CREDITS.md
 			DESTINATION "${JKASPInstallDir}/launcher" COMPONENT ${JKASPClientComponent})
 		install(FILES "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexSans-SemiBold.ttf"
 			"${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf"
@@ -233,6 +234,7 @@ if(BuildTests)
 	endif()
 	find_package(Python3 REQUIRED COMPONENTS Interpreter)
 	add_test(NAME launcher-music COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/test-launcher-music.py")
+	add_test(NAME launcher-band-art COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/test-launcher-band.py")
 	add_test(NAME native-jo-import COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/test-import-jo.py")
 	set_tests_properties(native-jo-import PROPERTIES ENVIRONMENT
 		"OPENJK_IMPORT_JO=$<TARGET_FILE:openjk-import-jo>;OPENJK_LAUNCHER=$<TARGET_FILE:openjk-launcher>")

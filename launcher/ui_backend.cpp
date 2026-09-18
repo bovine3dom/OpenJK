@@ -6,15 +6,29 @@
 #include <RmlUi_Platform_SDL.h>
 #include <RmlUi_Renderer_GL2.h>
 #include <SDL.h>
+#include <SDL_opengl.h>
 
 #include <algorithm>
 #include <memory>
 
 namespace {
+class LauncherRenderer final : public RenderInterface_GL2 {
+    Rml::TextureHandle LoadTexture(Rml::Vector2i& dimensions, const Rml::String& source) override {
+        const auto texture = RenderInterface_GL2::LoadTexture(dimensions, source);
+        const Rml::String sprite = "cantina-player.tga";
+        if (texture && source.size() >= sprite.size() && source.compare(source.size() - sprite.size(), sprite.size(), sprite) == 0) {
+            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(texture));
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        }
+        return texture;
+    }
+};
+
 struct Data {
     explicit Data(SDL_Window* value) : system(value), window(value) {}
     SystemInterface_SDL system;
-    RenderInterface_GL2 renderer;
+    LauncherRenderer renderer;
     TextInputMethodEditor_SDL text_editor;
     SDL_Window* window = nullptr;
     SDL_GLContext context = nullptr;

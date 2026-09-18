@@ -16,7 +16,7 @@ h1 { margin: 0 0 8dp; font-size: 24dp; text-align: center; }
 .campaign { flex: 1; min-width: 0; padding: 18dp; border: 2dp #6365ec; background-color: #080830; }
 .campaign + .campaign { margin-left: 18dp; }
 h2 { margin: 0 0 12dp; font-size: 24dp; color: #8cdaff; }
-.requirement { min-height: 40dp; margin-bottom: 12dp; }
+.requirement { min-height: 32dp; margin-bottom: 12dp; }
 label { display: block; margin-bottom: 6dp; color: #8cdaff; }
 input { tab-index: auto; }
 input[type=text] {
@@ -34,7 +34,7 @@ input[type=button]:hover, input[type=button]:focus { color: white; background-co
 input[type=text]:focus { border-color: white; }
 input:disabled { color: #77778b; cursor: arrow; }
 .tools { margin-top: 8dp; }
-.readiness { margin: 14dp 0; min-height: 64dp; }
+.readiness { margin: 14dp 0; min-height: 48dp; }
 .save { color: #8cdaff; font-size: 12dp; margin-bottom: 8dp; word-break: break-all; }
 .state { color: #8cdaff; margin-bottom: 6dp; }
 .detail { max-height: 70dp; overflow: auto; word-break: break-all; }
@@ -47,6 +47,9 @@ input:disabled { color: #77778b; cursor: arrow; }
 #music { flex-shrink: 0; }
 #music-credit { margin-left: 12dp; font-size: 12dp; color: #8cdaff; }
 #music-error { font-size: 12dp; color: #ffae00; word-break: break-all; }
+#band-stage { position: relative; width: 320dp; max-width: 100%; height: 68dp; margin: 4dp auto 0; pointer-events: none; }
+#stage-floor { position: absolute; bottom: 0; width: 100%; height: 3dp; border-top: 1dp #414878; background-color: #11172e; }
+#band-player { position: absolute; left: 50%; top: 0; width: 64dp; height: 64dp; margin-left: -32dp; }
 scrollbarvertical { width: 10dp; }
 scrollbarvertical slidertrack { background-color: #11152b; }
 scrollbarvertical sliderbar { background-color: #7c84aa; min-height: 12dp; }

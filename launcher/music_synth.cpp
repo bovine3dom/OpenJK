@@ -73,7 +73,6 @@ void Synth::reset() noexcept {
 
 VisualState Synth::render(std::int16_t* output, std::size_t frames) noexcept {
     VisualState visual;
-    visual.frame = length ? position % length : 0;
     for (std::size_t frame = 0; frame < frames; ++frame) {
         if (length && position == length) reset();
         while (next_note < notes.size() && notes[next_note].start == position) {
@@ -109,6 +108,13 @@ VisualState Synth::render(std::int16_t* output, std::size_t frames) noexcept {
         output[frame * 2] = static_cast<std::int16_t>(std::tanh(left * 0.07f) * 30000.f);
         output[frame * 2 + 1] = static_cast<std::int16_t>(std::tanh(right * 0.07f) * 30000.f);
         if (length) ++position;
+    }
+    visual.frame = length ? position % length : 0;
+    for (std::size_t i = 0; i < voice_count; ++i) {
+        const auto& voice = voices[i];
+        auto& note = visual.notes[voice.note->channel];
+        if (voice.note->gain > 0 && (!note.active || voice.age < note.age))
+            note = {voice.note->key, voice.age, true};
     }
     if (frames) {
         for (float& band : visual.bands) band = std::min(1.f, std::sqrt(band / frames) * 0.7f);

@@ -3,6 +3,7 @@
 #include "jo_import.h"
 #include "ui_backend.h"
 #include "music_player.h"
+#include "band_animation.h"
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/FileInterface.h>
@@ -102,6 +103,8 @@ public:
             element(id(i, "detail"));
         }
         for (const char* id : {"status", "progress", "profile", "last"}) element(id);
+        band_stage = element("band-stage");
+        band_player = element("band-player");
         document->AddEventListener("click", this);
         document->AddEventListener("change", this);
         std::string bars;
@@ -141,6 +144,7 @@ public:
         const auto now = SDL_GetTicks();
         const float decay = std::exp(-float(std::min<Uint32>(now - visual_time, 1000)) / 180.f);
         visual_time = now;
+        update_band(visual, now);
         for (unsigned i = 0; i < band_elements.size(); ++i) {
             band_levels[i] = std::max(visual.bands[i], band_levels[i] * decay);
             const int height = int(band_levels[i] * 100);
@@ -226,14 +230,38 @@ public:
     }
 
 private:
+    void update_band(const launcher_music::VisualState& visual, Uint32 now) {
+        const int pose = band_animation.update(visual, music_playing, now);
+        if (pose != band_pose) {
+            band_player->SetAttribute("rect", std::to_string(pose * 32) + " 0 32 32");
+            band_pose = pose;
+        }
+        // Use whole framebuffer pixels, including at fractional desktop scale factors.
+        const float ratio = document->GetContext()->GetDensityIndependentPixelRatio();
+        const int side = 32 * std::max(1, int(2 * ratio));
+        if (side != band_side) {
+            band_player->SetProperty("width", std::to_string(side) + "px");
+            band_player->SetProperty("height", std::to_string(side) + "px");
+            band_player->SetProperty("margin-left", std::to_string(-side / 2) + "px");
+            band_side = side;
+        }
+        if (band_stage->GetClientWidth() <= 0) return;
+        const auto origin = band_stage->GetAbsoluteOffset(Rml::BoxArea::Content);
+        const float x = std::round(origin.x + band_stage->GetClientWidth() / 2) - origin.x;
+        const float y = std::round(origin.y + band_stage->GetClientHeight() - 4 * ratio - side) - origin.y;
+        if (x != band_x) { band_player->SetProperty("left", std::to_string(x) + "px"); band_x = x; }
+        if (y != band_y) { band_player->SetProperty("top", std::to_string(y) + "px"); band_y = y; }
+    }
     void music_error(const std::string& error) {
         music.stop();
+        music_playing = false;
         element("music")->SetAttribute("value", "MUSIC: OFF");
         text("music-error", "Music is unavailable: " + error);
     }
     void toggle_music() {
         try {
-            element("music")->SetAttribute("value", music.toggle() ? "MUSIC: ON" : "MUSIC: OFF");
+            music_playing = music.toggle();
+            element("music")->SetAttribute("value", music_playing ? "MUSIC: ON" : "MUSIC: OFF");
             text("music-error", "");
         } catch (const std::exception& error) { music_error(error.what()); }
     }
@@ -410,6 +438,12 @@ private:
     }
 
     launcher_music::Player music;
+    launcher_band::Animation band_animation;
+    Rml::Element* band_stage = nullptr;
+    Rml::Element* band_player = nullptr;
+    bool music_playing = false;
+    int band_pose = -1, band_side = 0;
+    float band_x = 0, band_y = 0;
     std::array<Rml::Element*, launcher_music::band_count> band_elements{};
     std::array<float, launcher_music::band_count> band_levels{};
     std::array<int, launcher_music::band_count> band_heights{};

@@ -61,6 +61,10 @@
             <div id="music-credit">Cantina Band — John Williams<br />MIDI: Nonstop2k · Chiptune: OpenJedvibe</div>
         </div>
         <div id="music-error"></div>
+        <div id="band-stage">
+            <div id="stage-floor"></div>
+            <img id="band-player" src="cantina-player.tga" rect="192 0 32 32" />
+        </div>
     </div>
 </body>
 </rml>

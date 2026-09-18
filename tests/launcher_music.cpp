@@ -1,4 +1,5 @@
 #include "music_player.h"
+#include "band_animation.h"
 
 #include <algorithm>
 #include <cmath>
@@ -65,6 +66,19 @@ void fixtures() {
     invalid(bad);
 
     auto synth = load(fixture());
+    std::vector<std::int16_t> scratch(8192);
+    check(!synth.render(scratch.data(), 128).notes[0].active, "Note telemetry started early");
+    auto attack = synth.render(scratch.data(), 1);
+    check(attack.frame == 129 && attack.notes[0].active && attack.notes[0].key == 48 && attack.notes[0].age == 1,
+        "Note attack telemetry is incorrect");
+    check(!synth.render(scratch.data(), 2047).notes[0].active, "Released note is still active");
+    auto overlap = fixture(2);
+    overlap[16 + 13] = char(192);
+    overlap[16 + 13 + 11] = 0;
+    auto layered = load(overlap);
+    auto newest = layered.render(scratch.data(), 256);
+    check(newest.notes[0].key == 49 && newest.notes[0].age == 64, "Telemetry did not select the newest voice");
+    synth.reset();
     std::vector<std::int16_t> first(8192), second(8192), chunks(8192);
     const auto state = synth.render(first.data(), 4096);
     check(synth.render(second.data(), 4096).frame == 0, "The visual clock did not loop");
@@ -82,12 +96,41 @@ void fixtures() {
         "Instrument meters are missing");
     check(state.bands[6] > 0 && state.bands[0] == 0, "Pitch-band meters are incorrect");
 }
+void animation() {
+    using namespace launcher_band;
+    Animation actor;
+    VisualState music;
+    check(actor.update(music, false, 1000) == bored, "Muted actor is not bored");
+    check(actor.update(music, true, 1100) == ready, "Actor did not get ready");
+    music.notes[2] = {69, 100, true};
+    music.frame = sample_rate;
+    check(actor.update(music, true, 1300) == accent, "Note onset did not lift the horn");
+    music.notes[2].age = 2205;
+    check(actor.update(music, true, 1300) == playing_low, "Low fingering is missing");
+    music.notes[2].key = 74;
+    check(actor.update(music, true, 1310) == playing_high, "Pitch did not change fingering");
+    check(actor.update(music, true, 1320) == playing_high, "Animation advanced without the audio clock");
+    music.notes[2].age = 100;
+    music.frame = sample_rate + 5000;
+    check(actor.update(music, true, 1320) == playing_high, "Horn accents are too frequent");
+    music.notes[2].age = 2205;
+    music.frame = sample_rate / 4;
+    check(actor.update(music, true, 1320) == bob, "Half-time bob is missing");
+    music.notes[2].active = false;
+    check(actor.update(music, true, 1400) == lowering, "Actor did not finish its gesture");
+    check(actor.update(music, true, 1600) == ready, "Actor plays during a rest");
+    check(actor.update(music, false, 1700) == lowering, "Mute did not lower the horn");
+    check(actor.update(music, false, 1900) == bored, "Mute did not settle into idle");
+    check(actor.update(music, false, 5150) == blink, "Bored actor does not blink");
+    check(actor.update(music, true, 5200) == ready, "Actor did not recover from mute");
+}
 } // namespace
 
 int main(int argc, char** argv) {
     try {
         check(argc == 2, "Supply the checked-in score path");
         fixtures();
+        animation();
         std::ifstream input(argv[1], std::ios::binary);
         Synth synth;
         synth.load(input);
@@ -114,12 +157,14 @@ int main(int argc, char** argv) {
             auto state = player.visual();
             check(state.frame == 0 && std::all_of(state.bands.begin(), state.bands.end(), [](float x) { return x == 0; }),
                 "Muted meters are not clear");
+            check(std::none_of(state.notes.begin(), state.notes.end(), [](const auto& note) { return note.active; }),
+                "Muted note telemetry is not clear");
             check(player.toggle(), "Music did not restart");
             SDL_Delay(100);
             check(player.visual().frame > before, "Music did not resume");
         }
         SDL_Quit();
-        std::cout << "PASS: score validation, synthesis, loop, stereo, meters, and independent audio callback\n";
+        std::cout << "PASS: score validation, synthesis, loop, stereo, meters, band animation, and independent audio callback\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

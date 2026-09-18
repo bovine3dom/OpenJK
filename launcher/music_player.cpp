@@ -37,7 +37,11 @@ void Player::publish(const VisualState& state) {
     ++sequence;
     frame = state.frame;
     for (unsigned i = 0; i < band_count; ++i) bands[i] = state.bands[i];
-    for (unsigned i = 0; i < 16; ++i) instruments[i] = state.instruments[i];
+    for (unsigned i = 0; i < 16; ++i) {
+        instruments[i] = state.instruments[i];
+        note_keys[i] = state.notes[i].active ? state.notes[i].key + 1 : 0;
+        note_ages[i] = state.notes[i].age;
+    }
     ++sequence;
 }
 
@@ -57,7 +61,11 @@ VisualState Player::visual() const {
         if (before & 1) continue;
         result.frame = frame.load();
         for (unsigned i = 0; i < band_count; ++i) result.bands[i] = bands[i].load();
-        for (unsigned i = 0; i < 16; ++i) result.instruments[i] = instruments[i].load();
+        for (unsigned i = 0; i < 16; ++i) {
+            result.instruments[i] = instruments[i].load();
+            const auto key = note_keys[i].load();
+            result.notes[i] = {key ? key - 1 : 0, note_ages[i].load(), key != 0};
+        }
         if (before == sequence.load()) return result;
     }
 }

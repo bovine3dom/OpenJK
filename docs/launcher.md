@@ -44,8 +44,8 @@ Subtle blue bars in the background follow the music. They show voice energy in
 16 pitch ranges, not a full frequency analysis. Muting the music makes the bars
 fade out. The effect does not receive input or cover the campaign controls.
 
-The synthesizer exposes the sample position and per-instrument energy for
-future animation. Visual data is one callback buffer behind synthesis to
+The synthesizer exposes the sample position, per-instrument energy, and the
+pitch and age of the newest active voice on each channel. Visual data is one callback buffer behind synthesis to
 approximate playback time. SDL does not expose the hardware playback cursor;
 exact display-to-speaker timing still needs a device-specific check.
 
@@ -69,6 +69,33 @@ Use `openjedvibe-launcher --ui --profile PATH --ja-path PATH --jo-path PATH`
 to open the window with explicit paths. The JO path is optional. For command-line
 launches, use `--continue --campaign ja` or `--continue --campaign jo`.
 
+## Pixel Band
+
+The first prototype has one horn player on a small bottom stage. It does not
+receive input. The player follows the clarinet melody on zero-based channel 2.
+Note starts can lift the horn, with about half a second between accents. Pitch
+changes select two finger positions. During rests, the player lowers the horn.
+
+The head moves by one source pixel with the beat. This uses the
+current arrangement's fixed 270 BPM tempo at half speed. A different song or
+a variable tempo will need a separate beat map. Muting the music lowers the
+horn, then selects a bored pose with occasional blinking. Playback resumes
+through a ready pose. The other four musicians remain future work.
+
+Each pose is 32 by 32 pixels, including the handheld horn. The eight poses use
+original pixel patterns in `scripts/build-launcher-band.py`. The local reference
+image is ignored by Git. The generator does not read it. Builds use the stored
+`launcher/ui/cantina-player.tga` sheet and do not need Python. Run this command
+to build the sheet again:
+
+```sh
+python3 scripts/build-launcher-band.py
+```
+
+The sprite uses nearest-neighbour filtering and whole framebuffer pixels.
+At normal display scale, it is shown at twice its source size. Text keeps its
+normal filtering. The stage uses document space and does not cover controls.
+
 ## Verification
 
 The native import and launcher suite checks launch arguments, desktop defaults,
@@ -79,9 +106,13 @@ status, instrument selection, stereo pan, sustain, invalid data, and repeatable
 output. It also checks the stored score without the source MIDI. Native tests
 check score limits, simultaneous voices, stereo output, loop continuity, buffer
 size independence, and instrument meters. A dummy-device test checks that
-playback continues without UI updates and that mute clears the meters.
+playback continues without UI updates and that mute clears the meters and
+note state. Band tests check note starts, releases, overlapping voices, finger
+positions, beat movement, rests, and the transition to and from mute. Sprite
+tests check tile size, distinct poses, and repeatable sheet generation.
 
-With `BuildTests=ON`, run CTest targets `launcher-music` and `launcher-synth`.
+With `BuildTests=ON`, run CTest targets `launcher-music`, `launcher-synth`, and
+`launcher-band-art`.
 The project's full test configuration requires Boost. The native music tests
 can also run without Boost on Linux:
 
@@ -91,16 +122,18 @@ c++ -std=c++17 -O2 -DSDL_MAIN_HANDLED -Ilauncher $(pkg-config --cflags sdl2) \
   $(pkg-config --libs sdl2) -o /tmp/launcher-music-tests
 /tmp/launcher-music-tests launcher/music/cantina-band.score
 python3 scripts/test-launcher-music.py
+python3 scripts/test-launcher-band.py
 ```
 
 A local optimized build generated 160 seconds of audio in approximately
 0.31 seconds without audio output. This is a synthesis throughput check, not
 an audio-latency measurement or a minimum-hardware guarantee.
 
-Linux window checks use Xvfb and software OpenGL at 100% and 200% scale. Both
-initial layouts fit without a scrollbar. Music starts with the SDL dummy audio
-device. The background bars change during playback and clear after mute at
-both scales. Windows, macOS, Wayland,
+Linux window checks use Xvfb and software OpenGL at 100%, 125%, 150%, and 200%
+scale. All initial layouts fit without a scrollbar. Sprite pixels match the
+source sheet at whole-pixel scales. The player changes from playing to bored
+after mute. Music uses the SDL dummy audio device in these checks. The background
+bars change during playback and clear after mute. Windows, macOS, Wayland,
 hardware audio, and a full campaign load from Continue still need manual checks.
 
 ## User Data

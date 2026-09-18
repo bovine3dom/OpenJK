@@ -11,10 +11,18 @@ namespace launcher_music {
 constexpr unsigned sample_rate = 22050;
 constexpr unsigned band_count = 16;
 
+// The newest audible voice on a channel, including its short release tail.
+struct NoteState {
+    unsigned key = 0;
+    std::uint32_t age = 0;
+    bool active = false;
+};
+
 struct VisualState {
-    std::uint32_t frame = 0;
+    std::uint32_t frame = 0; // End of the rendered buffer, modulo the score length.
     std::array<float, band_count> bands{};
     std::array<float, 16> instruments{};
+    std::array<NoteState, 16> notes{};
 };
 
 class Synth {

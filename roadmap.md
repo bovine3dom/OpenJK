@@ -384,6 +384,8 @@ rough notes / todo
   - [x] Add a multi-instrument Cantina Band chiptune, enabled at startup, with source credit.
     Use a compact score and a real-time synthesizer. Do not distribute the source MIDI.
   - [x] Add subtle, audio-driven blue background bars and the OpenJedvibe heading.
+  - [x] Add one original 32-by-32 horn player with note-driven poses and a bored
+    mute pose. Review this prototype before adding the other four musicians.
   - [x] Use uppercase buttons and DPI-aware window sizing. The initial layout fits without scrolling.
   - [x] Load the most recent campaign save with Continue. Disable it when no save exists.
   - [x] Put Jedi Outcast before Jedi Academy.

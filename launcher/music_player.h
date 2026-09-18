@@ -26,6 +26,7 @@ private:
     std::atomic<unsigned> sequence{0}, frame{0};
     std::array<std::atomic<float>, band_count> bands{};
     std::array<std::atomic<float>, 16> instruments{};
+    std::array<std::atomic<unsigned>, 16> note_keys{}, note_ages{};
 };
 
 } // namespace launcher_music
