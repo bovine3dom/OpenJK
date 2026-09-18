@@ -40,6 +40,9 @@ cvar_t* bodyBudget = nullptr;
 cvar_t* lightningPushScale = nullptr;
 std::map<int, std::vector<float>> collision;
 std::unique_ptr<JoltReaction::CollisionScene> collisionScene;
+std::map<int, JoltReaction::Transform> colliderTransforms;
+std::set<int> enabledColliders, changedColliders, movingColliders;
+int colliderUpdateTime = -1;
 bool collisionLoaded = false;
 const char* bones[JoltReaction::PartCount] = {"pelvis", "lower_lumbar", "cervical", "lhumerus", "lradius", "rhumerus", "rradius", "lfemurYZ", "ltibia", "rfemurYZ", "rtibia", "ltalus", "rtalus"};
 const char* ends[JoltReaction::PartCount] = {"lower_lumbar", "cervical", "cranium", "lradius", "lhand", "rradius", "rhand", "ltibia", "ltalus", "rtibia", "rtalus", "ltalus", "rtalus"};
@@ -108,6 +111,7 @@ struct Actor {
 	bool engaged = false;
 	bool dead = false;
 	bool sleepingPose = false;
+	bool collidersInitialized = false;
 	int gripLevel = 0, gripCaster = -1;
 	int lightningCaster = -1, lightningContactStart = 0;
 	JoltReaction::Part gripPose[JoltReaction::PartCount];
@@ -208,21 +212,44 @@ void ExportSurface(int model, int count, const float* points, void*) {
 	for (int i = 0; i < count * 3; ++i) mesh.push_back(points[i] * MetresPerUnit);
 }
 void Actor::MoveColliders(float seconds) {
-	std::set<int> present;
-	for (int i = 1; i < globals.num_entities; ++i) {
-		const auto& ent = g_entities[i];
-		if (!ent.inuse || !ent.bmodel || !(ent.contents & MASK_NPCSOLID) || !ent.model || ent.model[0] != '*') continue;
-		present.insert(atoi(ent.model + 1));
-		JoltReaction::Transform transform;
-		vec3_t axis[3];
-		AnglesToAxis(ent.currentAngles, axis);
-		for (int r = 0; r < 3; ++r) {
-			for (int c = 0; c < 3; ++c) transform.matrix[r][c] = axis[c][r];
-			transform.matrix[r][3] = ent.currentOrigin[r] * MetresPerUnit;
+	if (colliderUpdateTime != level.time) {
+		colliderUpdateTime = level.time;
+		changedColliders.swap(movingColliders);
+		movingColliders.clear();
+		std::set<int> present;
+		for (int i = 1; i < globals.num_entities; ++i) {
+			const auto& ent = g_entities[i];
+			if (!ent.inuse || !ent.bmodel || !(ent.contents & MASK_NPCSOLID) || !ent.model || ent.model[0] != '*') continue;
+			const int model = atoi(ent.model + 1);
+			if (!collision.count(model)) continue;
+			present.insert(model);
+			JoltReaction::Transform transform;
+			vec3_t axis[3];
+			AnglesToAxis(ent.currentAngles, axis);
+			for (int r = 0; r < 3; ++r) {
+				for (int c = 0; c < 3; ++c) transform.matrix[r][c] = axis[c][r];
+				transform.matrix[r][3] = ent.currentOrigin[r] * MetresPerUnit;
+			}
+			auto previous = colliderTransforms.find(model);
+			if (previous == colliderTransforms.end() || memcmp(&previous->second, &transform, sizeof(transform))) {
+				changedColliders.insert(model);
+				movingColliders.insert(model);
+			}
+			colliderTransforms[model] = transform;
 		}
-		fall->MoveMesh(atoi(ent.model + 1), transform, seconds);
+		for (const auto& mesh : collision) if (mesh.first && enabledColliders.count(mesh.first) != present.count(mesh.first)) changedColliders.insert(mesh.first);
+		enabledColliders.swap(present);
 	}
-	for (const auto& mesh : collision) if (mesh.first) fall->SetMeshEnabled(mesh.first, present.count(mesh.first) != 0);
+	const auto update = [&](int model) {
+		auto transform = colliderTransforms.find(model);
+		if (enabledColliders.count(model) && transform != colliderTransforms.end()) fall->MoveMesh(model, transform->second, seconds);
+		fall->SetMeshEnabled(model, enabledColliders.count(model) != 0);
+	};
+	if (collidersInitialized) for (int model : changedColliders) update(model);
+	else {
+		for (const auto& mesh : collision) if (mesh.first) update(mesh.first);
+		collidersInitialized = true;
+	}
 }
 bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point, float strength, int hitPart) {
 	if (!PrepareRig(ent)) return false;
@@ -1135,7 +1162,8 @@ void G_JoltReset() {
 	demoStage = 0; demoCycle = false;
 	for (auto& entry : actors) if (entry.second->dead) { entry.second->StoreCorpse(); entry.second->engaged = false; }
 	actors.clear(); retryRigAfter.clear(); selectedActor = -1;
-	collision.clear(); collisionScene.reset(); collisionLoaded = false;
+	collision.clear(); collisionScene.reset(); colliderTransforms.clear();
+	enabledColliders.clear(); changedColliders.clear(); movingColliders.clear(); colliderUpdateTime = -1; collisionLoaded = false;
 }
 void G_JoltForget(const gentity_t* ent) {
 	if (!ent) return;
