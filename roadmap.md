@@ -403,4 +403,5 @@ rough notes / todo
 	- kejim_port, having to read and find the codes
 	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
 	- having to jump through the glass ceiling on ns_streets after the bridge explodes
+	- cairn bay jump from shuttle up to platform, very hard to make
 - [x] Use live launcher note data to animate a five-member pixel-art band.
