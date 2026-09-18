@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+run_logged() {
+    local label=$1 log=$2 status
+    shift 2
+    if "$@" > "$log" 2>&1; then
+        return
+    else
+        status=$?
+    fi
+    printf 'ERROR: %s failed (status %d). Log: %s\n' "$label" "$status" "$log" >&2
+    tail -n 40 "$log" >&2
+    return "$status"
+}
+
 integration=false
 local_sky_assets=false
 for option in "$@"; do
@@ -21,7 +34,8 @@ mkdir -p build/sp build/packages
 # Do not allow a second invocation to mix objects or staged modules.
 exec 9>build/sp/build.lock
 flock -n 9 || { printf 'Another SP build is running\n' >&2; exit 1; }
-cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+run_logged 'CMake configuration' build/sp/configure.log \
+    cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DProjectName=OpenJedvibe \
     -DBuildMPEngine=OFF -DBuildMPRdVanilla=OFF -DBuildMPDed=OFF \
@@ -29,9 +43,9 @@ cmake -S . -B build/sp -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DBuildSPEngine=ON -DBuildSPGame=ON -DBuildSPRdVanilla=ON -DBuildSPRend2=ON \
     -DBuildJK2SPEngine=OFF -DBuildJK2SPGame=OFF -DBuildJK2SPRdVanilla=OFF \
     -DBuildLauncher=ON -DBuildRmlUi=ON \
-    -DBuildTests=OFF > build/sp/configure.log 2>&1
+    -DBuildTests=OFF
 printf 'Building with one job. Log: %s/build/sp/build.log\n' "$root"
-cmake --build build/sp --parallel 1 > build/sp/build.log 2>&1
+run_logged 'SP compilation' build/sp/build.log cmake --build build/sp --parallel 1
 
 stage=$(mktemp -d "$root/build/packages/.candidate.XXXXXXXX")
 cmake --install build/sp --prefix "$stage" > "$stage/install.log"
