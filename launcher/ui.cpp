@@ -104,7 +104,10 @@ public:
         }
         for (const char* id : {"status", "progress", "profile", "last"}) element(id);
         band_stage = element("band-stage");
-        band_player = element("band-player");
+        for (unsigned i = 0; i < band_members.size(); ++i) {
+            band_members[i].player = element("band-player-" + std::to_string(i));
+            if (i >= launcher_band::keys) band_members[i].prop = element("band-prop-" + std::to_string(i));
+        }
         document->AddEventListener("click", this);
         document->AddEventListener("change", this);
         std::string bars;
@@ -231,26 +234,38 @@ public:
 
 private:
     void update_band(const launcher_music::VisualState& visual, Uint32 now) {
-        const int pose = band_animation.update(visual, music_playing, now);
-        if (pose != band_pose) {
-            band_player->SetAttribute("rect", std::to_string(pose * 32) + " 0 32 32");
-            band_pose = pose;
+        for (unsigned i = 0; i < band_members.size(); ++i) {
+            auto& member = band_members[i];
+            const int pose = member.animation.update(visual, music_playing, now, i);
+            if (pose != member.pose) {
+                member.player->SetAttribute("rect", std::to_string(pose * 32) + " " + std::to_string(i * 32) + " 32 32");
+                member.pose = pose;
+            }
         }
-        // Use whole framebuffer pixels, including at fractional desktop scale factors.
+        // Keep characters and props on the same whole-pixel grid, without overlap.
+        const float width = band_stage->GetClientWidth();
+        if (width <= 0) return;
         const float ratio = document->GetContext()->GetDensityIndependentPixelRatio();
-        const int side = 32 * std::max(1, int(2 * ratio));
-        if (side != band_side) {
-            band_player->SetProperty("width", std::to_string(side) + "px");
-            band_player->SetProperty("height", std::to_string(side) + "px");
-            band_player->SetProperty("margin-left", std::to_string(-side / 2) + "px");
-            band_side = side;
-        }
-        if (band_stage->GetClientWidth() <= 0) return;
+        const int side = 32 * std::max(1, int(std::min(2 * ratio, width / (32 * float(band_members.size())))));
         const auto origin = band_stage->GetAbsoluteOffset(Rml::BoxArea::Content);
-        const float x = std::round(origin.x + band_stage->GetClientWidth() / 2) - origin.x;
         const float y = std::round(origin.y + band_stage->GetClientHeight() - 4 * ratio - side) - origin.y;
-        if (x != band_x) { band_player->SetProperty("left", std::to_string(x) + "px"); band_x = x; }
-        if (y != band_y) { band_player->SetProperty("top", std::to_string(y) + "px"); band_y = y; }
+        for (unsigned i = 0; i < band_members.size(); ++i) {
+            auto& member = band_members[i];
+            const float x = std::round(origin.x + (launcher_band::parts[i].slot + 0.5f) * width / band_members.size()) - origin.x;
+            for (auto* image : {member.player, member.prop}) {
+                if (!image) continue;
+                if (side != band_side) {
+                    image->SetProperty("width", std::to_string(side) + "px");
+                    image->SetProperty("height", std::to_string(side) + "px");
+                    image->SetProperty("margin-left", std::to_string(-side / 2) + "px");
+                }
+                if (x != member.x) image->SetProperty("left", std::to_string(x) + "px");
+                if (y != band_y) image->SetProperty("top", std::to_string(y) + "px");
+            }
+            member.x = x;
+        }
+        band_side = side;
+        band_y = y;
     }
     void music_error(const std::string& error) {
         music.stop();
@@ -438,12 +453,18 @@ private:
     }
 
     launcher_music::Player music;
-    launcher_band::Animation band_animation;
+    struct BandMember {
+        launcher_band::Animation animation;
+        Rml::Element* player = nullptr;
+        Rml::Element* prop = nullptr;
+        int pose = -1;
+        float x = 0;
+    };
+    std::array<BandMember, launcher_band::member_count> band_members;
     Rml::Element* band_stage = nullptr;
-    Rml::Element* band_player = nullptr;
     bool music_playing = false;
-    int band_pose = -1, band_side = 0;
-    float band_x = 0, band_y = 0;
+    int band_side = 0;
+    float band_y = 0;
     std::array<Rml::Element*, launcher_music::band_count> band_elements{};
     std::array<float, launcher_music::band_count> band_levels{};
     std::array<int, launcher_music::band_count> band_heights{};

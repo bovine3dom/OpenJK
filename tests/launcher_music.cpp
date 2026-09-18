@@ -117,12 +117,35 @@ void animation() {
     music.frame = sample_rate / 4;
     check(actor.update(music, true, 1320) == bob, "Half-time bob is missing");
     music.notes[2].active = false;
-    check(actor.update(music, true, 1400) == lowering, "Actor did not finish its gesture");
-    check(actor.update(music, true, 1600) == ready, "Actor plays during a rest");
+    check(actor.update(music, true, 1400) == playing_high, "Short rests pump the horn");
+    check(actor.update(music, true, 1660) == lowering, "Actor did not lower after a longer rest");
     check(actor.update(music, false, 1700) == lowering, "Mute did not lower the horn");
     check(actor.update(music, false, 1900) == bored, "Mute did not settle into idle");
     check(actor.update(music, false, 5150) == blink, "Bored actor does not blink");
     check(actor.update(music, true, 5200) == ready, "Actor did not recover from mute");
+    std::array<unsigned, 16> channels{};
+    std::array<unsigned, member_count> slots{};
+    for (unsigned member = 0; member < member_count; ++member) {
+        ++slots[parts[member].slot];
+        VisualState part;
+        Animation player;
+        player.update(part, true, 1000, member);
+        for (int channel : parts[member].channels) {
+            if (channel < 0) continue;
+            ++channels[channel];
+            part.notes[channel] = {60, 100, true};
+            check(part_note(part, member).active, "Part misses a source channel");
+            part.notes[channel].active = false;
+        }
+        check(!part_note(part, member).active, "Silent part has a note");
+        part.notes[parts[member].channels[0]] = {60, 100, true};
+        part.frame = sample_rate;
+        check(player.update(part, true, 1300, member) != ready, "Member does not play its part");
+        check(player.update(part, false, 1400, member) == lowering, "Member does not stop");
+        check(player.update(part, false, 1600, member) == bored, "Member does not look bored");
+    }
+    for (auto count : channels) check(count == 1, "Channel assignment is not unique");
+    for (auto count : slots) check(count == 1, "Stage slot is not unique");
 }
 } // namespace
 

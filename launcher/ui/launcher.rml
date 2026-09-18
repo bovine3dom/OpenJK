@@ -63,7 +63,13 @@
         <div id="music-error"></div>
         <div id="band-stage">
             <div id="stage-floor"></div>
-            <img id="band-player" src="cantina-player.tga" rect="192 0 32 32" />
+            <img id="band-player-0" class="band-player" src="cantina-player.tga" rect="192 0 32 32" />
+            <img id="band-player-1" class="band-player" src="cantina-player.tga" rect="192 32 32 32" />
+            <img id="band-player-2" class="band-player" src="cantina-player.tga" rect="192 64 32 32" />
+            <img id="band-player-3" class="band-player" src="cantina-player.tga" rect="192 96 32 32" />
+            <img id="band-player-4" class="band-player" src="cantina-player.tga" rect="192 128 32 32" />
+            <img id="band-prop-3" class="band-prop" src="cantina-player.tga" rect="96 160 32 32" />
+            <img id="band-prop-4" class="band-prop" src="cantina-player.tga" rect="128 160 32 32" />
         </div>
     </div>
 </body>

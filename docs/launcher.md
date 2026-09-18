@@ -71,18 +71,26 @@ launches, use `--continue --campaign ja` or `--continue --campaign jo`.
 
 ## Pixel Band
 
-The first prototype has one horn player on a small bottom stage. It does not
-receive input. The player follows the clarinet melody on zero-based channel 2.
-Note starts can lift the horn, with about half a second between accents. Pitch
-changes select two finger positions. During rests, the player lowers the horn.
+Five musicians occupy the small bottom stage. They do not receive input.
+From left to right, they play bass, supporting horn, lead horn, keys, and drums.
+Each follows its own group of source channels. The lead follows clarinet and
+alto reeds. The supporting horn follows brass and tenor reeds. The bass follows
+synth bass and low winds. Keys follow piano and chords. Drums follow both
+percussion parts.
+
+Note starts can lift a horn by one source pixel, at most once per second.
+Pitch changes select two finger positions. The winds hold their pose through
+rests shorter than 300 milliseconds, then lower their instruments. Keyboard
+presses and drum taps use small hand movements. Keyboard and drum props are
+separate from the character sprites.
 
 The head moves by one source pixel with the beat. This uses the
 current arrangement's fixed 270 BPM tempo at half speed. A different song or
 a variable tempo will need a separate beat map. Muting the music lowers the
 horn, then selects a bored pose with occasional blinking. Playback resumes
-through a ready pose. The other four musicians remain future work.
+through a ready pose. The original lead player keeps its approved muted poses.
 
-Each pose is 32 by 32 pixels, including the handheld horn. The eight poses use
+Each pose is 32 by 32 pixels, including handheld objects. Each musician has eight poses. They use
 original pixel patterns in `scripts/build-launcher-band.py`. The local reference
 image is ignored by Git. The generator does not read it. Builds use the stored
 `launcher/ui/cantina-player.tga` sheet and do not need Python. Run this command

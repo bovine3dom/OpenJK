@@ -384,8 +384,8 @@ rough notes / todo
   - [x] Add a multi-instrument Cantina Band chiptune, enabled at startup, with source credit.
     Use a compact score and a real-time synthesizer. Do not distribute the source MIDI.
   - [x] Add subtle, audio-driven blue background bars and the OpenJedvibe heading.
-  - [x] Add one original 32-by-32 horn player with note-driven poses and a bored
-    mute pose. Review this prototype before adding the other four musicians.
+  - [x] Add five original 32-by-32 musicians with separate musical parts, small
+    playing gestures, and bored mute poses. Manual art and audio review remains.
   - [x] Use uppercase buttons and DPI-aware window sizing. The initial layout fits without scrolling.
   - [x] Load the most recent campaign save with Continue. Disable it when no save exists.
   - [x] Put Jedi Outcast before Jedi Academy.
@@ -403,4 +403,4 @@ rough notes / todo
 	- kejim_port, having to read and find the codes
 	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
 	- having to jump through the glass ceiling on ns_streets after the bridge explodes
-- very high priority: use the raw launcher music to control a pixel-art band who will play it in real-time
+- [x] Use live launcher note data to animate a five-member pixel-art band.

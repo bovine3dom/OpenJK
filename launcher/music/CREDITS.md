@@ -32,9 +32,9 @@ this file for that use. This credit does not grant rights to the composition or
 change the source terms. Check those rights before distribution. Do not apply
 the project's source-code licence to the MIDI, the derived score, or the generated audio.
 
-## Band Sprite
+## Band Sprites
 
-The OpenJedvibe horn-player sprite is original pixel art. Its source is
+The OpenJedvibe band sprites and instrument props are original pixel art. Their source is
 `scripts/build-launcher-band.py`. It uses hand-authored pixel patterns, not
 pixels from a photograph. The local cantina reference image is not included
 in the repository or the package.
