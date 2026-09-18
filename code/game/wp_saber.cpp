@@ -10580,11 +10580,6 @@ void ForceGrip( gentity_t *self )
 		if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
 		{
 			self->client->ps.forcePowerDuration[FP_GRIP] = level.time + 100;
-			self->client->ps.weaponTime = 1000;
-			if ( self->client->ps.forcePowersActive&(1<<FP_SPEED) )
-			{
-				self->client->ps.weaponTime = floor( self->client->ps.weaponTime * g_timescale->value );
-			}
 		}
 		return;
 	}
@@ -10612,12 +10607,6 @@ void ForceGrip( gentity_t *self )
 	NPC_SetAnim( self, SETANIM_TORSO, BOTH_FORCEGRIP_HOLD, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 	self->client->ps.saberMove = self->client->ps.saberBounceMove = LS_READY;//don't finish whatever saber anim you may have been in
 	self->client->ps.saberBlocked = BLOCKED_NONE;
-
-	self->client->ps.weaponTime = 1000;
-	if ( self->client->ps.forcePowersActive&(1<<FP_SPEED) )
-	{
-		self->client->ps.weaponTime = floor( self->client->ps.weaponTime * g_timescale->value );
-	}
 
 	AngleVectors( self->client->ps.viewangles, forward, NULL, NULL );
 	VectorNormalize( forward );
@@ -14244,7 +14233,8 @@ void WP_CheckForcedPowers( gentity_t *self, usercmd_t *ucmd )
 				self->client->ps.forcePowersForced &= ~(1<<forcePower);
 				break;
 			case FP_GRIP:
-				ucmd->buttons &= ~(BUTTON_ATTACK|BUTTON_ALT_ATTACK|BUTTON_FORCE_FOCUS|BUTTON_FORCE_DRAIN|BUTTON_FORCE_LIGHTNING);
+				//Grip uses one hand, so keep weapon fire available while it is held.
+				ucmd->buttons &= ~(BUTTON_FORCE_FOCUS|BUTTON_FORCE_DRAIN|BUTTON_FORCE_LIGHTNING);
 				ucmd->buttons |= BUTTON_FORCEGRIP;
 				//holds until cleared
 				break;

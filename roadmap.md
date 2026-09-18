@@ -404,4 +404,6 @@ rough notes / todo
 	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
 	- having to jump through the glass ceiling on ns_streets after the bridge explodes
 	- cairn bay jump from shuttle up to platform, very hard to make
+	- mind trick on the guy behind the glass on cairn_assembly
+- game doesn't really tell you about new force powers? highlight them somehow
 - [x] Use live launcher note data to animate a five-member pixel-art band.
