@@ -1272,9 +1272,9 @@ void SV_AutosaveFrame(void)
 	}
 
 	static const std::vector<std::string> rotation = {
-		"autosave_son",
-		"autosave_father",
-		"autosave_grandfather"
+		"auto_son",
+		"auto_father",
+		"auto_grandfather"
 	};
 	SG_StoreSaveGameComment("");
 	if (SG_WriteSavegameInternal(rotation.front().c_str(), qfalse, rotation))
