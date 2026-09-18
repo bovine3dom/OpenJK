@@ -37,6 +37,11 @@ animations:
 unification:
 - play jedi outcast in the jedi academy engine. mostly to make my life easier for all the improvements without maintaining two codebases, but you can also use weapons and force powers from JA. every time i reach a new level i find a broken thing so don't play it faster than me.
 
+quality of life:
+- off-thread autosaves every ~3 minutes when you aren't in combat or midair
+- easier to trigger special attacks/moves
+- launcher to make first time config easier
+
 ---
 
 Upstream information:
