@@ -3,7 +3,7 @@ set -euo pipefail
 
 config=${OJK_DESKTOP_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/openjk-desktop.conf}
 if [[ ${1:-} == --help ]]; then
-    printf 'Usage: %s --configure SSH_HOST /path/to/GameData [/path/to/GameData_JO]\n       %s --configure-jo /path/to/GameData_JO\n       %s [--worktree NAME] [--campaign ja|jo] [--new-game] [--desktop|--resolution WIDTHxHEIGHT] [--atmosphere-review [all]|--atmosphere-edit] [engine arguments]\nConfiguration: %s\n' "$0" "$0" "$0" "$config"
+    printf 'Usage: %s --configure SSH_HOST /path/to/GameData [/path/to/GameData_JO]\n       %s --configure-jo /path/to/GameData_JO\n       %s [--worktree NAME] [--launcher] [--campaign ja|jo] [--new-game] [--desktop|--resolution WIDTHxHEIGHT] [--atmosphere-review [all]|--atmosphere-edit] [engine arguments]\nConfiguration: %s\n' "$0" "$0" "$0" "$config"
     exit 0
 fi
 if [[ -f "$config" ]]; then
@@ -35,8 +35,12 @@ if [[ ${1:-} == --configure-jo ]]; then
 fi
 worktree=
 campaign=ja
-while [[ ${1:-} == --worktree || ${1:-} == --campaign ]]; do
-if [[ $1 == --campaign ]]; then
+launcher=false
+while [[ ${1:-} == --worktree || ${1:-} == --campaign || ${1:-} == --launcher ]]; do
+if [[ $1 == --launcher ]]; then
+    launcher=true
+    shift
+elif [[ $1 == --campaign ]]; then
     campaign=${2:-}
     [[ $campaign == ja || $campaign == jo ]] || { printf 'Use --campaign ja|jo\n' >&2; exit 1; }
     shift 2
@@ -52,6 +56,10 @@ else
     shift 2
 fi
 done
+if $launcher && { [[ $# != 0 ]] || [[ $campaign != ja ]]; }; then
+    printf 'Use --launcher with only --worktree; select the campaign in the window\n' >&2
+    exit 1
+fi
 host=${OJK_HOST:?Run --configure SSH_HOST /path/to/GameData first}
 [[ "$host" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.@-]*$ ]] || { printf 'Use an SSH host alias or user@hostname\n' >&2; exit 1; }
 [[ "$remote_root" == /* && "$remote_root" != *[$'\r\n']* ]] || { printf 'OJK_REMOTE_ROOT must be an absolute, single-line path\n' >&2; exit 1; }
@@ -59,7 +67,7 @@ assets=$(realpath -e -- "${OJK_ASSETS:?Set OJK_ASSETS to the desktop GameData di
 profile=$(realpath -m -- "$profile")
 destination=$(realpath -m -- "$desktop/build")
 asset_paths=("$assets" "$profile")
-if [[ $campaign == jo ]]; then
+if [[ $campaign == jo ]] || { $launcher && [[ -n ${OJK_JO_ASSETS:-} ]]; }; then
     OJK_JO_ASSETS=$(realpath -e -- "${OJK_JO_ASSETS:?Run --configure-jo /path/to/GameData_JO first}")
     export OJK_JO_ASSETS
     asset_paths+=("$OJK_JO_ASSETS")
@@ -129,5 +137,11 @@ done
 test -x "$destination/openjedvibe_sp.x86_64"
 rm -- "$destination/.update-incomplete"
 export OJK_PROFILE="$profile"
-# The launcher inherits descriptor 9 and keeps the same lock through game exit.
+if $launcher; then
+    launcher_args=(--ui --profile "$profile" --ja-path "$assets")
+    if [[ -n ${OJK_JO_ASSETS:-} ]]; then launcher_args+=(--jo-path "$OJK_JO_ASSETS"); fi
+    test -x "$destination/openjedvibe-launcher" || { printf 'This package has no launcher\n' >&2; exit 1; }
+    exec "$destination/openjedvibe-launcher" "${launcher_args[@]}"
+fi
+# The engine inherits descriptor 9 and keeps the same lock through game exit.
 exec bash "$destination/launch-sp.sh" "$assets" --campaign "$campaign" "$@"

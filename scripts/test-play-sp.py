@@ -112,6 +112,19 @@ class DesktopUpdateTests(unittest.TestCase):
         (package / "jo-mvp-result.txt").write_text("PASS: JO opening, wheels, weapon switching, save/load, and Kejim transition (rdsp-vanilla)\n")
         return package
 
+    def test_launcher_paths_and_missing_package(self):
+        self.run_play("--launcher", success=False)
+        server = self.worktree("launcher")
+        launcher = server / "build/ready/openjedvibe-launcher"
+        launcher.write_text(GAME)
+        launcher.chmod(0o755)
+        self.run_play("--launcher", "--worktree", "launcher", OJK_JO_ASSETS=str(self.jo_assets))
+        self.assertEqual(json.loads(self.launch.read_text()), ["--ui", "--profile",
+            str(self.root / "profile/worktrees/openjk-launcher"), "--ja-path", str(self.assets),
+            "--jo-path", str(self.jo_assets)])
+        self.run_play("--launcher", "+quit", success=False)
+        self.run_play("--launcher", "--campaign", "jo", success=False)
+
     def test_ja_does_not_need_jo_assets_or_importer(self):
         (self.first / "openjedvibe-import-jo").unlink()
         shutil.rmtree(self.jo_assets)

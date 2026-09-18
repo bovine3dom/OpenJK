@@ -308,7 +308,8 @@ class ImportTests(unittest.TestCase):
                 arguments = [json.loads(line) for line in printed.stdout.splitlines()]
                 expected = [str(Path(sys.executable).absolute()), "+set", "fs_basepath", str(Path(launcher).resolve().parent),
                     "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath", str(launcher_profile),
-                    "+set", "fs_game", "OpenJK", "+set", "com_outcast", "0", "+map", "yavin1",
+                    "+set", "fs_game", "OpenJK", "+set", "com_outcast", "0",
+                    "+set", "r_mode", "-2", "+set", "r_fullscreen", "1", "+set", "cg_fovAspectAdjust", "1", "+map", "yavin1",
                     "+set", "quoted value"]
                 self.assertEqual(arguments, expected)
                 checked = subprocess.run((launcher, "--headless-check", "--profile", launcher_profile),
@@ -322,8 +323,28 @@ class ImportTests(unittest.TestCase):
                 expected = [str(Path(sys.executable).absolute()), "+set", "fs_basepath", str(Path(launcher).resolve().parent),
                     "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath",
                     str(launcher_profile / "campaigns/jo"), "+set", "fs_game", "OpenJK", "+set",
-                    "com_outcast", "1", "+map", "kejim_post"]
+                    "com_outcast", "1", "+set", "r_mode", "-2", "+set", "r_fullscreen", "1",
+                    "+set", "cg_fovAspectAdjust", "1", "+map", "kejim_post"]
                 self.assertEqual(arguments, expected)
+                def resume(campaign):
+                    return subprocess.run((launcher, "--print-launch", "--profile", launcher_profile,
+                        "--engine", sys.executable, "--campaign", campaign, "--continue"),
+                        text=True, capture_output=True)
+
+                self.assertNotEqual(resume("ja").returncode, 0)
+                saves = launcher_profile / "OpenJK/saves"
+                saves.mkdir(parents=True)
+                for index, name in enumerate(("older", "auto", "current", "bad;quit")):
+                    save = saves / (name + ".sav")
+                    save.write_bytes(b"fixture")
+                    os.utime(save, (100 + index, 100 + index))
+                (saves / "empty.sav").touch()
+                continued = resume("ja")
+                self.assertEqual(continued.returncode, 0, continued.stderr)
+                self.assertEqual([json.loads(line) for line in continued.stdout.splitlines()][-2:], ["+load", "auto"])
+                self.assertNotEqual(resume("jo").returncode, 0)
+                (launcher_profile / "OpenJK/openjk_sp.cfg").write_text("seta r_mode 4\n")
+                self.assertNotIn('"r_mode"', resume("ja").stdout)
                 with zipfile.ZipFile(overlay) as expected, zipfile.ZipFile(
                         launcher_profile / "campaigns/jo/OpenJK/zz_jo_campaign.pk3") as actual:
                     self.assertEqual(actual.namelist(), expected.namelist())

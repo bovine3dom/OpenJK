@@ -377,14 +377,14 @@ constraints, but it does not remove the need to test campaign progression.
 
 rough notes / todo
 
-- launcher needs lots of TLC.
-  - give play-sp an option to launch it.
-  - UX needs classic 'all text and buttons must be useful to users'
-  - more cohesive styling with rest of game
-  - should provide sensible defaults, esp desktop resolution
-  - it totally needs a star wars chip-tune
-  - 'continue' button to load most recent save
-  - JO and JA should swap positions, so JO always comes first
+- [x] Replace launcher dashboard styling with the in-game blue and amber menu style.
+  - [x] Add `play-sp --launcher` with worktree paths and profiles.
+  - [x] Remove decorative labels. Use explicit Continue, New Game, and Main Menu controls.
+  - [x] Use desktop resolution for new profiles. Preserve existing display settings.
+  - [x] Add optional original space-adventure chiptune music. Do not copy licensed music.
+  - [x] Load the most recent campaign save with Continue. Disable it when no save exists.
+  - [x] Put Jedi Outcast before Jedi Academy.
+  - Manual platform, audio, and campaign-load checks remain open. See `docs/launcher.md`.
 - settings menu needs a refresh. lazy option would be to reuse the atmosphere_editor with descriptions from the variables
 - ... would it be crazy to port single-player to multiplayer to allow for co-op?
 - first person lightsaber?

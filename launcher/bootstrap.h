@@ -51,6 +51,7 @@ Result<std::vector<std::string>> launch_arguments(
     const std::filesystem::path& engine, const std::filesystem::path& package,
     const std::filesystem::path& academy, const std::filesystem::path& profile,
     Game game, bool new_game, const std::vector<std::string>& extra = {});
+Result<std::string> latest_save(const std::filesystem::path& profile, Game game);
 std::wstring quote_windows_argument(const std::wstring& argument);
 Result<bool> spawn(const std::vector<std::string>& arguments);
 std::string inspect_argument(const std::string& argument);

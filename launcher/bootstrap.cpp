@@ -447,6 +447,8 @@ Result<std::vector<std::string>> launch_arguments(const fs::path& engine, const 
             "+set", "fs_cdpath", academy.u8string(), "+set", "fs_homepath", campaign_profile(profile, game).u8string(),
             "+set", "fs_game", "OpenJK", "+set", "com_outcast", game == Game::outcast ? "1" : "0"};
         if (engine.empty() || package.empty() || academy.empty() || profile.empty()) throw std::runtime_error("Engine, package, game, and profile paths must not be empty.");
+        if (!fs::exists(campaign_profile(profile, game) / "OpenJK" / "openjk_sp.cfg"))
+            args.insert(args.end(), {"+set", "r_mode", "-2", "+set", "r_fullscreen", "1", "+set", "cg_fovAspectAdjust", "1"});
         if (new_game) { args.push_back("+map"); args.push_back(game == Game::academy ? "yavin1" : "kejim_post"); }
         args.insert(args.end(), extra.begin(), extra.end());
         for (const auto& arg : args) {
@@ -455,6 +457,27 @@ Result<std::vector<std::string>> launch_arguments(const fs::path& engine, const 
                 throw std::runtime_error("Engine arguments and paths must not contain double quote characters.");
         }
         return args;
+    });
+}
+
+Result<std::string> latest_save(const fs::path& profile, Game game) {
+    return guarded<std::string>(ErrorCode::io, profile, [&] {
+        const auto directory = campaign_profile(profile, game) / "OpenJK" / "saves";
+        std::string latest;
+        fs::file_time_type time = fs::file_time_type::min();
+        if (!fs::exists(directory)) return latest;
+        for (const auto& entry : fs::directory_iterator(directory)) {
+            const auto name = entry.path().stem().u8string();
+            if (entry.path().extension() != ".sav" || lower(name) == "current" ||
+                name.empty() || name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string::npos ||
+                !entry.is_regular_file() || entry.file_size() == 0) continue;
+            const auto modified = entry.last_write_time();
+            if (modified > time || (modified == time && name > latest)) {
+                latest = name;
+                time = modified;
+            }
+        }
+        return latest;
     });
 }
 

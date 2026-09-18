@@ -46,7 +46,7 @@ int run(const std::vector<std::string>& args) {
 #ifdef OPENJK_LAUNCHER_UI
     if (args.size() == 1) return launcher_ui::run();
 #endif
-    bool check = false, print = false, new_game = false, help = false;
+    bool check = false, print = false, new_game = false, help = false, ui = false, resume = false;
     std::optional<fs::path> ja, jo, profile, engine;
     std::optional<Game> campaign;
     std::vector<std::string> extra;
@@ -58,6 +58,8 @@ int run(const std::vector<std::string>& args) {
         if (arg == "--headless-check") check = true;
         else if (arg == "--print-launch") print = true;
         else if (arg == "--new-game") new_game = true;
+        else if (arg == "--continue") resume = true;
+        else if (arg == "--ui") ui = true;
         else if (arg == "--help") help = true;
         else if (arg == "--ja-path" || arg == "--jo-path" || arg == "--profile" || arg == "--engine" || arg == "--campaign") {
             if (i + 1 == args.size() || args[i + 1].empty() || args[i + 1].compare(0, 2, "--") == 0)
@@ -84,9 +86,21 @@ int run(const std::vector<std::string>& args) {
                      "  --profile PATH     Select the config and profile root\n"
                      "  --engine PATH      Select the engine executable\n"
                      "  --campaign ja|jo   Select a campaign\n"
+                     "  --ui               Open the launcher with the supplied paths and profile\n"
+                     "  --continue         Load the most recent campaign save\n"
                      "  --new-game         Start at the first map\n"
                      "  --help             Show this help\n";
         return 0;
+    }
+    if (resume && new_game) return error("Use either --continue or --new-game.");
+    if (ui) {
+        if (check || print || resume || new_game || engine || campaign || !extra.empty())
+            return error("Use --ui with only --ja-path, --jo-path, and --profile.");
+#ifdef OPENJK_LAUNCHER_UI
+        return launcher_ui::run(profile.value_or(fs::path{}), {ja, jo});
+#else
+        return error("This build does not include the launcher UI.");
+#endif
     }
     if (check && print) return error("Use either --headless-check or --print-launch.");
     auto root = profile ? *profile : fs::absolute(require(default_profile_root()));
@@ -133,6 +147,11 @@ int run(const std::vector<std::string>& args) {
     auto executable = require(executable_path());
     auto selected_engine = engine ? *engine : require(default_engine(executable));
     if (!fs::is_regular_file(selected_engine)) return error("Engine not found at " + inspect_argument(selected_engine.u8string()) + ". Use --engine PATH.");
+    if (resume) {
+        const auto save = require(latest_save(root, game));
+        if (save.empty()) return error("No saved game for this campaign. Use --new-game.");
+        extra.insert(extra.begin(), {"+load", save});
+    }
     auto argv = require(launch_arguments(selected_engine, package_root(executable), academy.data_root, root, game, new_game, extra));
     fs::create_directories(campaign_profile(root, game));
     config.ja_path = academy.data_root;

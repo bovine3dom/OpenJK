@@ -9,10 +9,13 @@
 #include <nfd.h>
 #include <nfd_sdl2.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cmath>
+#include <cctype>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -67,8 +70,52 @@ public:
     }
 };
 
+// Original short space-adventure motif. No game recordings or score data.
+class Music {
+public:
+    ~Music() { if (device) SDL_CloseAudioDevice(device); }
+    bool toggle() {
+        if (device) {
+            SDL_CloseAudioDevice(device);
+            device = 0;
+            return false;
+        }
+        if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) throw std::runtime_error(SDL_GetError());
+        SDL_AudioSpec spec{};
+        spec.freq = 22050;
+        spec.format = AUDIO_S16SYS;
+        spec.channels = 1;
+        spec.samples = 1024;
+        device = SDL_OpenAudioDevice(nullptr, 0, &spec, nullptr, 0);
+        if (!device) throw std::runtime_error(SDL_GetError());
+        if (samples.empty()) {
+            constexpr int notes[] = {52, 59, 64, 66, 67, 64, 59, 62, 55, 62, 67, 69, 66, 62, 59, 54};
+            constexpr int length = 6615;
+            for (int note : notes) {
+                const double frequency = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+                for (int i = 0; i < length; ++i) {
+                    const double envelope = std::min(1.0, i / 220.0) * (1.0 - i / double(length));
+                    const double phase = i * frequency / 22050.0;
+                    samples.push_back(static_cast<Sint16>((phase - std::floor(phase) < 0.25 ? 900 : -900) * envelope));
+                }
+            }
+        }
+        poll();
+        SDL_PauseAudioDevice(device, 0);
+        return true;
+    }
+    void poll() {
+        if (device && SDL_GetQueuedAudioSize(device) < samples.size() * sizeof(Sint16) &&
+            SDL_QueueAudio(device, samples.data(), static_cast<Uint32>(samples.size() * sizeof(Sint16))) != 0)
+            throw std::runtime_error(SDL_GetError());
+    }
+private:
+    SDL_AudioDeviceID device = 0;
+    std::vector<Sint16> samples;
+};
+
 struct Request {
-    bool startup = false, launch = false, new_game = false;
+    bool startup = false, launch = false, new_game = false, resume = false;
     int game = 0, mask = 3;
     std::array<std::string, 2> paths;
     fs::path profile;
@@ -80,6 +127,7 @@ struct Outcome {
     fs::path profile;
     std::vector<std::string> arguments;
     std::string status;
+    std::array<std::string, 2> saves;
 };
 
 class UI final : public Rml::EventListener {
@@ -87,7 +135,7 @@ public:
     UI(Rml::ElementDocument* document, fs::path executable, bool nfd_ready)
         : document(document), executable(std::move(executable)), nfd_ready(nfd_ready) {
         for (int i = 0; i < 2; ++i) {
-            for (const char* suffix : {"path", "locate", "check", "play", "new"}) {
+            for (const char* suffix : {"path", "locate", "check", "play", "new", "menu"}) {
                 auto* control = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(element(id(i, suffix)));
                 if (!control) throw std::runtime_error("Invalid launcher input: " + id(i, suffix));
                 controls.push_back(control);
@@ -126,6 +174,7 @@ public:
     }
 
     void poll() {
+        music.poll();
         if (!job.valid()) return;
         std::string progress;
         {
@@ -138,19 +187,24 @@ public:
         }
         if (job.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
         const Outcome result = job.get();
+        saves = result.saves;
         disable(false);
-        text("progress", "IDLE / Awaiting command");
+        text("progress", "");
         if (result.saved) {
             profile = result.profile;
             text("profile", profile.empty() ? "Profile location is unavailable." : profile.u8string());
             inputs[0]->SetValue(result.saved->ja_path ? result.saved->ja_path->u8string() : "");
             inputs[1]->SetValue(result.saved->jo_path ? result.saved->jo_path->u8string() : "");
-            text("last", std::string("LAST CAMPAIGN / ") + names[result.saved->last_campaign == Game::outcast]);
+            text("last", result.saved->ja_path ? std::string("Last played: ") +
+                names[result.saved->last_campaign == Game::outcast] : "Select the folders that contain your installed game files.");
         }
         for (int i = 0; i < 2; ++i) {
             if (!result.validation[i]) continue;
             const auto& validation = *result.validation[i];
-            text(id(i, "state"), bootstrap::state_name(validation.state));
+            std::string state = bootstrap::state_name(validation.state);
+            std::replace(state.begin(), state.end(), '_', ' ');
+            state[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(state[0])));
+            text(id(i, "state"), state);
             std::string detail = validation.detail;
             for (const auto& missing : validation.missing_files) detail += " / " + missing;
             text(id(i, "detail"), detail);
@@ -170,21 +224,26 @@ public:
     }
 
     void ProcessEvent(Rml::Event& event) override {
-        if (job.valid()) return;
         try {
             auto* target = event.GetTargetElement();
             while (target && target->GetTagName() != "input") target = target->GetParentNode();
             if (!target) return;
+            if (event.GetType() == "click" && target->GetId() == "music") {
+                target->SetAttribute("value", music.toggle() ? "Music: On" : "Music: Off");
+                return;
+            }
+            if (job.valid()) return;
             for (int i = 0; i < 2; ++i) {
                 const auto& target_id = target->GetId();
                 if (event.GetType() == "change" && target_id == id(i, "path")) {
                     text(id(i, "state"), "Not checked");
-                    text(id(i, "detail"), "Select Check Again or Play to validate this path.");
+                    text(id(i, "detail"), "Select Check Files to validate this path.");
                 }
                 if (event.GetType() != "click") continue;
                 if (target_id == id(i, "locate")) browse(i);
                 else if (target_id == id(i, "check")) submit(i, false, false);
-                else if (target_id == id(i, "play")) submit(i, true, false);
+                else if (target_id == id(i, "play")) submit(i, true, false, true);
+                else if (target_id == id(i, "menu")) submit(i, true, false);
                 else if (target_id == id(i, "new")) submit(i, true, true);
             }
         } catch (const std::exception& error) {
@@ -206,6 +265,11 @@ private:
     }
     void disable(bool disabled) {
         for (Rml::ElementFormControl* control : controls) control->SetDisabled(disabled);
+        for (int i = 0; i < 2; ++i) {
+            auto* button = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(element(id(i, "play")));
+            button->SetDisabled(disabled || saves[i].empty());
+            text(id(i, "save"), saves[i].empty() ? "No saved game" : "Latest save: " + saves[i]);
+        }
     }
     void report(const std::string& phase, const std::string& item) {
         std::lock_guard<std::mutex> lock(progress_mutex);
@@ -214,11 +278,12 @@ private:
     void check_cancel() const {
         if (cancel.load()) throw std::runtime_error("Operation cancelled.");
     }
-    void submit(int game, bool launch, bool new_game) {
+    void submit(int game, bool launch, bool new_game, bool resume = false) {
         Request request;
         request.game = game;
         request.launch = launch;
         request.new_game = new_game;
+        request.resume = resume;
         request.mask = launch ? 3 : 1 << game;
         request.profile = profile;
         for (int i = 0; i < 2; ++i) request.paths[i] = inputs[i]->GetValue();
@@ -257,14 +322,18 @@ private:
             std::string config_warning;
             if (request.startup) {
                 result.saved.emplace();
-                request.profile = fs::absolute(require(bootstrap::default_profile_root()));
+                if (request.profile.empty()) request.profile = fs::absolute(require(bootstrap::default_profile_root()));
                 result.profile = request.profile;
                 auto config = bootstrap::load_config(request.profile / "bootstrap.ini");
                 if (config) *result.saved = std::move(config.value);
                 else config_warning = "bootstrap.ini: " + config.error->detail + " ";
+                if (!request.paths[0].empty()) result.saved->ja_path = fs::u8path(request.paths[0]);
+                if (!request.paths[1].empty()) result.saved->jo_path = fs::u8path(request.paths[1]);
                 if (result.saved->ja_path) request.paths[0] = result.saved->ja_path->u8string();
                 if (result.saved->jo_path) request.paths[1] = result.saved->jo_path->u8string();
             }
+            for (int i = 0; i < 2; ++i)
+                result.saves[i] = require(bootstrap::latest_save(request.profile, i == 0 ? Game::academy : Game::outcast));
             for (int i = 0; i < 2; ++i) {
                 if (!(request.mask & (1 << i))) continue;
                 check_cancel();
@@ -330,8 +399,14 @@ private:
                 result.status = imported.warning;
             }
             check_cancel();
+            std::vector<std::string> extra;
+            if (request.resume) {
+                const auto save = require(bootstrap::latest_save(request.profile, game));
+                if (save.empty()) throw std::runtime_error("No saved game for this campaign. Select New Game.");
+                extra = {"+load", save};
+            }
             auto arguments = require(bootstrap::launch_arguments(engine, bootstrap::package_root(executable),
-                result.validation[0]->data_root, request.profile, game, request.new_game));
+                result.validation[0]->data_root, request.profile, game, request.new_game, extra));
             bootstrap::BootstrapConfig config;
             config.ja_path = result.validation[0]->data_root;
             if (*result.validation[1]) config.jo_path = result.validation[1]->data_root;
@@ -349,10 +424,12 @@ private:
         return result;
     }
 
+    Music music;
     Rml::ElementDocument* document;
     fs::path executable, profile;
     bool nfd_ready = false;
     std::array<Rml::ElementFormControlInput*, 2> inputs{};
+    std::array<std::string, 2> saves;
     std::vector<Rml::ElementFormControlInput*> controls;
     std::atomic<bool> cancel{false};
     std::mutex progress_mutex;
@@ -361,11 +438,11 @@ private:
 };
 } // namespace
 
-int run() {
+int run(const fs::path& profile, const bootstrap::BootstrapConfig& config) {
     FileInterface file_interface;
     Runtime runtime;
     try {
-        runtime.backend = Backend::Initialize("OpenJedvibe / Campaign Control", 960, 640, true);
+        runtime.backend = Backend::Initialize("OpenJedvibe", 960, 640, true);
         if (!runtime.backend) throw std::runtime_error(std::string("Cannot create the launcher window: ") + SDL_GetError());
         SDL_SetWindowMinimumSize(Backend::GetWindow(), 720, 560);
         Rml::SetSystemInterface(Backend::GetSystemInterface());
@@ -406,6 +483,9 @@ int run() {
             document->Show();
             Request startup;
             startup.startup = true;
+            startup.profile = profile;
+            if (config.ja_path) startup.paths[0] = config.ja_path->u8string();
+            if (config.jo_path) startup.paths[1] = config.jo_path->u8string();
             ui.start(std::move(startup));
             while (Backend::ProcessEvents(context)) {
                 ui.poll();
