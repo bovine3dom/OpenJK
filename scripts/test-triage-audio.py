@@ -17,7 +17,9 @@ class RoutingTests(unittest.TestCase):
             ('sound/weapons/blaster/fire', 'Local', 'legacy'),
             ('sound/movers/platforms/lift', 'World', 'protected'),
             ('sound/ambience/prototype/alarm1', 'World', 'protected'),
-            ('sound/effects/explode10', 'World', 'full'),
+            ('sound/effects/explode10', 'World', 'protected'),
+            ('sound/weapons/thermal/explode.mp3', 'Weapon', 'protected'),
+            ('sound/weapons/thermal/explode.mp3', 'Local', 'legacy'),
             ('unknown', 'World', 'protected'),
         ):
             self.assertEqual(triage.classify(path, context)['route'], mode)

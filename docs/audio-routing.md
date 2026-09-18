@@ -35,9 +35,10 @@ triage tool both read this table. Context rules take priority over asset names:
 
 1. Local, global-voice, announcer, and music channels use `legacy`.
 2. World-space voice channels use `protected`.
-3. Weapon-channel sources use `full`, including weapons on brush-model entities.
-4. Other brush-model sources, including moving doors and lifts, use `protected`.
-5. Other sources use the first matching asset prefix.
+3. Identified explosion assets use `protected`, including assets on weapon channels.
+4. Other weapon-channel sources use `full`, including weapons on brush-model entities.
+5. Other brush-model sources, including moving doors and lifts, use `protected`.
+6. Other sources use the first matching asset prefix.
 
 Global non-voice sound events use a new automatic broadcast channel. It retains
 legacy channel allocation so overlapping events do not replace each other.
@@ -49,8 +50,8 @@ The initial asset rules are:
 
 | Family | Route |
 | --- | --- |
-| Weapons, footsteps, body impacts, identified explosions and impacts, TIE pass effects | `full` |
-| Character cues, dialogue, movers, switches, vehicles, world ambience | `protected` |
+| Weapons, footsteps, body impacts, identified impacts, TIE pass effects | `full` |
+| Explosions, character cues, dialogue, movers, switches, vehicles, world ambience | `protected` |
 | Other environmental effects, including alarms, forcefields, steam, and machinery loops | `protected` |
 | Interface and music assets | `legacy` |
 | Unclassified assets | `protected`, with `unclassified-review` in diagnostics |
