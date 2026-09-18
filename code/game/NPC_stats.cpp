@@ -4129,6 +4129,11 @@ static qboolean NPC_OutcastAttribute(const char *type, const char *attribute, ch
 void NPC_RestoreOutcastEquipment(gentity_t *ent)
 {
 	if (!G_IsOutcast() || !ent->NPC || !ent->client || !ent->NPC_type || ent->health <= 0) return;
+	if (ent->client->NPC_class == CLASS_KYLE)
+	{
+		for (int blade = 0; blade < MAX_BLADES; ++blade)
+			ent->client->ps.saber[0].blade[blade].color = SABER_BLUE;
+	}
 	// Artus scripts change pull, grip, and lightning, but rely on Desann's default push.
 	// Limit this repair to old actors with no Force resources; preserve scripted levels.
 	char value[MAX_QPATH];

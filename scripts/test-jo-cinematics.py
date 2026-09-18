@@ -218,9 +218,9 @@ def run_case(package, case, renderer, saved):
                     walking_frames.append(float(bone[1]))
                 history.extend(current)
                 if case == "saber" and any(s.get("name") == "kyle_tube" and s.get("absent") != "1" for s in current):
-                    assert "cinematic_saber name=kyle_tube color=2" in state, state
+                    assert "cinematic_saber name=kyle_tube color=4" in state, state
                     if not captured and re.search(r"cinematic_combat name=kyle_tube .*blade_active=1 blade_length=[1-9]", state):
-                        capture("yellow_saber")
+                        capture("blue_saber")
                         captured = True
                 if case == "droid" and "campaign=jo map=bespin_streets" in state:
                     break
@@ -343,7 +343,7 @@ def run_case(package, case, renderer, saved):
                            for s in history), "No walking actor was observed"
                 assert "camera=0" in cmd("campaign_status"), "Scene did not return control"
             elif case == "saber":
-                assert captured and seen_camera, "Kyle's active yellow saber was not observed in the cutscene"
+                assert captured and seen_camera, "Kyle's active blue saber was not observed in the cutscene"
             elif case == "droid":
                 assert any(s.get("nav") == "1" for s in history), "Droid did not navigate to the lift"
                 assert all(s.get("noclip", "0") == "0" for s in history), "Droid bypassed collision"

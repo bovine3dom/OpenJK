@@ -1675,12 +1675,6 @@ gentity_t *NPC_Spawn_Do( gentity_t *ent, qboolean fullSpawnNow )
 		return NULL;
 	}
 
-	if (G_IsOutcast() && newent->client->NPC_class == CLASS_KYLE && g_entities[0].client)
-	{
-		for (int blade = 0; blade < MAX_BLADES; ++blade)
-			newent->client->ps.saber[0].blade[blade].color = g_entities[0].client->ps.saber[0].blade[0].color;
-	}
-
 	if ( ent->NPC_type )
 	{
 		if ( !Q_stricmp( ent->NPC_type, "player" ) )

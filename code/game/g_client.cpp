@@ -1891,6 +1891,19 @@ void G_AddWeaponModels( gentity_t *ent )
 extern saber_colors_t TranslateSaberColor( const char *name );
 extern void WP_RemoveSaber( gentity_t *ent, int saberNum );
 void G_ChangePlayerModel( gentity_t *ent, const char *newModel );
+
+static void G_SetOutcastPlayerSaberColor( gentity_t *ent )
+{
+	if ( !G_IsOutcast() || !ent || !ent->client || ent->s.number )
+	{
+		return;
+	}
+	for ( int blade = 0; blade < MAX_BLADES; ++blade )
+	{
+		ent->client->ps.saber[0].blade[blade].color = SABER_BLUE;
+	}
+}
+
 void G_SetSabersFromCVars( gentity_t *ent )
 {
 	if ( g_saber->string
@@ -1919,6 +1932,10 @@ void G_SetSabersFromCVars( gentity_t *ent )
 		{
 			ent->client->ps.saber[0].blade[n].color = SABER_RED;
 		}
+	}
+	else if ( G_IsOutcast() )
+	{
+		G_SetOutcastPlayerSaberColor( ent );
 	}
 	else if ( g_saber_color->string )
 	{//FIXME: how to specify color for each blade and/or color for second saber?
@@ -2231,6 +2248,7 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 
 		//setup sabers
 		G_ReloadSaberData( ent );
+		G_SetOutcastPlayerSaberColor( ent );
 		//force power levels should already be set
 	}
 	else
