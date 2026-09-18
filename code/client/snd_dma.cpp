@@ -191,6 +191,7 @@ cvar_t *s_separation;
 cvar_t *s_show;
 cvar_t *s_testsound;
 cvar_t *s_volume;
+cvar_t *s_footstepsVolume;
 cvar_t *s_volumeVoice;
 
 typedef struct
@@ -465,6 +466,8 @@ void S_Init( void ) {
 	s_show              = Cvar_Get( "s_show",              "0",       CVAR_CHEAT );
 	s_testsound         = Cvar_Get( "s_testsound",         "0",       CVAR_CHEAT );
 	s_volume            = Cvar_Get( "s_volume",            "0.5",     CVAR_ARCHIVE );
+	s_footstepsVolume   = Cvar_Get( "s_footstepsVolume",   "1",       CVAR_ARCHIVE );
+	Cvar_CheckRange( s_footstepsVolume, 0, 5, qtrue );
 	s_volumeVoice       = Cvar_Get( "s_volumeVoice",       "1.0",     CVAR_ARCHIVE );
 
 	MP3_InitCvars();
@@ -1534,6 +1537,7 @@ void S_StartSound(const vec3_t origin, int entityNum, soundChannel_t entchannel,
 {
 	channel_t	*ch;
 	/*const*/ sfx_t *sfx;
+	qboolean isFootstep;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
@@ -1548,6 +1552,7 @@ void S_StartSound(const vec3_t origin, int entityNum, soundChannel_t entchannel,
 	}
 
 	sfx = &s_knownSfx[ sfxHandle ];
+	isFootstep = !Q_stricmpn( sfx->sSoundName, "sound/player/footsteps/", 23 );
 	if (sfx->bInMemory == qfalse){
 		S_memoryLoad(sfx);
 	}
@@ -1630,6 +1635,10 @@ void S_StartSound(const vec3_t origin, int entityNum, soundChannel_t entchannel,
 
 	if (entchannel < CHAN_AMBIENT && entityNum == listener_number) {	//only do it for body sounds not local sounds
 		ch->master_vol = SOUND_MAXVOL * SOUND_FMAXVOL;	//this won't be attenuated so let it scale down
+	}
+	if ( isFootstep )
+	{
+		ch->master_vol = (int)( ch->master_vol * s_footstepsVolume->value );
 	}
 	if ( entchannel == CHAN_VOICE || entchannel == CHAN_VOICE_ATTEN || entchannel == CHAN_VOICE_GLOBAL )
 	{
