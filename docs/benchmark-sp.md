@@ -134,8 +134,9 @@ freeze AI, fire weapons, or use `ai-memory.cfg`.
 
 This is not a deterministic actor stress test. NPCs, scripts, projectiles,
 and player displacement can change the view. Check the final screenshot.
-The `--jolt-scene` mode uses `t1_sour` and creates controlled live-actor or corpse
-groups. See `jolt-performance.md`. These results include rendering and game-module
+The `--jolt-scene` mode creates controlled live-actor or corpse groups. It uses
+`t1_sour` by default. Use `--jolt-map cairn_assembly` for the JO map fixture.
+See `jolt-performance.md`. These results include rendering and game-module
 work. They do not isolate physics cost or replace a renderer character stress scene.
 
 ## Measurement

@@ -147,11 +147,14 @@ def run(args, suite, index, settings):
         if args.jolt_scene:
             commands("exitview; notarget; set d_npcfreeze 1; set cg_drawGun 0; set cg_thirdPerson 0")
             on = int(settings.get("g_joltReactions", 1))
+            fixtures = {"t1_sour": (5324, -3950, 64, 5504, -4300, 90),
+                        "cairn_assembly": (-1720, 4300, 280, -1520, 3900, 280)}
+            spawn_x, spawn_y, spawn_z, camera_x, camera_y, camera_z = fixtures[args.map]
             for first in range(0, args.characters, 10):
                 last = min(first+10, args.characters)
                 for i in range(first, last):
-                    x, y = 5324 + (i % 10)*40, -3950 + (i // 10)*48
-                    commands(f"setviewpos {x} {y-64} 64 90; wait 2; npc spawn stormtrooper bench_{i}; wait 2")
+                    x, y = spawn_x + (i % 10)*40, spawn_y + (i // 10)*48
+                    commands(f"setviewpos {x} {y-64} {spawn_z} 90; wait 2; npc spawn stormtrooper bench_{i}; wait 2")
                 settle(2)
                 if on and args.jolt_scene != "idle":
                     commands("; ".join(f"jolt_select bench_{i}; jolt_balance 60" for i in range(first, last)))
@@ -168,7 +171,7 @@ def run(args, suite, index, settings):
                             settle(3)
                         else:
                             raise RuntimeError("Corpse batch did not settle before the next allocation")
-            commands("setviewpos 5504 -4300 90 90; set cg_thirdPerson 0; set cg_drawGun 0")
+            commands(f"setviewpos {camera_x} {camera_y} {camera_z} 90; set cg_thirdPerson 0; set cg_drawGun 0")
             settle(1)
             start_line = len(lines)
             commands("; ".join(f"jolt_status bench_{i}" for i in range(args.characters)))
@@ -182,7 +185,7 @@ def run(args, suite, index, settings):
             if on and args.jolt_scene == "active" and len(re.findall(r"engaged=1 phase=1", status)) != args.characters:
                 raise RuntimeError("Not all benchmark rigs are active and balanced")
             result["jolt_scene"] = dict(kind=args.jolt_scene, characters=args.characters, enabled=on)
-            result["scene"].update(viewpos=[5504, -4300, 90, 90], npc_freeze=1, third_person=0)
+            result["scene"].update(viewpos=[camera_x, camera_y, camera_z, 90], npc_freeze=1, third_person=0)
             scene = time.monotonic()
         deadline = scene + args.warmup
         while time.monotonic() < deadline:
@@ -355,6 +358,7 @@ def main():
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
     parser.add_argument("--map", choices=("t2_wedge", "t1_sour", "cairn_assembly"), default="t2_wedge")
     parser.add_argument("--jolt-scene", choices=("idle", "active", "corpses"))
+    parser.add_argument("--jolt-map", choices=("t1_sour", "cairn_assembly"), default="t1_sour")
     parser.add_argument("--characters", type=int, default=10)
     parser.add_argument("--video-driver", choices=("offscreen", "x11", "wayland"), default="offscreen")
     parser.add_argument("--gpu", default="Intel", help="Required GL_RENDERER substring")
@@ -364,9 +368,8 @@ def main():
                         help="Override a numeric or single-word setting for an A/B test")
     args = parser.parse_args()
     if args.jolt_scene:
-        if args.campaign != "ja":
-            parser.error("Jolt fixture scenes require the JA campaign")
-        args.map = "t1_sour"
+        args.map = args.jolt_map
+        args.campaign = "jo" if args.map == "cairn_assembly" else "ja"
         if not 1 <= args.characters <= (60 if args.jolt_scene == "corpses" else 10):
             parser.error("Use 1..10 live characters or 1..60 corpses")
         if args.seconds + args.warmup > 45:

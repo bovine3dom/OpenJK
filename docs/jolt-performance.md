@@ -56,6 +56,7 @@ python3 scripts/benchmark-sp.py --jolt-scene idle --characters 10 --runs 2 --sec
 python3 scripts/benchmark-sp.py --jolt-scene idle --characters 10 --runs 2 --seconds 10 --warmup 3
 python3 scripts/benchmark-sp.py --jolt-scene active --characters 10 --runs 2 --seconds 10 --warmup 3
 python3 scripts/benchmark-sp.py --jolt-scene corpses --characters 60 --runs 2 --seconds 10 --warmup 3
+python3 scripts/benchmark-sp.py --jolt-map cairn_assembly --jolt-scene corpses --characters 60 --runs 2 --seconds 10 --warmup 3
 ```
 
 Use corpse counts of 10, 30, and 60. Add `--cvar g_joltReactions 0` for the
