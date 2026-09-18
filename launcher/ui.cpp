@@ -2,6 +2,7 @@
 #include "bootstrap.h"
 #include "jo_import.h"
 #include "ui_backend.h"
+#include "music_player.h"
 
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/FileInterface.h>
@@ -13,8 +14,8 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 #include <cctype>
 #include <future>
 #include <memory>
@@ -70,50 +71,6 @@ public:
     }
 };
 
-// Original short space-adventure motif. No game recordings or score data.
-class Music {
-public:
-    ~Music() { if (device) SDL_CloseAudioDevice(device); }
-    bool toggle() {
-        if (device) {
-            SDL_CloseAudioDevice(device);
-            device = 0;
-            return false;
-        }
-        if (SDL_InitSubSystem(SDL_INIT_AUDIO) != 0) throw std::runtime_error(SDL_GetError());
-        SDL_AudioSpec spec{};
-        spec.freq = 22050;
-        spec.format = AUDIO_S16SYS;
-        spec.channels = 1;
-        spec.samples = 1024;
-        device = SDL_OpenAudioDevice(nullptr, 0, &spec, nullptr, 0);
-        if (!device) throw std::runtime_error(SDL_GetError());
-        if (samples.empty()) {
-            constexpr int notes[] = {52, 59, 64, 66, 67, 64, 59, 62, 55, 62, 67, 69, 66, 62, 59, 54};
-            constexpr int length = 6615;
-            for (int note : notes) {
-                const double frequency = 440.0 * std::pow(2.0, (note - 69) / 12.0);
-                for (int i = 0; i < length; ++i) {
-                    const double envelope = std::min(1.0, i / 220.0) * (1.0 - i / double(length));
-                    const double phase = i * frequency / 22050.0;
-                    samples.push_back(static_cast<Sint16>((phase - std::floor(phase) < 0.25 ? 900 : -900) * envelope));
-                }
-            }
-        }
-        poll();
-        SDL_PauseAudioDevice(device, 0);
-        return true;
-    }
-    void poll() {
-        if (device && SDL_GetQueuedAudioSize(device) < samples.size() * sizeof(Sint16) &&
-            SDL_QueueAudio(device, samples.data(), static_cast<Uint32>(samples.size() * sizeof(Sint16))) != 0)
-            throw std::runtime_error(SDL_GetError());
-    }
-private:
-    SDL_AudioDeviceID device = 0;
-    std::vector<Sint16> samples;
-};
-
 struct Request {
     bool startup = false, launch = false, new_game = false, resume = false;
     int game = 0, mask = 3;
@@ -132,8 +89,8 @@ struct Outcome {
 
 class UI final : public Rml::EventListener {
 public:
-    UI(Rml::ElementDocument* document, fs::path executable, bool nfd_ready)
-        : document(document), executable(std::move(executable)), nfd_ready(nfd_ready) {
+    UI(Rml::ElementDocument* document, fs::path executable, bool nfd_ready, fs::path music_path)
+        : music(std::move(music_path)), document(document), executable(std::move(executable)), nfd_ready(nfd_ready) {
         for (int i = 0; i < 2; ++i) {
             for (const char* suffix : {"path", "locate", "check", "play", "new", "menu"}) {
                 auto* control = rmlui_dynamic_cast<Rml::ElementFormControlInput*>(element(id(i, suffix)));
@@ -147,6 +104,12 @@ public:
         for (const char* id : {"status", "progress", "profile", "last"}) element(id);
         document->AddEventListener("click", this);
         document->AddEventListener("change", this);
+        std::string bars;
+        for (unsigned i = 0; i < launcher_music::band_count; ++i)
+            bars += "<div class=\"equaliser-band\" id=\"band-" + std::to_string(i) + "\"></div>";
+        element("equaliser")->SetInnerRML(bars);
+        for (unsigned i = 0; i < band_elements.size(); ++i) band_elements[i] = element("band-" + std::to_string(i));
+        toggle_music();
     }
 
     ~UI() override {
@@ -174,7 +137,18 @@ public:
     }
 
     void poll() {
-        music.poll();
+        const auto visual = music.visual();
+        const auto now = SDL_GetTicks();
+        const float decay = std::exp(-float(std::min<Uint32>(now - visual_time, 1000)) / 180.f);
+        visual_time = now;
+        for (unsigned i = 0; i < band_elements.size(); ++i) {
+            band_levels[i] = std::max(visual.bands[i], band_levels[i] * decay);
+            const int height = int(band_levels[i] * 100);
+            if (height != band_heights[i]) {
+                band_elements[i]->SetProperty("height", std::to_string(height) + "%");
+                band_heights[i] = height;
+            }
+        }
         if (!job.valid()) return;
         std::string progress;
         {
@@ -229,7 +203,7 @@ public:
             while (target && target->GetTagName() != "input") target = target->GetParentNode();
             if (!target) return;
             if (event.GetType() == "click" && target->GetId() == "music") {
-                target->SetAttribute("value", music.toggle() ? "Music: On" : "Music: Off");
+                toggle_music();
                 return;
             }
             if (job.valid()) return;
@@ -252,6 +226,17 @@ public:
     }
 
 private:
+    void music_error(const std::string& error) {
+        music.stop();
+        element("music")->SetAttribute("value", "MUSIC: OFF");
+        text("music-error", "Music is unavailable: " + error);
+    }
+    void toggle_music() {
+        try {
+            element("music")->SetAttribute("value", music.toggle() ? "MUSIC: ON" : "MUSIC: OFF");
+            text("music-error", "");
+        } catch (const std::exception& error) { music_error(error.what()); }
+    }
     static std::string id(int game, const char* suffix) {
         return std::string(prefixes[game]) + "-" + suffix;
     }
@@ -424,7 +409,11 @@ private:
         return result;
     }
 
-    Music music;
+    launcher_music::Player music;
+    std::array<Rml::Element*, launcher_music::band_count> band_elements{};
+    std::array<float, launcher_music::band_count> band_levels{};
+    std::array<int, launcher_music::band_count> band_heights{};
+    Uint32 visual_time = SDL_GetTicks();
     Rml::ElementDocument* document;
     fs::path executable, profile;
     bool nfd_ready = false;
@@ -442,9 +431,8 @@ int run(const fs::path& profile, const bootstrap::BootstrapConfig& config) {
     FileInterface file_interface;
     Runtime runtime;
     try {
-        runtime.backend = Backend::Initialize("OpenJedvibe", 960, 640, true);
+        runtime.backend = Backend::Initialize("OpenJedvibe", 1000, 720, true);
         if (!runtime.backend) throw std::runtime_error(std::string("Cannot create the launcher window: ") + SDL_GetError());
-        SDL_SetWindowMinimumSize(Backend::GetWindow(), 720, 560);
         Rml::SetSystemInterface(Backend::GetSystemInterface());
         Rml::SetRenderInterface(Backend::GetRenderInterface());
         Rml::SetFileInterface(&file_interface);
@@ -479,7 +467,7 @@ int run(const fs::path& profile, const bootstrap::BootstrapConfig& config) {
         if (!document->GetStyleSheetContainer())
             throw std::runtime_error("Cannot load launcher stylesheet: " + (resource / "launcher.rcss").u8string());
         {
-            UI ui(document, executable, runtime.nfd);
+            UI ui(document, executable, runtime.nfd, resource / "cantina-band.score");
             document->Show();
             Request startup;
             startup.startup = true;

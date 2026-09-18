@@ -25,6 +25,25 @@ struct Data {
 
 std::unique_ptr<Data> data;
 
+float desktop_scale(int display) {
+    // macOS and Wayland use logical window coordinates. Windows and X11 use pixels.
+#ifndef _WIN32
+    const char* driver = SDL_GetCurrentVideoDriver();
+    if (!driver || SDL_strcmp(driver, "x11") != 0) return 1.f;
+#endif
+    float dpi = 96.f;
+    if (SDL_GetDisplayDPI(display, nullptr, &dpi, nullptr) != 0) return 1.f;
+    return std::max(1.f, std::min(dpi / 96.f, 4.f));
+}
+
+void fit_to_display(int display, int& width, int& height) {
+    SDL_Rect usable{};
+    if (SDL_GetDisplayUsableBounds(display, &usable) == 0) {
+        width = std::min(width, std::max(320, usable.w - 40));
+        height = std::min(height, std::max(240, usable.h - 60));
+    }
+}
+
 void update_dimensions(Rml::Context* context = nullptr) {
     int window_width = 0, window_height = 0, drawable_width = 0, drawable_height = 0;
     SDL_GetWindowSize(data->window, &window_width, &window_height);
@@ -33,9 +52,14 @@ void update_dimensions(Rml::Context* context = nullptr) {
     data->dimensions = {drawable_width, drawable_height};
     data->scale = window_width > 0 ? float(drawable_width) / float(window_width) : 1.f;
     data->renderer.SetViewport(drawable_width, drawable_height);
+    const int display = SDL_GetWindowDisplayIndex(data->window);
+    const float scale = desktop_scale(display);
+    int minimum_width = int(720 * scale), minimum_height = int(560 * scale);
+    fit_to_display(display, minimum_width, minimum_height);
+    SDL_SetWindowMinimumSize(data->window, minimum_width, minimum_height);
     if (context) {
         context->SetDimensions(data->dimensions);
-        context->SetDensityIndependentPixelRatio(data->scale);
+        context->SetDensityIndependentPixelRatio(data->scale * scale);
     }
 }
 }
@@ -44,9 +68,14 @@ bool Backend::Initialize(const char* window_name, int width, int height, bool al
 #ifdef SDL_HINT_IME_SHOW_UI
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 #endif
+    SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) return false;
+    const float scale = desktop_scale(0);
+    width = int(width * scale);
+    height = int(height * scale);
+    fit_to_display(0, width, height);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
@@ -102,7 +131,12 @@ bool Backend::ProcessEvents(Rml::Context* context, KeyDownCallback callback, boo
         } else if (event.type == SDL_TEXTEDITING) {
             data->text_editor.HandleEdit(event.edit);
             propagate = false;
-        } else if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+        } else if (event.type == SDL_WINDOWEVENT &&
+            (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED || event.window.event == SDL_WINDOWEVENT_MOVED
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                || event.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED
+#endif
+            )) {
             update_dimensions(context);
             propagate = false;
         } else if (event.type == SDL_KEYDOWN) {

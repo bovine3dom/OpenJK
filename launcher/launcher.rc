@@ -1,3 +1,6 @@
 #include <windows.h>
 
 101 ICON "../shared/icons/OpenJK_SP.ico"
+#ifdef OPENJK_LAUNCHER_RC_MANIFEST
+1 RT_MANIFEST "../shared/sys/win_manifest.manifest"
+#endif

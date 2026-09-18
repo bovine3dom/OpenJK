@@ -26,9 +26,35 @@ in-game selection menus. The launcher checks the files before each launch.
   The engine checks the save data when it loads the file.
 - Select **New Game** to start the first map.
 - Select **Main Menu** to open the game menu without loading a save.
-- Select **Music: Off** to start the original chiptune. Select **Music: On** to
-  stop it. Music is off at startup. It does not contain Star Wars recordings or
-  copied score data.
+- Music starts automatically. Select **MUSIC: ON** to stop it. Select
+  **MUSIC: OFF** to start it again. An audio-device failure does not stop the
+  launcher. The window shows the error.
+
+The music is a multi-instrument chiptune conversion of **Cantina Band**, by
+John Williams. The MIDI source is Nonstop2k. The window shows this credit.
+See [`launcher/music/CREDITS.md`](../launcher/music/CREDITS.md) for the source
+URL, terms, and conversion command. Installed packages include `launcher/CREDITS.md`.
+The source MIDI is not distributed. Builds use a checked-in score of about
+112 KiB, not a WAV file. They do not need Python or the MIDI file for audio
+conversion. The launcher generates the music in an SDL audio callback. File
+access and score validation occur before playback. The callback does not
+allocate memory or wait for UI updates.
+
+Subtle blue bars in the background follow the music. They show voice energy in
+16 pitch ranges, not a full frequency analysis. Muting the music makes the bars
+fade out. The effect does not receive input or cover the campaign controls.
+
+The synthesizer exposes the sample position and per-instrument energy for
+future animation. Visual data is one callback buffer behind synthesis to
+approximate playback time. SDL does not expose the hardware playback cursor;
+exact display-to-speaker timing still needs a device-specific check.
+
+The launcher uses uppercase buttons and a larger initial window. At the normal
+window size, all controls fit without a scrollbar. Smaller displays and long
+error messages can still need scrolling. Windows uses a per-monitor DPI
+manifest. macOS uses its high-resolution window support. Linux uses native
+Wayland scaling or the X11 display DPI. Pointer input uses the drawable scale,
+not the text scale.
 
 New profiles use the desktop resolution, full-screen mode, and aspect-correct
 field of view. Existing `OpenJK/openjk_sp.cfg` settings are not overridden.
@@ -48,8 +74,34 @@ launches, use `--continue --campaign ja` or `--continue --campaign jo`.
 The native import and launcher suite checks launch arguments, desktop defaults,
 existing settings, latest-save selection, excluded save files, and campaign
 separation. The desktop update suite checks update and profile behaviour.
-Linux window checks use Xvfb and software OpenGL. Windows, macOS, hardware audio,
-and a full campaign load from Continue still need manual checks.
+The music suite uses synthetic MIDI data. It checks tempo changes, running
+status, instrument selection, stereo pan, sustain, invalid data, and repeatable
+output. It also checks the stored score without the source MIDI. Native tests
+check score limits, simultaneous voices, stereo output, loop continuity, buffer
+size independence, and instrument meters. A dummy-device test checks that
+playback continues without UI updates and that mute clears the meters.
+
+With `BuildTests=ON`, run CTest targets `launcher-music` and `launcher-synth`.
+The project's full test configuration requires Boost. The native music tests
+can also run without Boost on Linux:
+
+```sh
+c++ -std=c++17 -O2 -DSDL_MAIN_HANDLED -Ilauncher $(pkg-config --cflags sdl2) \
+  tests/launcher_music.cpp launcher/music_synth.cpp launcher/music_player.cpp \
+  $(pkg-config --libs sdl2) -o /tmp/launcher-music-tests
+/tmp/launcher-music-tests launcher/music/cantina-band.score
+python3 scripts/test-launcher-music.py
+```
+
+A local optimized build generated 160 seconds of audio in approximately
+0.31 seconds without audio output. This is a synthesis throughput check, not
+an audio-latency measurement or a minimum-hardware guarantee.
+
+Linux window checks use Xvfb and software OpenGL at 100% and 200% scale. Both
+initial layouts fit without a scrollbar. Music starts with the SDL dummy audio
+device. The background bars change during playback and clear after mute at
+both scales. Windows, macOS, Wayland,
+hardware audio, and a full campaign load from Continue still need manual checks.
 
 ## User Data
 

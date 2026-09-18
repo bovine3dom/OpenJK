@@ -4,8 +4,9 @@
     <link type="text/rcss" href="launcher.rcss" />
 </head>
 <body>
+    <div id="equaliser"></div>
     <div id="console">
-        <h1>Select a campaign</h1>
+        <h1>OpenJedvibe</h1>
         <div id="last">Reading profile</div>
         <div class="campaigns">
             <div class="campaign">
@@ -55,7 +56,11 @@
         </div>
         <label>Settings and saves</label>
         <div id="profile">Reading profile location</div>
-        <input id="music" type="button" value="Music: Off" />
+        <div class="footer">
+            <input id="music" type="button" value="MUSIC: ON" />
+            <div id="music-credit">Cantina Band — John Williams<br />MIDI: Nonstop2k · Chiptune: OpenJedvibe</div>
+        </div>
+        <div id="music-error"></div>
     </div>
 </body>
 </rml>

@@ -4,7 +4,12 @@ body {
     background-color: #04043a; color: white;
     font-family: IBM Plex Sans; font-weight: 600; font-size: 14dp;
 }
-#console { margin: 20dp; }
+#equaliser {
+    position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+    display: flex; align-items: flex-end; overflow: hidden; pointer-events: none; z-index: 0;
+}
+.equaliser-band { flex: 1; height: 0; max-height: 75%; margin: 0 4dp; background-color: #101048; }
+#console { position: relative; z-index: 1; margin: 20dp; }
 h1 { margin: 0 0 8dp; font-size: 24dp; text-align: center; }
 #last { text-align: center; margin-bottom: 18dp; color: #8cdaff; }
 .campaigns { display: flex; }
@@ -23,7 +28,7 @@ input[type=button] {
     display: inline-block; padding: 8dp 6dp; margin-right: 6dp;
     border-width: 0; background-color: transparent;
     color: #ffae00; font-family: IBM Plex Sans; font-weight: 600;
-    font-size: 16dp; cursor: pointer; text-align: center;
+    font-size: 16dp; cursor: pointer; text-align: center; text-transform: uppercase;
 }
 input[type=button]:hover, input[type=button]:focus { color: white; background-color: #17175a; }
 input[type=text]:focus { border-color: white; }
@@ -38,7 +43,10 @@ input:disabled { color: #77778b; cursor: arrow; }
 #progress, #status, #profile { word-break: break-all; }
 #progress { color: #8cdaff; max-height: 60dp; overflow: auto; }
 #profile { font-size: 12dp; }
-#music { margin-top: 12dp; }
+.footer { display: flex; align-items: center; margin-top: 10dp; }
+#music { flex-shrink: 0; }
+#music-credit { margin-left: 12dp; font-size: 12dp; color: #8cdaff; }
+#music-error { font-size: 12dp; color: #ffae00; word-break: break-all; }
 scrollbarvertical { width: 10dp; }
 scrollbarvertical slidertrack { background-color: #11152b; }
 scrollbarvertical sliderbar { background-color: #7c84aa; min-height: 12dp; }

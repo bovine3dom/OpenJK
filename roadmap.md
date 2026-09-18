@@ -381,7 +381,10 @@ rough notes / todo
   - [x] Add `play-sp --launcher` with worktree paths and profiles.
   - [x] Remove decorative labels. Use explicit Continue, New Game, and Main Menu controls.
   - [x] Use desktop resolution for new profiles. Preserve existing display settings.
-  - [x] Add optional original space-adventure chiptune music. Do not copy licensed music.
+  - [x] Add a multi-instrument Cantina Band chiptune, enabled at startup, with source credit.
+    Use a compact score and a real-time synthesizer. Do not distribute the source MIDI.
+  - [x] Add subtle, audio-driven blue background bars and the OpenJedvibe heading.
+  - [x] Use uppercase buttons and DPI-aware window sizing. The initial layout fits without scrolling.
   - [x] Load the most recent campaign save with Continue. Disable it when no save exists.
   - [x] Put Jedi Outcast before Jedi Academy.
   - Manual platform, audio, and campaign-load checks remain open. See `docs/launcher.md`.
@@ -398,3 +401,4 @@ rough notes / todo
 	- kejim_port, having to read and find the codes
 	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
 	- having to jump through the glass ceiling on ns_streets after the bridge explodes
+- very high priority: use the raw launcher music to control a pixel-art band who will play it in real-time

@@ -35,7 +35,7 @@ set_target_properties(openjk-launcher PROPERTIES OUTPUT_NAME "${LauncherExecutab
 target_compile_features(openjk-launcher PRIVATE cxx_std_17)
 target_link_libraries(openjk-launcher PRIVATE openjk_bootstrap openjk_jo_import)
 if(WIN32)
-	target_sources(openjk-launcher PRIVATE launcher.rc)
+	target_sources(openjk-launcher PRIVATE launcher.rc "${CMAKE_SOURCE_DIR}/shared/sys/win_manifest.manifest")
 endif()
 if(APPLE AND MakeApplicationBundles)
 	target_compile_definitions(openjk_bootstrap PRIVATE OPENJK_LAUNCHER_BUNDLE=1)
@@ -108,6 +108,7 @@ if(BuildRmlUi)
 	FetchContent_MakeAvailable(nfd)
 
 	target_sources(openjk-launcher PRIVATE ui.cpp ui.h ui_backend.cpp ui_backend.h
+		music_synth.cpp music_synth.h music_player.cpp music_player.h
 		"${RMLUI_SOURCE_DIR}/Backends/RmlUi_Platform_SDL.cpp"
 		"${RMLUI_SOURCE_DIR}/Backends/RmlUi_Renderer_GL2.cpp")
 	target_include_directories(openjk-launcher PRIVATE "${RMLUI_SOURCE_DIR}/Backends")
@@ -136,19 +137,26 @@ if(BuildRmlUi)
 		endif()
 	endif()
 
+	set(launcher_music "${CMAKE_CURRENT_SOURCE_DIR}/music/cantina-band.score")
+
 	if(APPLE AND MakeApplicationBundles)
 		set(launcher_build_resource_dir "$<TARGET_BUNDLE_DIR:openjk-launcher>/Contents/Resources/launcher")
 	else()
 		set(launcher_build_resource_dir "$<TARGET_FILE_DIR:openjk-launcher>/launcher-resources")
 	endif()
+	set_property(TARGET openjk-launcher APPEND PROPERTY LINK_DEPENDS
+		"${launcher_music}" "${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rml"
+		"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${CMAKE_CURRENT_SOURCE_DIR}/music/CREDITS.md")
 	add_custom_command(TARGET openjk-launcher POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${launcher_build_resource_dir}/fonts"
+		COMMAND ${CMAKE_COMMAND} -E rm -f "${launcher_build_resource_dir}/cantina-band.wav"
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rml"
-			"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${launcher_build_resource_dir}"
+			"${CMAKE_CURRENT_SOURCE_DIR}/ui/launcher.rcss" "${launcher_music}"
+			"${CMAKE_CURRENT_SOURCE_DIR}/music/CREDITS.md" "${launcher_build_resource_dir}"
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexSans-SemiBold.ttf"
 			"${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf" "${launcher_build_resource_dir}/fonts")
 	if(NOT (APPLE AND MakeApplicationBundles))
-		install(FILES ui/launcher.rml ui/launcher.rcss
+		install(FILES ui/launcher.rml ui/launcher.rcss "${launcher_music}" music/CREDITS.md
 			DESTINATION "${JKASPInstallDir}/launcher" COMPONENT ${JKASPClientComponent})
 		install(FILES "${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexSans-SemiBold.ttf"
 			"${CMAKE_SOURCE_DIR}/ui/fonts/plex/IBMPlexMono-Regular.ttf"
@@ -163,6 +171,7 @@ set_target_properties(openjk-import-jo PROPERTIES OUTPUT_NAME "${JOImporterExecu
 target_compile_features(openjk-import-jo PRIVATE cxx_std_17)
 target_link_libraries(openjk-import-jo PRIVATE openjk_jo_import)
 if(MINGW)
+	target_compile_definitions(openjk-launcher PRIVATE OPENJK_LAUNCHER_RC_MANIFEST=1)
 	target_link_options(openjk-launcher PRIVATE -municode)
 	target_link_options(openjk-import-jo PRIVATE -municode)
 endif()
@@ -213,7 +222,17 @@ if(APPLE AND MakeApplicationBundles)
 endif()
 
 if(BuildTests)
+	if(BuildRmlUi)
+		add_executable(openjk-launcher-music-tests "${CMAKE_SOURCE_DIR}/tests/launcher_music.cpp"
+			music_synth.cpp music_player.cpp)
+		target_compile_features(openjk-launcher-music-tests PRIVATE cxx_std_17)
+		target_include_directories(openjk-launcher-music-tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+		target_compile_definitions(openjk-launcher-music-tests PRIVATE SDL_MAIN_HANDLED)
+		target_link_libraries(openjk-launcher-music-tests PRIVATE openjk_launcher_sdl)
+		add_test(NAME launcher-synth COMMAND openjk-launcher-music-tests "${launcher_music}")
+	endif()
 	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+	add_test(NAME launcher-music COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/test-launcher-music.py")
 	add_test(NAME native-jo-import COMMAND ${Python3_EXECUTABLE} "${CMAKE_SOURCE_DIR}/scripts/test-import-jo.py")
 	set_tests_properties(native-jo-import PROPERTIES ENVIRONMENT
 		"OPENJK_IMPORT_JO=$<TARGET_FILE:openjk-import-jo>;OPENJK_LAUNCHER=$<TARGET_FILE:openjk-launcher>")

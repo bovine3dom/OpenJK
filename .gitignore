@@ -200,3 +200,5 @@ cmake-build-*
 #############
 GameData
 GameData_JO
+# Download-only source for the launcher music; distribute the derived score instead.
+john-williams-cantina-band-*-nonstop2k.com.mid
