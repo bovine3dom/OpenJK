@@ -4269,9 +4269,15 @@ void UI_MainMenu(void)
 	{	//wha? try again
 		UI_LoadMenus("ui/menus.txt",qfalse);
 	}
+	// Consume the launcher request once. The menu keeps the normal campaign flow.
+	const bool newGame = Cvar_VariableIntegerValue("ui_newGame") != 0;
+	ui.Cvar_Set("ui_newGame", "0");
 	ui.Cvar_VariableStringBuffer("com_errorMessage", buf, sizeof(buf));
 	if (strlen(buf)) {
 		Menus_ActivateByName("error_popmenu");
+	} else if (newGame) {
+		Menus_CloseAll();
+		Menus_ActivateByName("newgameMenu");
 	}
 }
 

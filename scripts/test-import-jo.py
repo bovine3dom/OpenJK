@@ -309,7 +309,7 @@ class ImportTests(unittest.TestCase):
                 expected = [str(Path(sys.executable).absolute()), "+set", "fs_basepath", str(Path(launcher).resolve().parent),
                     "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath", str(launcher_profile),
                     "+set", "fs_game", "OpenJK", "+set", "com_outcast", "0",
-                    "+set", "r_mode", "-2", "+set", "r_fullscreen", "1", "+set", "cg_fovAspectAdjust", "1", "+map", "yavin1",
+                    "+set", "r_mode", "-2", "+set", "r_fullscreen", "1", "+set", "cg_fovAspectAdjust", "1", "+set", "ui_newGame", "1",
                     "+set", "quoted value"]
                 self.assertEqual(arguments, expected)
                 checked = subprocess.run((launcher, "--headless-check", "--profile", launcher_profile),
@@ -324,7 +324,7 @@ class ImportTests(unittest.TestCase):
                     "+set", "fs_cdpath", str(ja.resolve()), "+set", "fs_homepath",
                     str(launcher_profile / "campaigns/jo"), "+set", "fs_game", "OpenJK", "+set",
                     "com_outcast", "1", "+set", "r_mode", "-2", "+set", "r_fullscreen", "1",
-                    "+set", "cg_fovAspectAdjust", "1", "+map", "kejim_post"]
+                    "+set", "cg_fovAspectAdjust", "1", "+set", "ui_newGame", "1"]
                 self.assertEqual(arguments, expected)
                 def resume(campaign):
                     return subprocess.run((launcher, "--print-launch", "--profile", launcher_profile,

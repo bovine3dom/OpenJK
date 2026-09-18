@@ -449,7 +449,7 @@ Result<std::vector<std::string>> launch_arguments(const fs::path& engine, const 
         if (engine.empty() || package.empty() || academy.empty() || profile.empty()) throw std::runtime_error("Engine, package, game, and profile paths must not be empty.");
         if (!fs::exists(campaign_profile(profile, game) / "OpenJK" / "openjk_sp.cfg"))
             args.insert(args.end(), {"+set", "r_mode", "-2", "+set", "r_fullscreen", "1", "+set", "cg_fovAspectAdjust", "1"});
-        if (new_game) { args.push_back("+map"); args.push_back(game == Game::academy ? "yavin1" : "kejim_post"); }
+        if (new_game) args.insert(args.end(), {"+set", "ui_newGame", "1"});
         args.insert(args.end(), extra.begin(), extra.end());
         for (const auto& arg : args) {
             check_text(arg);

@@ -24,7 +24,8 @@ in-game selection menus. The launcher checks the files before each launch.
 - Select **Continue** to load the most recent save in that campaign. This control
   is disabled if there is no save. Temporary and empty save files are ignored.
   The engine checks the save data when it loads the file.
-- Select **New Game** to start the first map.
+- Select **New Game** to choose the difficulty. Jedi Academy then opens character
+  creation. Jedi Outcast starts the campaign after difficulty selection.
 - Select **Main Menu** to open the game menu without loading a save.
 - Music starts automatically. Select **MUSIC: ON** to stop it. Select
   **MUSIC: OFF** to start it again. An audio-device failure does not stop the

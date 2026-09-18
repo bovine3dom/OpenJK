@@ -88,7 +88,7 @@ int run(const std::vector<std::string>& args) {
                      "  --campaign ja|jo   Select a campaign\n"
                      "  --ui               Open the launcher with the supplied paths and profile\n"
                      "  --continue         Load the most recent campaign save\n"
-                     "  --new-game         Start at the first map\n"
+                     "  --new-game         Open difficulty selection\n"
                      "  --help             Show this help\n";
         return 0;
     }
