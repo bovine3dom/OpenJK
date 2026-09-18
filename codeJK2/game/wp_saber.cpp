@@ -8072,8 +8072,9 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 			}
 			else
 			{
-				if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
-				{//holding it
+				if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1
+					&& (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_IDLE) )
+				{// Hold Grip without interrupting a weapon animation.
 					NPC_SetAnim( self, SETANIM_TORSO, BOTH_FORCEGRIP_HOLD, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 				}
 				//get their org

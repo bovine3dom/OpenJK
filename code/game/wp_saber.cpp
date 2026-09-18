@@ -13612,8 +13612,9 @@ static void WP_ForcePowerRun( gentity_t *self, forcePowers_t forcePower, usercmd
 					return;
 				}
 
-				if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1 )
-				{//holding it
+				if ( self->client->ps.forcePowerLevel[FP_GRIP] > FORCE_LEVEL_1
+					&& (self->client->ps.weaponstate == WEAPON_READY || self->client->ps.weaponstate == WEAPON_IDLE) )
+				{// Hold Grip without interrupting a weapon animation.
 					NPC_SetAnim( self, SETANIM_TORSO, BOTH_FORCEGRIP_HOLD, SETANIM_FLAG_OVERRIDE|SETANIM_FLAG_HOLD );
 					if ( self->client->ps.torsoAnimTimer < 100 ){//we were already playing this anim, we didn't want to restart it, but we want to hold it for at least 100ms, sooo....
 
