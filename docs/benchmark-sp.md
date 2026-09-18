@@ -73,6 +73,7 @@ From the repository root:
 ```sh
 python3 scripts/benchmark-sp.py --renderer rdsp-rend2 --ffprobe
 python3 scripts/benchmark-sp.py --renderer rdsp-vanilla
+python3 scripts/benchmark-sp.py --campaign jo --map cairn_assembly
 OJK_ASSETS=/path/to/GameData python3 scripts/benchmark-sp.py --package build/ready
 ```
 
@@ -123,7 +124,9 @@ case used three runs and ten measurement seconds. Results are in
 `build/benchmark-sp/rdsp-rend2.nhbt5ali` and `rdsp-rend2.88w6txpm`.
 This single scene does not establish the cost for every weapon or resolution.
 
-The standard map mode supports `t2_wedge` and `t1_sour`. The default selects a
+The standard map mode supports `t2_wedge`, `t1_sour`, and `cairn_assembly`.
+Use `--campaign jo` with `cairn_assembly`. Set `OJK_JO_ASSETS`, or put the JO
+`GameData` directory at `GameData_JO` in the repository. The default selects a
 fixed natural view in the Krildor interior: `setviewpos 2688 640 -60 315`, third
 person, FOV 80, aspect adjustment on, and HUD off. God mode protects the player.
 In this mode, native NPCs stay active. The controller does not kill or add NPCs,

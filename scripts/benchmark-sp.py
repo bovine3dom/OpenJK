@@ -31,18 +31,22 @@ def percentiles(values):
 def run(args, suite, index, settings):
     directory = suite / f"run-{index}"
     profile = directory / "profile"
-    (profile / "OpenJK").mkdir(parents=True)
+    game_profile = profile / "campaigns/jo" if args.campaign == "jo" else profile
+    (game_profile / "OpenJK").mkdir(parents=True)
     # Avoid the engine's bounded startup command list and asset-side autoexec files.
-    (profile / "OpenJK/openjk_sp.cfg").write_text("".join(
+    (game_profile / "OpenJK/openjk_sp.cfg").write_text("".join(
         f'set {name} "{value}"\n' for name, value in settings.items()))
-    (profile / "OpenJK/autoexec_sp.cfg").write_text("// Controlled benchmark profile.\n")
+    (game_profile / "OpenJK/autoexec_sp.cfg").write_text("// Controlled benchmark profile.\n")
     env = dict(os.environ, OJK_PROFILE=str(profile), SDL_VIDEODRIVER=args.video_driver,
                EGL_PLATFORM="surfaceless", SDL_AUDIODRIVER="dummy",
                XDG_CACHE_HOME=str(suite / "cache"), MESA_SHADER_CACHE_DIR=str(suite / "cache/mesa"))
+    if args.campaign == "jo":
+        env["OJK_JO_ASSETS"] = str(args.jo_assets)
     env.pop("LIBGL_ALWAYS_SOFTWARE", None)
     if args.video_driver != "offscreen":
         env.pop("EGL_PLATFORM", None)
-    command = ["bash", str(args.package / "launch-sp.sh"), str(args.assets)]
+    command = ["bash", str(args.package / "launch-sp.sh"), str(args.assets),
+               "--campaign", args.campaign]
     command += ["+set", "activeAction", "echo OJK_BENCH_ACTIVE", "+devmap", args.map]
     result = {"run": index, "settings_requested": settings, "command": command,
               "package_build_id": (args.package / "build-id.txt").read_text().strip(),
@@ -52,7 +56,8 @@ def run(args, suite, index, settings):
                          "npc_freeze": settings.get("d_npcfreeze", 0), "weapon_command": args.weapon,
                          "viewpos": args.viewpos, "noclip": args.noclip},
               "environment": {k: env.get(k) for k in ("SDL_VIDEODRIVER", "EGL_PLATFORM",
-                  "SDL_AUDIODRIVER", "LIBGL_ALWAYS_SOFTWARE", "XDG_CACHE_HOME", "MESA_SHADER_CACHE_DIR")}}
+                  "SDL_AUDIODRIVER", "LIBGL_ALWAYS_SOFTWARE", "XDG_CACHE_HOME", "MESA_SHADER_CACHE_DIR",
+                  "OJK_JO_ASSETS")}}
     lines = []
     events = queue.Queue()
     started = time.monotonic()
@@ -97,7 +102,7 @@ def run(args, suite, index, settings):
 
     def commands(text):
         # Engine stdin has a bounded line buffer.
-        (profile / "OpenJK/benchmark_scene.cfg").write_text(text + "\necho OJK_SCENE_READY\n")
+        (game_profile / "OpenJK/benchmark_scene.cfg").write_text(text + "\necho OJK_SCENE_READY\n")
         send("exec benchmark_scene.cfg")
         wait_for("OJK_SCENE_READY")
 
@@ -282,7 +287,7 @@ def run(args, suite, index, settings):
         reader.join(timeout=args.timeout)
         if check_weapon:
             mask = subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i",
-                str(profile / "OpenJK/screenshots/benchmark_weapon_mask.png"),
+                str(game_profile / "OpenJK/screenshots/benchmark_weapon_mask.png"),
                 "-vf", "scale=160:120", "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
                 capture_output=True, check=True).stdout
             coverage = sum(value < 128 for value in mask) / max(1, len(mask))
@@ -291,7 +296,7 @@ def run(args, suite, index, settings):
             result["weapon_mask_coverage"] = coverage
         result["program_cache"] = [dict(zip(("linked", "reused", "unused_released"), map(int, values)))
             for values in re.findall(r"GLSL programs: (\d+) linked, (\d+) reused, (\d+) unused released", "".join(lines))]
-        image = profile / "OpenJK/screenshots/benchmark_end.png"
+        image = game_profile / "OpenJK/screenshots/benchmark_end.png"
         with image.open("rb") as stream:
             header = stream.read(24)
         if header[:16] != b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" or len(header) != 24:
@@ -335,6 +340,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--package", type=Path, default=root / "build/ready")
     parser.add_argument("--renderer", choices=("rdsp-vanilla", "rdsp-rend2"), default="rdsp-rend2")
+    parser.add_argument("--campaign", choices=("ja", "jo"), default="ja")
+    parser.add_argument("--jo-assets", type=Path, help="Jedi Outcast GameData directory")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument("--seconds", type=float, default=15)
@@ -346,7 +353,7 @@ def main():
     parser.add_argument("--noclip", action="store_true", help="Hold an airborne test position")
     parser.add_argument("--ssao", type=int, choices=(0, 1), default=1)
     parser.add_argument("--shadows", type=int, choices=(1, 2, 3), default=3)
-    parser.add_argument("--map", choices=("t2_wedge", "t1_sour"), default="t2_wedge")
+    parser.add_argument("--map", choices=("t2_wedge", "t1_sour", "cairn_assembly"), default="t2_wedge")
     parser.add_argument("--jolt-scene", choices=("idle", "active", "corpses"))
     parser.add_argument("--characters", type=int, default=10)
     parser.add_argument("--video-driver", choices=("offscreen", "x11", "wayland"), default="offscreen")
@@ -357,13 +364,18 @@ def main():
                         help="Override a numeric or single-word setting for an A/B test")
     args = parser.parse_args()
     if args.jolt_scene:
+        if args.campaign != "ja":
+            parser.error("Jolt fixture scenes require the JA campaign")
         args.map = "t1_sour"
         if not 1 <= args.characters <= (60 if args.jolt_scene == "corpses" else 10):
             parser.error("Use 1..10 live characters or 1..60 corpses")
         if args.seconds + args.warmup > 45:
             parser.error("Keep the active control benchmark within its 60-second hold")
     if args.viewpos is None:
-        args.viewpos = (6328, -952, 80, 225) if args.map == "t1_sour" else (2688, 640, -60, 315)
+        views = {"t1_sour": (6328, -952, 80, 225),
+                 "t2_wedge": (2688, 640, -60, 315),
+                 "cairn_assembly": (-2160, 747, 540, 90)}
+        args.viewpos = views[args.map]
     if any(not math.isfinite(value) or abs(value) > 100000 for value in args.viewpos):
         parser.error("Invalid view position")
     for name, value in args.cvar:
@@ -376,6 +388,9 @@ def main():
         parser.error("Invalid dimensions, count, duration, timeout, or GPU string")
     args.package = args.package.resolve()
     args.assets = Path(os.environ.get("OJK_ASSETS", root / "GameData")).resolve()
+    args.jo_assets = (args.jo_assets or Path(os.environ.get("OJK_JO_ASSETS", root / "GameData_JO"))).resolve()
+    if args.campaign == "jo" and not (args.jo_assets / "base/assets0.pk3").is_file():
+        parser.error("The JO asset directory has no base/assets0.pk3")
     if not (args.package / "launch-sp.sh").is_file():
         parser.error("Package has no launch-sp.sh")
     output = root / "build/benchmark-sp"
