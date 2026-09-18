@@ -3588,8 +3588,9 @@ void R_CreateBuiltinImages( void ) {
 		const bool halfRes = !r_ssaoMethod->integer || r_gtaoHalfRes->integer;
 		const int aoWidth = halfRes ? (width + 1) / 2 : width;
 		const int aoHeight = halfRes ? (height + 1) / 2 : height;
-		const int outputWidth = r_ssaoMethod->integer ? width : aoWidth;
-		const int outputHeight = r_ssaoMethod->integer ? height : aoHeight;
+		const bool upsample = r_ssaoMethod->integer && r_gtaoHalfRes->integer && r_gtaoUpsample->integer;
+		const int outputWidth = upsample ? width : aoWidth;
+		const int outputHeight = upsample ? height : aoHeight;
 		if (r_ssaoMethod->integer)
 			ri.Printf(PRINT_ALL, "GTAO: %dx%d -> %dx%d\n", aoWidth, aoHeight, outputWidth, outputHeight);
 		const int aoFormat = r_ssaoMethod->integer && r_compactAO->integer && glRefConfig.textureSwizzle ? GL_R8 : GL_RGBA8;

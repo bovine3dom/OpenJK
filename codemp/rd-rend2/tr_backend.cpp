@@ -2428,7 +2428,7 @@ static void RB_RenderSSAO(image_t *depth, FBO_t *raw, FBO_t *filtered, float rad
 
 	RB_InstantTriangle();
 
-	const bool upsample = r_ssaoMethod->integer && r_gtaoHalfRes->integer;
+	const bool upsample = r_ssaoMethod->integer && r_gtaoHalfRes->integer && r_gtaoUpsample->integer;
 	FBO_t *vertical = upsample ? tr.aoScratchFbo[0] : filtered;
 	FBO_Bind(vertical);
 	qglViewport(0, 0, vertical->width, vertical->height);

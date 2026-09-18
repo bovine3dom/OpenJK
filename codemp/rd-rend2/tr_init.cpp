@@ -154,7 +154,7 @@ cvar_t *r_sssDebugGain;
 cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
-cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoDenoise;
+cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoUpsample, *r_gtaoDenoise;
 cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
@@ -1600,8 +1600,10 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_ssaoMethod, 0, 1, qtrue);
 	r_gtaoQuality = ri.Cvar_Get("r_gtaoQuality", "1", CVAR_ARCHIVE, "GTAO quality: 0 low, 1 medium, 2 high, 3 ultra.");
 	ri.Cvar_CheckRange(r_gtaoQuality, 0, 3, qtrue);
-	r_gtaoHalfRes = ri.Cvar_Get("r_gtaoHalfRes", "1", CVAR_ARCHIVE | CVAR_LATCH, "Calculate GTAO at half width and height, then depth-aware upsample.");
+	r_gtaoHalfRes = ri.Cvar_Get("r_gtaoHalfRes", "1", CVAR_ARCHIVE | CVAR_LATCH, "Calculate GTAO at half width and height.");
+	r_gtaoUpsample = ri.Cvar_Get("r_gtaoUpsample", "0", CVAR_ARCHIVE | CVAR_LATCH, "Use depth-aware full-resolution GTAO upsampling.");
 	ri.Cvar_CheckRange(r_gtaoHalfRes, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_gtaoUpsample, 0, 1, qtrue);
 	r_gtaoDenoise = ri.Cvar_Get("r_gtaoDenoise", "1", CVAR_ARCHIVE, "Use a wider spatial filter for half-resolution GTAO.");
 	ri.Cvar_CheckRange(r_gtaoDenoise, 0, 1, qtrue);
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "0", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );

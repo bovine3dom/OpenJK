@@ -182,7 +182,7 @@ extern cvar_t *r_sssDebugGain;
 extern cvar_t  *r_ssaoAmbientOnly;
 extern cvar_t  *r_ssaoDebug;
 extern cvar_t  *r_ssaoStrength;
-extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoDenoise;
+extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoUpsample, *r_gtaoDenoise;
 extern cvar_t  *r_ssaoRadius;
 extern cvar_t  *r_ssaoViewModel;
 extern cvar_t  *r_ssaoViewModelStrength;
