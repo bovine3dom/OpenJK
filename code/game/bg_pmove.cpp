@@ -1185,7 +1185,7 @@ static qboolean PM_CheckJump( void )
 				&& pm->ps->groundEntityNum != ENTITYNUM_NONE//not in mid-air
 				&& !(pm->ps->pm_flags&PMF_JUMP_HELD)
 				//&& (float)(level.time-pm->ps->lastStationary) >= (3000.0f*g_timescale->value)//have to have a 3 second running start - relative to force speed slowdown
-				&& (level.time-pm->ps->forcePowerDebounce[FP_SPEED]) <= 250//have to have just started the force speed within the last half second
+				&& (level.time-pm->ps->forcePowerDebounce[FP_SPEED]) <= G_SpecialMoveTime( 250 )//force speed must have just started
 				&& pm->gent )
 			{//start a force long-jump!
 				vec3_t	jFwdAngs, jFwdVec;
@@ -1767,7 +1767,7 @@ static qboolean PM_CheckJump( void )
 					//NOTE: purposely falls through to next case!
 				case BOTH_WALL_RUN_LEFT:
 					doTrace = qtrue;
-					VectorMA( pm->ps->origin, -16, right, traceto );
+					VectorMA( pm->ps->origin, -G_SpecialMoveDistance( 16.0f ), right, traceto );
 					break;
 
 				case BOTH_WALL_FLIP_RIGHT:
@@ -1778,7 +1778,7 @@ static qboolean PM_CheckJump( void )
 					//NOTE: purposely falls through to next case!
 				case BOTH_WALL_RUN_RIGHT:
 					doTrace = qtrue;
-					VectorMA( pm->ps->origin, 16, right, traceto );
+					VectorMA( pm->ps->origin, G_SpecialMoveDistance( 16.0f ), right, traceto );
 					break;
 
 				case BOTH_WALL_FLIP_BACK1:
@@ -1787,7 +1787,7 @@ static qboolean PM_CheckJump( void )
 						contents |= CONTENTS_BODY;
 					}
 					doTrace = qtrue;
-					VectorMA( pm->ps->origin, 32, fwd, traceto );//was 16
+					VectorMA( pm->ps->origin, G_SpecialMoveDistance( 32.0f ), fwd, traceto );//was 16
 					break;
 
 				case BOTH_FORCEWALLRUNFLIP_START:
@@ -1796,7 +1796,7 @@ static qboolean PM_CheckJump( void )
 						contents |= CONTENTS_BODY;
 					}
 					doTrace = qtrue;
-					VectorMA( pm->ps->origin, 32, fwd, traceto );//was 16
+					VectorMA( pm->ps->origin, G_SpecialMoveDistance( 32.0f ), fwd, traceto );//was 16
 					break;
 				}
 
@@ -1870,7 +1870,7 @@ static qboolean PM_CheckJump( void )
 								vec3_t	start;
 								VectorCopy( pm->ps->origin, start );
 								start[2] += 64;
-								VectorMA( start, 32, fwd, traceto );
+								VectorMA( start, G_SpecialMoveDistance( 32.0f ), fwd, traceto );
 								pm->trace( &trace2, start, mins, maxs, traceto, pm->ps->clientNum, contents, (EG2_Collision)0, 0 );
 								if ( trace2.allsolid
 									|| trace2.startsolid
@@ -1905,13 +1905,13 @@ static qboolean PM_CheckJump( void )
 				}
 				gentity_t *traceEnt = &g_entities[trace.entityNum];
 
-				if ( !doTrace || (trace.fraction < 1.0f&&((trace.entityNum<ENTITYNUM_WORLD&&traceEnt&&traceEnt->s.solid!=SOLID_BMODEL)||DotProduct(wallNormal,idealNormal)>0.7)) )
+				if ( !doTrace || (trace.fraction < 1.0f&&((trace.entityNum<ENTITYNUM_WORLD&&traceEnt&&traceEnt->s.solid!=SOLID_BMODEL)||DotProduct(wallNormal,idealNormal)>G_SpecialMoveAlignment( 0.7f ))) )
 				{//there is a wall there
 
 					if ( (anim != BOTH_WALL_RUN_LEFT
 							&& anim != BOTH_WALL_RUN_RIGHT
 							&& anim != BOTH_FORCEWALLRUNFLIP_START)
-						|| (wallNormal[2] >= 0.0f && wallNormal[2] <= MAX_WALL_RUN_Z_NORMAL) )
+						|| (wallNormal[2] >= 0.0f && wallNormal[2] <= G_SpecialMoveDistance( MAX_WALL_RUN_Z_NORMAL )) )
 					{//wall-runs can only run on relatively flat walls, sorry.
 						if ( anim == BOTH_ARIAL_LEFT || anim == BOTH_CARTWHEEL_LEFT )
 						{
@@ -2060,24 +2060,24 @@ static qboolean PM_CheckJump( void )
 
 				if ( legsAnim == BOTH_WALL_RUN_LEFT )
 				{
-					if ( pm->ps->legsAnimTimer > 400 )
+					if ( pm->ps->legsAnimTimer > G_SpecialMoveTimeMargin( 400 ) )
 					{//not at the end of the anim
 						float animLen = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex, BOTH_WALL_RUN_LEFT );
-						if ( pm->ps->legsAnimTimer < animLen - 400 )
+						if ( pm->ps->legsAnimTimer < animLen - G_SpecialMoveTimeMargin( 400 ) )
 						{//not at start of anim
-							VectorMA( pm->ps->origin, -16, right, traceto );
+							VectorMA( pm->ps->origin, -G_SpecialMoveDistance( 16.0f ), right, traceto );
 							anim = BOTH_WALL_RUN_LEFT_FLIP;
 						}
 					}
 				}
 				else if ( legsAnim == BOTH_WALL_RUN_RIGHT )
 				{
-					if ( pm->ps->legsAnimTimer > 400 )
+					if ( pm->ps->legsAnimTimer > G_SpecialMoveTimeMargin( 400 ) )
 					{//not at the end of the anim
 						float animLen = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex, BOTH_WALL_RUN_RIGHT );
-						if ( pm->ps->legsAnimTimer < animLen - 400 )
+						if ( pm->ps->legsAnimTimer < animLen - G_SpecialMoveTimeMargin( 400 ) )
 						{//not at start of anim
-							VectorMA( pm->ps->origin, 16, right, traceto );
+							VectorMA( pm->ps->origin, G_SpecialMoveDistance( 16.0f ), right, traceto );
 							anim = BOTH_WALL_RUN_RIGHT_FLIP;
 						}
 					}
@@ -2118,9 +2118,9 @@ static qboolean PM_CheckJump( void )
 				AngleVectors( fwdAngles, fwd, NULL, NULL );
 
 				float animLen = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex, BOTH_FORCEWALLRUNFLIP_START );
-				if ( pm->ps->legsAnimTimer < animLen - 250 )//was 400
+				if ( pm->ps->legsAnimTimer < animLen - G_SpecialMoveTimeMargin( 250 ) )//was 400
 				{//not at start of anim
-					VectorMA( pm->ps->origin, 16, fwd, traceto );
+					VectorMA( pm->ps->origin, G_SpecialMoveDistance( 16.0f ), fwd, traceto );
 					anim = BOTH_FORCEWALLRUNFLIP_END;
 				}
 				if ( anim != -1 )
@@ -2280,9 +2280,9 @@ static qboolean PM_CheckJump( void )
 					//&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
 					&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_2//level 3 jump or better
 					&& pm->ps->forcePower > 10 //have enough force power to do another one
-					&& (level.time-pm->ps->lastOnGround) > 250 //haven't been on the ground in the last 1/4 of a second
+					&& (level.time-pm->ps->lastOnGround) > G_SpecialMoveTimeMargin( 250 ) //not immediately above the ground
 					&& (!(pm->ps->pm_flags&PMF_JUMPING)//not jumping
-						|| ( (level.time-pm->ps->lastOnGround) > 250 //we are jumping, but have been in the air for at least half a second
+						|| ( (level.time-pm->ps->lastOnGround) > G_SpecialMoveTimeMargin( 250 ) //wait briefly after a jump
 							 &&( g_debugMelee->integer//if you know kung fu, no height cap on wall-grab-jumps
 								|| ((pm->ps->origin[2]-pm->ps->forceJumpZStart) < (forceJumpHeightMax[FORCE_LEVEL_3]-(G_ForceWallJumpStrength()/2.0f))) )//can fit at least one more wall jump in (yes, using "magic numbers"... for now)
 							)
@@ -2330,14 +2330,14 @@ static qboolean PM_CheckJump( void )
 					}
 					if ( anim != -1 )
 					{//trace in the dir we're pushing in and see if there's a vertical wall there
-						VectorMA( pm->ps->origin, 16, checkDir, traceto );//was 8
+						VectorMA( pm->ps->origin, G_SpecialMoveDistance( 16.0f ), checkDir, traceto );//was 8
 						pm->trace( &trace, pm->ps->origin, mins, maxs, traceto, pm->ps->clientNum, CONTENTS_SOLID, (EG2_Collision)0, 0 );//FIXME: clip brushes too?
 						VectorSubtract( pm->ps->origin, traceto, idealNormal );
 						VectorNormalize( idealNormal );
 						gentity_t *traceEnt = &g_entities[trace.entityNum];
 						if ( trace.fraction < 1.0f
-							&& fabs(trace.plane.normal[2]) <= MAX_WALL_GRAB_SLOPE
-							&&((trace.entityNum<ENTITYNUM_WORLD&&traceEnt&&traceEnt->s.solid!=SOLID_BMODEL)||DotProduct(trace.plane.normal,idealNormal)>0.7) )
+							&& fabs(trace.plane.normal[2]) <= G_SpecialMoveDistance( MAX_WALL_GRAB_SLOPE )
+							&&((trace.entityNum<ENTITYNUM_WORLD&&traceEnt&&traceEnt->s.solid!=SOLID_BMODEL)||DotProduct(trace.plane.normal,idealNormal)>G_SpecialMoveAlignment( 0.7f )) )
 						{//there is a wall there
 							float dot = DotProduct( pm->ps->velocity, trace.plane.normal );
 							if ( dot < 1.0f )

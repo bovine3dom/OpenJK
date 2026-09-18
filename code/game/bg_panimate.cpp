@@ -2752,7 +2752,7 @@ qboolean PM_CheckJumpForwardAttackMove( void )
 		&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
 		&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 		&& pm->gent && !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
-		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=250) //on ground or just jumped (if not player)
+		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=G_SpecialMoveTime( 250 )) //on ground or just jumped (if not player)
 		)
 	{
 		if ( pm->ps->saberAnimLevel == SS_DUAL
@@ -2969,7 +2969,7 @@ qboolean PM_CheckFlipOverAttackMove( qboolean checkEnemy )
 		|| pm->ps->saberAnimLevel == SS_TAVION )//tavion
 		&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_1 //can force jump
 		&& !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
-		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=250) //on ground or just jumped
+		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=G_SpecialMoveTime( 250 )) //on ground or just jumped
 		)
 	{
 		qboolean tryMove = qfalse;
@@ -3015,12 +3015,13 @@ qboolean PM_CheckFlipOverAttackMove( qboolean checkEnemy )
 				if ( pm->gent->enemy )//have an enemy
 				{
 					vec3_t fwdAngles = {0,pm->ps->viewangles[YAW],0};
+					const float maximumDistance = G_SpecialMoveDistance( 100.0f );
 					if ( pm->gent->enemy->health > 0
 						&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
 						&& pm->gent->enemy->maxs[2] > 12
 						&& (!pm->gent->enemy->client || !PM_InKnockDownOnGround( &pm->gent->enemy->client->ps ) )
-						&& DistanceSquared( pm->gent->currentOrigin, pm->gent->enemy->currentOrigin ) < 10000
-						&& InFront( pm->gent->enemy->currentOrigin, pm->gent->currentOrigin, fwdAngles, 0.3f ) )
+						&& DistanceSquared( pm->gent->currentOrigin, pm->gent->enemy->currentOrigin ) < maximumDistance * maximumDistance
+						&& InFront( pm->gent->enemy->currentOrigin, pm->gent->currentOrigin, fwdAngles, G_SpecialMoveAlignment( 0.3f ) ) )
 					{//enemy must be alive, not low to ground, close and in front
 						return qtrue;
 					}
@@ -3109,7 +3110,7 @@ qboolean PM_CheckBackflipAttackMove( void )
 		&& pm->ps->forceRageRecoveryTime < pm->cmd.serverTime	//not in a force Rage recovery period
 		&& pm->gent && !(pm->gent->flags&FL_LOCK_PLAYER_WEAPONS) // yes this locked weapons check also includes force powers, if we need a separate check later I'll make one
 		//&& (pm->ps->legsAnim == BOTH_SABERSTAFF_STANCE || level.time-pm->ps->lastStationary<=250)//standing or just started moving
-		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=250) )//on ground or just jumped (if not player)
+		&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=G_SpecialMoveTime( 250 )) )//on ground or just jumped (if not player)
 	{
 		if ( pm->cmd.forwardmove < 0 //moving backwards
 			&& pm->ps->saberAnimLevel == SS_STAFF //using staff
@@ -3332,19 +3333,19 @@ saberMoveName_t PM_CheckPullAttack( void )
 					{//in old control scheme, make sure they're close or far enough away for the move we'll be doing
 						float targDist = Distance( targEnt->currentOrigin, pm->ps->origin );
 						if ( pullAttackMove == LS_PULL_ATTACK_STAB )
-						{//must be closer than 512
-							if ( targDist > 384.0f )
+						{//target must be in stabbing range
+							if ( targDist > G_SpecialMoveDistance( 384.0f ) )
 							{
 								return LS_NONE;
 							}
 						}
 						else//if ( pullAttackMove == LS_PULL_ATTACK_SWING )
-						{//must be farther than 256
-							if ( targDist > 512.0f )
+						{//target must be in swinging range
+							if ( targDist > G_SpecialMoveDistance( 512.0f ) )
 							{
 								return LS_NONE;
 							}
-							if ( targDist < 192.0f )
+							if ( targDist < G_SpecialMoveMinimumDistance( 192.0f ) )
 							{
 								return LS_NONE;
 							}
@@ -3480,7 +3481,7 @@ saberMoveName_t PM_SaberAttackForMovement( int forwardmove, int rightmove, int c
 	{//moving right
 		if ( !noSpecials
 			&& overrideJumpRightAttackMove != LS_NONE
-			&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=250) //on ground or just jumped
+			&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=G_SpecialMoveTime( 250 )) //on ground or just jumped
 			&& (pm->cmd.buttons&BUTTON_ATTACK)//hitting attack
 			&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0//have force jump 1 at least
 			&& G_EnoughPowerForSpecialMove( pm->ps->forcePower, SABER_ALT_ATTACK_POWER_LR )//pm->ps->forcePower >= SABER_ALT_ATTACK_POWER_LR//have enough power
@@ -3562,7 +3563,7 @@ saberMoveName_t PM_SaberAttackForMovement( int forwardmove, int rightmove, int c
 	{//moving left
 		if ( !noSpecials
 			&& overrideJumpLeftAttackMove != LS_NONE
-			&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=250) //on ground or just jumped
+			&& (pm->ps->groundEntityNum != ENTITYNUM_NONE||level.time-pm->ps->lastOnGround<=G_SpecialMoveTime( 250 )) //on ground or just jumped
 			&& (pm->cmd.buttons&BUTTON_ATTACK)//hitting attack
 			&& pm->ps->forcePowerLevel[FP_LEVITATION] > FORCE_LEVEL_0//have force jump 1 at least
 			&& G_EnoughPowerForSpecialMove( pm->ps->forcePower, SABER_ALT_ATTACK_POWER_LR )//pm->ps->forcePower >= SABER_ALT_ATTACK_POWER_LR//have enough power

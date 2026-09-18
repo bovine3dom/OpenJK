@@ -195,6 +195,8 @@ cvar_t	*g_saberMoveSpeed;
 cvar_t	*g_saberAnimSpeed;
 cvar_t	*g_saberAutoAim;
 cvar_t	*g_saberNewControlScheme;
+cvar_t	*g_specialMoveSpatialTolerance;
+cvar_t	*g_specialMoveTemporalTolerance;
 cvar_t	*g_debugSaberLock;
 cvar_t	*g_saberLockRandomNess;
 cvar_t	*g_debugMelee;
@@ -673,6 +675,8 @@ void G_InitCvars( void ) {
 	g_saberAnimSpeed = gi.cvar( "g_saberAnimSpeed", "1", CVAR_CHEAT );//how fast saber animations run
 	g_saberAutoAim = gi.cvar( "g_saberAutoAim", "1", CVAR_CHEAT );//auto-aims at enemies when not moving or when just running forward
 	g_saberNewControlScheme = gi.cvar( "g_saberNewControlScheme", "0", CVAR_ARCHIVE );//use +forcefocus to pull off all the special moves
+	g_specialMoveSpatialTolerance = gi.cvar( "g_specialMoveSpatialTolerance", "1.3", CVAR_ARCHIVE );
+	g_specialMoveTemporalTolerance = gi.cvar( "g_specialMoveTemporalTolerance", "1.3", CVAR_ARCHIVE );
 	g_debugSaberLock = gi.cvar( "g_debugSaberLock", "0", CVAR_CHEAT );//just for debugging/development, makes saberlocks happen all the time
 	g_saberLockRandomNess = gi.cvar( "g_saberLockRandomNess", "2", CVAR_ARCHIVE );//just for debugging/development, controls frequency of saberlocks
 	g_debugMelee = gi.cvar( "g_debugMelee", "0", CVAR_CHEAT );//just for debugging/development, test kicks and grabs

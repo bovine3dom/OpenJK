@@ -164,6 +164,8 @@ extern cvar_t	*g_saberAutoBlocking;
 extern cvar_t	*g_saberRealisticCombat;
 extern cvar_t	*g_saberDamageCapping;
 extern cvar_t	*g_saberNewControlScheme;
+extern cvar_t	*g_specialMoveSpatialTolerance;
+extern cvar_t	*g_specialMoveTemporalTolerance;
 extern int g_crosshairEntNum;
 
 qboolean g_saberNoEffects = qfalse;
@@ -4204,7 +4206,7 @@ qboolean G_TryingCartwheel( gentity_t *self, usercmd_t *cmd )
 					else
 					{//just jumped?
 						if ( self->client->ps.groundEntityNum == ENTITYNUM_NONE
-							&& level.time - self->client->ps.lastOnGround <= 50//250
+							&& level.time - self->client->ps.lastOnGround <= G_SpecialMoveTime( 50 )//250
 							&& (self->client->ps.pm_flags&PMF_JUMPING) )//jumping
 						{//just jumped this or last frame
 							return qtrue;
@@ -4260,9 +4262,9 @@ qboolean G_TryingJumpAttack( gentity_t *self, usercmd_t *cmd )
 			else if ( self && self->client )
 			{//just jumped?
 				if ( self->client->ps.groundEntityNum == ENTITYNUM_NONE
-					&& level.time - self->client->ps.lastOnGround <= 250
+					&& level.time - self->client->ps.lastOnGround <= G_SpecialMoveTime( 250 )
 					&& (self->client->ps.pm_flags&PMF_JUMPING) )//jumping
-				{//jumped within the last quarter second
+				{//jumped recently
 					return qtrue;
 				}
 			}
@@ -4298,9 +4300,9 @@ qboolean G_TryingJumpForwardAttack( gentity_t *self, usercmd_t *cmd )
 						return qtrue;
 					}
 					else
-					{//no slop on forward jumps - must be precise!
+					{//allow a short delay after forward jumps
 						if ( self->client->ps.groundEntityNum == ENTITYNUM_NONE
-							&& level.time - self->client->ps.lastOnGround <= 50
+							&& level.time - self->client->ps.lastOnGround <= G_SpecialMoveTime( 50 )
 							&& (self->client->ps.pm_flags&PMF_JUMPING) )//jumping
 						{//just jumped this or last frame
 							return qtrue;
@@ -4393,6 +4395,37 @@ int G_CostForSpecialMove( int cost, qboolean kataMove )
 	{//old control scheme: uses no power, so just do it
 		return 0;
 	}
+}
+
+static float G_PositiveSpecialMoveTolerance( const cvar_t *tolerance )
+{
+	return tolerance->value > 0.01f ? tolerance->value : 0.01f;
+}
+
+float G_SpecialMoveDistance( float distance )
+{
+	return distance * G_PositiveSpecialMoveTolerance( g_specialMoveSpatialTolerance );
+}
+
+float G_SpecialMoveMinimumDistance( float distance )
+{
+	return distance / G_PositiveSpecialMoveTolerance( g_specialMoveSpatialTolerance );
+}
+
+float G_SpecialMoveAlignment( float minimumDot )
+{
+	const float result = 1.0f - (1.0f - minimumDot) * G_PositiveSpecialMoveTolerance( g_specialMoveSpatialTolerance );
+	return result > -1.0f ? result : -1.0f;
+}
+
+int G_SpecialMoveTime( int milliseconds )
+{
+	return static_cast<int>(milliseconds * G_PositiveSpecialMoveTolerance( g_specialMoveTemporalTolerance ));
+}
+
+int G_SpecialMoveTimeMargin( int milliseconds )
+{
+	return static_cast<int>(milliseconds / G_PositiveSpecialMoveTolerance( g_specialMoveTemporalTolerance ));
 }
 
 extern qboolean G_EntIsBreakable( int entityNum, gentity_t *breaker );
@@ -9138,7 +9171,7 @@ void ForceThrow( gentity_t *self, qboolean pull, qboolean fake )
 			{//we will actually pull-attack him, so don't pull him or anything else here
 				//activate the power, here, though, so the later check that actually does the pull attack knows we tried to pull
 				self->client->ps.forcePowersActive |= (1<<FP_PULL);
-				self->client->ps.forcePowerDebounce[FP_PULL] = level.time + 100; //force-pulling
+				self->client->ps.forcePowerDebounce[FP_PULL] = level.time + G_SpecialMoveTime( 100 ); //force-pulling
 				return;
 			}
 		}
