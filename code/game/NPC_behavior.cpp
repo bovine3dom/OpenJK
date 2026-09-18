@@ -997,9 +997,13 @@ void NPC_BSJump (void)
 		{
 			NPCInfo->jumpState = JS_WAITING;
 
-			NPCInfo->goalEntity = UpdateGoal();
+			const bool completeOnLanding = G_IsOutcast(); // JO scripted jumps complete after one landing.
+			if ( !completeOnLanding )
+			{
+				NPCInfo->goalEntity = UpdateGoal();
+			}
 			// If he made it to his goal or his task is no longer pending.
-			if ( !NPCInfo->goalEntity || !Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
+			if ( completeOnLanding || !NPCInfo->goalEntity || !Q3_TaskIDPending( NPC, TID_MOVE_NAV ) )
 			{
 				NPC_ClearGoal();
 				NPCInfo->goalTime = level.time;
