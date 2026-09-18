@@ -52,9 +52,13 @@ The controller has separate strength settings for torso, head, arms, legs, and
 feet. Strength changes are gradual. Grip and Lightning use the same rig and the
 existing active-body budget. Unsupported actors use native behaviour.
 
+During a saber pull attack, Jolt releases physical control. The native pull
+movement and animation then control the target.
+
 Run `scripts/test-jolt-sp.py --force-effects --record` to check the native powers
 and record their motion. The test covers Grip levels, carrying, release,
-disable/re-enable, save/load, death, Lightning expiry, and protected targets.
+disable/re-enable, save/load, death, Lightning expiry, protected targets, and
+saber pull attacks against physical targets.
 
 Saber reactions remain deferred. See [Physical Melee Reactions](jolt-melee-plan.md).
 

@@ -24,8 +24,8 @@ def main():
     parser.add_argument("--control", action="store_true", help="Test the motor-driven balance controller")
     parser.add_argument("--floor-combat", action="store_true", help="Test movement over fallen NPCs and the saber floor finisher")
     parser.add_argument("--collapse", action="store_true", help="Test and record the motor fade during a standing death")
-    parser.add_argument("--force-effects", action="store_true", help="Test native Grip and Lightning with physical reactions")
-    parser.add_argument("--force-effect", choices=("grip", "lightning"), help="Test only one Force effect")
+    parser.add_argument("--force-effects", action="store_true", help="Test native Force effects with physical reactions")
+    parser.add_argument("--force-effect", choices=("grip", "lightning", "pull"), help="Test only one Force effect")
     parser.add_argument("--gameplay", action="store_true", help="Test humanoids, ten active rigs, explosions, and corpse continuity")
     parser.add_argument("--rig-types", nargs="+", help="NPC types for the gameplay rig test (maximum 16)")
     parser.add_argument("--demo", action="store_true", help="Test each demonstration case and save motion samples")
@@ -137,7 +137,7 @@ def main():
                     str(run / "motion.mp4")], stdout=subprocess.DEVNULL, stderr=stream)
             if args.force_effects:
                 results = {}
-                for power in (() if args.force_effect == "lightning" else (1, 2, 3)):
+                for power in ((1, 2, 3) if args.force_effect in (None, "grip") else ()):
                     start = len(log.read_text(errors="replace"))
                     cmd("jolt_demo idle")
                     wait_for("Jolt demo finished: idle", start)
@@ -192,7 +192,7 @@ def main():
                     if power == 2:
                         assert max(s["pelvis_z"] for s in samples) > before["pelvis_z"]+12, samples[-1]
                     print(f"PASS: {args.renderer}: Grip level {power} and release", flush=True)
-                for power in (() if args.force_effect == "grip" else (1, 2, 3)):
+                for power in ((1, 2, 3) if args.force_effect in (None, "lightning") else ()):
                     start = len(log.read_text(errors="replace"))
                     cmd("jolt_demo idle")
                     wait_for("Jolt demo finished: idle", start)
@@ -215,7 +215,7 @@ def main():
                         assert max(s["shock_push"] for s in samples) > limit*2, samples[-1]
                     assert max(s["pelvis_z"] for s in samples) < before["pelvis_z"]+16, samples[-1]
                     print(f"PASS: {args.renderer}: Lightning {power}, continuous push, contractions, and fade", flush=True)
-                if args.force_effect != "grip":
+                if args.force_effect in (None, "lightning"):
                     start = len(log.read_text(errors="replace"))
                     cmd("jolt_demo idle")
                     wait_for("Jolt demo finished: idle", start)
@@ -223,6 +223,24 @@ def main():
                     protected = status("jolt_demo_actor")
                     assert protected["health"] == 500 and protected["hits"] == 0 and protected["shock"] == 0, protected
                     print(f"PASS: {args.renderer}: protected targets do not acquire a Lightning reaction", flush=True)
+                if args.force_effect in (None, "pull"):
+                    start = len(log.read_text(errors="replace"))
+                    cmd("jolt_demo idle")
+                    wait_for("Jolt demo finished: idle", start)
+                    before = status("jolt_demo_actor")
+                    assert before["engaged"] == 1, before
+                    cmd("give weaponnum 1; weapon 1; setsaberstyle SS_FAST; setforcepull 3; set g_saberNewControlScheme 1; give force; campaign_status; wait 30")
+                    ready = status("jolt_demo_actor")
+                    cmd("+forcefocus; wait 1; force_pull; wait 1; +attack; wait 2; -attack; -forcefocus", 0)
+                    samples = []
+                    for _ in range(15):
+                        samples.append(status("jolt_demo_actor"))
+                        cmd("wait 2", 0)
+                    initial_distance = math.dist(ready["origin"], ready["player_origin"])
+                    closest_distance = min(math.dist(sample["origin"], sample["player_origin"]) for sample in samples)
+                    assert any(sample["engaged"] == 0 for sample in samples), samples[:3]
+                    assert closest_distance < initial_distance - 32, (initial_distance, closest_distance, samples)
+                    print(f"PASS: {args.renderer}: saber pull attack releases and moves a physical target", flush=True)
                 stdin.write("quit\n"); stdin.flush()
                 assert process.wait(timeout=30) == 0
                 return 0

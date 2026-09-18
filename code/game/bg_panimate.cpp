@@ -3352,6 +3352,7 @@ saberMoveName_t PM_CheckPullAttack( void )
 						}
 					}
 
+					G_JoltForget( targEnt );
 					vec3_t targAngles = {0,targEnt->client->ps.viewangles[YAW],0};
 					if ( InFront( pm->ps->origin, targEnt->currentOrigin, targAngles ) )
 					{

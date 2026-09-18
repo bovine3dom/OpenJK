@@ -661,7 +661,7 @@ bool SavedCorpse(const gentity_t* ent) {
 }
 bool ExternalPoseOwner(gentity_t* ent, bool allowGrip) {
 	return (in_camera && ent->health > 0) || (ent->flags & (FL_NO_ANGLES | FL_DISINTEGRATED)) || ent->s.weapon == WP_EMPLACED_GUN || ent->client->ps.saberLockTime > level.time ||
-		ent->client->ps.ikStatus || ent->client->ps.heldByBolt || G_IsRidingVehicle(ent) ||
+		ent->client->ps.pullAttackTime > level.time || ent->client->ps.ikStatus || ent->client->ps.heldByBolt || G_IsRidingVehicle(ent) ||
 		(ent->s.weapon == WP_THERMAL && ent->client->fireDelay > 0) ||
 		((ent->client->ps.eFlags & EF_FORCE_GRIPPED) && ent->health > 0 && !allowGrip && !G_JoltGripping(ent)) ||
 		(ent->client->ps.eFlags & (EF_FORCE_DRAINED | EF_HELD_BY_RANCOR | EF_HELD_BY_WAMPA)) ||
