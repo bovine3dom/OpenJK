@@ -74,6 +74,13 @@ bool CL_AtmosphereEditorKey(int key, bool down);
 bool CL_AtmosphereEditorChar(int key);
 bool CL_AtmosphereEditorMouse(int dx, int dy);
 void CL_AtmosphereEditorDraw();
+void CL_SettingsInit();
+void CL_SettingsShutdown();
+bool CL_SettingsActive();
+bool CL_SettingsKey(int key, bool down);
+bool CL_SettingsChar(int key);
+bool CL_SettingsMouse(int dx, int dy);
+void CL_SettingsDraw();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
 #endif
 

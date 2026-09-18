@@ -373,6 +373,7 @@ void	Cvar_Update( vmCvar_t *vmCvar );
 // updates an interpreted modules' version of a cvar
 
 void 	Cvar_Set( const char *var_name, const char *value );
+void	Cvar_SetUser( const char *var_name, const char *value );
 // will create the variable with no flags if it doesn't exist
 
 cvar_t	*Cvar_Set2(const char *var_name, const char *value, qboolean force);
@@ -393,6 +394,10 @@ int	Cvar_Flags(const char *var_name);
 // returns CVAR_NONEXISTENT if cvar doesn't exist or the flags of that particular CVAR.
 
 void	Cvar_CommandCompletion( callbackFunc_t callback );
+const char *Cvar_DescriptionString( const char *var_name );
+void	Cvar_SetDescription( const char *var_name, const char *description );
+void	Cvar_ForEach( void (*callback)( const cvar_t *var ) );
+void	Cvar_Clear( const char *var_name );
 // callback with each valid string
 
 void 	Cvar_Reset( const char *var_name );

@@ -31,7 +31,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "rd-common/tr_common.h"
 #include "renderer/atmosphere.h"
 #ifdef REND2_SP
-static_assert(REF_API_VERSION == 23, "Rend2 SP requires the SP private header path");
+static_assert(REF_API_VERSION == 24, "Rend2 SP requires the SP private header path");
 struct skin_t;
 #include "rd-rend2/tr_sp_import.h"
 #define ri riRend2

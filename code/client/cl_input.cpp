@@ -482,6 +482,7 @@ CL_MouseEvent
 */
 void CL_MouseEvent( int dx, int dy, int time ) {
 #ifdef USE_RMLUI
+	if (CL_SettingsMouse(dx, dy)) return;
 	if (CL_AtmosphereEditorMouse(dx, dy)) return;
 	if (CL_SelectionWheelMouse(dx, dy)) return;
 #endif
@@ -718,7 +719,7 @@ usercmd_t CL_CreateCmd( void ) {
 	vec3_t		oldAngles;
 
 #ifdef USE_RMLUI
-	if (CL_AtmosphereEditorActive()) {
+	if (CL_SettingsActive() || CL_AtmosphereEditorActive()) {
 		memset(&cmd, 0, sizeof(cmd));
 		cl.mouseDx[0] = cl.mouseDx[1] = cl.mouseDy[0] = cl.mouseDy[1] = 0;
 		CL_FinishMove(&cmd);

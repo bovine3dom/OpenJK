@@ -463,6 +463,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 	_UI_Refresh( cls.realtime );
 #ifdef USE_RMLUI
 	CL_AtmosphereEditorDraw();
+	CL_SettingsDraw();
 #endif
 
 	// console draws next

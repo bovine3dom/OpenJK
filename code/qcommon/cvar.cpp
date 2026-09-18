@@ -150,6 +150,23 @@ int Cvar_VariableIntegerValue( const char *var_name ) {
 Cvar_VariableString
 ============
 */
+const char *Cvar_DescriptionString( const char *var_name ) {
+	cvar_t *var = Cvar_FindVar(var_name);
+	return var && var->description ? var->description : "";
+}
+
+void Cvar_SetDescription( const char *var_name, const char *description ) {
+	cvar_t *var = Cvar_FindVar(var_name);
+	if (!var || !description || !description[0] || (var->description && !strcmp(var->description, description))) return;
+	if (var->description) Cvar_FreeString(var->description);
+	var->description = CopyString(description);
+}
+
+void Cvar_ForEach( void (*callback)( const cvar_t *var ) ) {
+	if (!callback) return;
+	for (cvar_t *var = cvar_vars; var; var = var->next) callback(var);
+}
+
 char *Cvar_VariableString( const char *var_name ) {
 	cvar_t *var;
 
@@ -445,6 +462,7 @@ cvar_t *Cvar_Get( const char *var_name, const char *var_value, int flags ) {
 		cvar_numIndexes = index + 1;
 
 	var->name = CopyString (var_name);
+	var->description = NULL;
 	var->string = CopyString (var_value);
 	var->modified = qtrue;
 	var->modificationCount = 1;
@@ -698,6 +716,10 @@ Cvar_Set
 */
 void Cvar_Set( const char *var_name, const char *value) {
 	Cvar_Set2 (var_name, value, qtrue);
+}
+
+void Cvar_SetUser( const char *var_name, const char *value ) {
+	Cvar_Set2(var_name, value, qfalse);
 }
 
 /*
@@ -1105,6 +1127,8 @@ cvar_t *Cvar_Unset(cvar_t *cv)
 
 	if(cv->name)
 		Cvar_FreeString(cv->name);
+	if(cv->description)
+		Cvar_FreeString(cv->description);
 	if(cv->string)
 		Cvar_FreeString(cv->string);
 	if(cv->latchedString)
@@ -1138,6 +1162,14 @@ Cvar_Unset_f
 Unsets a userdefined cvar
 ============
 */
+
+void Cvar_Clear(const char *var_name)
+{
+	cvar_t *cv = Cvar_FindVar(var_name);
+	if (!cv) return;
+	if (cv->flags & CVAR_USER_CREATED) Cvar_Unset(cv);
+	else Cvar_Set2(var_name, NULL, qfalse);
+}
 
 void Cvar_Unset_f(void)
 {
@@ -1415,6 +1447,9 @@ void Cvar_Defrag(void)
 		if (var->name) {
 			totalMem += strlen(var->name) + 1;
 		}
+		if (var->description) {
+			totalMem += strlen(var->description) + 1;
+		}
 		if (var->string) {
 			totalMem += strlen(var->string) + 1;
 		}
@@ -1433,6 +1468,7 @@ void Cvar_Defrag(void)
 	for (var = cvar_vars; var; var = var->next)
 	{
 		Cvar_Realloc(&var->name, mem, totalMem);
+		Cvar_Realloc(&var->description, mem, totalMem);
 		Cvar_Realloc(&var->string, mem, totalMem);
 		Cvar_Realloc(&var->resetString, mem, totalMem);
 		Cvar_Realloc(&var->latchedString, mem, totalMem);

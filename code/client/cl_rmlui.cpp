@@ -250,6 +250,7 @@ cvar_t* hudEnabled = nullptr;
 } // namespace
 
 void CL_RmlUiShutdown() {
+	CL_SettingsShutdown();
 	CL_AtmosphereEditorShutdown();
 	CL_RmlSelectionShutdown();
 	CL_CancelHudReveal();
@@ -332,6 +333,7 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 	CL_RmlSelectionInit();
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
 	CL_AtmosphereEditorInit();
+	CL_SettingsInit();
 }
 
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state) {

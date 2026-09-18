@@ -1261,6 +1261,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 	}
 	// keys can still be used for bound actions
 #ifdef USE_RMLUI
+	if (CL_SettingsKey(key, true)) return;
 	if (CL_AtmosphereEditorKey(key, true)) return;
 	if (CL_SelectionWheelKey(keynames[key].upper) && kg.keys[keynames[key].upper].repeats > 1) return;
 	if (CL_SelectionWheelCapturesInput() && !Key_GetCatcher()) {
@@ -1339,6 +1340,7 @@ void CL_KeyUpEvent( int key, unsigned time )
 	//
 	CL_ParseBinding( key, qfalse, time );
 #ifdef USE_RMLUI
+	if (CL_SettingsKey(key, false)) return;
 	if (CL_AtmosphereEditorKey(key, false)) return;
 #endif
 
@@ -1372,6 +1374,7 @@ void CL_CharEvent( int key ) {
 	if ( key == 127 )
 		return;
 #ifdef USE_RMLUI
+	if (CL_SettingsChar(key)) return;
 	if (CL_AtmosphereEditorChar(key)) return;
 #endif
 

@@ -335,8 +335,8 @@ std::string Markup() {
 
 void Open_f() {
 	if (active) { Close(); return; }
-	if (cls.state != CA_ACTIVE || (Key_GetCatcher() & KEYCATCH_UI)) {
-		Com_Printf("Atmosphere editor: open from the console during gameplay.\n"); return;
+	if (cls.state != CA_ACTIVE || (Key_GetCatcher() & KEYCATCH_UI) || CL_SettingsActive()) {
+		Com_Printf("Atmosphere editor: open from the console during gameplay after other panels are closed.\n"); return;
 	}
 	if (!CL_RmlUiAvailable() || !re.GetAtmosphere || !re.ApplyAtmosphere || !re.GetAtmosphere(&draft)) {
 		Com_Printf("Atmosphere editor: requires RmlUi, Rend2, and a valid atmosphere profile for this map.\n"); return;

@@ -1161,6 +1161,7 @@ void CL_InitRef( void ) {
 	RIT(CM_PointContents);
 	RIT(Cvar_Get);
 	RIT(Cvar_Set);
+	RIT(Cvar_SetDescription);
 	RIT(Cvar_SetValue);
 	RIT(Cvar_CheckRange);
 	RIT(Cvar_VariableIntegerValue);

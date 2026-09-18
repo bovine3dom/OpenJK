@@ -31,7 +31,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "../ghoul2/ghoul2_gore.h"
 #include "renderer/atmosphere.h"
 
-#define	REF_API_VERSION		23
+#define	REF_API_VERSION		24
 
 #define REF_UI_MAX_VERTICES 512
 #define REF_UI_MAX_INDICES 1536
@@ -58,6 +58,7 @@ typedef struct {
 	void				(*Cmd_RemoveCommand)				( const char *cmd_name );
 	void				(*Cvar_Set)							( const char *var_name, const char *value );
 	cvar_t *			(*Cvar_Get)							( const char *var_name, const char *value, int flags );
+	void				(*Cvar_SetDescription)				( const char *var_name, const char *description );
 	void				(*Cvar_SetValue)					( const char *name, float value );
 	void				(*Cvar_CheckRange)					( cvar_t *cv, float minVal, float maxVal, qboolean shouldBeIntegral );
 	void				(*Cvar_VariableStringBuffer)		( const char *var_name, char *buffer, int bufsize );

@@ -22,9 +22,11 @@ struct Rend2Imports : refimport_t
 	Rend2Imports() = default;
 	explicit Rend2Imports(const refimport_t &imports) : refimport_t(imports) {}
 
-	cvar_t *Cvar_Get(const char *name, const char *value, int flags, const char * = nullptr) const
+	cvar_t *Cvar_Get(const char *name, const char *value, int flags, const char *description = nullptr) const
 	{
-		return refimport_t::Cvar_Get(name, value, flags);
+		cvar_t *cvar = refimport_t::Cvar_Get(name, value, flags);
+		if (description && description[0]) refimport_t::Cvar_SetDescription(name, description);
+		return cvar;
 	}
 
 	void Cmd_AddCommand(const char *name, xcommand_t command, const char * = nullptr) const
