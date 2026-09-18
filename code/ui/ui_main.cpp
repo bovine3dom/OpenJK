@@ -66,7 +66,7 @@ extern qboolean PC_Script_Parse(const char **out);
 
 static struct
 {
-	char	listBuf[LISTBUFSIZE];			//	The list of file names read in
+	std::vector<char> listBuf;			// The list of file names read in
 
 	// For scrolling through file names
 	int				currentLine;		//	Index to currentSaveFileComments[] currently highlighted
@@ -78,7 +78,6 @@ static struct
 	int				savegameFromFlag;
 } s_savegame;
 
-#define MAX_SAVELOADFILES	100
 #define MAX_SAVELOADNAME	32
 
 #ifdef JK2_MODE
@@ -94,7 +93,7 @@ typedef struct
 	char currentSaveFileMap[MAX_TOKEN_CHARS];			// map save game is from
 } savedata_t;
 
-static savedata_t s_savedata[MAX_SAVELOADFILES];
+static std::vector<savedata_t> s_savedata;
 void UI_SetActiveMenu( const char* menuname,const char *menuID );
 void ReadSaveDirectory (void);
 void Item_RunScript(itemDef_t *item, const char *s);
@@ -842,12 +841,10 @@ qhandle_t UI_FeederItemImage(float feederID, int index)
 CreateNextSaveName
 =================
 */
-static int CreateNextSaveName(char *fileName)
+static void CreateNextSaveName(char *fileName)
 {
-	int i;
-
-	// Loop through all the save games and look for the first open name
-	for (i=0;i<MAX_SAVELOADFILES;i++)
+	// Loop through all the save games and look for the first open name.
+	for (int i = 0; ; i++)
 	{
 #ifdef JK2_MODE
 		Com_sprintf( fileName, MAX_SAVELOADNAME, "jkii%02d", i );
@@ -857,11 +854,9 @@ static int CreateNextSaveName(char *fileName)
 
 		if (!ui.SG_GetSaveGameComment(fileName, NULL, NULL))
 		{
-			return qtrue;
+			return;
 		}
 	}
-
-	return qfalse;
 }
 
 /*
@@ -947,7 +942,8 @@ static qboolean UI_RunMenuScript ( const char **args )
 		}
 		else if (Q_stricmp(name, "loadgame") == 0)
 		{
-			if (s_savedata[s_savegame.currentLine].currentSaveFileName)// && (*s_file_desc_field.field.buffer))
+			if (s_savegame.currentLine >= 0 && s_savegame.currentLine < s_savegame.saveFileCnt
+				&& s_savedata[s_savegame.currentLine].currentSaveFileName)// && (*s_file_desc_field.field.buffer))
 			{
 				Menus_CloseAll();
 				ui.Cmd_ExecuteText( EXEC_APPEND, va("load %s\n", s_savedata[s_savegame.currentLine].currentSaveFileName));
@@ -958,7 +954,8 @@ static qboolean UI_RunMenuScript ( const char **args )
 		}
 		else if (Q_stricmp(name, "deletegame") == 0)
 		{
-			if (s_savedata[s_savegame.currentLine].currentSaveFileName)	// A line was chosen
+			if (s_savegame.currentLine >= 0 && s_savegame.currentLine < s_savegame.saveFileCnt
+				&& s_savedata[s_savegame.currentLine].currentSaveFileName)	// A line was chosen
 			{
 #ifndef FINAL_BUILD
 				ui.Printf( va("%s\n","Attempting to delete game"));
@@ -1810,8 +1807,8 @@ static void UI_StopCinematic(int handle)
 }
 static void UI_HandleLoadSelection()
 {
-	Cvar_Set("ui_SelectionOK", va("%d",(s_savegame.currentLine < s_savegame.saveFileCnt)) );
-	if (s_savegame.currentLine >= s_savegame.saveFileCnt)
+	Cvar_Set("ui_SelectionOK", va("%d",(s_savegame.currentLine >= 0 && s_savegame.currentLine < s_savegame.saveFileCnt)) );
+	if (s_savegame.currentLine < 0 || s_savegame.currentLine >= s_savegame.saveFileCnt)
 		return;
 #ifdef JK2_MODE
 	Cvar_Set("ui_gameDesc", s_savedata[s_savegame.currentLine].currentSaveFileComments );	// set comment
@@ -6550,27 +6547,6 @@ void UI_ResetDefaults( void )
 
 /*
 =======================
-UI_SortSaveGames
-=======================
-*/
-static int UI_SortSaveGames( const void *A, const void *B )
-{
-
-	const int &a = ((savedata_t*)A)->currentSaveFileDateTime;
-	const int &b = ((savedata_t*)B)->currentSaveFileDateTime;
-
-	if (a > b)
-	{
-		return -1;
-	}
-	else
-	{
-		return (a < b);
-	}
-}
-
-/*
-=======================
 UI_AdjustSaveGameListBox
 =======================
 */
@@ -6616,9 +6592,9 @@ void ReadSaveDirectory (void)
 	int		i;
 	char	*holdChar;
 	int		len;
-	int		fileCnt;
+	int		fileCnt = -1;
 	// Clear out save data
-	memset(s_savedata,0,sizeof(s_savedata));
+	s_savedata.clear();
 	s_savegame.saveFileCnt = 0;
 	Cvar_Set("ui_gameDesc", "" );	// Blank out comment
 	Cvar_Set("ui_SelectionOK", "0" );
@@ -6627,11 +6603,21 @@ void ReadSaveDirectory (void)
 #endif
 
 
-	// Get everything in saves directory
-	fileCnt = ui.FS_GetFileList("saves", ".sav", s_savegame.listBuf, LISTBUFSIZE );
+	// Get everything in saves directory. Grow the buffer until no names are omitted.
+	int previousFileCnt = -1;
+	size_t listBufSize = LISTBUFSIZE;
+	do
+	{
+		previousFileCnt = fileCnt;
+		s_savegame.listBuf.resize(listBufSize);
+		fileCnt = ui.FS_GetFileList("saves", ".sav", s_savegame.listBuf.data(), s_savegame.listBuf.size());
+		listBufSize *= 2;
+	}
+	while (fileCnt != previousFileCnt);
 
+	s_savedata.reserve(fileCnt);
 	Cvar_Set("ui_ResumeOK", "0" );
-	holdChar = s_savegame.listBuf;
+	holdChar = s_savegame.listBuf.data();
 	for ( i = 0; i < fileCnt; i++ )
 	{
 		// strip extension
@@ -6647,20 +6633,18 @@ void ReadSaveDirectory (void)
 			}
 			else
 			{	// Is this a valid file??? & Get comment of file
-				result = ui.SG_GetSaveGameComment(holdChar, s_savedata[s_savegame.saveFileCnt].currentSaveFileComments, s_savedata[s_savegame.saveFileCnt].currentSaveFileMap);
+				savedata_t saveData = {};
+				result = ui.SG_GetSaveGameComment(holdChar, saveData.currentSaveFileComments, saveData.currentSaveFileMap);
 				if (result != 0) // ignore Bad save game
 				{
-					s_savedata[s_savegame.saveFileCnt].currentSaveFileName = holdChar;
-					s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTime = result;
+					saveData.currentSaveFileName = holdChar;
+					saveData.currentSaveFileDateTime = result;
 
 					struct tm *localTime;
 					localTime = localtime( &result );
-					strcpy(s_savedata[s_savegame.saveFileCnt].currentSaveFileDateTimeString,asctime( localTime ) );
+					strcpy(saveData.currentSaveFileDateTimeString,asctime( localTime ) );
+					s_savedata.push_back(saveData);
 					s_savegame.saveFileCnt++;
-					if (s_savegame.saveFileCnt == MAX_SAVELOADFILES)
-					{
-						break;
-					}
 				}
 			}
 		}
@@ -6668,6 +6652,9 @@ void ReadSaveDirectory (void)
 		holdChar += len + 1;	//move to next item
 	}
 
-	qsort( s_savedata, s_savegame.saveFileCnt, sizeof(savedata_t), UI_SortSaveGames );
+	std::sort(s_savedata.begin(), s_savedata.end(), [](const savedata_t &a, const savedata_t &b)
+	{
+		return a.currentSaveFileDateTime > b.currentSaveFileDateTime;
+	});
 
 }
