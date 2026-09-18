@@ -207,7 +207,6 @@ extern cvar_t *s_separation;
 extern cvar_t *s_show;
 extern cvar_t *s_testsound;
 extern cvar_t *s_volume;
-extern cvar_t *s_footstepsVolume;
 extern cvar_t *s_volumeVoice;
 
 wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength);

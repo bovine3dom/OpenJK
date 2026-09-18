@@ -1537,7 +1537,7 @@ void S_StartSound(const vec3_t origin, int entityNum, soundChannel_t entchannel,
 {
 	channel_t	*ch;
 	/*const*/ sfx_t *sfx;
-	qboolean isFootstep;
+	bool isFootstep;
 
 	if ( !s_soundStarted || s_soundMuted ) {
 		return;
