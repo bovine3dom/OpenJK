@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SETTINGS = dict(cl_renderer='rdsp-vanilla', r_mode=-1, r_customwidth=640, r_customheight=480,
                 r_fullscreen=0, s_initsound=1, s_musicvolume=0, s_volume=0.8, s_volumeVoice=1,
                 s_separation=0.5, com_maxfps=60, r_ignoreGLErrors=1, developer=1, s_khz=44,
-                s_steamAudio=1, s_steamReflections=1, s_steamPathing=1, s_steamReverb=0.2,
-                s_steamTransientReverb=2.5, s_steamTransmission=0.12, s_steamLimiter=1,
+                s_steamAudio=1, s_steamHeadphones=0, s_steamReflections=1, s_steamPathing=1, s_steamReverb=0.2,
+                s_steamTransientReverb=2.5, s_steamTransmission=0.12, s_steamLimiter=1, s_steamRoute=-1,
                 s_steamCache=1, cg_thirdPerson=0, cg_boltFlyby=0, s_language='english',
                 cg_smoothPlayerPos=0, cg_smoothPlayerPlat=0, cg_smoothCamera=0, cg_errorDecay=0,
                 cg_bobup=0, cg_bobpitch=0, cg_bobroll=0,
@@ -455,7 +455,7 @@ def main():
                 with game(package, inventory['campaign'], name, folder, args.freeze_scripts) as session:
                     result['runtime_search_path'] = session.cmd('path')
                     result['runtime_player_state'] = session.cmd('campaign_status')
-                    result['runtime_mix_settings'] = session.cmd('s_volume; s_volumeVoice; s_musicvolume; s_khz; s_separation; s_steamReverb; s_steamTransientReverb; s_steamTransmission; s_steamLimiter')
+                    result['runtime_mix_settings'] = session.cmd('s_volume; s_volumeVoice; s_musicvolume; s_khz; s_separation; s_steamReverb; s_steamTransientReverb; s_steamTransmission; s_steamLimiter; s_steamRoute')
                     if args.bake:
                         session.cmd('s_steam_bake')
                     if args.acoustic_tuning:

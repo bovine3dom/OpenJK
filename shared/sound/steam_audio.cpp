@@ -39,6 +39,11 @@ struct Engine::Impl {
 	struct Source {
 		IPLSource source=nullptr;
 		IPLDirectEffect direct=nullptr;
+		IPLBinauralEffect binaural=nullptr;
+		IPLVector3 direction={0,0,-1};
+		float spatialBlend=0;
+		int binauralTail=0;
+		bool decodeTail=false;
 		IPLPathEffect path=nullptr;
 		IPLReflectionEffect reflection=nullptr;
 		IPLAmbisonicsDecodeEffect decode=nullptr;
@@ -66,11 +71,13 @@ struct Engine::Impl {
 	IPLVector3 bakedOrigin={};
 	bool ready=false;
 	bool sceneDirty=false;
-	Impl(int rate) {
+	const bool headphones;
+	Impl(int rate,bool useHeadphones):headphones(useHeadphones) {
 		audio={rate,Block};
 		IPLContextSettings contextSettings={}; contextSettings.version=STEAMAUDIO_VERSION;
 		if (iplContextCreate(&contextSettings,&context)!=IPL_STATUS_SUCCESS) return;
 		IPLHRTFSettings hrtfSettings={}; hrtfSettings.type=IPL_HRTFTYPE_DEFAULT; hrtfSettings.volume=1;
+		hrtfSettings.normType=headphones ? IPL_HRTFNORMTYPE_RMS : IPL_HRTFNORMTYPE_NONE;
 		if(iplHRTFCreate(context,&audio,&hrtfSettings,&hrtf)!=IPL_STATUS_SUCCESS) return;
 		IPLEmbreeDeviceSettings embreeSettings={};
 		if(iplEmbreeDeviceCreate(context,&embreeSettings,&embree)==IPL_STATUS_SUCCESS) sceneType=IPL_SCENETYPE_EMBREE;
@@ -88,6 +95,7 @@ struct Engine::Impl {
 		iplSimulatorSetScene(simulator,scene);
 		IPLSourceSettings sourceSettings={}; sourceSettings.flags=All;
 		IPLDirectEffectSettings directSettings={}; directSettings.numChannels=1;
+		IPLBinauralEffectSettings binauralSettings={}; binauralSettings.hrtf=hrtf;
 		IPLPathEffectSettings pathSettings={}; pathSettings.maxOrder=Order; pathSettings.spatialize=IPL_TRUE;
 		pathSettings.speakerLayout.type=IPL_SPEAKERLAYOUTTYPE_STEREO;
 		pathSettings.hrtf=hrtf;
@@ -99,6 +107,7 @@ struct Engine::Impl {
 		for (auto &s : sources) {
 			if (iplSourceCreate(simulator,&sourceSettings,&s.source)!=IPL_STATUS_SUCCESS ||
 				iplDirectEffectCreate(context,&audio,&directSettings,&s.direct)!=IPL_STATUS_SUCCESS ||
+				(headphones && iplBinauralEffectCreate(context,&audio,&binauralSettings,&s.binaural)!=IPL_STATUS_SUCCESS) ||
 				iplPathEffectCreate(context,&audio,&pathSettings,&s.path)!=IPL_STATUS_SUCCESS ||
 				iplReflectionEffectCreate(context,&audio,&reflectionSettings,&s.reflection)!=IPL_STATUS_SUCCESS ||
 				iplAmbisonicsDecodeEffectCreate(context,&audio,&decodeSettings,&s.decode)!=IPL_STATUS_SUCCESS) return;
@@ -116,6 +125,7 @@ struct Engine::Impl {
 			if(s.reflection) iplReflectionEffectRelease(&s.reflection);
 			if(s.path) iplPathEffectRelease(&s.path);
 			if(s.direct) iplDirectEffectRelease(&s.direct);
+			if(s.binaural) iplBinauralEffectRelease(&s.binaural);
 			if(s.source) iplSourceRelease(&s.source);
 		}
 		if(simulator) iplSimulatorRelease(&simulator);
@@ -151,6 +161,7 @@ struct Engine::Impl {
 					s.output.reflections=output.reflections; s.hasReflection=true; s.reflectionUpdated=true; s.tail=1;
 					float silence[Block]={},left[Block]={},right[Block]={};
 					Reflect(s,silence,0,left,right); iplReflectionEffectReset(s.reflection);
+					iplAmbisonicsDecodeEffectReset(s.decode); s.decodeTail=false;
 					s.hasReflection=false; s.tail=0;
 				}
 				s.discardPending=false; continue;
@@ -174,24 +185,29 @@ struct Engine::Impl {
 		if(signal) s.tail=int(audio.samplingRate*decay/Block)+1;
 		const bool audible=s.tail>0;
 		// Drain new IRs even while quiet so the first shot uses the current room.
-		if(!audible && !s.reflectionUpdated) return;
+		if(!audible && !s.reflectionUpdated && !s.decodeTail) return;
 		const bool updated=s.reflectionUpdated; s.reflectionUpdated=false;
 		if(audible) --s.tail;
 		float reflected[Channels][Block]={},stereo[2][Block]={};
 		float *in[]={input},*ambi[]={reflected[0],reflected[1],reflected[2],reflected[3]},*out[]={stereo[0],stereo[1]};
 		IPLAudioBuffer ib={1,Block,in},ab={Channels,Block,ambi},ob={2,Block,out};
 		// Let the SDK retire convolution partitions after input stops.
-		const auto state=(signal || updated) ? iplReflectionEffectApply(s.reflection,&params,&ib,&ab,nullptr) :
-			iplReflectionEffectGetTail(s.reflection,&ab,nullptr);
-		if(state==IPL_AUDIOEFFECTSTATE_TAILCOMPLETE) s.tail=0;
-		if(!audible) return;
-		IPLAmbisonicsDecodeEffectParams decode={}; decode.order=Order; decode.orientation=listener; decode.binaural=IPL_FALSE;
-		iplAmbisonicsDecodeEffectApply(s.decode,&decode,&ab,&ob);
+		if(audible || updated) {
+			const auto state=(signal || updated) ? iplReflectionEffectApply(s.reflection,&params,&ib,&ab,nullptr) :
+				iplReflectionEffectGetTail(s.reflection,&ab,nullptr);
+			if(state==IPL_AUDIOEFFECTSTATE_TAILCOMPLETE) s.tail=0;
+		}
+		if(!audible && !s.decodeTail) return;
+		IPLAmbisonicsDecodeEffectParams decode={}; decode.order=Order; decode.orientation=listener;
+		decode.binaural=headphones ? IPL_TRUE : IPL_FALSE; decode.hrtf=hrtf;
+		const auto state=audible ? iplAmbisonicsDecodeEffectApply(s.decode,&decode,&ab,&ob) : iplAmbisonicsDecodeEffectGetTail(s.decode,&ob);
+		s.decodeTail=state==IPL_AUDIOEFFECTSTATE_TAILREMAINING;
 		for(int i=0;i<Block;++i) { left[i]+=stereo[0][i]*gain; right[i]+=stereo[1][i]*gain; }
 	}
 };
-Engine::Engine(int rate):p(new Impl(rate)) {}
+Engine::Engine(int rate,bool headphones):p(new Impl(rate,headphones)) {}
 Engine::~Engine()=default;
+bool Engine::Headphones() const { return p->headphones; }
 bool Engine::Ready() const {return p->ready;}
 bool Engine::Busy() const {return p->job.valid() && p->job.wait_for(std::chrono::seconds(0))!=std::future_status::ready;}
 void Engine::Wait() {p->Finish();}
@@ -295,12 +311,23 @@ std::vector<unsigned char> Engine::SaveProbes() {
 	iplProbeBatchSave(p->probes,object); const auto *data=iplSerializedObjectGetData(object);
 	std::vector<unsigned char> result(data,data+iplSerializedObjectGetSize(object)); iplSerializedObjectRelease(&object); return result;
 }
+void Engine::SetSpatialization(const std::array<Voice,Voices> &voices,const IPLCoordinateSpace3 &listener) {
+	// Mixer-owned pose data must not wait for the simulation worker or its 20 Hz update.
+	p->listener=listener;
+	for(int i=0;i<Voices;++i) if(voices[i].active) {
+		auto &s=p->sources[i]; const auto &a=voices[i].position; const auto &b=listener.origin;
+		const float distance2=(a.x-b.x)*(a.x-b.x)+(a.y-b.y)*(a.y-b.y)+(a.z-b.z)*(a.z-b.z);
+		s.spatialBlend=!voices[i].listenerAttached && std::isfinite(distance2) && distance2>1e-6f ? 1 : 0;
+		s.direction=s.spatialBlend ? iplCalculateRelativeDirection(p->context,a,b,listener.ahead,listener.up) : IPLVector3{0,0,-1};
+	}
+}
 void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSpace3 &listener,bool reflections,bool pathing,bool simulateReflections) {
+	SetSpatialization(voices,listener);
 	if(Busy()) return;
 	p->Finish();
 	const float dx=listener.origin.x-p->bakedOrigin.x,dy=listener.origin.y-p->bakedOrigin.y,dz=listener.origin.z-p->bakedOrigin.z;
 	if(dx*dx+dy*dy+dz*dz>1) p->cachedRoom=true;
-	p->listener=listener; p->info.active=p->info.reflected=0;
+	p->info.active=p->info.reflected=0;
 	std::array<int,Voices> order; std::iota(order.begin(),order.end(),0);
 	std::stable_sort(order.begin(),order.end(),[&](int a,int b){
 		return voices[a].priority*(p->sources[a].reflected ? 1.1f : 1) > voices[b].priority*(p->sources[b].reflected ? 1.1f : 1);
@@ -348,6 +375,8 @@ void Engine::Update(const std::array<Voice,Voices> &voices,const IPLCoordinateSp
 }
 void Engine::ResetVoice(int index) {
 	auto &s=p->sources[index]; iplDirectEffectReset(s.direct); iplPathEffectReset(s.path); iplReflectionEffectReset(s.reflection); s.tail=0; s.hasReflection=false; s.hasPath=false; s.fresh=true;
+	if(s.binaural) iplBinauralEffectReset(s.binaural);
+	iplAmbisonicsDecodeEffectReset(s.decode); s.binauralTail=s.decodeTail=false;
 	// Effects are mixer-owned. Do not wait for, or consume, the previous occupant's simulation.
 	s.discardPending=p->job.valid(); s.reflected=false; s.output.direct=s.smooth=NeutralDirect();
 	s.reflectionUpdated=false;
@@ -356,7 +385,7 @@ void Engine::ResetVoice(int index) {
 	std::fill(s.pathSH,s.pathSH+Channels,0); s.output.pathing.shCoeffs=s.pathSH;
 }
 void Engine::Begin() { p->room.fill(0); p->indirectLeft.fill(0); p->indirectRight.fill(0); }
-void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight,float transmissionFloor,float reverbSend) {
+void Engine::Mix(int index,const float *input,float left,float right,float gain,float wet,float *outLeft,float *outRight,float transmissionFloor,float reverbSend,bool protectedDirect) {
 	auto &s=p->sources[index]; float filtered[Block]={}; float *in[]={const_cast<float*>(input)},*out[]={filtered};
 	float *wetLeft=p->indirectLeft.data(),*wetRight=p->indirectRight.data();
 	IPLAudioBuffer ib={1,Block,in},ob={1,Block,out};
@@ -372,11 +401,28 @@ void Engine::Mix(int index,const float *input,float left,float right,float gain,
 	}
 	smooth.flags=static_cast<IPLDirectEffectFlags>(IPL_DIRECTEFFECTFLAGS_APPLYOCCLUSION|IPL_DIRECTEFFECTFLAGS_APPLYTRANSMISSION|IPL_DIRECTEFFECTFLAGS_APPLYAIRABSORPTION);
 	smooth.transmissionType=IPL_TRANSMISSIONTYPE_FREQDEPENDENT;
-	iplDirectEffectApply(s.direct,&smooth,&ib,&ob);
-	for(int i=0;i<Block;++i) { outLeft[i]+=filtered[i]*left; outRight[i]+=filtered[i]*right; }
-	if(s.hasPath && smooth.occlusion<0.99f) {
+	if(protectedDirect) std::copy(input,input+Block,filtered);
+	else iplDirectEffectApply(s.direct,&smooth,&ib,&ob);
+	if(p->headphones) {
+		bool signal=false; for(float v:filtered) signal|=std::abs(v)>1e-9f;
+		if(signal || s.binauralTail) {
+			float stereo[2][Block]={}; float *channels[]={stereo[0],stereo[1]}; IPLAudioBuffer stereoOut={2,Block,channels};
+			IPLBinauralEffectParams params={}; params.direction=s.direction; params.spatialBlend=s.spatialBlend;
+			params.interpolation=IPL_HRTFINTERPOLATION_BILINEAR; params.hrtf=p->hrtf;
+			// Feed silence through convolution so late-block samples keep their full tail.
+			iplBinauralEffectApply(s.binaural,&params,&ob,&stereoOut);
+			s.binauralTail=signal ? std::max(Block,iplBinauralEffectGetTailSize(s.binaural)) : std::max(0,s.binauralTail-Block);
+			// Keep the legacy distance/channel gain, but replace its pan with HRTF positioning.
+			const float monoGain=.5f*(left+right);
+			for(int i=0;i<Block;++i) { outLeft[i]+=stereo[0][i]*monoGain; outRight[i]+=stereo[1][i]*monoGain; }
+		}
+	} else if(!protectedDirect) {
+		for(int i=0;i<Block;++i) { outLeft[i]+=filtered[i]*left; outRight[i]+=filtered[i]*right; }
+	}
+	// Protected direct audio already reaches the listener; do not add another diffracted direct path.
+	if(!protectedDirect && s.hasPath && smooth.occlusion<0.99f) {
 		float stereo[2][Block]={}; float *channels[]={stereo[0],stereo[1]}; IPLAudioBuffer pathOut={2,Block,channels};
-		auto params=s.output.pathing; params.order=Order; params.binaural=IPL_FALSE; params.listener=p->listener; params.hrtf=p->hrtf;
+		auto params=s.output.pathing; params.order=Order; params.binaural=p->headphones ? IPL_TRUE : IPL_FALSE; params.listener=p->listener; params.hrtf=p->hrtf;
 		iplPathEffectApply(s.path,&params,&ib,&pathOut);
 		for(int i=0;i<Block;++i) { wetLeft[i]+=stereo[0][i]*gain*(1-smooth.occlusion); wetRight[i]+=stereo[1][i]*gain*(1-smooth.occlusion); }
 	}

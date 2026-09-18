@@ -16,6 +16,7 @@ struct Voice {
 	IPLVector3 position={};
 	bool active=false;
 	float priority=0;
+	bool listenerAttached=false;
 };
 struct Info {
 	int triangles=0, probes=0, active=0, reflected=0;
@@ -25,8 +26,9 @@ struct Info {
 };
 class Engine {
 public:
-	Engine(int rate);
+	Engine(int rate, bool headphones=false);
 	~Engine();
+	bool Headphones() const;
 	bool Ready() const;
 	bool Busy() const;
 	void Wait();
@@ -37,10 +39,11 @@ public:
 	bool LoadProbes(const std::vector<unsigned char> &data);
 	bool Bake(const IPLVector3 &low, const IPLVector3 &high);
 	std::vector<unsigned char> SaveProbes();
+	void SetSpatialization(const std::array<Voice,Voices> &voices, const IPLCoordinateSpace3 &listener);
 	void Update(const std::array<Voice,Voices> &voices, const IPLCoordinateSpace3 &listener, bool reflections, bool pathing, bool simulateReflections);
 	void ResetVoice(int index);
 	void Begin();
-	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight, float transmissionFloor=0, float reverbSend=1);
+	void Mix(int index, const float *input, float left, float right, float gain, float wet, float *outLeft, float *outRight, float transmissionFloor=0, float reverbSend=1, bool protectedDirect=false);
 	void End(float wet, float *outLeft, float *outRight);
 	void Indirect(float *left, float *right) const;
 	Info Status() const;

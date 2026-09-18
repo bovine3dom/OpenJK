@@ -742,10 +742,10 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_GLOBAL_SOUND:	// play from the player's head so it never diminishes
 		DEBUGNAME("EV_GLOBAL_SOUND");
 		if ( cgs.sound_precache[ es->eventParm ] ) {
-			cgi_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO, cgs.sound_precache[ es->eventParm ] );
+			cgi_S_StartSound (NULL, cg.snap->ps.clientNum, CHAN_AUTO_GLOBAL, cgs.sound_precache[ es->eventParm ] );
 		} else {
 			s = CG_ConfigString( CS_SOUNDS + es->eventParm );
-			CG_TryPlayCustomSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO, s, CS_BASIC );
+			CG_TryPlayCustomSound( NULL, cg.snap->ps.clientNum, CHAN_AUTO_GLOBAL, s, CS_BASIC );
 		}
 		break;
 

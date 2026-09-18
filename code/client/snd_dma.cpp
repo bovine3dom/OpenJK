@@ -1121,11 +1121,12 @@ channel_t *S_PickChannel(int entnum, int entchannel)
 
     firstToDie = &s_channels[0];
 
-	for ( int pass = 0; (pass < ((entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN)?1:2)) && !foundChan; pass++ )
+	const bool automatic = entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || entchannel == CHAN_AUTO_GLOBAL;
+	for ( int pass = 0; (pass < (automatic ? 1 : 2)) && !foundChan; pass++ )
 	{
 		for (ch_idx = 0, ch = &s_channels[0]; ch_idx < MAX_CHANNELS ; ch_idx++, ch++ )
 		{
-			if ( entchannel == CHAN_AUTO || entchannel == CHAN_LESS_ATTEN || pass > 0 )
+			if ( automatic || pass > 0 )
 			{//if we're on the second pass, just find the first open chan
 				if ( !ch->thesfx )
 				{//grab the first open channel

@@ -5,6 +5,7 @@
 #ifdef USE_STEAM_AUDIO
 #include "sound/steam_audio.h"
 #include "sound/mix_limiter.h"
+#include "sound/audio_routing.h"
 #include "sdl/sdl_sound.h"
 #include <algorithm>
 #include <array>
@@ -22,7 +23,7 @@ constexpr float Metres=1.0f/32;
 constexpr unsigned CacheVersion=3;
 std::unique_ptr<SteamSound::Engine> engine;
 cvar_t *enabled,*reflections,*pathing,*wet,*cache,*transmission,*transientReverb,*limiterEnabled;
-cvar_t *auditSound,*auditEntity;
+cvar_t *auditSound,*auditEntity,*routeOverride,*headphones;
 SteamSound::MixLimiter mixLimiter;
 std::string loadedMap;
 unsigned mapChecksum=0;
@@ -47,6 +48,7 @@ struct Slot {
 	bool loop=false,active=false;
 	float input[SteamSound::Block]={},left=0,right=0,gain=0;
 	float reverbSend=1;
+	SteamSound::Route route=SteamSound::Route::Legacy;
 };
 std::array<Slot,SteamSound::Voices> slots;
 IPLVector3 Position(const float *p) { return {p[0]*Metres,p[2]*Metres,-p[1]*Metres}; }
@@ -54,9 +56,21 @@ IPLVector3 Direction(const float *p) { return {p[0],p[2],-p[1]}; }
 bool AuditSelected(const channel_t &ch) {
 	return S_SteamAuditSelected(ch.entnum,ch.thesfx);
 }
+SteamSound::Routing Routing(const channel_t &ch) {
+	using namespace SteamSound;
+	SoundContext context=SoundContext::World;
+	if(ch.entchannel==CHAN_LOCAL || ch.entchannel==CHAN_LOCAL_SOUND || ch.entchannel==CHAN_VOICE_GLOBAL ||
+		ch.entchannel==CHAN_ANNOUNCER || ch.entchannel==CHAN_MUSIC || ch.entchannel==CHAN_AUTO_GLOBAL) context=SoundContext::Local;
+	else if(ch.entchannel==CHAN_VOICE || ch.entchannel==CHAN_VOICE_ATTEN) context=SoundContext::Voice;
+	else if(ch.entchannel==CHAN_WEAPON) context=SoundContext::Weapon;
+	else if(ge && sv.state==SS_GAME && ch.entnum>=0 && ch.entnum<ge->num_entities &&
+		SV_GentityNum(ch.entnum)->inuse && SV_GentityNum(ch.entnum)->bmodel) context=SoundContext::Mover;
+	if(context!=SoundContext::Local && routeOverride && routeOverride->integer>=0)
+		return {static_cast<Route>(routeOverride->integer),"diagnostic-override"};
+	return ClassifySound(ch.thesfx ? ch.thesfx->sSoundName : "",context);
+}
 bool Eligible(const channel_t &ch) {
-	return AuditSelected(ch) && ch.thesfx && ch.entchannel!=CHAN_LOCAL && ch.entchannel!=CHAN_LOCAL_SOUND &&
-		ch.entchannel!=CHAN_VOICE_GLOBAL && ch.entchannel!=CHAN_ANNOUNCER && ch.entchannel!=CHAN_MUSIC;
+	return AuditSelected(ch) && ch.thesfx && Routing(ch).mode!=SteamSound::Route::Legacy;
 }
 std::string CacheName(const char *kind) { return va("cache/steamaudio/%08x-v%u-sdk%x.%s",mapChecksum,CacheVersion,STEAMAUDIO_VERSION,kind); }
 std::vector<unsigned char> ReadCache(const char *kind) {
@@ -183,6 +197,7 @@ void Status() {
 	const auto info=engine ? engine->Status() : SteamSound::Info{};
 	Com_Printf("steam_audio active=%d map=%s triangles=%d movers=%d sources=%d reflections=%d probes=%d scene_cache=%d probe_cache=%d occlusion=%.3f transmission=%.3f rt60=%.3f simulation_ms=%d reflection_ms=%d mixed_blocks=%d\n",
 		S_SteamActive(),loadedMap.c_str(),info.triangles,int(objects.size()),info.active,info.reflected,info.probes,sceneCache,probeCache,info.occlusion,info.transmission,info.reverb,simulationMs,info.reflectionMs,mixedBlocks);
+	Com_Printf("steam_output mode=%s hrtf=%d\n",S_SteamActive() ? (engine->Headphones() ? "headphones" : "speakers") : "legacy",S_SteamActive() && engine->Headphones());
 	Com_Printf("steam_audio timing rate=%d mix_peak_us=%d mix_calls=%d underrun_frames=%d callbacks=%u callback_peak_us=%d lock_peak_us=%d scene_peak_us=%d buffer_clears=%d\n",dma.speed,mixPeakUs,mixCalls,underrunFrames,device.callbacks,device.callbackPeakUs,device.lockPeakUs,info.scenePeakUs,bufferClears);
 	Com_Printf("steam_audio limiter pre_peak=%.3f min_gain=%.3f limited_frames=%llu\n",mixLimiter.Peak(),mixLimiter.MinimumGain(),static_cast<unsigned long long>(mixLimiter.LimitedFrames()));
 	Com_Printf("steam_listener pos=%.2f,%.2f,%.2f solid=%d audit_sound=%s audit_entity=%d\n",listener_origin[0],listener_origin[1],listener_origin[2],
@@ -196,7 +211,8 @@ void Status() {
 			visible|=cl.parseEntities[(cl.frame.parseEntitiesNum+i)&(MAX_PARSE_ENTITIES-1)].number==ch.entnum;
 		const float *origin=ch.fixed_origin ? ch.origin : s_entityPosition[Com_Clampi(0,MAX_GENTITIES-1,ch.entnum)];
 		const auto direct=engine ? engine->DirectParams(int(&ch-s_channels)) : IPLDirectEffectParams{};
-		Com_Printf("steam_source entity=%d loop=%d visible=%d left=%d right=%d solid=%d pos=%.1f,%.1f,%.1f occlusion=%.3f transmission=%.5f,%.5f,%.5f sound=%s channel=%d master=%d selected=%d\n",ch.entnum,ch.loopSound,visible,ch.leftvol,ch.rightvol,bool(CM_PointContents(origin,0)&CONTENTS_SOLID),origin[0],origin[1],origin[2],direct.occlusion,direct.transmission[0],direct.transmission[1],direct.transmission[2],ch.thesfx->sSoundName,int(ch.entchannel),ch.master_vol,AuditSelected(ch));
+		const auto routing=S_SteamActive() ? Routing(ch) : SteamSound::Routing{SteamSound::Route::Legacy,"backend-disabled"};
+		Com_Printf("steam_source entity=%d loop=%d visible=%d left=%d right=%d solid=%d pos=%.1f,%.1f,%.1f occlusion=%.3f transmission=%.5f,%.5f,%.5f sound=%s channel=%d master=%d selected=%d route=%s rule=%s\n",ch.entnum,ch.loopSound,visible,ch.leftvol,ch.rightvol,bool(CM_PointContents(origin,0)&CONTENTS_SOLID),origin[0],origin[1],origin[2],direct.occlusion,direct.transmission[0],direct.transmission[1],direct.transmission[2],ch.thesfx->sSoundName,int(ch.entchannel),ch.master_vol,AuditSelected(ch),SteamSound::RouteName(routing.mode),routing.rule);
 	}
 }
 void Probe() {
@@ -216,7 +232,9 @@ void Bake() {
 	else Com_Printf("Steam Audio: no acoustic probes could be generated.\n");
 }
 void Emit() {
-	if(Cmd_Argc()!=2 && Cmd_Argc()!=5) { Com_Printf("s_steam_emit sound [x y z]\n"); return; }
+	const bool global=Cmd_Argc()==3 && !Q_stricmp(Cmd_Argv(2),"global");
+	if(Cmd_Argc()!=2 && Cmd_Argc()!=5 && !global) { Com_Printf("s_steam_emit sound [x y z | global]\n"); return; }
+	if(global) { S_StartLocalSound(S_RegisterSound(Cmd_Argv(1)),CHAN_AUTO_GLOBAL); return; }
 	vec3_t origin; VectorCopy(listener_origin,origin);
 	if(Cmd_Argc()==5) for(int i=0;i<3;++i) {origin[i]=atof(Cmd_Argv(i+2)); if(!std::isfinite(origin[i])) return;}
 	S_StartSound(origin,ENTITYNUM_WORLD,CHAN_AUTO,S_RegisterSound(Cmd_Argv(1)));
@@ -266,6 +284,7 @@ void Capture(portable_samplepair_t *output,int count) {
 }
 }
 void S_SteamInit() {
+	headphones=Cvar_Get("s_steamHeadphones","1",CVAR_ARCHIVE); Cvar_CheckRange(headphones,0,1,qtrue);
 	enabled=Cvar_Get("s_steamAudio","1",CVAR_ARCHIVE); Cvar_CheckRange(enabled,0,1,qtrue);
 	reflections=Cvar_Get("s_steamReflections","1",CVAR_ARCHIVE); Cvar_CheckRange(reflections,0,1,qtrue);
 	pathing=Cvar_Get("s_steamPathing","1",CVAR_ARCHIVE); Cvar_CheckRange(pathing,0,1,qtrue);
@@ -276,6 +295,7 @@ void S_SteamInit() {
 	cache=Cvar_Get("s_steamCache","1",CVAR_ARCHIVE); Cvar_CheckRange(cache,0,1,qtrue);
 	auditSound=Cvar_Get("s_steamAuditSound","",CVAR_CHEAT);
 	auditEntity=Cvar_Get("s_steamAuditEntity","-1",CVAR_CHEAT); Cvar_CheckRange(auditEntity,-1,MAX_GENTITIES-1,qtrue);
+	routeOverride=Cvar_Get("s_steamRoute","-1",CVAR_CHEAT); Cvar_CheckRange(routeOverride,-1,2,qtrue);
 	Cmd_AddCommand("s_steam_probe",Probe);
 	Cmd_AddCommand("s_steam_status",Status); Cmd_AddCommand("s_steam_bake",Bake); Cmd_AddCommand("s_steam_emit",Emit); Cmd_AddCommand("s_steam_record",Record);
 }
@@ -294,15 +314,15 @@ void S_SteamPrepare() {
 	if(!enabled || !enabled->integer || !cl.mapname[0] || (dma.speed!=44100 && dma.speed!=48000)) return;
 	if(loadedMap!=cl.mapname || serverId!=cl.serverId) {
 		S_SteamClear(); loadedMap=cl.mapname; serverId=cl.serverId;
-		engine.reset(new SteamSound::Engine(dma.speed));
+		engine.reset(new SteamSound::Engine(dma.speed,headphones->integer!=0));
 		if(!engine->Ready() || !LoadMap()) { engine.reset(); Com_Printf("Steam Audio: initialization failed for %s; retaining legacy sound.\n",loadedMap.c_str()); return; }
 		Status();
 	}
 }
 void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool inWater) {
-	(void)listener; (void)inWater;
-	if(auditSound && auditEntity && (auditSound->modified || auditEntity->modified)) {
-		S_SteamClear(); auditSound->modified=auditEntity->modified=qfalse;
+	(void)inWater;
+	if(headphones && (auditSound->modified || auditEntity->modified || routeOverride->modified || headphones->modified)) {
+		S_SteamClear(); auditSound->modified=auditEntity->modified=routeOverride->modified=headphones->modified=qfalse;
 	}
 	if(!enabled || !enabled->integer || cls.state!=CA_ACTIVE || !cl.mapname[0]) {
 		if(cls.state!=CA_LOADING && cls.state!=CA_PRIMED && !loadedMap.empty()) S_SteamClear();
@@ -312,17 +332,20 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 	if(!engine) return;
 	std::array<SteamSound::Voice,SteamSound::Voices> voices={}; bool changed=false;
 	for(int i=0;i<SteamSound::Voices;++i) {
-		const auto &ch=s_channels[i]; auto &slot=slots[i]; const bool active=Eligible(ch);
-		if(slot.sound!=ch.thesfx || slot.entity!=ch.entnum || slot.active!=active || slot.loop!=bool(ch.loopSound) ||
+		const auto &ch=s_channels[i]; auto &slot=slots[i]; const auto route=Routing(ch).mode; const bool active=Eligible(ch);
+		if(slot.sound!=ch.thesfx || slot.entity!=ch.entnum || slot.active!=active || slot.loop!=bool(ch.loopSound) || slot.route!=route ||
 			(!ch.loopSound && slot.start!=ch.startSample && slot.start!=START_SAMPLE_IMMEDIATE)) {
 			if(ch.thesfx) engine->ResetVoice(i);
 			slot.sound=ch.thesfx; slot.entity=ch.entnum; slot.loop=ch.loopSound; changed=true;
 		}
-		slot.start=ch.startSample;
+		slot.route=route; slot.start=ch.startSample;
 		slot.active=active; if(!active) continue;
 		const float *origin=ch.fixed_origin ? ch.origin : s_entityPosition[Com_Clampi(0,MAX_GENTITIES-1,ch.entnum)];
-		voices[i].position=Position(origin); voices[i].active=true; voices[i].priority=float(ch.leftvol+ch.rightvol);
+		voices[i].position=Position(origin); voices[i].active=true; voices[i].listenerAttached=ch.entnum==listener; voices[i].priority=float(ch.leftvol+ch.rightvol);
 	}
+	IPLCoordinateSpace3 space={}; space.origin=Position(head); space.ahead=Direction(axis[0]); space.up=Direction(axis[2]);
+	vec3_t right; VectorNegate(axis[1],right); space.right=Direction(right);
+	engine->SetSpatialization(voices,space);
 	reflectionDirty|=changed;
 	if(engine->Busy()) return;
 	const int now=Sys_Milliseconds(); if(!changed && now-lastUpdate<50) return; lastUpdate=now;
@@ -340,8 +363,6 @@ void S_SteamUpdate(const float *head,const float axis[3][3],int listener,bool in
 	}
 	for(const auto &old:objects) if(!seen.count(old.first)) engine->Object(old.first,old.second,{},false);
 	objects.swap(seen);
-	IPLCoordinateSpace3 space={}; space.origin=Position(head); space.ahead=Direction(axis[0]); space.up=Direction(axis[2]);
-	vec3_t right; VectorNegate(axis[1],right); space.right=Direction(right);
 	const float dx=space.origin.x-reflectionOrigin.x,dy=space.origin.y-reflectionOrigin.y,dz=space.origin.z-reflectionOrigin.z;
 	const bool reflect=now-lastReflection>=500 || ((reflectionDirty || dx*dx+dy*dy+dz*dz>.25f) && now-lastReflection>=100);
 	if(reflect) { lastReflection=now; reflectionOrigin=space.origin; reflectionDirty=false; }
@@ -372,19 +393,17 @@ bool S_SteamPaint(channel_t *channel,const short *samples,int count,int offset,i
 	for(int i=0;i<count;++i) slot.input[offset+i]=samples[i]/32768.0f;
 	slot.left=channel->leftvol*volume/65536.0f; slot.right=channel->rightvol*volume/65536.0f; slot.gain=channel->master_vol*volume/65536.0f;
 	const bool voice=channel->entchannel==CHAN_VOICE || channel->entchannel==CHAN_VOICE_ATTEN;
-	slot.reverbSend=channel->loopSound || voice || channel->entchannel==CHAN_AMBIENT ? 1 : transientReverb->value;
-	return true;
+	slot.reverbSend=slot.route==SteamSound::Route::Protected || channel->loopSound || voice || channel->entchannel==CHAN_AMBIENT ? 1 : transientReverb->value;
+	// Speakers retain the protected legacy direct mix; headphones replace its panning.
+	return slot.route!=SteamSound::Route::Protected || engine->Headphones();
 }
 void S_SteamEndBlock(portable_samplepair_t *output,int count) {
 	float left[SteamSound::Block]={},right[SteamSound::Block]={};
 	if(S_SteamActive() && count==SteamSound::Block) {
 		for(int i=0;i<SteamSound::Voices;++i) {
 			auto &s=slots[i];
-			// The perimeter warning must retain its measured legacy exterior coverage.
-			const bool alarm=s.loop && s.sound && loadedMap=="maps/kejim_post.bsp" &&
-				!Q_stricmp(s.sound->sSoundName,"sound/ambience/prototype/alarm1");
-			const float floor=std::min(1.0f,transmission->value*(alarm ? 2 : 1));
-			engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right,floor,s.reverbSend);
+			engine->Mix(i,s.input,s.left,s.right,s.gain,wet->value,left,right,transmission->value,s.reverbSend,
+				s.route==SteamSound::Route::Protected);
 		}
 		engine->End(wet->value,left,right);
 		AddToPaint(output,left,right,count);

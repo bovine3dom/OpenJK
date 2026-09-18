@@ -27,11 +27,15 @@ def main():
     parser.add_argument("--acoustics", action="store_true", help="Capture indoor and outdoor indirect sound on Kejim Post")
     parser.add_argument("--burst", action="store_true", help="Check headroom with four simultaneous blaster shots")
     parser.add_argument("--flyby", action="store_true", help="Check left and right close-pass cue auditions")
+    parser.add_argument("--headphones", action="store_true", help="Use headphone HRTF instead of speaker output")
+    parser.add_argument("--routing", action="store_true", help="Check protected direct audio, reflections, and routing context")
     parser.add_argument("--audit-freeze", action="store_true", help="Check that script freezing holds and releases a queued task")
     parser.add_argument("--rate", type=int, choices=(22, 44), default=44)
     parser.add_argument("--audio-driver", default="dummy")
     parser.add_argument("--device-samples", type=int, default=0)
     args = parser.parse_args()
+    if args.headphones and args.routing:
+        parser.error("Run exact legacy routing comparisons in speaker mode, without --headphones")
     run = Path(tempfile.mkdtemp(prefix="steam-audio.", dir=root / "build/smoke"))
     home = run / "profile"
     profile = home / ("campaigns/jo/OpenJK" if args.campaign == "jo" else "OpenJK")
@@ -39,13 +43,27 @@ def main():
     settings = dict(cl_renderer="rdsp-vanilla", r_mode=-1, r_customwidth=640, r_customheight=480,
                     r_fullscreen=0, s_initsound=1, s_musicvolume=0, s_volume=0.8, com_maxfps=60,
                     r_ignoreGLErrors=1, developer=1, s_khz=args.rate,
-                    s_sdlDevSamps=args.device_samples)
+                    s_sdlDevSamps=args.device_samples, s_steamHeadphones=int(args.headphones))
     (profile / "openjk_sp.cfg").write_text("".join(f'set {k} "{v}"\n' for k, v in settings.items()))
     (profile / "autoexec_sp.cfg").write_text("")
     (profile / "audio-file-test.cfg").write_text("echo AUDIO_FILE_READ\n")
     (profile / "flyby-burst.cfg").write_text("testflyby left\n" + "s_steam_emit sound/weapons/blaster/fire.wav\n" * 4)
+    if args.routing:
+        tone = b''.join(struct.pack('<h', 2000 if i % 100 < 50 else -2000) for i in range(44100))
+        for family in ('movers', 'weapons'):
+            asset = profile / f'sound/{family}/audio_route_test.wav'
+            asset.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(asset), 'wb') as wav:
+                wav.setparams((1, 2, 44100, 0, 'NONE', 'not compressed'))
+                wav.writeframes(tone)
+        (profile / 'scripts').mkdir(exist_ok=True)
+        for channel in ('CHAN_VOICE', 'CHAN_VOICE_GLOBAL'):
+            values = (channel, 'sound/weapons/audio_route_test.wav')
+            (profile / f'scripts/audio_route_{channel.lower()}.IBI').write_bytes(
+                b'IBI\0' + struct.pack('<fiiB', 1.57, 20, 2, 0) + b''.join(
+                    struct.pack('<ii', 4, len(v) + 1) + v.encode() + b'\0' for v in values))
     if args.audit_freeze:
-        (profile / "scripts").mkdir()
+        (profile / "scripts").mkdir(exist_ok=True)
         message = b"!AUDIO_FREEZE_RELEASED\0"
         (profile / "scripts/audio-audit-freeze-check.IBI").write_bytes(
             b"IBI\0" + struct.pack("<fiiBii", 1.57, 29, 1, 0, 4, len(message)) + message)
@@ -90,6 +108,9 @@ def main():
             assert match, result
             value = dict(word.split("=", 1) for word in match[0].split()[1:])
             records[name] = value
+            if value['active'] == '1':
+                mode = 'headphones' if args.headphones else 'speakers'
+                assert f'steam_output mode={mode} hrtf={int(args.headphones)}' in result, result
             timing = re.search(r"steam_audio timing ([^\n]+)", result)
             assert timing, result
             records[name + "_timing"] = dict(word.split("=", 1) for word in timing[1].split())
@@ -101,7 +122,7 @@ def main():
             start = len(text())
             shots = "; ".join(["s_steam_emit sound/weapons/blaster/fire.wav"] * (4 if args.burst and not wet else 1))
             response = cmd(f"s_steam_record 2{' wet' if wet else ''}; {play or shots}")
-            if play:
+            if play and ("testflyby" in play or "flyby-burst" in play):
                 assert "bolt_flyby audition=1" in response, response
             result = wait("Steam Audio capture continuity:", start)
             match = re.search(r"Steam Audio capture: (\S+)", result)
@@ -117,6 +138,7 @@ def main():
             records.setdefault("captures", []).append(dict(
                 file=match[1], continuous=continuous, overlap_frames=int(continuity[1]), gap_frames=int(continuity[2]),
                 peak=peak, energy=sum(s*s for s in samples), wet=wet,
+                left_energy=sum(s*s for s in samples[::2]), right_energy=sum(s*s for s in samples[1::2]),
                 clipped_samples=sum(s in (-32768, 32767) for s in samples)))
             if continuous:
                 assert continuity.groups() == ("0", "0"), continuity[0]
@@ -173,6 +195,60 @@ def main():
                 print("PASS: 22050 Hz legacy fallback and sound restart")
                 return
             assert initial["active"] == "1" and int(initial["triangles"]) > 100, initial
+            if args.routing:
+                cmd('noclip; cg_thirdPerson 0; give weaponnum 3; give ammo; wait 30; weapon 3; wait 60')
+                position = re.search(r'steam_listener pos=([^ ]+)', cmd('s_steam_status'))[1]
+                x, y, z = map(float, position.split(','))
+                sound = 'sound/movers/audio_route_test'
+                emit = f's_steam_emit {sound}.wav {x + 128:.2f} {y:.2f} {z:.2f}'
+                cmd(f'set s_steamAuditSound {sound}; set s_steamReflections 0; set s_steamReverb 0')
+                cmd(f'{emit}; wait 90')
+                for route in (0, -1):
+                    cmd(f'set s_steamRoute {route}; wait 90')
+                    capture(play=emit)
+                dry = records['captures'][-2:]
+                records['protected_direct_energy_ratio'] = dry[1]['energy'] / dry[0]['energy']
+                # Event submission can differ by a frame; direct peak must remain exact.
+                assert dry[0]['peak'] == dry[1]['peak'], dry
+                assert abs(records['protected_direct_energy_ratio'] - 1) < .03, dry
+                sources = cmd(f'{emit}; wait 3; s_steam_status sources')
+                assert 'route=protected rule=machinery' in sources, sources
+                cmd('set s_steamReflections 1; set s_steamReverb 0.2; wait 180')
+                capture(wet=True, play=emit)
+                cmd('set s_steamAuditSound sound/weapons/audio_route_test; wait 90')
+                sources = cmd('s_steam_emit sound/weapons/audio_route_test.wav; wait 3; s_steam_status sources')
+                assert 'route=full rule=weapon-effect' in sources, sources
+                for channel, route in (('chan_voice', 'protected'), ('chan_voice_global', 'legacy')):
+                    sources = cmd(f'wait 90; runscript audio_route_{channel}; wait 20; s_steam_status sources')
+                    assert any(f'channel={3 if channel == "chan_voice" else 5} ' in line and
+                               f'route={route} ' in line for line in sources.splitlines()), sources
+                cmd('set s_steamReverb 0; wait 90')
+                for route in (0, -1):
+                    cmd(f'set s_steamRoute {route}; wait 90')
+                    capture(play='runscript audio_route_chan_voice')
+                dry = records['captures'][-2:]
+                records['voice_direct_energy_ratio'] = dry[1]['energy'] / dry[0]['energy']
+                assert dry[0]['peak'] == dry[1]['peak'] and abs(records['voice_direct_energy_ratio'] - 1) < .03, dry
+                cmd('set s_steamReverb 0.2; wait 180')
+                capture(wet=True, play='runscript audio_route_chan_voice')
+                cmd('set s_steamRoute 0; wait 30; set s_steamRoute -1; wait 90')
+                capture(wet=True, signal=False, play='runscript audio_route_chan_voice_global')
+                global_sound = 's_steam_emit sound/weapons/audio_route_test.wav global'
+                sources = cmd(f'{global_sound}; {global_sound}; wait 3; s_steam_status sources')
+                assert sum('channel=13 ' in line and 'route=legacy ' in line for line in sources.splitlines()) == 2, sources
+                records['overlapping_global_events'] = 'legacy-without-replacement'
+                cmd('set s_steamReverb 0; wait 180')
+                capture(play=global_sound)
+                response = cmd('set s_steamHeadphones 1; wait 180; s_steam_status')
+                assert 'steam_output mode=headphones hrtf=1' in response, response
+                capture(play=global_sound)
+                dry = records['captures'][-2:]
+                assert dry[0]['peak'] == dry[1]['peak'] and dry[0]['energy'] == dry[1]['energy'], dry
+                capture(play='runscript audio_route_chan_voice')
+                response = cmd('set s_steamHeadphones 0; wait 180; s_steam_status')
+                assert 'steam_output mode=speakers hrtf=0' in response, response
+                cmd('set s_steamReverb 0.2')
+                cmd('set s_steamAuditSound ""; wait 180')
             if args.flyby:
                 cmd("set cg_boltFlyby 2; set cg_thirdPerson 0; set s_steamAuditSound sound/weapons/blaster/reflect1; wait 100")
                 for volume in (96, 192):
@@ -181,7 +257,12 @@ def main():
                 old, new = records["captures"][-2:]
                 records["flyby_energy_ratio"] = new["energy"] / old["energy"]
                 assert 3.6 < records["flyby_energy_ratio"] < 4.5, records["flyby_energy_ratio"]
+                if args.headphones:
+                    assert new['left_energy'] > new['right_energy'], new
                 capture(play="testflyby right")
+                if args.headphones:
+                    cue = records['captures'][-1]
+                    assert cue['right_energy'] > cue['left_energy'], cue
                 cmd("set s_musicvolume 1; wait 100")
                 for active in (0, 1):
                     cmd(f"set s_steamAudio {active}; set s_steamAuditEntity 0; wait 100")
@@ -208,7 +289,7 @@ def main():
                 source = alarm()
                 original = [s for s in source if s["pos"] == "56.0,160.0,472.0"]
                 assert len(original) == 1 and float(original[0]["occlusion"]) < .1, source
-                assert float(original[0]["transmission"].split(",")[1]) >= .239, source
+                assert all(s['route'] == 'protected' for s in source), source
                 assert len(source) == 3 and len({s["entity"] for s in source}) == 3, source
                 records["alarm"] = source
                 cmd("set cg_alarmRelays 0; wait 40")
@@ -227,8 +308,9 @@ def main():
             if args.ambient:
                 assert not args.map, "Ambient fixtures use the default map"
                 ambient()
+            before_mix = status("before_mix")
             capture()
-            assert int(status("mixed")["mixed_blocks"]) > int(initial["mixed_blocks"])
+            assert int(status("mixed")["mixed_blocks"]) > int(before_mix["mixed_blocks"])
             if args.bake:
                 cmd("s_steam_bake")
                 assert int(status("baked")["probes"]) > 0

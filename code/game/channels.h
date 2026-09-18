@@ -40,5 +40,6 @@ typedef enum //# soundChannel_e
 	CHAN_ANNOUNCER,		//## %s !!"W:\game\base\!!sound\*.wav;*.mp3" #announcer voices, etc
 	CHAN_LESS_ATTEN,	//## %s !!"W:\game\base\!!sound\*.wav;*.mp3" #attenuates similar to chan_voice, but uses empty channel auto-pick behaviour
 	CHAN_MUSIC,	//played as a looping sound - added by BTO (VV)
+	CHAN_AUTO_GLOBAL, // Listener-attached non-voice events; allocate without replacing other events.
 } soundChannel_t;
 

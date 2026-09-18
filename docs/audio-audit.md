@@ -138,11 +138,10 @@ blocked-path loss. Successful initialization is not an audibility pass.
 The sampler checks the active backend before each capture. A requested Steam
 mode that falls back to legacy is an error, not an A/B comparison.
 
-The Kejim perimeter alarm has a cue-specific blocked-path floor. Its mid-band
-minimum is twice `s_steamTransmission`, limited to 1. This applies only to the
-looping `sound/ambience/prototype/alarm1` asset in `kejim_post`. Other cues and
-clear paths retain their previous settings. A zero transmission setting still
-disables the floor.
+The measurements below predate [the routing policy](audio-routing.md).
+That policy replaces the Kejim alarm-specific transmission floor with protected
+direct audio plus reflections. The earlier floor was twice `s_steamTransmission`,
+limited to 1, for the looping alarm asset in `kejim_post` only.
 
 An initial 10-second comparison found about 3.4 dB of loss at two exterior
 positions with a strong legacy signal. After the change, a baked 11-position

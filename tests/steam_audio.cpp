@@ -9,8 +9,9 @@ static void Quad(Mesh &m,IPLVector3 a,IPLVector3 b,IPLVector3 c,IPLVector3 d) {
 	const int n=int(m.vertices.size()); m.vertices.insert(m.vertices.end(),{a,b,c,d});
 	m.triangles.push_back({{n,n+1,n+2}}); m.triangles.push_back({{n,n+2,n+3}}); m.materials.insert(m.materials.end(),{0,0});
 }
-int main() {
-	Engine engine(44100); assert(engine.Ready());
+int main(int argc,char **) {
+	const bool headphones=argc>1;
+	Engine engine(44100,headphones); assert(engine.Ready());
 	std::vector<IPLMaterial> material(1); material[0]={{0.1f,0.15f,0.2f},0.5f,{0.1f,0.03f,0.01f}};
 	Mesh room;
 	Quad(room,{-6,0,-6},{-6,0,6},{6,0,6},{6,0,-6});
@@ -54,6 +55,22 @@ int main() {
 	assert(audible.transmission[0]>audible.transmission[1] && audible.transmission[1]>audible.transmission[2]);
 	float protectedEnergy=0; for(float sample:left) protectedEnergy+=sample*sample;
 	assert(protectedEnergy>blocked/19 && protectedEnergy<clear/19);
+	// Protected direct audio belongs to the caller, even behind a closed door.
+	for(int i=0;i<Block;++i) { left[i]=input[i]*.5f; right[i]=input[i]*.25f; }
+	engine.Begin(); engine.Mix(0,input,.5f,.25f,1,0,left,right,0,1,true); engine.End(0,left,right);
+	if(!headphones) for(int i=0;i<Block;++i) { assert(left[i]==input[i]*.5f); assert(right[i]==input[i]*.25f); }
+	else {
+		// Protected headphone audio must not depend on the closed door's simulation result.
+		engine.ResetVoice(0);
+		engine.Update(voices,listener,false,false,false); engine.Wait();
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		engine.Mix(0,input,.5f,.5f,1,0,left,right,0,1,true);
+		const std::vector<float> blockedDirect(left,left+Block);
+		engine.ResetVoice(0);
+		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+		engine.Mix(0,input,.5f,.5f,1,0,left,right,0,1,true);
+		for(int i=0;i<Block;++i) assert(left[i]==blockedDirect[i]);
+	}
 	// Reusing a voice must not wait for or inherit the previous source's blocked result.
 	engine.Update(voices,listener,true,false,true);
 	engine.ResetVoice(0); engine.Wait();
@@ -65,7 +82,7 @@ int main() {
 	float tail=0;
 	for(int n=0;n<500;++n) {
 		std::fill(left,left+Block,0); std::fill(right,right+Block,0);
-		engine.Begin(); engine.Mix(0,input,0,0,1,0.3f,left,right); engine.End(0.3f,left,right);
+		engine.Begin(); engine.Mix(0,input,.5f,.5f,1,0.3f,left,right,0,1,true); engine.End(0.3f,left,right);
 		for(float v:left) { assert(std::isfinite(v)); if(n>4) tail+=v*v; }
 		input[0]=0;
 	}
@@ -74,7 +91,7 @@ int main() {
 	assert(engine.Bake({-6,0,-6},{6,4,6}));
 	assert(engine.Status().probes>0 && engine.Status().probes<=256);
 	const auto probes=engine.SaveProbes(); assert(!probes.empty());
-	Engine restored(44100); assert(restored.Ready() && restored.LoadWorld(saved) && restored.LoadProbes(probes));
+	Engine restored(44100,headphones); assert(restored.Ready() && restored.LoadWorld(saved) && restored.LoadProbes(probes));
 	assert(restored.Status().triangles==int(room.triangles.size()));
 	restored.Update(voices,listener,true,true,true);
 	restored.Wait();
@@ -93,6 +110,9 @@ int main() {
 		for(float v:left) {assert(std::isfinite(v)); routed+=v*v;}
 	}
 	assert(routed>0.000001f); // Only the indirect path can reach the output in this test.
+	std::fill(left,left+Block,0); std::fill(right,right+Block,0);
+	restored.Begin(); restored.Mix(0,input,0,0,1,0,left,right,0,1,true); restored.End(0,left,right);
+	for(int i=0;i<Block;++i) assert(left[i]==0 && right[i]==0); // No duplicate diffracted direct path.
 	// Extend past the room edges so probe rays cannot pass along a shared boundary.
 	Mesh sealedDoor; Quad(sealedDoor,{0,-1,-7},{0,5,-7},{0,5,7},{0,-1,7});
 	assert(restored.AddModel(sealedDoor,material));
@@ -107,7 +127,7 @@ int main() {
 	assert(sealed<routed*0.01f); // A closed barrier invalidates the baked route.
 	std::cout << "PASS: Steam Audio direct transmission, moving barrier, reflection tail, and cached probes\n";
 
-	Engine canyon(44100); assert(canyon.Ready());
+	Engine canyon(44100,headphones); assert(canyon.Ready());
 	Mesh cliff; Quad(cliff,{-100,-100,-40},{100,-100,-40},{100,100,-40},{-100,100,-40});
 	assert(canyon.AddModel(cliff,material));
 	listener.origin={0,0,0}; voices[0].position=listener.origin;

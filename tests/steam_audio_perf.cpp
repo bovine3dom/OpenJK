@@ -15,8 +15,8 @@ static void Quad(Mesh &m,IPLVector3 a,IPLVector3 b,IPLVector3 c,IPLVector3 d) {
 	const int n=int(m.vertices.size()); m.vertices.insert(m.vertices.end(),{a,b,c,d});
 	m.triangles.push_back({{n,n+1,n+2}}); m.triangles.push_back({{n,n+2,n+3}}); m.materials.insert(m.materials.end(),{0,0});
 }
-int main() {
-	Engine engine(44100); assert(engine.Ready());
+int main(int argc,char **) {
+	Engine engine(44100,argc>1); assert(engine.Ready());
 	Mesh room;
 	// A large static floor exposes scene-update cost when a small door moves.
 	for(int x=-128;x<128;++x) for(int z=-128;z<128;++z)
@@ -64,7 +64,7 @@ int main() {
 		if(i==0) assert(engine.Status().occlusion<.01f);
 		if(i==39) assert(engine.Status().occlusion>.99f);
 	}
-	std::cout<<"voices="<<Voices<<" block_frames="<<Block<<" mix_mean_us="<<total/512<<" mix_peak_us="<<peak
+	std::cout<<"headphones="<<engine.Headphones()<<" voices="<<Voices<<" block_frames="<<Block<<" mix_mean_us="<<total/512<<" mix_peak_us="<<peak
 		<<" dsp_fraction="<<(total/512)/(1000000.0*Block/44100)
 		<<" reset_peak_us="<<resetPeak<<" door_mean_us="<<moveTotal/40<<" door_peak_us="<<movePeak
 		<<" scene_peak_us="<<engine.Status().scenePeakUs<<'\n';

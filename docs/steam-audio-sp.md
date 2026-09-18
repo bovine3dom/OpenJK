@@ -31,26 +31,53 @@ music playback, and voice-completion timing remain in use.
   submits each emitter once. Walls, distance, and scripted on/off state still
   control the result. This does not add hidden models or NPCs to the render pass.
 
-The direct mix retains the game's distance curves and stereo panning. Indirect
-sound uses Steam Audio's stereo spatialization. This version does not enable
-headphone HRTF processing for the direct mix.
+Headphone output is the default. Full and protected sources use HRTF for direct
+sound and reflections. Full sources also use HRTF for available indirect paths.
+Legacy sources do not use HRTF. The game still controls distance and channel gain.
+Protected direct sound bypasses wall obstruction and transmission filters.
+
+Set `s_steamHeadphones 0` for stereo speakers. This restores stereo panning and
+the legacy direct mixer for protected sources. Set it to `1` for headphones.
+The setting is saved. A change resets effect history and loads the existing map
+cache; no new bake is needed. `s_steam_status` reports the output mode.
+Listener-attached sounds stay centered. Head rotation updates each sound frame,
+without a wait for the acoustic simulation. This does not add multichannel output.
+
+Headphone checks:
+
+- `tests/steam_audio_headphones.cpp` checks left/right, front/back, elevation,
+  head rotation, gain, centered sources, convolution tails, and source reset.
+- Run `tests/steam_audio.cpp` with an extra argument to test HRTF with walls,
+  reflections, cached probes, and indirect paths. No argument tests speakers.
+- Run `scripts/test-steam-audio-sp.py --headphones --flyby --burst --first-use`
+  for headless game checks. `--routing` tests speaker routing, output-mode changes,
+  protected headphone voice playback, and unchanged global sound energy.
+- Run `tests/steam_audio_perf.cpp` with an extra argument for 32-voice HRTF cost.
+  The local test used 2.30 ms per 256-frame block on average, with a 3.99 ms peak.
+  The block budget at 44100 Hz is 5.80 ms. This is not a hardware guarantee.
+
+Listen with headphones before further tuning. Check front/back and height cues,
+voices behind walls, the Kejim lift, and sliding doors. Automated checks cannot
+confirm that the default HRTF suits each listener.
 
 ## Controls
 
 | Setting | Default | Function |
 | --- | --- | --- |
 | `s_steamAudio` | `1` | Enable Steam Audio; `0` restores legacy mixing |
+| `s_steamHeadphones` | `1` | HRTF for full and protected sources; `0` selects stereo speakers |
 | `s_steamReflections` | `1` | Enable reflections and room reverb |
 | `s_steamPathing` | `1` | Use cached propagation paths when available |
 | `s_steamReverb` | `0.2` | Set reflection and reverb gain, from 0 to 1 |
-| `s_steamTransientReverb` | `2.5` | Reflection send multiplier for one-shot world effects; `1` restores the previous send level |
+| `s_steamTransientReverb` | `1.0` | Reflection send multiplier for full-route one-shot world effects |
 | `s_steamLimiter` | `1` | Limit combined mix peaks with about 3 ms of lookahead; `0` bypasses peak control |
-| `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain; `0` uses the raw material result |
+| `s_steamTransmission` | `0.12` | Minimum blocked-path mid-band gain for full-route sources; `0` uses the raw material result |
+| `s_steamRoute` | `-1` | Diagnostic override: automatic policy, or `0` legacy, `1` protected direct, `2` full; not archived |
 | `s_steamCache` | `1` | Read and write local acoustic caches |
 | `cg_spatialAmbience` | `1` | Submit environmental emitters across room visibility boundaries; `0` restores snapshot-only submission |
 | `cg_alarmRelays` | `1` | Add Kejim Post perimeter-alarm relays at its control panel and gun base |
 | `cg_boltFlyby` | `0` | Enable prototype close-pass cues with `1`; `2` also prints diagnostics |
-| `cg_boltFlybyVolume` | `192` | Set the peak close-pass cue volume, from 0 to 255 |
+| `cg_boltFlybyVolume` | `256` | Set the peak close-pass cue volume; playback clamps the value to 0 through 255 |
 
 Use `s_steam_status` to inspect the current scene, moving objects, active
 sources, probes, filter values, and simulation times. `simulation_ms` reports
@@ -82,10 +109,12 @@ channel gains, and sound names. `visible=0` means that the source entity is abse
 from the current visual snapshot. A local sound set retains its entity number
 even when another emitter uses the same sound asset.
 Source details also include position, solid contents at that position, and the
-smoothed occlusion and three transmission bands used by the mixer. Scene-wide
-occlusion and transmission values remain the raw simulation minima.
+smoothed occlusion and three transmission bands. Only full-route sources apply
+these filters to direct audio. Each source also reports `route` and `rule`.
+Scene-wide occlusion and transmission values remain the raw simulation minima.
+See [sound routing](audio-routing.md) for the three routes and classification rules.
 
-The transmission minimum keeps authored gameplay cues audible through BSP walls.
+The transmission minimum limits blocked-path losses for full-route sources.
 Low frequencies have twice this minimum gain; high frequencies have one quarter.
 The material result is blended above the minimum, so material differences remain.
 This is an audibility adjustment, not a physical wall measurement. Clear paths
@@ -97,11 +126,9 @@ existing defense hardware. They use the original alarm's live on/off state.
 They need no new game entities or save format. Only one visible control-panel
 variant emits sound. The relays require `cg_spatialAmbience 1` and stop when the
 original alarm stops. Set `cg_alarmRelays 0` for an original-source comparison.
-This alarm also uses twice the general transmission minimum, capped at one.
-At the default setting, its blocked-path minimum is `{0.48, 0.24, 0.06}` across
-the three frequency bands. This cue-specific treatment keeps useful exterior
-coverage without changing other world sounds. Clear paths are unchanged.
-Setting `s_steamTransmission 0` also disables this cue-specific minimum.
+The alarm now uses protected direct audio plus reflections. Acoustic obstruction
+does not reduce its direct signal. The earlier alarm-specific transmission
+multiplier was removed. Legacy distance attenuation and the mix limiter still apply.
 
 The close-pass prototype uses quiet stock blaster-deflection clips. Use
 `testflyby left` and `testflyby right` to audition them. Enable `cg_boltFlyby 1`
@@ -112,8 +139,8 @@ Player-owned shots, vehicle shots, and cinematics do not add these cues. Shots
 with an existing flight sound retain that sound. Purpose-recorded pass-by clips
 and desktop listening are still needed before enabling this prototype by default.
 Ambient one-shots use the normal reverb send, including these cues.
-The default peak volume is twice the previous value of 96. This adds approximately
-6 dB before limiting. Volume falls linearly to zero at 72 units. Auditions use
+The current peak setting reaches the playback limit of 255. Volume falls
+linearly to zero at 72 units. Auditions use
 the same curve at a distance of four units. The limiter remains active.
 
 `cg_spatialAmbience` also works with legacy mixing. Steam Audio supplies wall
@@ -211,10 +238,9 @@ See [the campaign audio audit](audio-audit.md) for report commands and limits.
 
 ### Reflection Tuning
 
-Start with the send controls. Lower `s_steamTransientReverb` from `2.5` to `1`
-to reduce only the reflection send from one-shot world effects. This reduces
-that send by approximately 8 dB. It does not change speech, loops, or ambient
-one-shots. Lower `s_steamReverb` from `0.2` to `0.1` to reduce all reflection
+The current `s_steamTransientReverb` default is `1`. Compared with the previous
+value of `2.5`, this reduces the full-route transient send by approximately 8 dB.
+Protected sources, loops, and ambient one-shots use a normal send of 1. Lower `s_steamReverb` from `0.2` to `0.1` to reduce all reflection
 and room-reverb output by approximately 6 dB. These changes do not shorten echoes.
 Disable `s_steamPathing` when you compare reflection sends. Baked path output is
 separate from the reflection gain. Keep `s_steamLimiter 1` for full-mix checks.

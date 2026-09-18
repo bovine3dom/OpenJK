@@ -1,5 +1,54 @@
 # Audio Handoff
 
+## Current Work: Hybrid Sound Routing
+
+The user reports that full acoustic obstruction still hides alarms, moving doors,
+lifts, and important dialogue. The earlier sparse audit did not establish good
+playback. Do not treat its alarm-floor fix as the final solution.
+
+The mixer now has three routes: full Steam Audio, protected direct audio
+plus Steam reflections, and legacy-only playback. Channels and brush ownership
+take priority over asset prefixes. See the routing guide below for the category
+assignments and conservative environmental-sound rules.
+
+The policy is in `shared/sound/audio_routes.inc`. `s_steam_status sources` reports
+`route` and `rule`. The non-archived diagnostic override is `s_steamRoute`:
+`-1` automatic, `0` legacy, `1` protected, `2` full. Return it to `-1` after a test.
+The alarm-specific transmission multiplier was removed. Existing alarm relays
+remain. The user's reverb and fly-by settings were not changed.
+
+The previous inventories supplied the first classification pass. Reports are
+`build/audio-routing/ja-triage.json` and `build/audio-routing/jo-triage.json`.
+All resolved references have a context or asset-family rule. Missing and dynamic
+references remain flagged. This is not proof of every runtime state or generated
+sound. See [sound routing](docs/audio-routing.md) for rules, counts, and tests.
+
+Actual Kejim lift and sliding-door tests passed in
+`build/audio-routing/movers.4loelaku`. Protected direct differed from the
+legacy-direct control by -0.06 dB on the lift and +0.08 dB on the door. Full
+processing lost 10.55 dB and 5.23 dB, respectively. No clipped samples occurred,
+and both movement loops stopped. These fixtures use the same saved state and
+the continuous Steam mixer clock; they are not a complete campaign audit.
+
+The new alarm sweep (`build/audio-audit/measure.yejoo9x4`) obtained valid
+comparisons at all 11 fixed positions. No strong legacy sample lost more than 3 dB. Stop was silent, with
+no clipping. Exterior gains are now about +6.8 dB; panel gain is +9.0 dB.
+Selected old losses in Taspir 2, Cairn Dock 1, and Doom Shields now measure
++2.86, +0.56, and -0.51 dB relative to legacy. See the routing guide for sample
+labels and report paths. These results do not establish full route coverage.
+
+Final routing checks passed in `build/smoke/steam-audio.5uuqxnra`: protected
+machinery and voice direct-energy ratios were exactly 1.0 against the legacy
+route. Voice reflections remained audible in the wet capture; broadcast-voice
+wet output was silent. Overlapping global events retained separate legacy
+channels. The 22050 Hz fallback passed in `build/smoke/steam-audio.g4e57_2o`.
+The SDK and classifier tests also passed. Desktop balance remains unverified.
+
+Next: listen to protected dialogue through walls, radio speech without room
+reflections, moving doors and lifts, alarm coverage, and dense combat. Review
+`route` and `rule` for exceptions. Check normal mission-state activation and
+source/channel pressure before more specific policy changes.
+
 ## Next Work: Campaign Audibility Audit
 
 **Progress:** static inventories now cover all 34 JA and 26 JO campaign maps.
@@ -346,10 +395,11 @@ The current backend uses the official Steam Audio 4.8.1 SDK on Linux x86-64.
 It uses Embree for CPU acoustic queries when available. `libphonon.so` is
 installed beside the engine, with an `$ORIGIN` runtime search path.
 
-World sounds receive material-dependent transmission, partial occlusion, and
-air absorption. Up to four priority sources receive source-dependent reflections.
-Other sources feed a listener-room reverb. The direct mix retains legacy distance
-curves and stereo panning. Direct headphone HRTF processing is not enabled.
+Full-route sounds receive material-dependent transmission, partial occlusion, and
+air absorption. Protected direct sound bypasses those filters. Up to four priority
+sources receive source-dependent reflections. Other sources feed room reverb.
+Full and protected sources use headphone HRTF by default. `s_steamHeadphones 0`
+restores stereo speaker output. Legacy sources bypass HRTF.
 
 Music, menu sounds, global voices, and announcer sounds bypass the effects.
 Ordinary world WAV and MP3 channels use the processing hooks. Check these
@@ -438,8 +488,8 @@ Relevant artifacts from implementation:
 
 ## SDK Issues Already Resolved
 
-- Path-effect creation required an initialized HRTF object even though rendering
-  uses speaker output. Supplying no HRTF caused a crash.
+- Path-effect creation requires an initialized HRTF object, even for speaker
+  output. Supplying no HRTF caused a crash.
 - Baking uses a non-null progress callback. A null callback caused a crash.
 - Loaded probe batches need `iplProbeBatchCommit` before use.
 - Whole-scene serialization/loading was unsuitable for the Embree path. The
@@ -458,5 +508,8 @@ After clean playback is established:
   effects and SDK source state currently exist for all 32 voice slots.
 - [ ] Review sparse-probe coverage and the live-reverb fallback for missed rooms.
 - [ ] Extend geometry coverage for model props, deforming actors, and sub-BSP additions.
-- [ ] Evaluate underwater propagation and optional headphone HRTF processing.
+- [x] Add headphone HRTF for full and protected sources. Keep legacy sources unchanged.
+  `s_steamHeadphones` defaults to `1`; use `0` for stereo speakers.
+- [ ] Listen to headphone front/back and elevation cues, protected voices, and moving doors.
+- [ ] Evaluate underwater propagation.
 - [ ] Add other supported build platforms after the Linux implementation is stable.
