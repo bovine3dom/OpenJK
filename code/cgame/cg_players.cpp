@@ -6887,9 +6887,12 @@ qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin )
 		return qfalse;
 	}
 
-	vec3_t boltOrigin;
+	vec3_t boltOrigin, neckUp;
 	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, boltOrigin );
-	VectorCopy( boltOrigin, origin );
+	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, neckUp );
+	// The cervical bolt is the neck's rotation pivot. Sample a point above it
+	// so neck pitch also produces camera movement instead of only rotation.
+	VectorMA( boltOrigin, cg_firstPersonBodyNeckOffset.value, neckUp, origin );
 	return qtrue;
 }
 
