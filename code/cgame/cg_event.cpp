@@ -401,6 +401,11 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		CG_TryPlayCustomSound(NULL, es->number, CHAN_AUTO, "*jump1.wav", CS_BASIC );//CHAN_VOICE
 		break;
 
+	case EV_KICK:
+		DEBUGNAME("EV_KICK");
+		cgi_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.kickSound );
+		break;
+
 	case EV_ROLL:
 		DEBUGNAME("EV_ROLL");
 		CG_TryPlayCustomSound(NULL, es->number, CHAN_AUTO, "*jump1.wav", CS_BASIC );//CHAN_VOICE

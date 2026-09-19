@@ -14772,6 +14772,7 @@ static qboolean PM_TryKick( void )
 	pm->ps->pm_flags |= PMF_KICK_HELD;
 	PM_SetAnim( pm, SETANIM_LEGS, BOTH_A7_KICK_F,
 		SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 100 );
+	PM_AddEvent( EV_KICK );
 	pm->ps->weaponTime = 0;
 	pm->ps->weaponstate = WEAPON_IDLE;
 

@@ -735,6 +735,7 @@ static void CG_RegisterSounds( void ) {
 //	cgs.media.talkSound = 	cgi_S_RegisterSound( "sound/interface/communicator.wav" );
 	cgs.media.landSound =	cgi_S_RegisterSound( "sound/player/land1.wav");
 	cgs.media.rollSound =	cgi_S_RegisterSound( "sound/player/roll1.wav");
+	cgs.media.kickSound = cgi_S_RegisterSound( "sound/weapons/melee/kick1.mp3");
 	theFxScheduler.RegisterEffect( "env/slide_dust" );
 
 	cgs.media.overchargeFastSound	= cgi_S_RegisterSound("sound/weapons/overchargeFast.wav" );

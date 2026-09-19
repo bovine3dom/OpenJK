@@ -285,6 +285,7 @@ typedef struct {
 
 	sfxHandle_t landSound;
 	sfxHandle_t rollSound;
+	sfxHandle_t kickSound;
 	sfxHandle_t messageLitSound;
 
 	sfxHandle_t	batteryChargeSound;

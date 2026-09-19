@@ -296,6 +296,7 @@ typedef enum {
 	EV_FALL_FAR,
 
 	EV_JUMP,
+	EV_KICK,
 	EV_ROLL,
 	EV_WATER_TOUCH,	// foot touches
 	EV_WATER_LEAVE,	// foot leaves
