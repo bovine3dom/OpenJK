@@ -413,3 +413,4 @@ rough notes / todo
 - not convinced ragdolling jolt enemies take fall damage, even from crazy heights, or into walls
 - in JO, at least, we don't seem to be able to switch between lightsaber styles - check JA too. it's bound to mouse3
 - disable 'switch to better weapon' by default?
+- make force jump transition at the top a bit less harsh
