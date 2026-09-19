@@ -415,3 +415,6 @@ rough notes / todo
 - disable 'switch to better weapon' by default?
 - make force jump transition at the top a bit less harsh
 - add nukem-boot (i think the anim already exists?). have power scale with force push power.
+	- get a better kick sound (grunt?)
+	- give kick more of an up impulse and much less of a back impulse
+	- work out what the kick pitch and roll settings are for?
