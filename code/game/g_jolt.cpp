@@ -76,6 +76,7 @@ bool ExternalPoseOwner(gentity_t* ent, bool allowGrip = false);
 bool AnimationOwnsPose(gentity_t* ent);
 bool BoltPosition(gentity_t* ent, int bolt, vec3_t position);
 void LocalVector(gentity_t* ent, const vec3_t world, vec3_t local);
+int WaterLevelAtPoint(const vec3_t origin, int passEntityNum, int viewHeight);
 
 struct Actor {
 	std::unique_ptr<JoltReaction::Simulation> simulation;
@@ -138,6 +139,7 @@ struct Actor {
 	bool ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& models);
 	void Engage(gentity_t* ent);
 	void UpdateRig(gentity_t* ent, float seconds);
+	void ApplyImpactDamage(gentity_t* ent, const JoltReaction::BalanceStatus& impact);
 	void ApplyFallDamage(gentity_t* ent);
 	bool Recover(gentity_t* ent);
 	void ReturnToAnimation(gentity_t* ent);
@@ -470,7 +472,8 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else VectorClear(ent->client->ps.velocity);
 	Render(ent, level.time, origin, ent->currentAngles, false);
 	UpdatePhysicalHull(ent);
-	if (fallStart && balance.phase == JoltReaction::ControlPhase::Falling &&
+	if (!dead && balance.impactSpeed > 0) ApplyImpactDamage(ent, balance);
+	if (!dead && fallStart && balance.phase == JoltReaction::ControlPhase::Falling &&
 		(balance.supportedTrunk || balance.contacts) && !fallDamageApplied)
 		ApplyFallDamage(ent);
 	if (dead || gripLevel || balance.shock > .05f) return;
@@ -489,18 +492,56 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else settledSince = 0;
 }
 
+void Actor::ApplyImpactDamage(gentity_t* ent, const JoltReaction::BalanceStatus& impact) {
+	if (ent->flags & FL_NO_IMPACT_DMG) return;
+	vec3_t point, normal, start, end;
+	for (int i = 0; i < 3; ++i) {
+		point[i] = impact.impactPoint[i] / MetresPerUnit;
+		normal[i] = impact.impactNormal[i];
+	}
+	VectorMA(point, 2, normal, start);
+	VectorMA(point, -2, normal, end);
+	trace_t surface;
+	gi.trace(&surface, start, nullptr, nullptr, end, actor, MASK_NPCSOLID, (EG2_Collision)0, 0);
+	if (!surface.startsolid && !surface.allsolid && surface.fraction < 1 && (surface.surfaceFlags & SURF_NODAMAGE)) return;
+	float magnitude = impact.impactSpeed / MetresPerUnit * ent->mass / 50;
+	if (!((magnitude >= 100 + ent->health && ent->s.number >= MAX_CLIENTS && ent->s.weapon != WP_SABER) || magnitude >= 700)) return;
+	if (ent->s.weapon == WP_SABER) return;
+	if ((ent->s.number < MAX_CLIENTS || (ent->client &&
+		(ent->client->NPC_class == CLASS_BOBAFETT || ent->client->NPC_class == CLASS_ROCKETTROOPER))) &&
+		ent->client && ent->client->ps.groundEntityNum < ENTITYNUM_NONE && magnitude < 1000)
+		magnitude *= .5f;
+	magnitude /= 40;
+	if (magnitude < 1) return;
+	G_Damage(ent, NULL, NULL, NULL, ent->currentOrigin, magnitude / 2, DAMAGE_NO_ARMOR, MOD_FALLING);
+}
+
 void Actor::ApplyFallDamage(gentity_t* ent) {
 	fallDamageApplied = true;
-	if (ent->NPC && (ent->s.weapon == WP_SABER || ent->client->NPC_class == CLASS_REBORN)) return;
+	trace_t landing;
+	vec3_t start, end;
+	VectorCopy(ent->currentOrigin, start); start[2] += 16;
+	VectorCopy(start, end); end[2] -= 128;
+	gi.trace(&landing, start, nullptr, nullptr, end, actor, MASK_NPCSOLID, (EG2_Collision)0, 0);
+	const bool foundSurface = !landing.startsolid && !landing.allsolid && landing.fraction < 1;
+	if (foundSurface && (landing.surfaceFlags & SURF_NODAMAGE)) return;
+	const float* landingPoint = foundSurface ? landing.endpos : ent->currentOrigin;
+	const int waterlevel = WaterLevelAtPoint(landingPoint, actor, ent->client->ps.viewheight);
+	if (waterlevel == 3) return;
 	int dflags = DAMAGE_NO_ARMOR;
 	float damage;
 	if (ent->NPC && (ent->NPC->aiFlags & NPCAI_DIE_ON_IMPACT)) {
 		damage = 1000;
 		dflags |= DAMAGE_DIE_ON_IMPACT;
 	} else {
-		const int delta = int(fallImpactSpeed / MetresPerUnit / 10);
-		if (delta < 30 || (ent->flags & FL_NO_IMPACT_DMG)) return;
-		damage = delta * .5f;
+		if (ent->NPC && (ent->s.weapon == WP_SABER || ent->client->NPC_class == CLASS_REBORN)) return;
+		float delta = fallImpactSpeed / MetresPerUnit / 10;
+		if (waterlevel == 2) delta *= .25f;
+		else if (waterlevel == 1) delta *= .5f;
+		if (waterlevel >= 2) delta *= .4f;
+		const int damageDelta = int(delta);
+		if (damageDelta < 30 || (ent->flags & FL_NO_IMPACT_DMG)) return;
+		damage = damageDelta * .5f;
 	}
 	ent->painDebounceTime = level.time + 200;
 	G_Damage(ent, NULL, NULL, NULL, ent->currentOrigin, damage, dflags, MOD_FALLING);
@@ -751,6 +792,22 @@ void LocalVector(gentity_t* ent, const vec3_t world, vec3_t local) {
 	local[0] = world[0] * cosf(yaw) + world[1] * sinf(yaw);
 	local[1] = -world[0] * sinf(yaw) + world[1] * cosf(yaw);
 	local[2] = world[2];
+}
+int WaterLevelAtPoint(const vec3_t origin, int passEntityNum, int viewHeight) {
+	int waterlevel = 0;
+	if (!(gi.totalMapContents() & (MASK_WATER | CONTENTS_LADDER))) return waterlevel;
+	vec3_t point;
+	VectorCopy(origin, point); point[2] += DEFAULT_MINS_2 + 1;
+	int contents = gi.pointcontents(point, passEntityNum);
+	if (!(contents & (MASK_WATER | CONTENTS_LADDER))) return waterlevel;
+	waterlevel = 1;
+	point[2] = origin[2] + DEFAULT_MINS_2 + (viewHeight - DEFAULT_MINS_2) / 2;
+	contents = gi.pointcontents(point, passEntityNum);
+	if (!(contents & (MASK_WATER | CONTENTS_LADDER))) return waterlevel;
+	waterlevel = 2;
+	point[2] = origin[2] + viewHeight;
+	if (gi.pointcontents(point, passEntityNum) & (MASK_WATER | CONTENTS_LADDER)) waterlevel = 3;
+	return waterlevel;
 }
 void Actor::Reset(bool restoreOrigin) {
 	if (engaged && fall && actor > 0 && g_entities[actor].inuse && g_entities[actor].client) {

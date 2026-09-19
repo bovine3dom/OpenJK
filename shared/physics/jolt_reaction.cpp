@@ -239,6 +239,31 @@ struct FallSimulation::Impl {
 	struct FootContacts final : JPH::ContactListener {
 		Impl* owner;
 		explicit FootContacts(Impl* value) : owner(value) {}
+		int CharacterPart(const JPH::BodyID& id) const {
+			for (int i = 0; i < PartCount; ++i) if (owner->bodies[i] == id) return i;
+			return -1;
+		}
+		bool Mesh(const JPH::BodyID& id) const {
+			for (const auto& mesh : owner->meshes) if (mesh.second == id) return true;
+			return false;
+		}
+		void RecordImpact(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& manifold) {
+			const int partA = CharacterPart(a.GetID()), partB = CharacterPart(b.GetID());
+			const bool meshA = Mesh(a.GetID()), meshB = Mesh(b.GetID());
+			const bool characterFirst = partA >= 0 && meshB, characterSecond = partB >= 0 && meshA;
+			if ((!characterFirst && !characterSecond) || !manifold.mRelativeContactPointsOn1.size()) return;
+			const auto normal = characterFirst ? -manifold.mWorldSpaceNormal : manifold.mWorldSpaceNormal;
+			if (normal.GetZ() > .5f) return; // PMove leaves ordinary floor landings to fall damage.
+			// Contact callbacks run inside the update. Read bodies directly; BodyInterface locks.
+			const auto meshVelocity = characterFirst ? b.GetLinearVelocity() : a.GetLinearVelocity();
+			const auto relative = owner->body[0]->GetLinearVelocity() - meshVelocity;
+			const float speed = relative.Length();
+			if (speed <= owner->balance.impactSpeed) return;
+			owner->balance.impactSpeed = speed;
+			for (int i = 0; i < 3; ++i) owner->balance.impactNormal[i] = normal[i];
+			const auto point = characterFirst ? manifold.GetWorldSpaceContactPointOn1(0) : manifold.GetWorldSpaceContactPointOn2(0);
+			for (int i = 0; i < 3; ++i) owner->balance.impactPoint[i] = point[i];
+		}
 		void Record(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& manifold) {
 			if ((a.GetID() == owner->bodies[2] || b.GetID() == owner->bodies[2]) && !owner->balance.firstHeadContact)
 				owner->balance.firstHeadContact = owner->steps+1;
@@ -264,7 +289,7 @@ struct FallSimulation::Impl {
 				}
 			}
 		}
-		void OnContactAdded(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& m, JPH::ContactSettings&) override { Record(a,b,m); }
+		void OnContactAdded(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& m, JPH::ContactSettings&) override { Record(a,b,m); RecordImpact(a,b,m); }
 		void OnContactPersisted(const JPH::Body& a, const JPH::Body& b, const JPH::ContactManifold& m, JPH::ContactSettings&) override { Record(a,b,m); }
 	};
 	std::shared_ptr<Runtime> runtime = AcquireRuntime();
@@ -1185,6 +1210,7 @@ void FallSimulation::RootVelocity(float* velocity) const {
 bool FallSimulation::Advance(float seconds) {
 	if (!std::isfinite(seconds) || seconds < 0 || seconds > 0.25f) return false;
 	auto& s = *impl;
+	s.balance.impactSpeed = 0;
 	if (s.balance.phase == ControlPhase::Dead && !s.world.GetNumActiveBodies(JPH::EBodyType::RigidBody)) {
 		s.balance.passiveTorque = 0;
 		s.clock += seconds;

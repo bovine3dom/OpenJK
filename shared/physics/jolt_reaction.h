@@ -42,6 +42,8 @@ struct BalanceStatus {
 	float gripError = 0;
 	float gripYawError = 0, gripYawSpeed = 0, gripTorque = 0; // Degrees, degrees/s, N m.
 	float gripLegTone = 0; // Peak applied hip/knee muscle torque in N m.
+	float impactSpeed = 0; // Relative speed at a non-floor map impact, metres/s.
+	float impactNormal[3] = {}, impactPoint[3] = {}; // World-space contact data, metres.
 	bool passiveLegs = false; // Joint motors are off; lifted Grip can add soft muscle torques.
 	unsigned gripStruggles = 0;
 	float shockPushUsed = 0, shockPushRate = 0;
