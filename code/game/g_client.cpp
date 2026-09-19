@@ -2371,7 +2371,11 @@ qboolean ClientSpawn(gentity_t *ent, SavedGameJustLoaded_e eSavedGameJustLoaded 
 			client->ps.dualSabers = qfalse;
 			WP_SaberParseParms( g_saber->string, &client->ps.saber[0] );//get saber info
 
-			client->ps.saberStylesKnown |= (1<<gi.Cvar_VariableIntegerValue("g_fighting_style"));
+			const int fightingStyle = gi.Cvar_VariableIntegerValue("g_fighting_style");
+			if ( fightingStyle > SS_NONE && fightingStyle < SS_NUM_SABER_STYLES )
+			{
+				client->ps.saberStylesKnown |= 1 << fightingStyle;
+			}
 
 //			if ( client->ps.saber[0].stylesLearned )
 //			{

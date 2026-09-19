@@ -481,7 +481,26 @@ void Svcmd_SaberAttackCycle_f( void )
 		return;
 	}
 
-	int allowedStyles = self->client->ps.saberStylesKnown;
+	int allowedStyles;
+	if ( G_IsOutcast() )
+	{
+		// JO maps Saber Offense ranks to the classic style progression:
+		// rank 1 is medium, rank 2 adds fast, and rank 3 adds strong.
+		allowedStyles = 1 << SS_MEDIUM;
+		if ( self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] >= FORCE_LEVEL_2 )
+		{
+			allowedStyles |= 1 << SS_FAST;
+		}
+		if ( self->client->ps.forcePowerLevel[FP_SABER_OFFENSE] >= FORCE_LEVEL_3 )
+		{
+			allowedStyles |= 1 << SS_STRONG;
+		}
+	}
+	else
+	{
+		allowedStyles = self->client->ps.saberStylesKnown;
+	}
+
 	if ( self->client->ps.dualSabers
 		&& self->client->ps.saber[0].Active()
 		&& self->client->ps.saber[1].Active() )
