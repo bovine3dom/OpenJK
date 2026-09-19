@@ -6819,8 +6819,8 @@ extern qboolean G_RagDoll(gentity_t *ent, vec3_t forcedAngles);
 int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
 
 /*
- * Render the local player near the camera so the first-person body path can
- * be inspected without changing gameplay or the normal world model.
+ * Render the local player in the first-person view when looking down. This is
+ * cosmetic only; the normal world model remains available to mirrors.
  */
 static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const centity_t *cent )
 {
@@ -6834,10 +6834,11 @@ static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const cen
 	// Keep the real depth for Rend2's screen-space skin diffusion. A depth-hacked
 	// view model reconstructs as near-camera geometry and gets excessive blur.
 	viewModel.renderfx = RF_FIRST_PERSON | RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+	viewModel.shaderRGBA[3] = 255;
 
-	// Use a fixed distance for this experiment. Production placement will
-	// follow the player origin and isolate the visible body surfaces.
-	VectorMA( cg.refdef.vieworg, 100.0f, cg.refdef.viewaxis[0], viewModel.origin );
+	// Use the gameplay model position so the body appears below the camera when
+	// the player looks down instead of floating at a test distance.
+	VectorCopy( playerModel->origin, viewModel.origin );
 	VectorCopy( viewModel.origin, viewModel.oldorigin );
 	VectorCopy( viewModel.origin, viewModel.lightingOrigin );
 
