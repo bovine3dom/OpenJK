@@ -14776,8 +14776,10 @@ static qboolean PM_TryKick( void )
 	pm->ps->weaponTime = 0;
 	pm->ps->weaponstate = WEAPON_IDLE;
 
-	// Give the kick a small lift. Force Push upgrades make the lift stronger.
-	pm->ps->velocity[2] += 60.0f + 20.0f * pm->ps->forcePowerLevel[FP_PUSH];
+	// Keep each Force Push upgrade visible after gravity acts on the kick.
+	const int pushLevel = Com_Clampi( FORCE_LEVEL_0, FORCE_LEVEL_3,
+		pm->ps->forcePowerLevel[FP_PUSH] );
+	pm->ps->velocity[2] += 120.0f + 40.0f * pushLevel;
 	pm->ps->groundEntityNum = ENTITYNUM_NONE;
 	pml.groundPlane = qfalse;
 	pml.walking = qfalse;

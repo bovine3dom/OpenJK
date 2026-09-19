@@ -131,7 +131,7 @@ playtesting.
 
 - [x] Add the kick event and start sound.
 - [x] Add Force Push-scaled upward impulse.
-- [ ] Fix bug: force push does _not_ appear to scale the impulse ingame.
+- [x] Make each Force Push level produce a visible increase in kick lift.
 - [x] Remove the obsolete kick camera pitch and roll settings.
 - [ ] Make upwards impulse tuneable ingame, and the backwards one too, separately.
 - [ ] Test demos, save games, prediction, and multiplayer behavior.
