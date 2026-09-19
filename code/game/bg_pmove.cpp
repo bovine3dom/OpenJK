@@ -14758,7 +14758,7 @@ static qboolean PM_TryKick( void )
 		return qfalse;
 	}
 	if ( pm->ps->clientNum >= MAX_CLIENTS || pm->ps->pm_type != PM_NORMAL ||
-		pm->ps->weapon == WP_NONE || pm->ps->weapon == WP_SABER ||
+		pm->ps->weapon == WP_NONE ||
 		pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->waterlevel > 1 ||
 		(pm->ps->pm_flags & PMF_DUCKED) || pm->cmd.upmove < 0 ||
 		PM_InKnockDown( pm->ps ) || PM_InRoll( pm->ps ) || PM_RidingVehicle() ||

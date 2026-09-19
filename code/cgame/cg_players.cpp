@@ -6831,11 +6831,9 @@ static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const cen
 	}
 
 	refEntity_t viewModel = *playerModel;
-	// Rend2 excludes forced-alpha entities from the skin diffusion pass. The
-	// cosmetic view model should keep the normal world model's skin response.
-	viewModel.renderfx = RF_FIRST_PERSON | RF_DEPTHHACK | RF_NOSHADOW |
-		RF_LIGHTING_ORIGIN | RF_FORCE_ENT_ALPHA;
-	viewModel.shaderRGBA[3] = 255;
+	// Keep the real depth for Rend2's screen-space skin diffusion. A depth-hacked
+	// view model reconstructs as near-camera geometry and gets excessive blur.
+	viewModel.renderfx = RF_FIRST_PERSON | RF_NOSHADOW | RF_LIGHTING_ORIGIN;
 
 	// Use a fixed distance for this experiment. Production placement will
 	// follow the player origin and isolate the visible body surfaces.
