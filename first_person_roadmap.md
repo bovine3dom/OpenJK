@@ -55,7 +55,8 @@ console without changing the model or the kick trace.
 
 Open work:
 
-- [ ] Critical bug: weapon model is mirrored but in the correct position. This means that the UNMODELLED side of the weapon is on display, because it is only supposed to be viewed from its left! It needs to be flipped 'in place', changing only the appearance of the model, and not where it is located in the world.
+- [x] Flip the mirrored body-mode weapon in place without changing its world
+  position.
 - [ ] Replace the hip-fire weapon pose with a first-person aiming or ready pose.
 - [ ] Tune camera and reticle smoothing, kick camera pitch and roll, death
   presentation, and an optional toggleable ready pose vs hip firing.

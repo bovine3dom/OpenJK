@@ -1187,6 +1187,10 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 			CG_PositionEntityOnTag( &muzzleProbe, &gun, gun.hModel, "tag_flash" );
 			VectorSubtract( bodyWeaponMuzzleOrigin, muzzleProbe.origin, bodyWeaponRenderOffset );
 			VectorAdd( gun.origin, bodyWeaponRenderOffset, gun.origin );
+
+			// The body hand transform is left-handed. Restore the model without
+			// changing the position that was aligned above.
+			VectorNegate( gun.axis[1], gun.axis[1] );
 		}
 
 		// Keep the physical hand placement while retaining normal first-person
@@ -1271,6 +1275,7 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 			if ( bodyWeaponMuzzleValid )
 			{
 				VectorAdd( barrel.origin, bodyWeaponRenderOffset, barrel.origin );
+				VectorNegate( barrel.axis[1], barrel.axis[1] );
 			}
 
 			if ( drawGun )
