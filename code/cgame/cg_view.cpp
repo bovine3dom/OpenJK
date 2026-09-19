@@ -2246,6 +2246,22 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	// build the render lists
 	if ( !cg.hyperspace ) {
 		CG_AddPacketEntities(qfalse);			// adter calcViewValues, so predicted player state is correct
+
+		// Re-anchor the cosmetic body view after the player model updates its
+		// Ghoul2 pose. Keep the camera angles and transient view offsets.
+		if ( ( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
+			!cg.renderingThirdPerson && !cg_thirdPerson.integer )
+		{
+			vec3_t neckOrigin;
+			if ( CG_GetFirstPersonBodyNeckOrigin( neckOrigin ) )
+			{
+				vec3_t viewOffset;
+				VectorSubtract( cg.refdef.vieworg, cg.predicted_player_state.origin, viewOffset );
+				viewOffset[2] -= cg.predicted_player_state.viewheight;
+				VectorAdd( neckOrigin, viewOffset, cg.refdef.vieworg );
+			}
+		}
+
 		CG_AddMarks();
 		CG_DrawMiscEnts();
 	}

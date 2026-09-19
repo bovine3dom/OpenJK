@@ -6861,6 +6861,38 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	cgi_R_AddRefEntityToScene( &viewModel );
 }
 
+qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin )
+{
+	const centity_t *cent = &cg_entities[cg.snap->ps.clientNum];
+	if ( cent->currentState.number != cg.snap->ps.clientNum || !cent->gent ||
+		!cent->gent->client || !cent->gent->ghoul2.IsValid() ||
+		cent->gent->playerModel < 0 || cent->gent->playerModel >= cent->gent->ghoul2.size() ||
+		cent->gent->cervicalBolt < 0 )
+	{
+		return qfalse;
+	}
+
+	vec3_t modelOrigin;
+	VectorCopy( cent->lerpOrigin, modelOrigin );
+	if ( cent->currentState.modelScale[2] && cent->currentState.modelScale[2] != 1.0f )
+	{
+		modelOrigin[2] += 24 * (cent->currentState.modelScale[2] - 1);
+	}
+
+	mdxaBone_t boltMatrix;
+	if ( !gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel,
+		cent->gent->cervicalBolt, &boltMatrix, cent->renderAngles, modelOrigin,
+		cg.time, cgs.model_draw, cent->currentState.modelScale ) )
+	{
+		return qfalse;
+	}
+
+	vec3_t boltOrigin;
+	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, boltOrigin );
+	VectorCopy( boltOrigin, origin );
+	return qtrue;
+}
+
 void CG_Player( centity_t *cent ) {
 	clientInfo_t	*ci;
 	qboolean		shadow, staticScale = qfalse;
