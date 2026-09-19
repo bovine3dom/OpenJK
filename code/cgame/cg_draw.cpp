@@ -2757,6 +2757,13 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 			ecolor[1] = 0.0;//G
 			ecolor[2] = 0.0;//B
 		}
+		else if ( crossEnt->takedamage )
+		{
+			// Destructible objects are yellow
+			ecolor[0] = 1.0;//R
+			ecolor[1] = 1.0;//G
+			ecolor[2] = 0.0;//B
+		}
 		else if ( (crossEnt->flags&FL_RED_CROSSHAIR) )
 		{//special case flagged to turn crosshair red
 			ecolor[0] = 1.0;//R
