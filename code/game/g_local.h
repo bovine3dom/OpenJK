@@ -367,6 +367,7 @@ extern	level_locals_t	level;
 extern	game_export_t	globals;
 
 extern	cvar_t	*g_gravity;
+extern	cvar_t	*g_jumpHeightMultiplier;
 extern	cvar_t	*g_speed;
 extern	cvar_t	*g_cheats;
 extern	cvar_t	*g_developer;
@@ -381,6 +382,8 @@ extern	cvar_t	*g_ICARUSDebug;
 extern cvar_t	*g_npcdebug;
 
 extern	cvar_t	*g_allowBunnyhopping;
+extern float G_PlayerJumpHeightMultiplier( gentity_t *ent );
+extern float G_PlayerJumpVelocity( gentity_t *ent, float velocity );
 extern gentity_t *player;
 //
 // g_spawn.c

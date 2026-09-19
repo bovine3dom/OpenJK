@@ -148,6 +148,7 @@ gentity_t		*player;
 
 cvar_t	*g_speed;
 cvar_t	*g_gravity;
+cvar_t	*g_jumpHeightMultiplier;
 cvar_t	*g_stepSlideFix;
 
 cvar_t	*g_sex;
@@ -634,6 +635,7 @@ void G_InitCvars( void ) {
 	// change anytime vars
 	g_speed = gi.cvar( "g_speed", "250", CVAR_CHEAT );
 	g_gravity = gi.cvar( "g_gravity", "800", CVAR_SAVEGAME|CVAR_ROM );
+	g_jumpHeightMultiplier = gi.cvar( "g_jumpHeightMultiplier", "1.2", CVAR_ARCHIVE );
 	g_stepSlideFix = gi.cvar( "g_stepSlideFix", "1", CVAR_ARCHIVE );
 	g_sex = gi.cvar ("sex", "f", CVAR_USERINFO | CVAR_ARCHIVE|CVAR_SAVEGAME|CVAR_NORESTART );
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_SAVEGAME|CVAR_NORESTART);

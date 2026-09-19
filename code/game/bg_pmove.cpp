@@ -141,6 +141,7 @@ extern qboolean		player_locked;
 extern qboolean		MatrixMode;
 qboolean		waterForceJump;
 extern cvar_t	*g_timescale;
+extern cvar_t	*g_jumpHeightMultiplier;
 extern cvar_t	*g_speederControlScheme;
 extern cvar_t	*d_slowmodeath;
 extern cvar_t	*g_debugMelee;
@@ -205,6 +206,32 @@ extern qboolean G_ControlledByPlayer( gentity_t *self );
 qboolean PM_ControlledByPlayer( void )
 {
 	return G_ControlledByPlayer( pm->gent );
+}
+
+float G_PlayerJumpHeightMultiplier( gentity_t *ent )
+{
+	if ( ent && ent->s.number >= MAX_CLIENTS && !G_ControlledByPlayer( ent ) )
+	{
+		return 1.0f;
+	}
+
+	if ( !g_jumpHeightMultiplier )
+	{
+		return 1.0f;
+	}
+
+	return g_jumpHeightMultiplier->value > 0.0f ? g_jumpHeightMultiplier->value : 0.0f;
+}
+
+float G_PlayerJumpVelocity( gentity_t *ent, float velocity )
+{
+	// Jump height is proportional to the square of the launch velocity.
+	return velocity * sqrtf( G_PlayerJumpHeightMultiplier( ent ) );
+}
+
+static float PM_ForceJumpHeight( int level )
+{
+	return forceJumpHeight[level] * G_PlayerJumpHeightMultiplier( pm->gent );
 }
 
 qboolean BG_UnrestrainedPitchRoll( playerState_t *ps, Vehicle_t *pVeh )
@@ -1233,14 +1260,14 @@ static qboolean PM_CheckJump( void )
 				*/
 				float curHeight = pm->ps->origin[2] - pm->ps->forceJumpZStart;
 				//check for max force jump level and cap off & cut z vel
-				if ( ( curHeight<=forceJumpHeight[0] ||//still below minimum jump height
+				if ( ( curHeight<=PM_ForceJumpHeight( 0 ) ||//still below minimum jump height
 						(pm->ps->forcePower&&pm->cmd.upmove>=10) ) &&////still have force power available and still trying to jump up
-					curHeight < forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]] )//still below maximum jump height
+					curHeight < PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] ) )//still below maximum jump height
 				{//can still go up
 					//FIXME: after a certain amount of time of held jump, play force jump sound and flip if a dir is being held
 					//FIXME: if hit a wall... should we cut velocity or allow them to slide up it?
 					//FIXME: constantly drain force power at a rate by which the usage for maximum height would use up the full cost of force jump
-					if ( curHeight > forceJumpHeight[0] )
+					if ( curHeight > PM_ForceJumpHeight( 0 ) )
 					{//passed normal jump height  *2?
 						if ( !(pm->ps->forcePowersActive&(1<<FP_LEVITATION)) )//haven't started forcejump yet
 						{
@@ -1393,16 +1420,16 @@ static qboolean PM_CheckJump( void )
 					}
 
 					//need to scale this down, start with height velocity (based on max force jump height) and scale down to regular jump vel
-					pm->ps->velocity[2] = (forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]]-curHeight)/forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]]*forceJumpStrength[pm->ps->forcePowerLevel[FP_LEVITATION]];//JUMP_VELOCITY;
+					pm->ps->velocity[2] = (PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] )-curHeight)/PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] )*forceJumpStrength[pm->ps->forcePowerLevel[FP_LEVITATION]];//JUMP_VELOCITY;
 					pm->ps->velocity[2] /= 10;
-					pm->ps->velocity[2] += JUMP_VELOCITY;
+					pm->ps->velocity[2] += G_PlayerJumpVelocity( pm->gent, JUMP_VELOCITY );
 					pm->ps->pm_flags |= PMF_JUMP_HELD;
 				}
-				else if ( curHeight > forceJumpHeight[0] && curHeight < forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]] - forceJumpHeight[0] )
+				else if ( curHeight > PM_ForceJumpHeight( 0 ) && curHeight < PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] ) - PM_ForceJumpHeight( 0 ) )
 				{//still have some headroom, don't totally stop it
-					if ( pm->ps->velocity[2] > JUMP_VELOCITY )
+					if ( pm->ps->velocity[2] > G_PlayerJumpVelocity( pm->gent, JUMP_VELOCITY ) )
 					{
-						pm->ps->velocity[2] = JUMP_VELOCITY;
+						pm->ps->velocity[2] = G_PlayerJumpVelocity( pm->gent, JUMP_VELOCITY );
 					}
 				}
 				else
@@ -1669,7 +1696,7 @@ static qboolean PM_CheckJump( void )
 					if ( !(pm->ps->saber[0].saberFlags&SFL_NO_FLIPS)
 						&& (!pm->ps->dualSabers || !(pm->ps->saber[1].saberFlags&SFL_NO_FLIPS)) )
 					{//okay to do backstabs with this saber
-						vertPush = JUMP_VELOCITY;
+						vertPush = G_PlayerJumpVelocity( pm->gent, JUMP_VELOCITY );
 						if ( pm->gent->client && pm->gent->client->NPC_class == CLASS_ALORA && !Q_irand( 0, 2 ) )
 						{
 							anim = BOTH_ALORA_FLIP_B;
@@ -2284,7 +2311,7 @@ static qboolean PM_CheckJump( void )
 					&& (!(pm->ps->pm_flags&PMF_JUMPING)//not jumping
 						|| ( (level.time-pm->ps->lastOnGround) > G_SpecialMoveTimeMargin( 250 ) //wait briefly after a jump
 							 &&( g_debugMelee->integer//if you know kung fu, no height cap on wall-grab-jumps
-								|| ((pm->ps->origin[2]-pm->ps->forceJumpZStart) < (forceJumpHeightMax[FORCE_LEVEL_3]-(G_ForceWallJumpStrength()/2.0f))) )//can fit at least one more wall jump in (yes, using "magic numbers"... for now)
+								|| ((pm->ps->origin[2]-pm->ps->forceJumpZStart) < (forceJumpHeightMax[FORCE_LEVEL_3] * G_PlayerJumpHeightMultiplier( pm->gent )-(G_ForceWallJumpStrength()/2.0f))) )//can fit at least one more wall jump in (yes, using "magic numbers"... for now)
 							)
 						)
 					//&& (pm->ps->legsAnim == BOTH_JUMP1 || pm->ps->legsAnim == BOTH_INAIR1 ) )//not in a flip or spin or anything
@@ -2423,7 +2450,7 @@ static qboolean PM_CheckJump( void )
 		}
 		*/
 
-		pm->ps->velocity[2] = JUMP_VELOCITY;
+		pm->ps->velocity[2] = G_PlayerJumpVelocity( pm->gent, JUMP_VELOCITY );
 		pm->ps->forceJumpZStart = pm->ps->origin[2];//so we don't take damage if we land at same height
 		pm->ps->pm_flags |= PMF_JUMPING;
 	}
@@ -3002,7 +3029,7 @@ static void PM_AirMove( void ) {
 		&& pm->ps->velocity[2] > 0 )
 	{//I am force jumping and I'm not holding the button anymore
 		float curHeight = pm->ps->origin[2] - pm->ps->forceJumpZStart + (pm->ps->velocity[2]*pml.frametime);
-		float maxJumpHeight = forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]];
+		float maxJumpHeight = PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] );
 		if ( curHeight >= maxJumpHeight )
 		{//reached top, cut velocity
 			pm->ps->velocity[2] = 0;
@@ -4043,12 +4070,12 @@ static void PM_CrashLand( void )
 			else
 			{//take off some of it, at least
 				delta = (pm->ps->jumpZStart-pm->ps->origin[2]);
-				float dropAllow = forceJumpHeight[pm->ps->forcePowerLevel[FP_LEVITATION]];
+				float dropAllow = PM_ForceJumpHeight( pm->ps->forcePowerLevel[FP_LEVITATION] );
 				if ( dropAllow < 128 )
 				{//always allow a drop from 128, at least
 					dropAllow = 128;
 				}
-				if ( delta > forceJumpHeight[FORCE_LEVEL_1] )
+				if ( delta > PM_ForceJumpHeight( FORCE_LEVEL_1 ) )
 				{//will have to use force jump ability to absorb some of it
 					forceLanding = qtrue;//absorbed some - just to force the correct animation to play below
 				}
@@ -9149,7 +9176,7 @@ qboolean PM_CanDoDualDoubleAttacks( void )
 
 void PM_SetJumped( float height, qboolean force )
 {
-	pm->ps->velocity[2] = height;
+	pm->ps->velocity[2] = G_PlayerJumpVelocity( pm->gent, height );
 	pml.groundPlane = qfalse;
 	pml.walking = qfalse;
 	pm->ps->groundEntityNum = ENTITYNUM_NONE;
