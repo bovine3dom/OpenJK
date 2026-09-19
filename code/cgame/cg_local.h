@@ -685,6 +685,8 @@ extern	vmCvar_t		cg_smoothCamera;
 extern	vmCvar_t		cg_speedTrail;
 extern	vmCvar_t		cg_fovViewmodel;
 extern	vmCvar_t		cg_fovViewmodelAdjust;
+extern	vmCvar_t		cg_firstPersonKickPitch;
+extern	vmCvar_t		cg_firstPersonKickRoll;
 
 extern	vmCvar_t		cg_scaleVehicleSensitivity;
 
