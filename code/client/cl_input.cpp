@@ -1082,6 +1082,8 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-force_grip", IN_Button6Up);
 	Cmd_AddCommand ("+altattack", IN_Button7Down);//altattack
 	Cmd_AddCommand ("-altattack", IN_Button7Up);
+	Cmd_AddCommand ("+kick", IN_Button9Down);
+	Cmd_AddCommand ("-kick", IN_Button9Up);
 #ifndef JK2_MODE
 	Cmd_AddCommand ("+forcefocus", IN_Button8Down);//special saber attacks
 	Cmd_AddCommand ("-forcefocus", IN_Button8Up);

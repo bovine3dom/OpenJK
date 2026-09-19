@@ -13464,6 +13464,11 @@ static void PM_Weapon( void )
 		}
 	}
 
+	if ( PM_KickingAnim( pm->ps->legsAnim ) )
+	{
+		return;
+	}
+
 	// check for weapon change
 	// can't change if weapon is firing, but can change again if lowering or raising
 	if ( (pm->ps->weaponTime <= 0 || pm->ps->weaponstate != WEAPON_FIRING)  && pm->ps->weaponstate != WEAPON_CHARGING_ALT && pm->ps->weaponstate != WEAPON_CHARGING) {
@@ -14745,6 +14750,33 @@ void PM_VehForcedTurning( gentity_t *veh )
 	//PM_SetPMViewAngle(pm->ps, pm->ps->viewangles, &pm->cmd);
 	SetClientViewAngle(pm->gent, pm->ps->viewangles);
 }
+
+static qboolean PM_TryKick( void )
+{
+	if ( !(pm->cmd.buttons & BUTTON_KICK) || (pm->ps->pm_flags & PMF_KICK_HELD) )
+	{
+		return qfalse;
+	}
+	if ( pm->ps->clientNum >= MAX_CLIENTS || pm->ps->pm_type != PM_NORMAL ||
+		pm->ps->weapon == WP_NONE || pm->ps->weapon == WP_SABER ||
+		pm->ps->groundEntityNum == ENTITYNUM_NONE || pm->waterlevel > 1 ||
+		(pm->ps->pm_flags & PMF_DUCKED) || pm->cmd.upmove < 0 ||
+		PM_InKnockDown( pm->ps ) || PM_InRoll( pm->ps ) || PM_RidingVehicle() ||
+		pm->ps->weaponstate == WEAPON_DROPPING || pm->ps->weaponstate == WEAPON_RAISING ||
+		pm->ps->weaponstate == WEAPON_CHARGING || pm->ps->weaponstate == WEAPON_CHARGING_ALT ||
+		(PM_KickingAnim( pm->ps->legsAnim ) && pm->ps->legsAnimTimer > 0) )
+	{
+		return qfalse;
+	}
+
+	pm->ps->pm_flags |= PMF_KICK_HELD;
+	PM_SetAnim( pm, SETANIM_LEGS, BOTH_A7_KICK_F,
+		SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 100 );
+	pm->ps->weaponTime = 0;
+	pm->ps->weaponstate = WEAPON_IDLE;
+	return qtrue;
+}
+
 /*
 ================
 Pmove
@@ -14773,6 +14805,11 @@ void Pmove( pmove_t *pmove )
 	// In certain situations, we may want to control which attack buttons are pressed and what kind of functionality
 	//	is attached to them
 	PM_AdjustAttackStates( pm );
+
+	if ( !(pm->cmd.buttons & BUTTON_KICK) )
+	{
+		pm->ps->pm_flags &= ~PMF_KICK_HELD;
+	}
 
 	// clear the respawned flag if attack and use are cleared
 	if ( pm->ps->stats[STAT_HEALTH] > 0 &&
@@ -14912,6 +14949,13 @@ void Pmove( pmove_t *pmove )
 	if ( Flying == FLY_HOVER )
 	{//never stick to the ground
 		PM_HoverTrace();
+	}
+
+	if ( PM_TryKick() || PM_KickingAnim( pm->ps->legsAnim ) )
+	{
+		pm->cmd.forwardmove = 0;
+		pm->cmd.rightmove = 0;
+		pm->cmd.upmove = 0;
 	}
 
 	if ( pm->ps->pm_type == PM_DEAD ) {

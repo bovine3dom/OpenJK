@@ -121,8 +121,9 @@ typedef enum {
 #define	PMF_ATTACK_HELD		(1<<15)//32768	// Holding down the attack button
 #define	PMF_ALT_ATTACK_HELD	(1<<16)//65536	// Holding down the alt-attack button
 #define PMF_BUMPED			(1<<17)//131072	// Bumped into something
-#define PMF_FORCE_FOCUS_HELD	(1<<18)//262144	// Holding down the saberthrow/kick button
+#define PMF_FORCE_FOCUS_HELD	(1<<18)//262144	// Holding down the saberthrow/special-attack button
 #define PMF_FIX_MINS		(1<<19)//524288	// Mins raised for dual forward jump, fix them
+#define PMF_KICK_HELD		(1<<20)//1048576	// Holding down the kick button
 #define	PMF_ALL_TIMES	(PMF_TIME_WATERJUMP|PMF_TIME_LAND|PMF_TIME_KNOCKBACK|PMF_TIME_NOFRICTION)
 
 #define	MAXTOUCH	32
