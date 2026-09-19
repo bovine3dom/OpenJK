@@ -418,3 +418,8 @@ rough notes / todo
 	- get a better kick sound (grunt?)
 	- give kick more of an up impulse and much less of a back impulse
 	- work out what the kick pitch and roll settings are for?
+	- apply some tiny amount of smoothing to the camera / reticule
+	- when you die you have no head
+	- arma style 'high ready' animation that is toggleabl that is toggleabl that is toggleabl that is toggleable?
+- fix disruptor rifle aspect ratio
+- dismemberment for high damage weapons like the flechette rifle? explosions?
