@@ -6832,6 +6832,28 @@ static qboolean firstPersonBodyNeckValid = qfalse;
 static qboolean firstPersonBodyWeaponHandValid = qfalse;
 static qboolean firstPersonBodyWeaponMuzzleValid = qfalse;
 
+static int CG_FirstPersonBodyWeaponAnim( int weapon )
+{
+	switch ( weapon )
+	{
+	case WP_BLASTER_PISTOL:
+	case WP_BRYAR_PISTOL:
+		return TORSO_WEAPONREADY2;
+	case WP_DISRUPTOR:
+	case WP_TUSKEN_RIFLE:
+		return TORSO_WEAPONREADY4;
+	case WP_THERMAL:
+		return TORSO_WEAPONREADY10;
+	case WP_NONE:
+	case WP_SABER:
+	case WP_MELEE:
+	case WP_TUSKEN_STAFF:
+		return -1;
+	default:
+		return TORSO_WEAPONREADY3;
+	}
+}
+
 static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity_t *cent )
 {
 	if ( firstPersonBodyNeckTime != cg.time )
@@ -6861,6 +6883,16 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	{
 		gi.G2API_SetSurfaceOnOff( &firstPersonGhoul2[cent->gent->playerModel], headSurface,
 			G2SURFACEFLAG_OFF | G2SURFACEFLAG_NODESCENDANTS );
+	}
+
+	const int readyAnim = CG_FirstPersonBodyWeaponAnim( cent->currentState.weapon );
+	if ( readyAnim >= 0 && cent->gent->lowerLumbarBone >= 0 && cent->gent->client )
+	{
+		const animation_t &anim = level.knownAnimFileSets[
+			cent->gent->client->clientInfo.animFileIndex].animations[readyAnim];
+		gi.G2API_SetBoneAnimIndex( &firstPersonGhoul2[cent->gent->playerModel],
+			cent->gent->lowerLumbarBone, anim.firstFrame, anim.firstFrame + anim.numFrames,
+			BONE_ANIM_OVERRIDE_FREEZE, 1.0f, cg.time, anim.firstFrame, 0 );
 	}
 
 	refEntity_t viewModel = *playerModel;

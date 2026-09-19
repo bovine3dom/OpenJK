@@ -2305,18 +2305,13 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 		cgi_CM_SnapPVS( cg.refdef.vieworg, cg.snap->areamask );
 	}
 
-	// Draw the high-detail weapon at the body's hand when body mode is active.
-	const qboolean firstPersonBodyWeapon =
-		( ( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
-		  !cg.renderingThirdPerson && !cg_thirdPerson.integer &&
-		  cg.predicted_player_state.weapon != WP_SABER &&
-		  cg.predicted_player_state.weapon != WP_MELEE ) ? qtrue : qfalse;
 	if ( !in_camera
 		&& !cg_pano.integer
 		&& cg.snap->ps.weapon != WP_SABER
 		&& ( cg.snap->ps.viewEntity == 0 || cg.snap->ps.viewEntity >= ENTITYNUM_WORLD ) )
 	{
-		CG_AddViewWeapon( &cg.predicted_player_state, firstPersonBodyWeapon );
+		// Keep the normal first-person aim presentation over the full body.
+		CG_AddViewWeapon( &cg.predicted_player_state, qfalse );
 	}
 	else if( cg.snap->ps.viewEntity != 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{

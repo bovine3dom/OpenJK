@@ -57,7 +57,7 @@ Open work:
 
 - [x] Flip the mirrored body-mode weapon in place without changing its world
   position.
-- [ ] Replace the hip-fire weapon pose with a first-person aiming or ready pose.
+- [x] Replace the hip-fire weapon pose with a first-person aiming pose.
 - [ ] Tune camera and reticle smoothing, kick camera pitch and roll, death
   presentation, and an optional toggleable ready pose vs hip firing.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
@@ -331,7 +331,7 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
 - [x] Add configurable body neck and height offsets.
 - [x] Add the initial kick camera response and kick sound.
-- [ ] Replace the third-person hip-fire pose with a view-aligned aim or ready
+- [x] Replace the third-person hip-fire pose with a first-person weapon-ready
   animation.
 - [ ] Decide whether the weapon should remain body-driven during aiming or use
   a controlled first-person hand pose.
