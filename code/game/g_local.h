@@ -368,6 +368,8 @@ extern	game_export_t	globals;
 
 extern	cvar_t	*g_gravity;
 extern	cvar_t	*g_jumpHeightMultiplier;
+extern	cvar_t	*g_kickUpImpulse;
+extern	cvar_t	*g_kickBackImpulse;
 extern	cvar_t	*g_speed;
 extern	cvar_t	*g_cheats;
 extern	cvar_t	*g_developer;

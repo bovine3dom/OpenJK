@@ -87,10 +87,8 @@ controls. The current controls are:
 - `cg_firstPersonBodyNeckOffset`: neck-axis offset.
 - `cg_firstPersonBodyHeightOffset`: world height offset.
 
-The high-detail weapon remains visible in body mode. The code first anchors it to
-the animated hand, then aligns its muzzle and barrels to the animated world
-weapon muzzle. This prevents the model-origin offset from moving the weapon away
-from the hand. Projectile and reticle muzzle data use the same live world muzzle.
+The high-detail weapon remains visible in body mode. The first-person ready pose
+uses the standard first-person weapon transform.
 
 The saber still uses its special player-model path. A general first-person saber
 presentation remains open.
@@ -133,7 +131,8 @@ playtesting.
 - [x] Add Force Push-scaled upward impulse.
 - [x] Make each Force Push level produce a visible increase in kick lift.
 - [x] Remove the obsolete kick camera pitch and roll settings.
-- [ ] Make upwards impulse tuneable ingame, and the backwards one too, separately.
+- [x] Make upward and backward impulse tunable separately with
+  `g_kickUpImpulse` and `g_kickBackImpulse`.
 - [ ] Test demos, save games, prediction, and multiplayer behavior.
 - [ ] Tune damage, push, range, cooldown, and animation timing.
 - [ ] Add air and directional kicks if wanted.
