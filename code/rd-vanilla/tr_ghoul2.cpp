@@ -3078,16 +3078,19 @@ static bool R_DrawGhoulGpu(CRenderableSurface *surf)
 {
 	const mdxmSurface_t *surface = surf->surfaceData;
 	if (!r_g2GpuSkinning->integer || r_externalGLSL->integer) return false;
+	const int slot = backEndData->currentFrame - backEndData->frames;
 #ifdef _G2_GORE
 	if (surf->alternateTex || surf->goreChain) { ++g2GpuGoreFallbacks; return false; }
 #endif
+	// GPU projection shadows pay off only after the scene becomes a crowd.
+	const bool projectionShadow = tess.shader == tr.projectionShadowShader &&
+		g2GpuPaletteFrames[slot] == backEndData->realFrameNumber &&
+		g2GpuPalettePoseCount[slot] > G2_PALETTE_CACHE_MIN_POSES;
 	if (surf->genShadows || tess.shader == tr.shadowShader ||
-		tess.shader->numDeforms || tess.shader->sort > SS_OPAQUE || tess.shader->useDistortion ||
+		(!projectionShadow && (tess.shader->numDeforms || tess.shader->sort > SS_OPAQUE)) || tess.shader->useDistortion ||
 		(tess.shader->vertexAttribs & ATTR_LIGHTDIRECTION) || r_shadows->integer == 4 ||
 		surface->numBoneReferences <= 0 || surface->numBoneReferences > MAX_G2_BONES ||
 		(backEnd.currentEntity->e.renderfx & (RF_DISINTEGRATE1 | RF_DISINTEGRATE2 | RF_DISTORTION))) return false;
-	auto *frame = backEndData->currentFrame;
-	const int slot = frame - backEndData->frames;
 	if (g2GpuPaletteFrames[slot] != backEndData->realFrameNumber)
 	{
 		g2GpuPaletteFrames[slot] = backEndData->realFrameNumber;
