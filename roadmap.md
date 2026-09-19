@@ -406,5 +406,10 @@ rough notes / todo
 	- cairn bay jump from shuttle up to platform, very hard to make
 	- mind trick on the guy behind the glass on cairn_assembly
 	- cairn_assembly, blow up the pipes to ... blow up the robot to blow a hole in the wall !? maybe let's have the reticule go yellow when you're aiming at something that can be destroyed
-- game doesn't really tell you about new force powers? highlight them somehow
+	- cairn_reactor, the jumping between the platforms getting shot by missiles, and before that, jumping between platforms timed with laser beams
+- game doesn't really tell you about new force powers? highlight them somehow?
 - [x] Use live launcher note data to animate a five-member pixel-art band.
+- fix JO initial loading screen before the level loading screen, it says jedi academy. alternatively replace that with our own openjedvibe
+- not convinced ragdolling jolt enemies take fall damage, even from crazy heights, or into walls
+- in JO, at least, we don't seem to be able to switch between lightsaber styles - check JA too. it's bound to mouse3
+- disable 'switch to better weapon' by default?
