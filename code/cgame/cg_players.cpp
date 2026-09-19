@@ -6818,6 +6818,30 @@ extern qboolean G_ControlledByPlayer( gentity_t *self );
 extern qboolean G_RagDoll(gentity_t *ent, vec3_t forcedAngles);
 int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
 
+/*
+ * Render the local player near the camera so the first-person body path can
+ * be inspected without changing gameplay or the normal world model.
+ */
+static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const centity_t *cent )
+{
+	if ( !cg_firstPersonBodyTest.integer || cg.renderingThirdPerson ||
+		cent->currentState.number != cg.snap->ps.clientNum )
+	{
+		return;
+	}
+
+	refEntity_t viewModel = *playerModel;
+	viewModel.renderfx = RF_FIRST_PERSON | RF_DEPTHHACK | RF_NOSHADOW | RF_LIGHTING_ORIGIN;
+
+	// Use a fixed distance for this experiment. Production placement will
+	// follow the player origin and isolate the visible body surfaces.
+	VectorMA( cg.refdef.vieworg, 100.0f, cg.refdef.viewaxis[0], viewModel.origin );
+	VectorCopy( viewModel.origin, viewModel.oldorigin );
+	VectorCopy( viewModel.origin, viewModel.lightingOrigin );
+
+	cgi_R_AddRefEntityToScene( &viewModel );
+}
+
 void CG_Player( centity_t *cent ) {
 	clientInfo_t	*ci;
 	qboolean		shadow, staticScale = qfalse;
@@ -7243,6 +7267,7 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 			}
 		}
 		CG_AddRefEntityWithPowerups( &ent, cent->currentState.powerups, cent );
+		CG_AddFirstPersonBodyTest( &ent, cent );
 		VectorCopy( tempAngles, cent->renderAngles );
 
 		//Initialize all these to *some* valid data

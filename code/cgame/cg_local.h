@@ -624,6 +624,7 @@ extern	vmCvar_t		cg_boltFlyby;
 extern	vmCvar_t		cg_boltFlybyVolume;
 extern	vmCvar_t		cg_addMarks;
 extern	vmCvar_t		cg_drawGun;
+extern	vmCvar_t	cg_firstPersonBodyTest;
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 extern vmCvar_t cg_hudReveal;
 void CG_HudStatus_f();
