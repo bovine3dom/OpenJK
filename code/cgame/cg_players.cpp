@@ -6822,8 +6822,18 @@ int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
  * Render the local player in the first-person view when looking down. This is
  * cosmetic only; the normal world model remains available to mirrors.
  */
+static vec3_t firstPersonBodyNeckOrigin;
+static int firstPersonBodyNeckTime = -1;
+static qboolean firstPersonBodyNeckValid = qfalse;
+
 static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity_t *cent )
 {
+	if ( firstPersonBodyNeckTime != cg.time )
+	{
+		firstPersonBodyNeckTime = cg.time;
+		firstPersonBodyNeckValid = qfalse;
+	}
+
 	if ( !( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) ||
 		( cg.renderingThirdPerson && cg_thirdPerson.integer ) ||
 		cent->currentState.number != cg.snap->ps.clientNum || !playerModel->ghoul2 ||
@@ -6837,6 +6847,22 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	// other views that render the normal player model.
 	static CGhoul2Info_v firstPersonGhoul2;
 	firstPersonGhoul2.DeepCopy( *playerModel->ghoul2 );
+
+	// The body uses the world weapon model, while the view weapon below uses
+	// the higher-detail first-person model. Keep the saber attached because it
+	// is rendered as part of the first-person body.
+	if ( cent->currentState.weapon != WP_SABER )
+	{
+		for ( int i = 0; i < MAX_INHAND_WEAPONS; ++i )
+		{
+			const int weaponModel = cent->gent->weaponModel[i];
+			if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
+				weaponModel != cent->gent->playerModel )
+			{
+				gi.G2API_RemoveGhoul2Model( firstPersonGhoul2, weaponModel );
+			}
+		}
+	}
 
 	char headSurface[MAX_QPATH];
 	if ( G_GetRootSurfNameWithVariant( cent->gent, "head", headSurface, sizeof(headSurface) ) )
@@ -6858,41 +6884,42 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	VectorCopy( viewModel.origin, viewModel.oldorigin );
 	VectorCopy( viewModel.origin, viewModel.lightingOrigin );
 
+	if ( cent->gent->cervicalBolt >= 0 )
+	{
+		mdxaBone_t boltMatrix;
+		if ( gi.G2API_GetBoltMatrix( firstPersonGhoul2, cent->gent->playerModel,
+			cent->gent->cervicalBolt, &boltMatrix, vec3_origin, vec3_origin, cg.time,
+			cgs.model_draw, cent->currentState.modelScale ) )
+		{
+			vec3_t localOrigin, localUp, worldUp;
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, localOrigin );
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, localUp );
+			VectorCopy( viewModel.origin, firstPersonBodyNeckOrigin );
+			VectorClear( worldUp );
+			for ( int i = 0; i < 3; ++i )
+			{
+				VectorMA( firstPersonBodyNeckOrigin, localOrigin[i], viewModel.axis[i],
+					firstPersonBodyNeckOrigin );
+				VectorMA( worldUp, localUp[i], viewModel.axis[i], worldUp );
+			}
+			VectorNormalize( worldUp );
+			VectorMA( firstPersonBodyNeckOrigin, cg_firstPersonBodyNeckOffset.value,
+				worldUp, firstPersonBodyNeckOrigin );
+			firstPersonBodyNeckValid = qtrue;
+		}
+	}
+
 	cgi_R_AddRefEntityToScene( &viewModel );
 }
 
 qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin )
 {
-	const centity_t *cent = &cg_entities[cg.snap->ps.clientNum];
-	if ( cent->currentState.number != cg.snap->ps.clientNum || !cent->gent ||
-		!cent->gent->client || !cent->gent->ghoul2.IsValid() ||
-		cent->gent->playerModel < 0 || cent->gent->playerModel >= cent->gent->ghoul2.size() ||
-		cent->gent->cervicalBolt < 0 )
+	if ( !firstPersonBodyNeckValid || firstPersonBodyNeckTime != cg.time )
 	{
 		return qfalse;
 	}
 
-	vec3_t modelOrigin;
-	VectorCopy( cent->lerpOrigin, modelOrigin );
-	if ( cent->currentState.modelScale[2] && cent->currentState.modelScale[2] != 1.0f )
-	{
-		modelOrigin[2] += 24 * (cent->currentState.modelScale[2] - 1);
-	}
-
-	mdxaBone_t boltMatrix;
-	if ( !gi.G2API_GetBoltMatrix( cent->gent->ghoul2, cent->gent->playerModel,
-		cent->gent->cervicalBolt, &boltMatrix, cent->renderAngles, modelOrigin,
-		cg.time, cgs.model_draw, cent->currentState.modelScale ) )
-	{
-		return qfalse;
-	}
-
-	vec3_t boltOrigin, neckUp;
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, boltOrigin );
-	gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, neckUp );
-	// The cervical bolt is the neck's rotation pivot. Sample a point above it
-	// so neck pitch also produces camera movement instead of only rotation.
-	VectorMA( boltOrigin, cg_firstPersonBodyNeckOffset.value, neckUp, origin );
+	VectorCopy( firstPersonBodyNeckOrigin, origin );
 	return qtrue;
 }
 
