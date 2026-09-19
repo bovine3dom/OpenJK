@@ -34,7 +34,7 @@ run=$(mktemp -d "$output/$map.XXXXXXXX")
 printf 'Smoke-test output: %s\n' "$run"
 
 # A fresh profile prevents a stale screenshot from passing a failed run.
-command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run -a -s "-screen 0 ${display}x24" \
+command=(timeout --kill-after=5s "${timeout_seconds}s" xvfb-run --auto-display -s "-screen 0 ${display}x24" \
     env LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS="${LP_NUM_THREADS:-1}" SDL_AUDIODRIVER=dummy \
     OJK_PROFILE="$run/profile" bash "$package/launch-sp.sh" "$assets" \
     --campaign "$campaign" \
