@@ -55,12 +55,13 @@ console without changing the model or the kick trace.
 
 Open work:
 
+- [ ] Critical bug: weapon model is mirrored but in the correct position. This means that the UNMODELLED side of the weapon is on display, because it is only supposed to be viewed from its left! It needs to be flipped 'in place', changing only the appearance of the model, and not where it is located in the world.
 - [ ] Replace the hip-fire weapon pose with a first-person aiming or ready pose.
-- [ ] Decide how first-person lightsabers should render.
 - [ ] Tune camera and reticle smoothing, kick camera pitch and roll, death
-  presentation, and an optional toggleable high-ready pose.
+  presentation, and an optional toggleable ready pose vs hip firing.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
   mirrors, water, weapon changes, and rapid movement.
+- [ ] Decide how first-person lightsabers should render.
 
 ## Findings from other games and engines
 

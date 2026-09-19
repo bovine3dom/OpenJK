@@ -132,11 +132,12 @@ playtesting.
 - [x] Add the kick event and start sound.
 - [x] Add the initial camera response.
 - [x] Add Force Push-scaled upward impulse.
+- [ ] Fix bug: force push does _not_ appear to scale the impulse ingame.
+- [ ] Remove the obsolete kick camera pitch and roll settings.
+- [ ] Make upwards impulse tuneable ingame, and the backwards one too, separately.
+- [ ] Test demos, save games, prediction, and multiplayer behavior.
 - [ ] Tune damage, push, range, cooldown, and animation timing.
 - [ ] Add air and directional kicks if wanted.
-- [ ] Add camera and reticle smoothing.
-- [ ] Work out the kick camera pitch and roll settings.
-- [ ] Test demos, save games, prediction, and multiplayer behavior.
 
 ## Main risks
 
