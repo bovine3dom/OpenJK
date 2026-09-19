@@ -1086,6 +1086,16 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 	vec3_t bodyWeaponHandOrigin, bodyWeaponHandAxis[3];
 	const qboolean useBodyWeapon = ( bodyWeapon &&
 		CG_GetFirstPersonBodyWeaponHand( bodyWeaponHandOrigin, bodyWeaponHandAxis ) ) ? qtrue : qfalse;
+	vec3_t bodyWeaponMuzzleOrigin, bodyWeaponMuzzleDir, bodyWeaponRenderOffset;
+	const qboolean bodyWeaponMuzzleValid = ( useBodyWeapon && cent->gent && cent->gent->client &&
+		cent->gent->client->renderInfo.mPCalcTime >= cg.time - FRAMETIME*2 &&
+		!VectorCompare( cent->gent->client->renderInfo.muzzlePoint, vec3_origin ) ) ? qtrue : qfalse;
+	if ( bodyWeaponMuzzleValid )
+	{
+		VectorCopy( cent->gent->client->renderInfo.muzzlePoint, bodyWeaponMuzzleOrigin );
+		VectorCopy( cent->gent->client->renderInfo.muzzleDir, bodyWeaponMuzzleDir );
+	}
+	VectorClear( bodyWeaponRenderOffset );
 	vec3_t extraOffset;
 	extraOffset[0] = extraOffset[1] = extraOffset[2] = 0.0f;
 
@@ -1173,6 +1183,17 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 
 		AnglesToAxis( angles, gun.axis );
 		CG_PositionEntityOnTag( &gun, &hand, weapon->handsModel, "tag_weapon");
+		// The first-person hand model and the world weapon use different origins.
+		// Match their muzzle positions before drawing the high-detail model.
+		if ( bodyWeaponMuzzleValid )
+		{
+			refEntity_t muzzleProbe;
+			memset( &muzzleProbe, 0, sizeof( muzzleProbe ) );
+			muzzleProbe.hModel = gun.hModel;
+			CG_PositionEntityOnTag( &muzzleProbe, &gun, gun.hModel, "tag_flash" );
+			VectorSubtract( bodyWeaponMuzzleOrigin, muzzleProbe.origin, bodyWeaponRenderOffset );
+			VectorAdd( gun.origin, bodyWeaponRenderOffset, gun.origin );
+		}
 
 		// Keep the physical hand placement while retaining normal first-person
 		// weapon visibility when the body is between the camera and the weapon.
@@ -1253,6 +1274,10 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 			{
 				CG_PositionRotatedEntityOnTag( &barrel, &hand, weapon->handsModel, va("tag_barrel%d",i+1), NULL );
 			}
+			if ( bodyWeaponMuzzleValid )
+			{
+				VectorAdd( barrel.origin, bodyWeaponRenderOffset, barrel.origin );
+			}
 
 			if ( drawGun )
 			{
@@ -1264,6 +1289,11 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 
 		// Seems like we should always do this in case we have an animating muzzle flash....that way we can always store the correct muzzle dir, etc.
 		CG_PositionEntityOnTag( &flash, &gun, gun.hModel, "tag_flash");
+		if ( bodyWeaponMuzzleValid )
+		{
+			VectorCopy( bodyWeaponMuzzleOrigin, flash.origin );
+			VectorCopy( bodyWeaponMuzzleDir, flash.axis[0] );
+		}
 
 		CG_DoMuzzleFlash( cent, flash.origin, flash.axis[0], wData );
 
