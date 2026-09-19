@@ -14774,6 +14774,12 @@ static qboolean PM_TryKick( void )
 		SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 100 );
 	pm->ps->weaponTime = 0;
 	pm->ps->weaponstate = WEAPON_IDLE;
+
+	// Give the kick a small lift. Force Push upgrades make the lift stronger.
+	pm->ps->velocity[2] += 60.0f + 20.0f * pm->ps->forcePowerLevel[FP_PUSH];
+	pm->ps->groundEntityNum = ENTITYNUM_NONE;
+	pml.groundPlane = qfalse;
+	pml.walking = qfalse;
 	return qtrue;
 }
 
