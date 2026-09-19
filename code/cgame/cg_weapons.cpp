@@ -968,7 +968,7 @@ Add the weapon, and flash for the player's view
 extern int PM_TorsoAnimForFrame( gentity_t *ent, int torsoFrame );
 extern float CG_ForceSpeedFOV( void );
 
-void CG_AddViewWeapon( playerState_t *ps )
+void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 {
 	refEntity_t	hand;
 	refEntity_t	flash;
@@ -1083,6 +1083,9 @@ void CG_AddViewWeapon( playerState_t *ps )
 	// set up gun position
 	CG_CalculateWeaponPosition( hand.origin, angles );
 
+	vec3_t bodyWeaponHandOrigin, bodyWeaponHandAxis[3];
+	const qboolean useBodyWeapon = ( bodyWeapon &&
+		CG_GetFirstPersonBodyWeaponHand( bodyWeaponHandOrigin, bodyWeaponHandAxis ) ) ? qtrue : qfalse;
 	vec3_t extraOffset;
 	extraOffset[0] = extraOffset[1] = extraOffset[2] = 0.0f;
 
@@ -1093,17 +1096,23 @@ void CG_AddViewWeapon( playerState_t *ps )
 		extraOffset[2] = -6;
 	}
 
-	VectorMA( hand.origin, cg_gun_x.value+extraOffset[0], cg.refdef.viewaxis[0], hand.origin );
-	VectorMA( hand.origin, (cg_gun_y.value+leanOffset+extraOffset[1]), cg.refdef.viewaxis[1], hand.origin );
-	VectorMA( hand.origin, (cg_gun_z.value+fovOffset+extraOffset[2]), cg.refdef.viewaxis[2], hand.origin );
-	//VectorMA( hand.origin, 0, cg.refdef.viewaxis[0], hand.origin );
-	//VectorMA( hand.origin, (0+leanOffset), cg.refdef.viewaxis[1], hand.origin );
-	//VectorMA( hand.origin, (0+fovOffset), cg.refdef.viewaxis[2], hand.origin );
+	if ( useBodyWeapon )
+	{
+		VectorCopy( bodyWeaponHandOrigin, hand.origin );
+		for ( int i = 0; i < 3; ++i )
+		{
+			VectorCopy( bodyWeaponHandAxis[i], hand.axis[i] );
+		}
+	}
+	else
+	{
+		VectorMA( hand.origin, cg_gun_x.value+extraOffset[0], cg.refdef.viewaxis[0], hand.origin );
+		VectorMA( hand.origin, (cg_gun_y.value+leanOffset+extraOffset[1]), cg.refdef.viewaxis[1], hand.origin );
+		VectorMA( hand.origin, (cg_gun_z.value+fovOffset+extraOffset[2]), cg.refdef.viewaxis[2], hand.origin );
+		AnglesToAxis( angles, hand.axis );
+	}
 
-	AnglesToAxis( angles, hand.axis );
-
-
-	if ( cg_fovViewmodel.integer ) {
+	if ( cg_fovViewmodel.integer && !useBodyWeapon ) {
 		float fracDistFOV = tanf( cg.refdef.fov_x * ( M_PI/180 ) * 0.5f );
 		float fracWeapFOV = (1.0f / fracDistFOV) * tanf( actualFOV * (M_PI / 180) * 0.5f );
 		VectorScale( hand.axis[0], fracWeapFOV, hand.axis[0] );
@@ -1165,6 +1174,8 @@ void CG_AddViewWeapon( playerState_t *ps )
 		AnglesToAxis( angles, gun.axis );
 		CG_PositionEntityOnTag( &gun, &hand, weapon->handsModel, "tag_weapon");
 
+		// Keep the physical hand placement while retaining normal first-person
+		// weapon visibility when the body is between the camera and the weapon.
 		gun.renderfx = RF_DEPTHHACK | RF_FIRST_PERSON;
 
 	//---------

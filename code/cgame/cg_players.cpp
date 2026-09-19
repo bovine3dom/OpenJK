@@ -6823,8 +6823,11 @@ int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
  * cosmetic only; the normal world model remains available to mirrors.
  */
 static vec3_t firstPersonBodyNeckOrigin;
+static vec3_t firstPersonBodyWeaponHandOrigin;
+static vec3_t firstPersonBodyWeaponHandAxis[3];
 static int firstPersonBodyNeckTime = -1;
 static qboolean firstPersonBodyNeckValid = qfalse;
+static qboolean firstPersonBodyWeaponHandValid = qfalse;
 
 static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity_t *cent )
 {
@@ -6832,6 +6835,7 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	{
 		firstPersonBodyNeckTime = cg.time;
 		firstPersonBodyNeckValid = qfalse;
+		firstPersonBodyWeaponHandValid = qfalse;
 	}
 
 	if ( !( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) ||
@@ -6847,23 +6851,6 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	// other views that render the normal player model.
 	static CGhoul2Info_v firstPersonGhoul2;
 	firstPersonGhoul2.DeepCopy( *playerModel->ghoul2 );
-
-	// The body uses the world weapon model, while the view weapon below uses
-	// the higher-detail first-person model. Keep the saber attached because it
-	// is rendered as part of the first-person body.
-	if ( cent->currentState.weapon != WP_SABER )
-	{
-		for ( int i = 0; i < MAX_INHAND_WEAPONS; ++i )
-		{
-			const int weaponModel = cent->gent->weaponModel[i];
-			if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
-				weaponModel != cent->gent->playerModel &&
-				firstPersonGhoul2[weaponModel].mModelindex >= 0 )
-			{
-				gi.G2API_RemoveGhoul2Model( firstPersonGhoul2, weaponModel );
-			}
-		}
-	}
 
 	char headSurface[MAX_QPATH];
 	if ( G_GetRootSurfNameWithVariant( cent->gent, "head", headSurface, sizeof(headSurface) ) )
@@ -6884,6 +6871,61 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	VectorCopy( playerModel->origin, viewModel.origin );
 	VectorCopy( viewModel.origin, viewModel.oldorigin );
 	VectorCopy( viewModel.origin, viewModel.lightingOrigin );
+
+	if ( cent->gent->handRBolt >= 0 )
+	{
+		mdxaBone_t boltMatrix;
+		if ( gi.G2API_GetBoltMatrix( firstPersonGhoul2, cent->gent->playerModel,
+			cent->gent->handRBolt, &boltMatrix, vec3_origin, vec3_origin, cg.time,
+			cgs.model_draw,
+			cent->currentState.modelScale ) )
+		{
+			vec3_t localOrigin, localForward, localRight, localUp;
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, localOrigin );
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, localForward );
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_X, localRight );
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, localUp );
+
+			VectorCopy( viewModel.origin, firstPersonBodyWeaponHandOrigin );
+			for ( int i = 0; i < 3; ++i )
+			{
+				VectorMA( firstPersonBodyWeaponHandOrigin, localOrigin[i], viewModel.axis[i],
+					firstPersonBodyWeaponHandOrigin );
+			}
+
+			const vec3_t localAxes[3] = { { localForward[0], localForward[1], localForward[2] },
+				{ localRight[0], localRight[1], localRight[2] },
+				{ localUp[0], localUp[1], localUp[2] } };
+			for ( int axis = 0; axis < 3; ++axis )
+			{
+				VectorClear( firstPersonBodyWeaponHandAxis[axis] );
+				for ( int i = 0; i < 3; ++i )
+				{
+					VectorMA( firstPersonBodyWeaponHandAxis[axis], localAxes[axis][i],
+						viewModel.axis[i], firstPersonBodyWeaponHandAxis[axis] );
+				}
+				VectorNormalize( firstPersonBodyWeaponHandAxis[axis] );
+			}
+			firstPersonBodyWeaponHandValid = qtrue;
+		}
+	}
+
+	// The body uses the world weapon model, while the view weapon below uses
+	// the higher-detail first-person model. Keep the saber attached because it
+	// is rendered as part of the first-person body.
+	if ( cent->currentState.weapon != WP_SABER )
+	{
+		for ( int i = 0; i < MAX_INHAND_WEAPONS; ++i )
+		{
+			const int weaponModel = cent->gent->weaponModel[i];
+			if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
+				weaponModel != cent->gent->playerModel &&
+				firstPersonGhoul2[weaponModel].mModelindex >= 0 )
+			{
+				gi.G2API_RemoveGhoul2Model( firstPersonGhoul2, weaponModel );
+			}
+		}
+	}
 
 	if ( cent->gent->cervicalBolt >= 0 )
 	{
@@ -6921,6 +6963,21 @@ qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin )
 	}
 
 	VectorCopy( firstPersonBodyNeckOrigin, origin );
+	return qtrue;
+}
+
+qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] )
+{
+	if ( !firstPersonBodyWeaponHandValid || firstPersonBodyNeckTime != cg.time )
+	{
+		return qfalse;
+	}
+
+	VectorCopy( firstPersonBodyWeaponHandOrigin, origin );
+	for ( int i = 0; i < 3; ++i )
+	{
+		VectorCopy( firstPersonBodyWeaponHandAxis[i], axis[i] );
+	}
 	return qtrue;
 }
 

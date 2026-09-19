@@ -628,6 +628,7 @@ extern	vmCvar_t	cg_firstPersonBody;
 extern	vmCvar_t	cg_firstPersonBodyTest;
 extern	vmCvar_t	cg_firstPersonBodyNeckOffset;
 qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin );
+qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] );
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 extern vmCvar_t cg_hudReveal;
 void CG_HudStatus_f();
@@ -869,7 +870,7 @@ void CG_RegisterItemSounds( int itemNum );
 
 void CG_FireWeapon( centity_t *cent, qboolean alt_fire );
 
-void CG_AddViewWeapon (playerState_t *ps);
+void CG_AddViewWeapon (playerState_t *ps, qboolean bodyWeapon);
 void CG_DrawWeaponSelect( void );
 
 void CG_OutOfAmmoChange( void );	// should this be in pmove?
