@@ -3172,7 +3172,7 @@ struct G2Geometry
 	std::vector<int> usedBones;
 	std::vector<mdxmVertex_t> vertices;
 	std::vector<uint32_t> normals, fallbackTangents, tangents;
-	bool ready = false, tangentsReady = false;
+	bool ready = false, normalsReady = false, tangentsReady = false;
 	size_t bytes = 0;
 	unsigned frame = 0;
 };
@@ -3324,7 +3324,7 @@ static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, con
 	const mdxaBone_t *pose, vec3_t position, vec3_t normal)
 {
 	VectorClear(position);
-	VectorClear(normal);
+	if (normal) VectorClear(normal);
 	const int numWeights = G2_GetVertWeights(vertex);
 	float totalWeight = 0.0f;
 	for (int k = 0; k < numWeights; ++k)
@@ -3339,16 +3339,17 @@ static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, con
 		for (int axis = 0; axis < 3; ++axis)
 		{
 			position[axis] += weight * (DotProduct(bone.matrix[axis], vertex->vertCoords) + bone.matrix[axis][3]);
-			normal[axis] += weight * DotProduct(bone.matrix[axis], vertex->normal);
+			if (normal) normal[axis] += weight * DotProduct(bone.matrix[axis], vertex->normal);
 		}
 	}
-	if (!VectorNormalize(normal)) VectorSet(normal, 0.0f, 0.0f, 1.0f);
+	if (normal && !VectorNormalize(normal)) VectorSet(normal, 0.0f, 0.0f, 1.0f);
 }
 
 static G2Geometry *R_GhoulGeometry(CRenderableSurface *surf, const mdxmVertex_t *vertices, const int *references)
 {
 	if (!r_g2GeometryCache->integer) return nullptr;
 	const mdxmSurface_t *surface = surf->surfaceData;
+	const bool positionsOnly = tess.shader == tr.projectionShadowShader && !r_g2GeometryValidate->integer;
 	const G2GeometryKey key = {surface, surf->boneCache};
 	if (g2Geometry.find(key) == g2Geometry.end())
 	{
@@ -3395,18 +3396,23 @@ static G2Geometry *R_GhoulGeometry(CRenderableSurface *surf, const mdxmVertex_t 
 		same = same && !memcmp(&entry.bones[index], &bone, sizeof(bone));
 		entry.bones[index] = bone;
 	}
-	if (same) { ++g2CachedSkins; return &entry; }
+	if (same && (positionsOnly || entry.normalsReady)) { ++g2CachedSkins; return &entry; }
 	for (int j = 0; j < surface->numVerts; ++j)
 	{
 		auto &vertex = entry.vertices[j];
-		R_SkinGhoulVertex(&vertices[j], surf->boneCache, references, entry.bones.data(), vertex.vertCoords, vertex.normal);
-		entry.normals[j] = R_VboPackNormal(vertex.normal);
-		vec4_t tangent;
-		PerpendicularVector(tangent, vertex.normal);
-		tangent[3] = 1.0f;
-		entry.fallbackTangents[j] = R_VboPackTangent(tangent);
+		R_SkinGhoulVertex(&vertices[j], surf->boneCache, references, entry.bones.data(), vertex.vertCoords,
+			positionsOnly ? nullptr : vertex.normal);
+		if (!positionsOnly)
+		{
+			entry.normals[j] = R_VboPackNormal(vertex.normal);
+			vec4_t tangent;
+			PerpendicularVector(tangent, vertex.normal);
+			tangent[3] = 1.0f;
+			entry.fallbackTangents[j] = R_VboPackTangent(tangent);
+		}
 	}
 	entry.ready = true;
+	entry.normalsReady = !positionsOnly;
 	entry.tangentsReady = false;
 	return &entry;
 }
