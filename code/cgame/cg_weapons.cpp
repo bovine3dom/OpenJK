@@ -1087,14 +1087,8 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 	const qboolean useBodyWeapon = ( bodyWeapon &&
 		CG_GetFirstPersonBodyWeaponHand( bodyWeaponHandOrigin, bodyWeaponHandAxis ) ) ? qtrue : qfalse;
 	vec3_t bodyWeaponMuzzleOrigin, bodyWeaponMuzzleDir, bodyWeaponRenderOffset;
-	const qboolean bodyWeaponMuzzleValid = ( useBodyWeapon && cent->gent && cent->gent->client &&
-		cent->gent->client->renderInfo.mPCalcTime >= cg.time - FRAMETIME*2 &&
-		!VectorCompare( cent->gent->client->renderInfo.muzzlePoint, vec3_origin ) ) ? qtrue : qfalse;
-	if ( bodyWeaponMuzzleValid )
-	{
-		VectorCopy( cent->gent->client->renderInfo.muzzlePoint, bodyWeaponMuzzleOrigin );
-		VectorCopy( cent->gent->client->renderInfo.muzzleDir, bodyWeaponMuzzleDir );
-	}
+	const qboolean bodyWeaponMuzzleValid = ( useBodyWeapon &&
+		CG_GetFirstPersonBodyWeaponMuzzle( bodyWeaponMuzzleOrigin, bodyWeaponMuzzleDir ) ) ? qtrue : qfalse;
 	VectorClear( bodyWeaponRenderOffset );
 	vec3_t extraOffset;
 	extraOffset[0] = extraOffset[1] = extraOffset[2] = 0.0f;

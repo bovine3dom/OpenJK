@@ -6825,9 +6825,12 @@ int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
 static vec3_t firstPersonBodyNeckOrigin;
 static vec3_t firstPersonBodyWeaponHandOrigin;
 static vec3_t firstPersonBodyWeaponHandAxis[3];
+static vec3_t firstPersonBodyWeaponMuzzleOrigin;
+static vec3_t firstPersonBodyWeaponMuzzleDir;
 static int firstPersonBodyNeckTime = -1;
 static qboolean firstPersonBodyNeckValid = qfalse;
 static qboolean firstPersonBodyWeaponHandValid = qfalse;
+static qboolean firstPersonBodyWeaponMuzzleValid = qfalse;
 
 static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity_t *cent )
 {
@@ -6836,6 +6839,7 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 		firstPersonBodyNeckTime = cg.time;
 		firstPersonBodyNeckValid = qfalse;
 		firstPersonBodyWeaponHandValid = qfalse;
+		firstPersonBodyWeaponMuzzleValid = qfalse;
 	}
 
 	if ( !( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) ||
@@ -6910,6 +6914,34 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 		}
 	}
 
+	if ( cent->currentState.weapon != WP_SABER )
+	{
+		const int weaponModel = cent->gent->weaponModel[0];
+		if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
+			firstPersonGhoul2[weaponModel].mModelindex >= 0 )
+		{
+			mdxaBone_t boltMatrix;
+			if ( gi.G2API_GetBoltMatrix( firstPersonGhoul2, weaponModel, 0, &boltMatrix,
+				vec3_origin, vec3_origin, cg.time, cgs.model_draw, cent->currentState.modelScale ) )
+			{
+				vec3_t localOrigin, localDirection;
+				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, localOrigin );
+				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, localDirection );
+				VectorCopy( viewModel.origin, firstPersonBodyWeaponMuzzleOrigin );
+				VectorClear( firstPersonBodyWeaponMuzzleDir );
+				for ( int i = 0; i < 3; ++i )
+				{
+					VectorMA( firstPersonBodyWeaponMuzzleOrigin, localOrigin[i], viewModel.axis[i],
+						firstPersonBodyWeaponMuzzleOrigin );
+					VectorMA( firstPersonBodyWeaponMuzzleDir, localDirection[i], viewModel.axis[i],
+						firstPersonBodyWeaponMuzzleDir );
+				}
+				VectorNormalize( firstPersonBodyWeaponMuzzleDir );
+				firstPersonBodyWeaponMuzzleValid = qtrue;
+			}
+		}
+	}
+
 	// The body uses the world weapon model, while the view weapon below uses
 	// the higher-detail first-person model. Keep the saber attached because it
 	// is rendered as part of the first-person body.
@@ -6981,6 +7013,18 @@ qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] )
 	{
 		VectorCopy( firstPersonBodyWeaponHandAxis[i], axis[i] );
 	}
+	return qtrue;
+}
+
+qboolean CG_GetFirstPersonBodyWeaponMuzzle( vec3_t origin, vec3_t direction )
+{
+	if ( !firstPersonBodyWeaponMuzzleValid || firstPersonBodyNeckTime != cg.time )
+	{
+		return qfalse;
+	}
+
+	VectorCopy( firstPersonBodyWeaponMuzzleOrigin, origin );
+	VectorCopy( firstPersonBodyWeaponMuzzleDir, direction );
 	return qtrue;
 }
 

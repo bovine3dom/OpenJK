@@ -630,6 +630,7 @@ extern	vmCvar_t	cg_firstPersonBodyNeckOffset;
 extern	vmCvar_t	cg_firstPersonBodyHeightOffset;
 qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin );
 qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] );
+qboolean CG_GetFirstPersonBodyWeaponMuzzle( vec3_t origin, vec3_t direction );
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 extern vmCvar_t cg_hudReveal;
 void CG_HudStatus_f();
