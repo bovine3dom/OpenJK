@@ -1407,13 +1407,6 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 			ecolor[1] = 0.0;//G
 			ecolor[2] = 0.0;//B
 		}
-		else if ( crossEnt->takedamage )
-		{
-			// Destructible objects are yellow
-			ecolor[0] = 1.0;//R
-			ecolor[1] = 1.0;//G
-			ecolor[2] = 0.0;//B
-		}
 		else
 		{
 			VectorCopy( crossEnt->startRGBA, ecolor );
