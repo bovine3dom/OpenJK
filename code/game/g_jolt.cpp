@@ -100,7 +100,8 @@ struct Actor {
 	float recoveryLift = 0;
 	int fallStart = 0, settledSince = 0, recoverStart = 0, lastHit = -10000;
 	int lastHitMod = MOD_UNKNOWN;
-	float fallYaw = 0, instability = 0, launchSpeed = 0;
+	float fallYaw = 0, instability = 0, launchSpeed = 0, fallImpactSpeed = 0;
+	bool fallDamageApplied = false;
 	float poseError = 0;
 	double fallMicroseconds = 0;
 	unsigned fallSteps = 0;
@@ -137,6 +138,7 @@ struct Actor {
 	bool ReadParts(gentity_t* ent, JoltReaction::Part* parts, CGhoul2Info_v& models);
 	void Engage(gentity_t* ent);
 	void UpdateRig(gentity_t* ent, float seconds);
+	void ApplyFallDamage(gentity_t* ent);
 	bool Recover(gentity_t* ent);
 	void ReturnToAnimation(gentity_t* ent);
 	void FinishRecovery(gentity_t* ent);
@@ -258,6 +260,8 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 	fall->Impulse(hitPart, direction, hit, strength);
 	fall->ReleaseControl();
 	VectorClear(ent->client->ps.velocity); // The rig already carries the native velocity.
+	fallImpactSpeed = 0;
+	fallDamageApplied = false;
 	fallStart = level.time;
 	if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
 	if (debug->integer) gi.Printf("Jolt: released control actor=%d launch_speed=%.1f\n", actor, launchSpeed);
@@ -368,6 +372,7 @@ void Actor::Engage(gentity_t* ent) {
 	VectorCopy(ent->currentOrigin, lastOrigin);
 	VectorCopy(ent->mins, savedMins); VectorCopy(ent->maxs, savedMaxs);
 	fallYaw = ent->client->renderInfo.legsYaw; fallStart = 0;
+	fallImpactSpeed = 0; fallDamageApplied = false;
 	fallMicroseconds = 0; fallSteps = 0;
 	settledSince = recoverStart = prepareStart = nextRecoverAttempt = 0;
 	riseStart = 0;
@@ -429,6 +434,11 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		if (prepareStart && VectorLengthSquared(pushed) > .01f) { prepareStart = 0; fall->ReleaseControl(); }
 		if (!dead) fall->AddVelocity(pushed);
 	}
+	if (phase == JoltReaction::ControlPhase::Falling && !dead) {
+		vec3_t velocity;
+		fall->RootVelocity(velocity);
+		fallImpactSpeed = std::max(fallImpactSpeed, -velocity[2]);
+	}
 	const auto start = std::chrono::steady_clock::now();
 	const unsigned before = fall->Steps();
 	if (!fall->Advance(seconds)) { Reset(true); return; }
@@ -438,6 +448,8 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	const auto balance = fall->Balance();
 	if (balance.phase == JoltReaction::ControlPhase::Falling && !fallStart) {
 		fallStart = level.time;
+		fallImpactSpeed = 0;
+		fallDamageApplied = false;
 		if (g_entities[0].client->ps.viewEntity == actor) G_ClearViewEntity(&g_entities[0]);
 		if (debug->integer) gi.Printf("Jolt: lost support actor=%d steps=%u error=%.3f\n", actor, balance.corrections, balance.error);
 	}
@@ -458,6 +470,9 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 	} else VectorClear(ent->client->ps.velocity);
 	Render(ent, level.time, origin, ent->currentAngles, false);
 	UpdatePhysicalHull(ent);
+	if (fallStart && balance.phase == JoltReaction::ControlPhase::Falling &&
+		(balance.supportedTrunk || balance.contacts) && !fallDamageApplied)
+		ApplyFallDamage(ent);
 	if (dead || gripLevel || balance.shock > .05f) return;
 	if (prepareStart) {
 		if (level.time-prepareStart >= prepareTime && (fall->TrunkSpeed() < .75f || level.time-prepareStart >= prepareTime+250)) {
@@ -472,6 +487,23 @@ void Actor::UpdateRig(gentity_t* ent, float seconds) {
 		if (!settledSince) settledSince = level.time;
 		if (level.time-settledSince > 500) ReturnToAnimation(ent);
 	} else settledSince = 0;
+}
+
+void Actor::ApplyFallDamage(gentity_t* ent) {
+	fallDamageApplied = true;
+	if (ent->NPC && (ent->s.weapon == WP_SABER || ent->client->NPC_class == CLASS_REBORN)) return;
+	int dflags = DAMAGE_NO_ARMOR;
+	float damage;
+	if (ent->NPC && (ent->NPC->aiFlags & NPCAI_DIE_ON_IMPACT)) {
+		damage = 1000;
+		dflags |= DAMAGE_DIE_ON_IMPACT;
+	} else {
+		const int delta = int(fallImpactSpeed / MetresPerUnit / 10);
+		if (delta < 30 || (ent->flags & FL_NO_IMPACT_DMG)) return;
+		damage = delta * .5f;
+	}
+	ent->painDebounceTime = level.time + 200;
+	G_Damage(ent, NULL, NULL, NULL, ent->currentOrigin, damage, dflags, MOD_FALLING);
 }
 
 void Actor::ReturnToAnimation(gentity_t* ent) {
@@ -739,7 +771,8 @@ void Actor::Reset(bool restoreOrigin) {
 	sleepingPose = false;
 	gripLevel = 0; gripCaster = -1;
 	lightningCaster = -1; lightningContactStart = 0;
-	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = 0; lastHit = -10000;
+	recoverStart = prepareStart = riseStart = fallStart = 0; instability = launchSpeed = poseError = fallImpactSpeed = 0; lastHit = -10000;
+	fallDamageApplied = false;
 	fallMicroseconds = 0; fallSteps = 0;
 	simulation.reset();
 	pelvisBolt = -1;
