@@ -1032,32 +1032,9 @@ void CG_AddViewWeapon( playerState_t *ps )
 		}
 	}
 
-	// allow the gun to be completely removed
-	if ( !cg_drawGun.integer || cg.zoomMode )
-	{
-		vec3_t		origin;
-
-		// special hack for lightning guns...
-		VectorCopy( cg.refdef.vieworg, origin );
-		VectorMA( origin, -10, cg.refdef.viewaxis[2], origin );
-		VectorMA( origin, 16, cg.refdef.viewaxis[0], origin );
-// Doesn't look like we'll have lightning style guns.  Clean this crap up when we are sure about this.
-//		CG_LightningBolt( cent, origin );
-
-		// We should still do muzzle flashes though...
-		CG_RegisterWeapon( ps->weapon );
-		weapon = &cg_weapons[ps->weapon];
-		wData =  &weaponData[ps->weapon];
-
-		CG_DoMuzzleFlash( cent, origin, cg.refdef.viewaxis[0], wData );
-
-		// If we don't update this, the muzzle flash point won't even be updated properly
-		VectorCopy( origin, cent->gent->client->renderInfo.muzzlePoint );
-		VectorCopy( cg.refdef.viewaxis[0], cent->gent->client->renderInfo.muzzleDir );
-
-		cent->gent->client->renderInfo.mPCalcTime = cg.time;
-		return;
-	}
+	// Keep calculating the view weapon when it is hidden. Its muzzle tag still
+	// supplies the correct origin for projectiles and muzzle flashes.
+	const qboolean drawGun = ( cg_drawGun.integer && !cg.zoomMode ) ? qtrue : qfalse;
 
 	// drop gun lower at higher fov
 	float actualFOV;
@@ -1225,7 +1202,10 @@ void CG_AddViewWeapon( playerState_t *ps )
 		//---------
 
 		//	CG_AddRefEntityWithPowerups( &gun, cent->currentState.powerups, cent->gent );
-			cgi_R_AddRefEntityToScene( &gun );
+			if ( drawGun )
+			{
+				cgi_R_AddRefEntityToScene( &gun );
+			}
 
 	/*	if ( ps->weapon == WP_STUN_BATON )
 		{
@@ -1263,7 +1243,10 @@ void CG_AddViewWeapon( playerState_t *ps )
 				CG_PositionRotatedEntityOnTag( &barrel, &hand, weapon->handsModel, va("tag_barrel%d",i+1), NULL );
 			}
 
-			cgi_R_AddRefEntityToScene( &barrel );
+			if ( drawGun )
+			{
+				cgi_R_AddRefEntityToScene( &barrel );
+			}
 		}
 
 		memset (&flash, 0, sizeof(flash));
