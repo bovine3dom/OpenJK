@@ -287,6 +287,7 @@ vmCvar_t	cg_debugEvents;
 vmCvar_t	cg_errorDecay;
 vmCvar_t	cg_addMarks;
 vmCvar_t	cg_drawGun;
+vmCvar_t	cg_firstPersonBody;
 vmCvar_t	cg_firstPersonBodyTest;
 vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 vmCvar_t cg_hudReveal;
@@ -369,6 +370,7 @@ typedef struct {
 static cvarTable_t cvarTable[] = {
 	{ &cg_autoswitch, "cg_autoswitch", "1", CVAR_ARCHIVE },
 	{ &cg_drawGun, "cg_drawGun", "1", CVAR_ARCHIVE },
+	{ &cg_firstPersonBody, "cg_firstPersonBody", "0", CVAR_CHEAT },
 	{ &cg_firstPersonBodyTest, "cg_firstPersonBodyTest", "0", CVAR_CHEAT },
 	{ &cg_torch, "cg_torch", "0", CVAR_ARCHIVE },
 	{ &cg_hudReveal, "cg_hudReveal", "0", CVAR_ROM },

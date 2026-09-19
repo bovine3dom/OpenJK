@@ -6822,9 +6822,10 @@ int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
  * Render the local player in the first-person view when looking down. This is
  * cosmetic only; the normal world model remains available to mirrors.
  */
-static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const centity_t *cent )
+static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity_t *cent )
 {
-	if ( !cg_firstPersonBodyTest.integer || ( cg.renderingThirdPerson && cg_thirdPerson.integer ) ||
+	if ( !( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) ||
+		( cg.renderingThirdPerson && cg_thirdPerson.integer ) ||
 		cent->currentState.number != cg.snap->ps.clientNum || !playerModel->ghoul2 ||
 		!playerModel->ghoul2->IsValid() || cent->gent->playerModel < 0 ||
 		cent->gent->playerModel >= playerModel->ghoul2->size() )
@@ -7277,8 +7278,8 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 			}
 		}
 
-		if ( cg_firstPersonBodyTest.integer && !cg_thirdPerson.integer &&
-			cent->currentState.number == cg.snap->ps.clientNum )
+		if ( ( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
+			!cg_thirdPerson.integer && cent->currentState.number == cg.snap->ps.clientNum )
 		{
 			// The saber path normally draws the local world model in first person.
 			// Keep it in mirrors so the isolated view model is the only local copy.
@@ -7293,7 +7294,7 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 			}
 		}
 		CG_AddRefEntityWithPowerups( &ent, cent->currentState.powerups, cent );
-		CG_AddFirstPersonBodyTest( &ent, cent );
+		CG_AddFirstPersonBody( &ent, cent );
 		VectorCopy( tempAngles, cent->renderAngles );
 
 		//Initialize all these to *some* valid data
