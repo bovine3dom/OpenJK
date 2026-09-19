@@ -6824,13 +6824,28 @@ int	cg_saberOnSoundTime[MAX_GENTITIES] = {0};
  */
 static void CG_AddFirstPersonBodyTest( const refEntity_t *playerModel, const centity_t *cent )
 {
-	if ( !cg_firstPersonBodyTest.integer || cg.renderingThirdPerson ||
-		cent->currentState.number != cg.snap->ps.clientNum )
+	if ( !cg_firstPersonBodyTest.integer || ( cg.renderingThirdPerson && cg_thirdPerson.integer ) ||
+		cent->currentState.number != cg.snap->ps.clientNum || !playerModel->ghoul2 ||
+		!playerModel->ghoul2->IsValid() || cent->gent->playerModel < 0 ||
+		cent->gent->playerModel >= playerModel->ghoul2->size() )
 	{
 		return;
 	}
 
+	// Use a separate Ghoul2 copy so the hidden head does not affect mirrors or
+	// other views that render the normal player model.
+	static CGhoul2Info_v firstPersonGhoul2;
+	firstPersonGhoul2.DeepCopy( *playerModel->ghoul2 );
+
+	char headSurface[MAX_QPATH];
+	if ( G_GetRootSurfNameWithVariant( cent->gent, "head", headSurface, sizeof(headSurface) ) )
+	{
+		gi.G2API_SetSurfaceOnOff( &firstPersonGhoul2[cent->gent->playerModel], headSurface,
+			G2SURFACEFLAG_OFF | G2SURFACEFLAG_NODESCENDANTS );
+	}
+
 	refEntity_t viewModel = *playerModel;
+	viewModel.ghoul2 = &firstPersonGhoul2;
 	// Keep the real depth for Rend2's screen-space skin diffusion. A depth-hacked
 	// view model reconstructs as near-camera geometry and gets excessive blur.
 	viewModel.renderfx = RF_FIRST_PERSON | RF_NOSHADOW | RF_LIGHTING_ORIGIN;
@@ -7260,6 +7275,14 @@ extern vmCvar_t	cg_thirdPersonAlpha;
 				ent.renderfx |= RF_ALPHA_FADE;
 				ent.shaderRGBA[3] = (unsigned char)(alpha * 255.0f);
 			}
+		}
+
+		if ( cg_firstPersonBodyTest.integer && !cg_thirdPerson.integer &&
+			cent->currentState.number == cg.snap->ps.clientNum )
+		{
+			// The saber path normally draws the local world model in first person.
+			// Keep it in mirrors so the isolated view model is the only local copy.
+			ent.renderfx |= RF_THIRD_PERSON;
 		}
 
 		if ( cg_debugHealthBars.integer )

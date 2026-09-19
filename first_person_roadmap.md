@@ -278,6 +278,9 @@ Prefer option 1 for the first production attempt if Ghoul2 duplication and surfa
 ### Phase 5: Weapon and camera polish
 
 - Keep the rifle hands aligned with the camera.
+- Replace the current third-person hip-fire pose with a view-aligned aim animation.
+- Keep first-person weapon alignment separate from the third-person body animation.
+- Verify that projectile and hitscan origins use the intended aim point.
 - Add a small pitch and roll response.
 - Add kick start and impact sounds.
 - Tune view-model scale and offsets for different FOV settings.
