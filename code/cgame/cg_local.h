@@ -627,6 +627,7 @@ extern	vmCvar_t		cg_drawGun;
 extern	vmCvar_t	cg_firstPersonBody;
 extern	vmCvar_t	cg_firstPersonBodyTest;
 extern	vmCvar_t	cg_firstPersonBodyNeckOffset;
+extern	vmCvar_t	cg_firstPersonBodyHeightOffset;
 qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin );
 qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] );
 extern vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;

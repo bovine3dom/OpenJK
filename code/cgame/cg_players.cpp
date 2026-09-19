@@ -6934,20 +6934,23 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 			cent->gent->cervicalBolt, &boltMatrix, vec3_origin, vec3_origin, cg.time,
 			cgs.model_draw, cent->currentState.modelScale ) )
 		{
-			vec3_t localOrigin, localUp, worldUp;
+			vec3_t localOrigin, localNeckAxis, neckAxis;
 			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, localOrigin );
-			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, localUp );
+			gi.G2API_GiveMeVectorFromMatrix( boltMatrix, POSITIVE_Z, localNeckAxis );
 			VectorCopy( viewModel.origin, firstPersonBodyNeckOrigin );
-			VectorClear( worldUp );
+			VectorClear( neckAxis );
 			for ( int i = 0; i < 3; ++i )
 			{
 				VectorMA( firstPersonBodyNeckOrigin, localOrigin[i], viewModel.axis[i],
 					firstPersonBodyNeckOrigin );
-				VectorMA( worldUp, localUp[i], viewModel.axis[i], worldUp );
+				VectorMA( neckAxis, localNeckAxis[i], viewModel.axis[i], neckAxis );
 			}
-			VectorNormalize( worldUp );
+			VectorNormalize( neckAxis );
+			// The cervical bolt's local +Z follows the neck, rather than world
+			// vertical. Keep this offset separate from the camera height.
 			VectorMA( firstPersonBodyNeckOrigin, cg_firstPersonBodyNeckOffset.value,
-				worldUp, firstPersonBodyNeckOrigin );
+				neckAxis, firstPersonBodyNeckOrigin );
+			firstPersonBodyNeckOrigin[2] += cg_firstPersonBodyHeightOffset.value;
 			firstPersonBodyNeckValid = qtrue;
 		}
 	}
