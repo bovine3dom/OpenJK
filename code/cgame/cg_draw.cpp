@@ -4039,6 +4039,68 @@ static void CG_Draw2DScreenTints( void )
 		CG_FillRect( 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, hcolor  );
 	}
 }
+static int CG_ObjectiveIndex(const char* name)
+{
+	if (!name) return -1;
+	for (int i = 0; i < objectiveCount; ++i)
+		if (objectiveTable[i].name && !Q_stricmp(objectiveTable[i].name, name)) return i;
+	return -1;
+}
+
+static qboolean CG_PasscodeMarkerVisible(const gentity_t& marker)
+{
+	vec3_t direction, normal;
+	VectorSubtract(marker.currentOrigin, cg.refdef.vieworg, direction);
+	const float distance = VectorNormalize(direction);
+	if (distance > marker.radius || DotProduct(direction, cg.refdef.viewaxis[0]) < 0.966f) return qfalse;
+	AngleVectors(marker.s.angles, normal, nullptr, nullptr);
+	if (DotProduct(direction, normal) < 0.5f) return qfalse;
+	trace_t trace;
+	CG_Trace(&trace, cg.refdef.vieworg, nullptr, nullptr, marker.currentOrigin,
+		cg.snap->ps.clientNum, MASK_SOLID);
+	return (qboolean)(trace.fraction == 1.0f);
+}
+
+static void CG_UpdatePasscodes()
+{
+	cg.passcodeMask = 0;
+	if (!G_IsOutcast() || !g_entities[0].client) return;
+	const auto& objectives = g_entities[0].client->sess.mission_objectives;
+	for (int i = 0; i < objectiveCount; ++i) {
+		const int code = PasscodeOverlay::ObjectiveCode(objectiveTable[i].name);
+		if (code >= 0 && objectives[i].display && objectives[i].status == OBJECTIVE_STAT_PENDING)
+			cg.passcodeMask |= PasscodeOverlay::Bit(code);
+	}
+	for (int i = 0; i < globals.num_entities; ++i) {
+		gentity_t& marker = g_entities[i];
+		if (!marker.inuse || !marker.classname || Q_stricmp(marker.classname, "target_passcode")) continue;
+		const int code = PasscodeOverlay::MarkerCode(marker.message);
+		const int objective = CG_ObjectiveIndex(marker.target);
+		if (code < 0 || objective < 0 || objectives[objective].status != OBJECTIVE_STAT_PENDING) continue;
+		if (!marker.count && CG_PasscodeMarkerVisible(marker)) {
+			marker.count = 1;
+			OBJ_DiscoverPasscode(code);
+		}
+		if (marker.count) cg.passcodeMask |= PasscodeOverlay::Bit(code);
+	}
+	if (passcodeDiscoveryMask) {
+		cg.passcodeNotificationTime = cg.time + 4000;
+		passcodeDiscoveryMask = 0;
+	}
+}
+
+void CG_PasscodeStatus_f()
+{
+	Com_Printf("passcodes active=0x%x notification=%dms discoveries=0x%x\n", cg.passcodeMask,
+		std::max(0, cg.passcodeNotificationTime - cg.time), passcodeDiscoveryMask);
+	for (int i = 0; i < globals.num_entities; ++i) {
+		const gentity_t& marker = g_entities[i];
+		if (marker.inuse && marker.classname && !Q_stricmp(marker.classname, "target_passcode"))
+			Com_Printf("passcode marker=%s seen=%d objective=%s\n", marker.message ? marker.message : "<unset>",
+				marker.count != 0, marker.target ? marker.target : "<unset>");
+	}
+}
+
 /*
 =================
 CG_Draw2D
@@ -4065,6 +4127,10 @@ static void CG_Draw2D( void )
 	{
 		return;
 	}
+
+	if (!in_camera && !CG_RenderingFromMiscCamera() && cg.snap->ps.pm_type != PM_INTERMISSION &&
+		cg.snap->ps.stats[STAT_HEALTH] > 0 && !cg.snap->ps.viewEntity)
+		CG_UpdatePasscodes();
 
 	if ( cg_draw2D.integer == 0 && !fullHud )
 	{
@@ -4120,6 +4186,10 @@ static void CG_Draw2D( void )
 		CG_DrawCenterString();
 		return;
 	}
+
+	PasscodeOverlay::Frame passcodes;
+	passcodes.active = cg.passcodeMask;
+	cgi_R_DrawPasscodes(&passcodes);
 
 	if ( (cg.snap->ps.forcePowersActive&(1<<FP_SEE)) )
 	{//force sight is on
@@ -4194,6 +4264,7 @@ static void CG_Draw2D( void )
 	}
 	else
 */
+	const char* topNotice = nullptr;
 	if (missionInfo_Updated)
 	{
 		if (cg.predicted_player_state.pm_type != PM_DEAD)
@@ -4227,14 +4298,19 @@ static void CG_Draw2D( void )
 			}
 
 			cgi_SP_GetStringTextString( "SP_INGAME_NEW_OBJECTIVE_INFO", text, sizeof(text) );
-
-			int x_pos = 0;
-			y_pos = 20;
-			const int font = cgs.media.qhFontMedium | UiText::LabelFontFlag;
-			w = cgi_R_Font_StrLenPixels(text,font, 1.0f);
-			x_pos = (SCREEN_WIDTH/2)-(w/2);
-			cgi_R_Font_DrawString(x_pos, y_pos, text,  colorTable[CT_LTRED1], font, -1, 1.0f);
+			topNotice = text;
 		}
+	}
+	else if (cg.passcodeNotificationTime > cg.time && cg.predicted_player_state.pm_type != PM_DEAD)
+	{
+		topNotice = "NEW PASSCODE FOUND";
+	}
+	if (topNotice)
+	{
+		const int font = cgs.media.qhFontMedium | UiText::LabelFontFlag;
+		w = cgi_R_Font_StrLenPixels(topNotice, font, 1.0f);
+		y_pos = 20;
+		cgi_R_Font_DrawString((SCREEN_WIDTH-w)/2, y_pos, topNotice, colorTable[CT_LTRED1], font, -1, 1.0f);
 	}
 
 	if (cg.weaponPickupTextTime	> cg.time )

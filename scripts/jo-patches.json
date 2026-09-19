@@ -22,5 +22,36 @@
         "origin": "276 -444 28"
       }
     ]
+  },
+  "ns_starpad": {
+    "description": "Mark the red and blue fuel symbols so that the HUD can record them when the player sees them.",
+    "edit": [
+      {
+        "match": {"classname": "func_usable", "targetname": "fuel_codes1", "Usescript": "ns_starpad/cycle_fuel_codes1", "endframe": "3"},
+        "expect": 1
+      },
+      {
+        "match": {"classname": "func_usable", "targetname": "fuel_codes2", "Usescript": "ns_starpad/cycle_fuel_codes2", "endframe": "3"},
+        "expect": 1
+      }
+    ],
+    "add": [
+      {
+        "classname": "target_passcode",
+        "origin": "-524 -464 -744",
+        "angles": "0 0 0",
+        "message": "ns_red_fuel",
+        "target": "NS_STARPAD_OBJ4",
+        "radius": "256"
+      },
+      {
+        "classname": "target_passcode",
+        "origin": "-524 784 -744",
+        "angles": "0 0 0",
+        "message": "ns_blue_fuel",
+        "target": "NS_STARPAD_OBJ4",
+        "radius": "256"
+      }
+    ]
   }
 }

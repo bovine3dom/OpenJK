@@ -82,6 +82,7 @@ bool CL_SettingsChar(int key);
 bool CL_SettingsMouse(int dx, int dy);
 void CL_SettingsDraw();
 int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const reticleHudState_t* state = nullptr);
+bool CL_RmlUiDrawPasscodes(const PasscodeOverlay::Frame& frame);
 #endif
 
 void CL_UpdateHudReveal();

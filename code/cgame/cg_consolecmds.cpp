@@ -259,6 +259,7 @@ static consoleCommand_t	commands[] = {
 	{ "lock_disable",		Lock_Disable },	//player can move now
 	{ "nextframe",			CG_TestModelNextFrame_f },
 	{ "nextskin",			CG_TestModelNextSkin_f },
+	{ "passcode_status",	CG_PasscodeStatus_f },
 	{ "prevframe",			CG_TestModelPrevFrame_f },
 	{ "prevskin",			CG_TestModelPrevSkin_f },
 	{ "tcmd",				CG_TargetCommand_f },

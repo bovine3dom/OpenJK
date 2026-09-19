@@ -10,7 +10,7 @@
 namespace jo_import {
 
 // Increase this version when the output format or conversion rules change.
-inline constexpr unsigned format_version = 2;
+inline constexpr unsigned format_version = 4;
 
 enum class ErrorCode { invalid_source, invalid_profile, archive, invalid_data,
                        io, busy, cancelled, internal };

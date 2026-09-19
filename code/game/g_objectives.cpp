@@ -30,14 +30,26 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "objectives.h"
 #include "qcommon/ojk_saved_game_helper.h"
+#include "qcommon/passcode_overlay.h"
 
 qboolean	missionInfo_Updated;
+unsigned passcodeDiscoveryMask;
+static unsigned passcodeSeenMask;
 
 stringID_table_t *objectiveTable = academyObjectiveTable;
 int objectiveCount = MAX_OBJECTIVES;
 
+void OBJ_DiscoverPasscode(int code)
+{
+	const unsigned bit = PasscodeOverlay::Bit(code);
+	if (!bit) return;
+	if (!(passcodeSeenMask & bit)) passcodeDiscoveryMask |= bit;
+	passcodeSeenMask |= bit;
+}
+
 void OBJ_InitCampaign(void)
 {
+	passcodeDiscoveryMask = passcodeSeenMask = 0;
 	objectiveTable = academyObjectiveTable;
 	objectiveCount = MAX_OBJECTIVES;
 	if (!G_IsOutcast()) return;

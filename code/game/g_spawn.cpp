@@ -427,6 +427,7 @@ void SP_target_teleporter( gentity_t *ent );
 void SP_target_relay (gentity_t *ent);
 void SP_target_kill (gentity_t *ent);
 void SP_target_position (gentity_t *ent);
+void SP_target_passcode (gentity_t *ent);
 void SP_target_location (gentity_t *ent);
 void SP_target_push (gentity_t *ent);
 void SP_target_random (gentity_t *self);
@@ -664,6 +665,7 @@ spawn_t	spawns[] = {
 	{"target_relay", SP_target_relay},
 	{"target_kill", SP_target_kill},
 	{"target_position", SP_target_position},
+	{"target_passcode", SP_target_passcode},
 	{"target_location", SP_target_location},
 	{"target_push", SP_target_push},
 	{"target_random", SP_target_random},

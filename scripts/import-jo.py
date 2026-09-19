@@ -12,6 +12,14 @@ import tempfile
 import zipfile
 
 UI_PREFIXES = ("gfx/menus/", "gfx/hud/", "gfx/2d/")
+PASSCODE_IMAGES = (
+    ("gfx/passcodes/securitycode_red", "textures/system/securitycode_red"),
+    ("gfx/passcodes/securitycode_green", "textures/system/securitycode_green"),
+    ("gfx/passcodes/securitycode_blue", "textures/system/securitycode_blue"),
+    ("gfx/passcodes/fuelpump4", "textures/narshaddaa/fuelpump4"),
+    ("gfx/passcodes/fuelpump3", "textures/narshaddaa/fuelpump3"),
+    ("gfx/passcodes/securitycode", "textures/system/securitycode"),
+)
 NPC_CLASSES = {"GALAK_MECH": "GALAKMECH", "MORGAN": "MORGANKATARN"}
 NPC_SABERS = {"CLASS_KYLE": "Kyle", "CLASS_LUKE": "Luke", "CLASS_DESANN": "Desann",
               "CLASS_TAVION": "Tavion", "CLASS_REBORN": "Reborn"}
@@ -218,6 +226,11 @@ def shader_definitions(data):
         yield name[0].strip('"').lower(), text[name.start():tokens[i - 1].end()].encode("latin1")
 
 
+def passcode_shader(name, image):
+    return (f"{name}\n{{\n\tnopicmip\n\tsort additive\n\t{{\n\t\tmap {image}\n"
+            "\t\tblendFunc GL_ONE GL_ONE\n\t\trgbGen identity\n\t}\n}").encode()
+
+
 def write_shaders(dest, academy, outcast):
     definitions = {}
     paths = set()
@@ -231,6 +244,8 @@ def write_shaders(dest, academy, outcast):
                 if assets is outcast and name.startswith(UI_PREFIXES) and name in definitions:
                     continue
                 definitions[name] = body
+    for name, image in PASSCODE_IMAGES:
+        definitions[name] = passcode_shader(name, image)
     # Shadow the source files so duplicate names in other files cannot win by load order.
     for path in sorted(paths):
         if path != "shaders/jo_campaign.shader":

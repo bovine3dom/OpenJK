@@ -41,6 +41,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "g_vehicles.h"
 #include "g_navigator.h"
 #include "qcommon/ojk_saved_game_helper.h"
+#include "qcommon/passcode_overlay.h"
 
 extern	cvar_t	*com_buildScript;
 
@@ -769,6 +770,8 @@ static void Q3_SetObjective(const char *ObjEnum, int status)
 		objective->display = (qboolean)(OBJECTIVE_HIDE != 0);
 		break;
 	case SET_OBJ_SHOW :
+		if (objective->display == OBJECTIVE_HIDE)
+			OBJ_DiscoverPasscode(PasscodeOverlay::ObjectiveCode(ObjEnum));
 		objective->display = (qboolean)(OBJECTIVE_SHOW != 0);
 		objectivesShown++;
 		missionInfo_Updated = qtrue;	// Activate flashing text

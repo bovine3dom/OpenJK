@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #define _CG_PUBLIC_H
 
 #include "qcommon/reticle_hud.h"
+#include "qcommon/passcode_overlay.h"
 #include "qcommon/force_wheel.h"
 #include "qcommon/weapon_wheel.h"
 #include "qcommon/ui_text.h"
@@ -239,6 +240,7 @@ Ghoul2 Insert End
 	CG_R_PLEXTEXT,
 	CG_R_AUTOMAP,
 	CG_S_STARTAMBIENTSOUND,
+	CG_R_DRAWPASSCODES,
 } cgameImport_t;
 
 #ifdef JK2_MODE

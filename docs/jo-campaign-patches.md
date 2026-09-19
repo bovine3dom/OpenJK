@@ -59,6 +59,26 @@ Start Kejim Post again to apply this entity change. An existing mid-map save
 retains its saved entities and counter values; rebuilding the import does not
 rewrite those save records.
 
+## Nar Shaddaa Starpad: Fuel Symbols
+
+The fuel-symbol textures are part of the map geometry. The scripts do not send
+an event when the player sees a symbol. The patch adds one `target_passcode`
+marker to each source symbol. It does not change the fuel controls or the puzzle
+scripts.
+
+The importer checks the two `func_usable` fuel controls before it adds the
+markers. The check confirms the original script names and frame ranges. If the
+source map does not have the expected controls, the import stops.
+
+The game records a marker when the player is close to the symbol, looks toward
+it, and has an unobstructed view. The marker count is part of the saved entity
+state. See [Passcode Overlay](passcode-overlay.md) for the supported codes and
+test procedure.
+
+Import format 3 and later formats include this patch. Start Nar Shaddaa Starpad
+from a new game or from a save that the game made after format 3 was imported. An old mid-map
+save can contain the old entity list without these markers.
+
 ## Checks and New Patches
 
 For a new patch, update the source recipe and the matching checked native edit.

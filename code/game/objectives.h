@@ -179,6 +179,8 @@ typedef enum //# StatusText_e
 } statusText_t;
 
 extern qboolean	missionInfo_Updated;
+extern unsigned passcodeDiscoveryMask;
+void OBJ_DiscoverPasscode(int code);
 
 #define SET_TACTICAL_OFF	0
 #define SET_TACTICAL_ON		1

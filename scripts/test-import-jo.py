@@ -149,6 +149,8 @@ class ImportTests(unittest.TestCase):
                 '{"classname" "NPC_Stormtrooper" "NPC_target" "st_death" "origin" "188 -252 360"}',
                 '{"classname" "target_counter" "targetname" "st_death" "target" "run_check_door" "count" "7"}',
                 '{"classname" "target_counter" "targetname" "st_death" "Usescript" "kejim_post/jan_fight" "count" "2"}',
+                '{"classname" "func_usable" "targetname" "fuel_codes1" "Usescript" "ns_starpad/cycle_fuel_codes1" "endframe" "3"}',
+                '{"classname" "func_usable" "targetname" "fuel_codes2" "Usescript" "ns_starpad/cycle_fuel_codes2" "endframe" "3"}',
             ))
             entities = "\n".join(entities).encode()
             bsp = b"RBSP" + struct.pack("<iii", 1, 16, len(entities) + 1) + entities + b"\0"
@@ -164,7 +166,7 @@ class ImportTests(unittest.TestCase):
             with zipfile.ZipFile(source / "base/assets0.pk3", "w") as archive:
                 for name, data in presentation.items():
                     archive.writestr(name, data)
-                for mapname in ("kejim_post", "kejim_base"):
+                for mapname in ("kejim_post", "kejim_base", "ns_starpad"):
                     archive.writestr(f"maps/{mapname}.bsp", bsp)
                 archive.writestr("ext_data/npcs.cfg", b"Kyle\n{\nplayerModel kyle\nclass kyle\n}\nJan\n{\nplayerModel jan\nclass jan\n}\nGalak\n{\nplayerModel galak\nclass galak\n}\nTavion\n{\nplayerModel tavion\nclass tavion\ncustomSkin red\n}\n")
                 archive.writestr(human + "animation.cfg", b"BOTH_COCKPIT_SIT 30 5 0 20\nBOTH_TALKGESTURE11START 50 33 -1 20\nBOTH_TALKGESTURE11STOP 83 16 -1 20\nBOTH_TALKGESTURE2 99 39 -1 20\n")
@@ -219,6 +221,13 @@ class ImportTests(unittest.TestCase):
                 self.assertEqual(patched_entities.count(b'"NPC_target" "jo_ground_death"'), 6)
                 self.assertIn(b'"targetname" "jo_ground_death"', patched_entities)
                 self.assertEqual(archive.read("maps/kejim_post.bsp"), bsp)
+                starpad_entities = archive.read("maps/ns_starpad.ent")
+                self.assertEqual(starpad_entities.count(b'"classname" "target_passcode"'), 2)
+                self.assertIn(b'"origin" "-524 -464 -744"', starpad_entities)
+                self.assertIn(b'"message" "ns_red_fuel"', starpad_entities)
+                self.assertIn(b'"origin" "-524 784 -744"', starpad_entities)
+                self.assertIn(b'"message" "ns_blue_fuel"', starpad_entities)
+                self.assertEqual(starpad_entities.count(b'"target" "NS_STARPAD_OBJ4"'), 2)
                 self.assertNotIn("maps/kejim_base.ent", names)
                 self.assertIn(b"playerModel jo_cinematic_kyle", archive.read("ext_data/jo/npcs.cfg"))
                 self.assertIn(b"class CLASS_KYLE", archive.read("ext_data/jo/npcs.cfg"))
@@ -238,6 +247,9 @@ class ImportTests(unittest.TestCase):
                 self.assertIn(b"blendFunc blend", shaders["gfx/hud/vehicle_frame"])
                 self.assertIn(b"map correct", shaders["textures/kejim/panel"])
                 self.assertIn(b"menu/new/title", shaders["console"])
+                for name, image in jo.PASSCODE_IMAGES:
+                    self.assertIn(f"map {image}".encode(), shaders[name])
+                    self.assertIn(b"blendFunc GL_ONE GL_ONE", shaders[name])
                 self.assertNotIn("gfx/menus/scanlines.tga", names)
                 for path in ("shaders/ui.shader", "shaders/desert.shader", "shaders/imperial.shader"):
                     self.assertEqual(list(jo.shader_definitions(archive.read(path))), [])

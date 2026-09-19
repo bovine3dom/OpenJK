@@ -379,6 +379,10 @@ int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const
 	return Q_syscall(CG_R_DRAWRETICLEHUD, PASSFLOAT(x), PASSFLOAT(y), PASSFLOAT(size), color, state);
 }
 
+qboolean cgi_R_DrawPasscodes(const PasscodeOverlay::Frame* frame) {
+	return (qboolean)Q_syscall(CG_R_DRAWPASSCODES, frame);
+}
+
 void cgi_R_DrawAutomap(const Automap::Frame *frame) {
 	Q_syscall(CG_R_AUTOMAP, frame);
 }

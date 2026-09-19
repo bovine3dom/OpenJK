@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "../qcommon/q_shared.h"
 #include "qcommon/reticle_hud.h"
+#include "qcommon/passcode_overlay.h"
 #include "qcommon/force_wheel.h"
 #include "qcommon/weapon_wheel.h"
 #include "qcommon/ui_text.h"
@@ -483,6 +484,8 @@ typedef struct {
 	int			loadLCARSStage;
 
 	int			missionInfoFlashTime;
+	unsigned	passcodeMask;
+	int			passcodeNotificationTime;
 	qboolean	missionStatusShow;
 	int			missionStatusDeadTime;
 
@@ -921,6 +924,7 @@ extern void CG_MissionCompletion(void);
 //
 qboolean CG_ConsoleCommand( void );
 void CG_InitConsoleCommands( void );
+void CG_PasscodeStatus_f( void );
 
 //
 // cg_servercmds.c
@@ -1073,6 +1077,7 @@ void	cgi_R_RenderScene( const refdef_t *fd );
 void	cgi_R_SetColor( const float *rgba );	// NULL = 1,1,1,1
 qboolean cgi_R_DrawReticle(float x, float y, float size, const float* color);
 int cgi_R_DrawReticleHud(float x, float y, float size, const float* color, const reticleHudState_t* state);
+qboolean cgi_R_DrawPasscodes(const PasscodeOverlay::Frame* frame);
 void cgi_ForceWheelUpdate(ForceWheel::Frame* frame);
 float cgi_R_DrawForceWheel(const char* label);
 qboolean cgi_ForceWheelPreview();

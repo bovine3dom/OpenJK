@@ -562,6 +562,13 @@ struct Ordered {
         else values[inserted.first->second].second = std::move(value);
     }
 };
+std::string passcode_shader(View name, View image) {
+    std::string text(name);
+    text += "\n{\n\tnopicmip\n\tsort additive\n\t{\n\t\tmap ";
+    text += image;
+    text += "\n\t\tblendFunc GL_ONE GL_ONE\n\t\trgbGen identity\n\t}\n}";
+    return text;
+}
 void write_shaders(Output& dest, const Assets& ja, const Assets& jo) {
     Ordered merged;
     std::set<std::string> paths;
@@ -578,6 +585,13 @@ void write_shaders(Output& dest, const Assets& ja, const Assets& jo) {
             } catch (Failure& e) { if (e.error.asset.empty()) e.error.asset = path; throw; }
         }
     }
+    for (const auto& item : {std::pair<View, View>{"gfx/passcodes/securitycode_red", "textures/system/securitycode_red"},
+             {"gfx/passcodes/securitycode_green", "textures/system/securitycode_green"},
+             {"gfx/passcodes/securitycode_blue", "textures/system/securitycode_blue"},
+             {"gfx/passcodes/fuelpump4", "textures/narshaddaa/fuelpump4"},
+             {"gfx/passcodes/fuelpump3", "textures/narshaddaa/fuelpump3"},
+             {"gfx/passcodes/securitycode", "textures/system/securitycode"}})
+        merged.set(std::string(item.first), passcode_shader(item.first, item.second));
     for (const auto& path : paths)
         if (path != "shaders/jo_campaign.shader") dest.add(path, "// Definitions merged into jo_campaign.shader\n");
     std::string text;
@@ -722,6 +736,23 @@ std::vector<Entity> parse_entities(View text) {
     }
     return entities;
 }
+std::string serialize_entities(const std::vector<Entity>& entities) {
+    std::string output;
+    for (const auto& entity : entities) {
+        output += "{\n";
+        for (const auto& field : entity) output += '"' + field.first + "\" \"" + field.second + "\"\n";
+        output += "}\n";
+    }
+    return output;
+}
+std::string map_entities(const Assets& jo, View map) {
+    const std::string path = "maps/" + std::string(map);
+    if (jo.has(path + ".ent")) return jo.read(path + ".ent");
+    auto bsp = jo.read(path + ".bsp");
+    auto offset = nonnegative(bsp, 8), size = nonnegative(bsp, 12);
+    bounds(bsp, offset, size);
+    return bsp.substr(offset, size);
+}
 std::string patch_kejim_post(std::string text) {
     while (!text.empty() && text.back() == '\0') text.pop_back();
     auto entities = parse_entities(text);
@@ -746,20 +777,26 @@ std::string patch_kejim_post(std::string text) {
         "JO patch expected 1 Kejim door counter, found " + std::to_string(counters) + ".");
     entities.push_back({{"classname", "target_relay"}, {"targetname", "jo_ground_death"},
                         {"target", "st_death"}, {"origin", "276 -444 28"}});
-    std::string output;
-    for (const auto& entity : entities) {
-        output += "{\n";
-        for (const auto& field : entity) output += '"' + field.first + "\" \"" + field.second + "\"\n";
-        output += "}\n";
-    }
-    return output;
+    return serialize_entities(entities);
 }
-std::string patched_kejim_entities(const Assets& jo) {
-    if (jo.has("maps/kejim_post.ent")) return patch_kejim_post(jo.read("maps/kejim_post.ent"));
-    auto bsp = jo.read("maps/kejim_post.bsp");
-    auto offset = nonnegative(bsp, 8), size = nonnegative(bsp, 12);
-    bounds(bsp, offset, size);
-    return patch_kejim_post(bsp.substr(offset, size));
+std::string patch_ns_starpad(std::string text) {
+    while (!text.empty() && text.back() == '\0') text.pop_back();
+    auto entities = parse_entities(text);
+    const char* names[] = {"fuel_codes1", "fuel_codes2"};
+    const char* scripts[] = {"ns_starpad/cycle_fuel_codes1", "ns_starpad/cycle_fuel_codes2"};
+    std::size_t controls[2]{};
+    for (const auto& entity : entities) for (int i = 0; i < 2; ++i)
+        controls[i] += entity_value(entity, "classname") == "func_usable" &&
+            entity_value(entity, "targetname") == names[i] && entity_value(entity, "Usescript") == scripts[i] &&
+            entity_value(entity, "endframe") == "3";
+    for (int i = 0; i < 2; ++i) if (controls[i] != 1) fail(ErrorCode::invalid_data,
+        "JO patch expected 1 Nar Shaddaa fuel control " + std::to_string(i + 1) +
+        ", found " + std::to_string(controls[i]) + ".");
+    entities.push_back({{"classname", "target_passcode"}, {"origin", "-524 -464 -744"},
+        {"angles", "0 0 0"}, {"message", "ns_red_fuel"}, {"target", "NS_STARPAD_OBJ4"}, {"radius", "256"}});
+    entities.push_back({{"classname", "target_passcode"}, {"origin", "-524 784 -744"},
+        {"angles", "0 0 0"}, {"message", "ns_blue_fuel"}, {"target", "NS_STARPAD_OBJ4"}, {"radius", "256"}});
+    return serialize_entities(entities);
 }
 
 void build_overlay(const Assets& ja, const Assets& jo, const fs::path& path,
@@ -775,7 +812,7 @@ void build_overlay(const Assets& ja, const Assets& jo, const fs::path& path,
         bool selected = false;
         for (auto root : {"maps/", "scripts/", "textures/", "sound/", "music/", "video/", "effects/",
                           "models/", "gfx/", "menu/", "levelshots/"}) selected = selected || starts(name, root);
-        if (!selected || name == "maps/kejim_post.ent" || starts(name, humanoid) ||
+        if (!selected || name == "maps/kejim_post.ent" || name == "maps/ns_starpad.ent" || starts(name, humanoid) ||
             starts(name, "models/weapons2/") || (ja.has(name) && ui(name))) continue;
         try {
             auto data = jo.read(name);
@@ -786,7 +823,8 @@ void build_overlay(const Assets& ja, const Assets& jo, const fs::path& path,
             dest.add(name, data);
         } catch (Failure& e) { if (e.error.asset.empty()) e.error.asset = name; throw; }
     }
-    dest.add("maps/kejim_post.ent", patched_kejim_entities(jo));
+    dest.add("maps/kejim_post.ent", patch_kejim_post(map_entities(jo, "kejim_post")));
+    dest.add("maps/ns_starpad.ent", patch_ns_starpad(map_entities(jo, "ns_starpad")));
     write_shaders(dest, ja, jo);
     dest.add("ext_data/dms.dat", jo.read("ext_data/dms.dat"));
     try {

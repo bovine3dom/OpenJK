@@ -69,7 +69,9 @@ prints the selected profile. JO imports, settings, and saves stay in that
 profile. Do not use original JO saves or copy JA saves into it.
 
 See [JO Campaign Patches](jo-campaign-patches.md) for the optional entity patch
-system and the revised conditions for Jan's door sequence in Kejim Post.
+system and the revised conditions for Jan's door sequence in Kejim Post. See
+[Passcode Overlay](passcode-overlay.md) for the Kejim, Nar Shaddaa, and Doomgiver
+passcodes.
 
 ## Controls and Diagnostics
 
@@ -80,6 +82,8 @@ system and the revised conditions for Jan's door sequence in Kejim Post.
 - Use the shared save and load menus to continue a test.
 - Enter `campaign_status` in the console to print the campaign, map, camera
   state, equipment, ammunition, position, and active objectives.
+- Enter `passcode_status` to print active passcode textures and Nar Shaddaa
+  marker states.
 - Enter `cinematic_status NPC_NAME` to print a cinematic actor's position,
   movement, animations, and pending tasks. For example, use
   `cinematic_status cinematic4_kyle` during the Artus opening.
@@ -166,10 +170,11 @@ generated asset archive after the game exits. The launcher can regenerate it.
 2. Skip the opening in a new session. Check that player control returns.
 3. Select and fire both starting weapons. Check the wheel and direct bindings.
 4. Fight the first guards. Check Jan's movement, friendly fire, and enemy reactions.
-5. Read the datapad. Check the objectives and the three code objectives.
-6. Complete Kejim Post through normal play and enter Kejim Base.
-7. Save during play, quit, restart the updater, and load the save.
-8. Repeat the scene checks with Rend2 on the test machine.
+5. Find each Kejim code. Check the notification and the three passcode textures.
+6. Complete each code objective. Check that its texture disappears.
+7. Complete Kejim Post through normal play and enter Kejim Base.
+8. Save during play, quit, restart the updater, and load the save.
+9. Repeat the scene checks with Rend2 on the test machine.
 
 The content test checks weapon cycling, datapad text, mounted health changes,
 goggle pickup and activation, panel textures, and the generator pipe material's

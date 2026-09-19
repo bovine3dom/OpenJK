@@ -1081,6 +1081,12 @@ intptr_t CL_CgameSystemCalls( intptr_t *args ) {
 	case CG_R_AUTOMAP:
 		CL_DrawAutomap((const Automap::Frame *)VMA(1));
 		return 0;
+	case CG_R_DRAWPASSCODES:
+#ifdef USE_RMLUI
+		return CL_RmlUiDrawPasscodes(*(const PasscodeOverlay::Frame*)VMA(1));
+#else
+		return qfalse;
+#endif
 	case CG_R_PLEXTEXT:
 #ifdef USE_RMLUI
 	{

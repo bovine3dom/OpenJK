@@ -26,6 +26,22 @@ resource-rings { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 </style></head><body><resource-rings id="resources"/><div id="dot"/></body></rml>
 )";
 
+const char* passcodeRml = R"(
+<rml><head><style>
+body { margin: 0; width: 100%; height: 100%; }
+#codes { position: absolute; left: 12dp; top: 12dp; width: 128dp; }
+.code { display: none; width: 32dp; height: 32dp; margin-bottom: 6dp; }
+#code-5 { width: 128dp; }
+</style></head><body><div id="codes">
+<passcode-image class="code" id="code-0" src="gfx/passcodes/securitycode_red"/>
+<passcode-image class="code" id="code-1" src="gfx/passcodes/securitycode_green"/>
+<passcode-image class="code" id="code-2" src="gfx/passcodes/securitycode_blue"/>
+<passcode-image class="code" id="code-3" src="gfx/passcodes/fuelpump4"/>
+<passcode-image class="code" id="code-4" src="gfx/passcodes/fuelpump3"/>
+<passcode-image class="code" id="code-5" src="gfx/passcodes/securitycode"/>
+</div></body></rml>
+)";
+
 class ReticleSystem final : public Rml::SystemInterface {
 public:
 	double GetElapsedTime() override { return Sys_Milliseconds() * 0.001; }
@@ -129,6 +145,22 @@ public:
 	void ReleaseTexture(Rml::TextureHandle texture) override { re.ReleaseUiTexture(qhandle_t(texture)); }
 };
 
+class PasscodeImage final : public Rml::Element {
+	Rml::String source;
+	qhandle_t shader = 0;
+	void OnRender() override {
+		const auto path = GetAttribute<Rml::String>("src", "");
+		if (path != source) { source = path; shader = re.RegisterShaderNoMip(path.c_str()); }
+		const auto position = GetAbsoluteOffset(), size = GetBox().GetSize(Rml::BoxArea::Content);
+		if (!shader || size.x <= 0 || size.y <= 0 || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0) return;
+		re.SetColor(nullptr);
+		re.DrawStretchPic(position.x * 640 / cls.glconfig.vidWidth, position.y * 480 / cls.glconfig.vidHeight,
+			size.x * 640 / cls.glconfig.vidWidth, size.y * 480 / cls.glconfig.vidHeight, 0, 0, 1, 1, shader);
+	}
+public:
+	explicit PasscodeImage(const Rml::String& tag) : Rml::Element(tag) {}
+};
+
 class RadialElement : public Rml::Element {
 protected:
 	Rml::Geometry geometry;
@@ -221,6 +253,7 @@ public:
 
 Rml::ElementInstancerGeneric<SelectionWheelElement> wheelInstancer;
 Rml::ElementInstancerGeneric<ResourceRings> resourceInstancer;
+Rml::ElementInstancerGeneric<PasscodeImage> passcodeImageInstancer;
 ReticleHud::Activity activity;
 ReticleSystem systemInterface;
 GameFiles fileInterface;
@@ -234,6 +267,9 @@ Rml::ElementDocument* wheelDocument = nullptr;
 SelectionWheelElement* wheelElement = nullptr;
 Rml::Element* wheelLabel = nullptr;
 Rml::ElementText* wheelLabelText = nullptr;
+Rml::Context* passcodeContext = nullptr;
+Rml::ElementDocument* passcodeDocument = nullptr;
+Rml::Element* passcodeImages[PasscodeOverlay::CodeCount] = {};
 void* fontData = nullptr;
 void* labelFontData = nullptr;
 void* datapadFontData = nullptr;
@@ -276,6 +312,9 @@ void CL_RmlUiShutdown() {
 	wheelElement = nullptr;
 	wheelLabel = nullptr;
 	wheelLabelText = nullptr;
+	passcodeContext = nullptr;
+	passcodeDocument = nullptr;
+	for (auto& image : passcodeImages) image = nullptr;
 	activity.Reset();
 	initialized = false;
 }
@@ -303,6 +342,7 @@ void CL_RmlUiInit() {
 		Com_Printf(fontReady ? "RmlUi: IBM Plex Mono loaded\n" : "RmlUi: IBM Plex Mono missing; selection wheels unavailable\n");
 		Rml::Factory::RegisterElementInstancer("resource-rings", &resourceInstancer);
 		Rml::Factory::RegisterElementInstancer("selection-wheel", &wheelInstancer);
+		Rml::Factory::RegisterElementInstancer("passcode-image", &passcodeImageInstancer);
 		context = Rml::CreateContext("reticle", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
 		if (context) document = context->LoadDocumentFromMemory(reticleRml);
 		wheelContext = Rml::CreateContext("selection-wheel", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
@@ -313,6 +353,8 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 #selection-name { position: absolute; font-family: IBM Plex Mono; font-weight: 600;
  color: #edf0ef; text-align: center; line-height: 130%; }
 </style></head><body><selection-wheel id="wheel"/><div id="selection-name">Force</div></body></rml>)");
+		passcodeContext = Rml::CreateContext("passcodes", {cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+		if (passcodeContext) passcodeDocument = passcodeContext->LoadDocumentFromMemory(passcodeRml);
 	}
 	if (document) {
 		dot = document->GetElementById("dot");
@@ -323,6 +365,11 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 		wheelLabel = wheelDocument->GetElementById("selection-name");
 		if (wheelLabel) wheelLabelText = static_cast<Rml::ElementText*>(wheelLabel->GetFirstChild());
 	}
+	if (passcodeDocument) {
+		for (int i = 0; i < PasscodeOverlay::CodeCount; ++i)
+			passcodeImages[i] = passcodeDocument->GetElementById(va("code-%d", i));
+		for (auto* image : passcodeImages) if (!image) passcodeDocument = nullptr;
+	}
 	if (!document || !dot || !resources || !wheelElement || !wheelLabelText) {
 		Com_Printf("RmlUi: reticle initialization failed; using legacy crosshair\n");
 		CL_RmlUiShutdown();
@@ -330,6 +377,8 @@ selection-wheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; 
 	}
 	document->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
 	wheelDocument->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+	if (passcodeDocument) passcodeDocument->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+	else Com_Printf("RmlUi: passcode overlay initialization failed\n");
 	CL_RmlSelectionInit();
 	Com_Printf("RmlUi: reticle ready (6.3)\n");
 	CL_AtmosphereEditorInit();
@@ -361,6 +410,19 @@ int CL_RmlUiDrawReticle(float x, float y, float size, const float* color, const 
 	context->Update();
 	context->Render();
 	return ReticleHud::DotDrawn | (drawHud ? ReticleHud::ResourcesDrawn : 0);
+}
+
+bool CL_RmlUiDrawPasscodes(const PasscodeOverlay::Frame& frame) {
+	if (!passcodeDocument || cls.glconfig.vidWidth <= 0 || cls.glconfig.vidHeight <= 0) return false;
+	passcodeContext->SetDimensions({cls.glconfig.vidWidth, cls.glconfig.vidHeight});
+	passcodeContext->SetDensityIndependentPixelRatio(cls.glconfig.vidHeight / 480.0f);
+	for (int i = 0; i < PasscodeOverlay::CodeCount; ++i)
+		passcodeImages[i]->SetProperty("display", frame.active & PasscodeOverlay::Bit(i) ? "block" : "none");
+	if (frame.active) {
+		passcodeContext->Update();
+		passcodeContext->Render();
+	}
+	return true;
 }
 
 bool CL_RmlUiAvailable() { return wheelElement && fontReady; }

@@ -525,6 +525,18 @@ void SP_target_position( gentity_t *self ){
 	G_SetOrigin( self, self->s.origin );
 }
 
+/*QUAKED target_passcode (0.2 0.8 1) (-4 -4 -4) (4 4 4)
+Marks a passcode image that the player must see and use later.
+"message" identifies the displayed code.
+"target" names the objective that consumes the code.
+"radius" sets the maximum discovery distance.
+*/
+void SP_target_passcode(gentity_t *self) {
+	G_SetOrigin(self, self->s.origin);
+	self->svFlags |= SVF_NOCLIENT;
+	if (self->radius <= 0) self->radius = 256;
+}
+
 //static -slc
 void target_location_linkup(gentity_t *ent)
 {
