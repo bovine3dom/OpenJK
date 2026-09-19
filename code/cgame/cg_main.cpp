@@ -375,7 +375,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_firstPersonBody, "cg_firstPersonBody", "0", CVAR_CHEAT },
 	{ &cg_firstPersonBodyTest, "cg_firstPersonBodyTest", "0", CVAR_CHEAT },
 	{ &cg_firstPersonBodyNeckOffset, "cg_firstPersonBodyNeckOffset", "-2", CVAR_CHEAT },
-	{ &cg_firstPersonBodyHeightOffset, "cg_firstPersonBodyHeightOffset", "16", CVAR_CHEAT },
+	{ &cg_firstPersonBodyHeightOffset, "cg_firstPersonBodyHeightOffset", "8", CVAR_CHEAT },
 	{ &cg_torch, "cg_torch", "0", CVAR_ARCHIVE },
 	{ &cg_hudReveal, "cg_hudReveal", "0", CVAR_ROM },
 	{ &cg_torchRange, "cg_torchRange", "768", CVAR_ARCHIVE },
