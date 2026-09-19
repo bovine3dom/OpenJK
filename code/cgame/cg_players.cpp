@@ -6857,7 +6857,8 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 		{
 			const int weaponModel = cent->gent->weaponModel[i];
 			if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
-				weaponModel != cent->gent->playerModel )
+				weaponModel != cent->gent->playerModel &&
+				firstPersonGhoul2[weaponModel].mModelindex >= 0 )
 			{
 				gi.G2API_RemoveGhoul2Model( firstPersonGhoul2, weaponModel );
 			}
