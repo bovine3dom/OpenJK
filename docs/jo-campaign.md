@@ -55,8 +55,8 @@ Select JA with `--campaign ja`. The default campaign is JA.
 Put worktree and campaign options before display and engine arguments.
 `--new-game` starts a new game each time you use it.
 
-Python 3.9 or later is required on the test machine. On the first JO launch,
-the importer creates `OpenJK/zz_jo_campaign.pk3` in the JO profile. This file
+The packaged native importer does not need Python. On the first JO launch, the
+importer creates `OpenJK/zz_jo_campaign.pk3` in the JO profile. This archive
 contains selected and converted assets from your local installations. The
 package transfer does not include these assets. Leave both installations in
 place. Later launches reuse the import unless the importer, campaign recipes, or source archives
@@ -99,7 +99,8 @@ hoods remain outside the skin effect. Use `r_sssDebug 1` to inspect skin coverag
 
 ## Build and Automated Checks
 
-From the repository root:
+Python 3.9 or later is required only for the test scripts. Run them from the
+repository root:
 
 ```bash
 bash scripts/build-sp.sh

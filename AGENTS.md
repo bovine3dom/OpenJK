@@ -1,6 +1,6 @@
 # Repository instructions
 
-- `code/` is active. JA and imported JO content use it.
-- Treat `codeJK2/` as read-only reference. Port required behavior into `code/`.
-- Change or build standalone JK2 only when the user explicitly asks.
-- Game files are found in GameData/ and GameData_JO/. If they are missing, ask the user.
+- `code/` is active JA SP code for both campaigns.
+- Do not edit `codemp/` or `codeJK2/` unless asked; port needed behavior into `code/`.
+- Follow the `GameData/` and `GameData_JO/` symlinks for assets; ask if either is absent.
+- Validate player-visible fixes in the JA binary with real assets when practical; a build alone is insufficient.
