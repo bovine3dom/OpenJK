@@ -2886,7 +2886,39 @@ static GLuint g2GpuReadback;
 static GLuint g2GpuPalettes[MAX_FRAMES];
 static size_t g2GpuPaletteOffsets[MAX_FRAMES];
 static unsigned g2GpuPaletteFrames[MAX_FRAMES];
+struct G2GpuPaletteEntry
+{
+	const mdxmSurface_t *surface;
+	CBoneCache *bones;
+	size_t offset;
+};
+static constexpr size_t G2_PALETTE_CACHE_SIZE = 2048;
+static constexpr int G2_PALETTE_CACHE_MIN_POSES = 32;
+static G2GpuPaletteEntry g2GpuPaletteCache[MAX_FRAMES][G2_PALETTE_CACHE_SIZE];
+static CBoneCache *g2GpuPalettePoses[MAX_FRAMES][G2_PALETTE_CACHE_MIN_POSES + 1];
+static int g2GpuPalettePoseCount[MAX_FRAMES];
 static constexpr size_t G2_PALETTE_BYTES = 4*1024*1024;
+
+static bool R_CacheGhoulGpuPalettes(int slot, CBoneCache *bones)
+{
+	if (g2GpuPalettePoseCount[slot] > G2_PALETTE_CACHE_MIN_POSES) return true;
+	for (int i = 0; i < g2GpuPalettePoseCount[slot]; ++i)
+		if (g2GpuPalettePoses[slot][i] == bones) return false;
+	g2GpuPalettePoses[slot][g2GpuPalettePoseCount[slot]++] = bones;
+	return g2GpuPalettePoseCount[slot] > G2_PALETTE_CACHE_MIN_POSES;
+}
+
+static G2GpuPaletteEntry *R_FindGhoulGpuPalette(int slot, const mdxmSurface_t *surface, CBoneCache *bones)
+{
+	size_t index = ((uintptr_t(surface) >> 4) ^ (uintptr_t(bones) >> 4)) & (G2_PALETTE_CACHE_SIZE - 1);
+	for (size_t probe = 0; probe < G2_PALETTE_CACHE_SIZE; ++probe)
+	{
+		auto &entry = g2GpuPaletteCache[slot][index];
+		if (!entry.surface || (entry.surface == surface && entry.bones == bones)) return &entry;
+		index = (index + 1) & (G2_PALETTE_CACHE_SIZE - 1);
+	}
+	return nullptr;
+}
 static void R_SkinGhoulVertex(const mdxmVertex_t *vertex, CBoneCache *bones, const int *references,
 	const mdxaBone_t *pose, vec3_t position, vec3_t normal);
 struct G2GpuVertex
@@ -2925,6 +2957,8 @@ void R_ClearGhoul2GpuBuffers()
 	qglDeleteBuffers(MAX_FRAMES, g2GpuPalettes);
 	memset(g2GpuPalettes, 0, sizeof(g2GpuPalettes));
 	memset(g2GpuPaletteOffsets, 0, sizeof(g2GpuPaletteOffsets));
+	memset(g2GpuPaletteCache, 0, sizeof(g2GpuPaletteCache));
+	memset(g2GpuPalettePoseCount, 0, sizeof(g2GpuPalettePoseCount));
 	memset(glState.currentUBOs, 0, sizeof(glState.currentUBOs));
 	glState.currentGlobalUBO = 0;
 }
@@ -3058,25 +3092,22 @@ static bool R_DrawGhoulGpu(CRenderableSurface *surf)
 	{
 		g2GpuPaletteFrames[slot] = backEndData->realFrameNumber;
 		g2GpuPaletteOffsets[slot] = 0;
+		memset(g2GpuPaletteCache[slot], 0, sizeof(g2GpuPaletteCache[slot]));
+		g2GpuPalettePoseCount[slot] = 0;
 	}
+	// Distinct offsets are faster in small scenes. Reuse offsets only when a crowd
+	// would otherwise exhaust this frame's palette buffer.
+	G2GpuPaletteEntry *cachedPalette = R_CacheGhoulGpuPalettes(slot, surf->boneCache)
+		? R_FindGhoulGpuPalette(slot, surface, surf->boneCache) : nullptr;
+	const bool cached = cachedPalette && cachedPalette->surface;
 	const size_t alignment = glRefConfig.uniformBufferOffsetAlignment - 1;
 	const size_t size = (sizeof(SkeletonBoneMatricesBlock) + alignment) & ~alignment;
-	if (g2GpuPaletteOffsets[slot] + size > G2_PALETTE_BYTES) return false;
+	if (!cached && g2GpuPaletteOffsets[slot] + size > G2_PALETTE_BYTES) return false;
 	RB_EndSurface();
 	RB_BeginSurface(tess.shader, tess.fogNum, tess.cubemapIndex);
 	G2GpuMesh *mesh = R_GhoulGpuMesh(surface);
 	if (!mesh) return false;
-	SkeletonBoneMatricesBlock palette = {};
 	const int *references = (const int *)((const byte *)surface + surface->ofsBoneReferences);
-	for (int index : mesh->usedBones)
-	{
-#ifdef JK2_MODE
-		const mdxaBone_t &bone = surf->boneCache->Eval(references[index]);
-#else
-		const mdxaBone_t &bone = surf->boneCache->EvalRender(references[index]);
-#endif
-		memcpy(palette.matrices[index], bone.matrix, sizeof(mdxaBone_t));
-	}
 	// Separate palettes cannot exhaust the scene/camera uniform allocator. Each slot
 	// follows the existing frame fence before its storage is reused.
 	if (!g2GpuPalettes[slot])
@@ -3089,9 +3120,30 @@ static bool R_DrawGhoulGpu(CRenderableSurface *surf)
 		qglBindBuffer(GL_UNIFORM_BUFFER, g2GpuPalettes[slot]);
 	glState.currentGlobalUBO = g2GpuPalettes[slot];
 	tr.animationBoneUbo = g2GpuPalettes[slot];
-	tr.animationBoneUboOffset = g2GpuPaletteOffsets[slot];
-	qglBufferSubData(GL_UNIFORM_BUFFER, tr.animationBoneUboOffset, sizeof(palette), &palette);
-	g2GpuPaletteOffsets[slot] += size;
+	if (!cached)
+	{
+		SkeletonBoneMatricesBlock palette = {};
+		for (int index : mesh->usedBones)
+		{
+#ifdef JK2_MODE
+			const mdxaBone_t &bone = surf->boneCache->Eval(references[index]);
+#else
+			const mdxaBone_t &bone = surf->boneCache->EvalRender(references[index]);
+#endif
+			memcpy(palette.matrices[index], bone.matrix, sizeof(mdxaBone_t));
+		}
+		tr.animationBoneUboOffset = g2GpuPaletteOffsets[slot];
+		qglBufferSubData(GL_UNIFORM_BUFFER, tr.animationBoneUboOffset, sizeof(palette), &palette);
+		if (cachedPalette)
+		{
+			cachedPalette->surface = surface;
+			cachedPalette->bones = surf->boneCache;
+			cachedPalette->offset = tr.animationBoneUboOffset;
+		}
+		g2GpuPaletteOffsets[slot] += size;
+	}
+	else
+		tr.animationBoneUboOffset = cachedPalette->offset;
 	R_BindVBO(&mesh->vbo);
 	R_BindIBO(&mesh->ibo);
 	tess.useInternalVBO = qfalse;
