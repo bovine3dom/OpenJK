@@ -392,8 +392,14 @@ rough notes / todo
   - Manual platform, audio, and campaign-load checks remain open. See `docs/launcher.md`.
 - settings menu needs a refresh. lazy option would be to reuse the atmosphere_editor with descriptions from the variables
 - ... would it be crazy to port single-player to multiplayer to allow for co-op?
-- first person lightsaber?
-- lightsaber + jolt?
+- [ ] First-person lightsaber presentation.
+- [ ] First-person lightsaber with Jolt reactions.
+- [x] Add the first-person full-body prototype: clone the player model, hide
+  the head, follow the animated neck, and show the body during kicks.
+- [x] Align high-detail body-mode weapons and projectiles with the animated
+  world weapon muzzle.
+- [ ] Replace hip-fire weapon presentation with a first-person aim or ready
+  pose.
 - JO force-picking screen needs story-progression powers to be more obviously marked. especially where they have gained levels
 - force-picking screen should have the blue-striped background expand across the whole screen rather than being a little box in the middle of a sea of black
 - speed up loading times
@@ -414,12 +420,13 @@ rough notes / todo
 - in JO, at least, we don't seem to be able to switch between lightsaber styles - check JA too. it's bound to mouse3
 - disable 'switch to better weapon' by default?
 - make force jump transition at the top a bit less harsh
-- add nukem-boot (i think the anim already exists?). have power scale with force push power.
-	- get a better kick sound (grunt?)
-	- give kick more of an up impulse and much less of a back impulse
-	- work out what the kick pitch and roll settings are for?
-	- apply some tiny amount of smoothing to the camera / reticule
-	- when you die you have no head
-	- arma style 'high ready' animation that is toggleabl that is toggleabl that is toggleabl that is toggleable?
+- [x] Add nukem-boot with Force Push-scaled lift.
+	- [x] Add a kick sound.
+	- [x] Add upward impulse, scaled with Force Push.
+	- [ ] Tune backward movement and overall kick balance.
+	- [ ] Work out the kick camera pitch and roll settings.
+	- [ ] Apply a small amount of smoothing to the camera and reticle.
+	- [ ] Verify the death view has no head clipping.
+	- [ ] Add an optional Arma-style high-ready animation.
 - fix disruptor rifle aspect ratio
 - dismemberment for high damage weapons like the flechette rifle? explosions?

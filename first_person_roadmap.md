@@ -25,6 +25,43 @@ The main split is:
 
 This means OpenJK does not need to choose between a fully shared body and a fully fake body. A hybrid system is the best fit.
 
+## Current implementation status
+
+The first working hybrid body view now exists in `code/`.
+
+Completed:
+
+- [x] Render a cloned Ghoul2 player body in first person.
+- [x] Hide the head surface in the clone. Do not create a kick-only model.
+- [x] Keep the body available for mirrors while hiding the normal local world body.
+- [x] Re-anchor the camera to the animated neck area.
+- [x] Add separate neck-axis and height controls:
+  `cg_firstPersonBodyNeckOffset` and `cg_firstPersonBodyHeightOffset`.
+- [x] Keep high-detail first-person weapons in body mode.
+- [x] Align body-mode weapons and barrels to the animated world muzzle. Keep
+  projectiles and the reticle aligned with that muzzle.
+- [x] Keep muzzle calculation active when `cg_drawGun 0` hides the weapon.
+- [x] Preserve subsurface scattering with normal model depth.
+- [x] Show the body during the shared kick animation, including when the saber
+  is equipped.
+- [x] Add the shared kick button, kick sound, Force Push-scaled lift, and a
+  small first-person camera response.
+
+Enable the body mode with `cg_firstPersonBody 1`. The developer test path also
+accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
+`cg_firstPersonBodyNeckOffset -2` and
+`cg_firstPersonBodyHeightOffset 16`. The default height can be tuned in the
+console without changing the model or the kick trace.
+
+Open work:
+
+- [ ] Replace the hip-fire weapon pose with a first-person aiming or ready pose.
+- [ ] Decide how first-person lightsabers should render.
+- [ ] Tune camera and reticle smoothing, kick camera pitch and roll, death
+  presentation, and an optional toggleable high-ready pose.
+- [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
+  mirrors, water, weapon changes, and rapid movement.
+
 ## Findings from other games and engines
 
 ### Arma
@@ -171,7 +208,9 @@ OpenJK already has a hybrid foundation:
 - The renderer already has `RF_DEPTHHACK` and `RF_FIRST_PERSON` flags.
 - Kick traces use server-side animation and foot bolt positions.
 
-The main missing feature is a local first-person body render that can show the kicking leg without exposing the full player model.
+The initial local first-person body render is now implemented. The remaining
+work is presentation polish: aim poses, saber presentation, camera smoothing,
+and broader model and movement testing.
 
 ## Recommended design
 
@@ -226,69 +265,78 @@ This keeps prediction and multiplayer behavior stable.
 
 ## Implementation plan
 
-### Phase 0: Rendering experiment
+### Phase 0: Rendering experiment — complete
 
-Goal: prove that the current Ghoul2 model can render as a local view model.
+- [x] Add a developer-only test path.
+- [x] Render a duplicate local player model in first person.
+- [x] Hide the head and use first-person render flags.
+- [x] Keep the normal world model available to mirrors.
+- [x] Test camera pitch and looking down with real GameData assets.
 
-- Add a developer-only test path.
-- Render a duplicate local player model near the first-person camera.
-- Apply `RF_DEPTHHACK` and `RF_FIRST_PERSON`.
-- Confirm that the model does not appear in mirrors twice.
-- Test camera pitch, yaw, crouching, and weapon changes.
+Crouching, slopes, stairs, mirrors, water, and all player models still need
+broader testing.
 
-Do not change gameplay in this phase.
+### Phase 1: Kick gameplay — complete for the first prototype
 
-### Phase 1: Kick gameplay
+See `duke_boot_roadmap.md`.
 
-Use the plan in `duke_boot_roadmap.md`:
+- [x] Add a dedicated kick button and held-button flag.
+- [x] Start a forward kick in shared movement code.
+- [x] Apply the kick to `SETANIM_LEGS`.
+- [x] Stop normal weapon firing during the kick.
+- [x] Reuse the existing server kick trace.
+- [x] Add kick sound, Force Push-scaled lift, and first-person camera response.
 
-- Add a dedicated kick button.
-- Add a held-button flag.
-- Start a forward kick in shared movement code.
-- Apply the kick to `SETANIM_LEGS`.
-- Stop movement and normal firing during the kick.
-- Reuse `G_KickTrace()`.
+Directional, air, and balance tuning remain open.
 
-### Phase 2: Static full-body view model
+### Phase 2: Static full-body view model — complete
 
-- Render the existing full player model in the first-person view.
-- Use fixed offsets first.
-- Keep the gameplay origin and orientation authoritative.
-- Hide the head surface.
-- Confirm that the body is visible when looking down.
+- [x] Render the existing full player model in the first-person view.
+- [x] Keep the gameplay origin and orientation authoritative.
+- [x] Hide the head surface.
+- [x] Confirm that the body is visible when looking down.
+- [x] Use one full-body presentation for normal movement and kicks.
 
 Do not create a boot-only or kick-only model.
 
-### Phase 3: Animate the view model
+### Phase 3: Animate the view model — initial implementation complete
 
-- Drive the full body from the predicted legs and torso animation state.
-- Reuse the existing Ghoul2 skeleton.
-- Preserve the rifle torso pose.
-- Compare the visible boot position with the server foot bolt.
-- Correct only visual offsets. Do not change hit detection to match the view model.
+- [x] Drive the body from the predicted legs and torso animation state.
+- [x] Reuse the existing Ghoul2 skeleton.
+- [x] Preserve the weapon torso animation.
+- [x] Keep the server animation and foot bolts authoritative.
+- [x] Correct visual body, camera, hand, and muzzle offsets without changing
+  hit detection.
 
-### Phase 4: Isolate the first-person body
+Compare the visible boot position with the server foot bolt during a dedicated
+movement pass. Do not change hit detection to match the view model.
+
+### Phase 4: Isolate the first-person body — complete for the current prototype
 
 Use a cloned Ghoul2 player model with the head surface disabled.
 
-- Keep the torso, pelvis, legs, and boots available.
-- Keep surface changes off the live world model.
-- Hide additional surfaces only when they clip the camera or weapon.
-- Keep one view model for normal movement and kicks.
+- [x] Keep the torso, pelvis, legs, and boots available.
+- [x] Keep surface changes off the live world model.
+- [x] Hide the head without hiding the body needed by the kick.
+- [x] Keep one view model for normal movement and kicks.
 
-Use a separate lower-body model only if the cloned full-body model cannot meet the clipping and aiming requirements.
+Use a separate lower-body model only if later testing proves that the cloned
+full-body model cannot meet the clipping and aiming requirements.
 
 ### Phase 5: Weapon and camera polish
 
-- Keep the rifle hands aligned with the camera.
-- Replace the current third-person hip-fire pose with a view-aligned aim animation.
-- Keep first-person weapon alignment separate from the third-person body animation.
-- Verify that projectile and hitscan origins use the intended aim point.
-- Add a small pitch and roll response.
-- Add kick start and impact sounds.
-- Tune view-model scale and offsets for different FOV settings.
-- Test crouching, jumping, slopes, stairs, mirrors, and water.
-- Test all player models and skins.
+- [x] Place the high-detail weapon at the animated hand and world muzzle.
+- [x] Keep projectile and hitscan origins aligned with the world muzzle.
+- [x] Add configurable body neck and height offsets.
+- [x] Add the initial kick camera response and kick sound.
+- [ ] Replace the third-person hip-fire pose with a view-aligned aim or ready
+  animation.
+- [ ] Decide whether the weapon should remain body-driven during aiming or use
+  a controlled first-person hand pose.
+- [ ] Add camera and reticle smoothing.
+- [ ] Tune view-model scale and offsets for different FOV settings.
+- [ ] Test crouching, jumping, slopes, stairs, mirrors, water, weapon changes,
+  all weapons, and all player models and skins.
 
 ### Phase 6: Optional true full-body mode
 
@@ -330,7 +378,10 @@ Recommendation: share the kick animation and legs timer first. Add first-person-
 
 ### 6. Should the camera follow the animated body?
 
-Recommendation: no for the first version. Keep the existing camera and add controlled camera offsets. A body-driven camera is a later option.
+The current prototype re-anchors the camera to the animated neck area while
+preserving view offsets. Keep this controlled approach. Do not make the full
+head animation the camera until camera shake, clipping, and weapon aim are
+solved.
 
 ### 7. Should the first-person body affect collision or damage?
 
@@ -353,15 +404,17 @@ The first production version is successful when:
 
 ## Final recommendation
 
-Implement a shared gameplay animation with a separate first-person full-body presentation. This follows the common industry split:
+Keep the current shared-gameplay, separate-presentation design:
 
 - Reuse the animation and gameplay truth.
 - Cheat the camera, FOV, depth, and visible geometry.
 - Hide the head while keeping the torso and legs visible.
 - Use the same body presentation for movement and kicks.
+- Align high-detail weapons to the animated world muzzle.
 - Keep the third-person model authoritative for other players and hit detection.
 
-This gives OpenJK the useful part of Arma-style body awareness without requiring a complete true-first-person camera system.
+The next major task is a first-person weapon aim or ready pose. Do not replace
+the full-body view with a kick-only model.
 
 ## Source and research notes
 
