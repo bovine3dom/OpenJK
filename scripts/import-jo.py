@@ -16,7 +16,7 @@ NPC_CLASSES = {"GALAK_MECH": "GALAKMECH", "MORGAN": "MORGANKATARN"}
 NPC_SABERS = {"CLASS_KYLE": "Kyle", "CLASS_LUKE": "Luke", "CLASS_DESANN": "Desann",
               "CLASS_TAVION": "Tavion", "CLASS_REBORN": "Reborn"}
 CINEMATIC_GESTURES = (b"BOTH_TALKGESTURE11START", b"BOTH_TALKGESTURE11STOP", b"BOTH_TALKGESTURE2")
-# Slots 45-50 are shared with the Galak controller in codeJK2/game/AI_GalakMech.cpp.
+# Slots 45-50 are shared with the Galak controller in code/game/AI_GalakMech_JO.cpp.
 GALAK_ANIMATIONS = (b"BOTH_ALERT1", b"TORSO_RAISEWEAP2", b"TORSO_DROPWEAP2",
                     b"BOTH_TRIUMPHANT1START", b"BOTH_TRIUMPHANT1STARTGESTURE", b"BOTH_TRIUMPHANT1STOP")
 # These two retail script names have no clips in the supplied animation sets.
