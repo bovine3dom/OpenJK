@@ -357,8 +357,6 @@ vmCvar_t	cg_smoothCamera;
 vmCvar_t	cg_speedTrail;
 vmCvar_t	cg_fovViewmodel;
 vmCvar_t	cg_fovViewmodelAdjust;
-vmCvar_t	cg_firstPersonKickPitch;
-vmCvar_t	cg_firstPersonKickRoll;
 
 vmCvar_t	cg_scaleVehicleSensitivity;
 
@@ -491,8 +489,6 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_speedTrail, "cg_speedTrail", "1", CVAR_ARCHIVE },
 	{ &cg_fovViewmodel, "cg_fovViewmodel", "0", CVAR_ARCHIVE },
 	{ &cg_fovViewmodelAdjust, "cg_fovViewmodelAdjust", "1", CVAR_ARCHIVE },
-	{ &cg_firstPersonKickPitch, "cg_firstPersonKickPitch", "2", CVAR_ARCHIVE },
-	{ &cg_firstPersonKickRoll, "cg_firstPersonKickRoll", "0.5", CVAR_ARCHIVE },
 
 	{ &cg_scaleVehicleSensitivity, "cg_scaleVehicleSensitivity", "1", CVAR_ARCHIVE },
 };

@@ -1143,7 +1143,6 @@ CG_OffsetFirstPersonView
 extern qboolean PM_InForceGetUp( playerState_t *ps );
 extern qboolean PM_InGetUp( playerState_t *ps );
 extern qboolean PM_InKnockDown( playerState_t *ps );
-extern qboolean PM_KickingAnim( int anim );
 extern int PM_AnimLength( int index, animNumber_t anim );
 static void CG_OffsetFirstPersonView( qboolean firstPersonSaber ) {
 	float			*origin;
@@ -1207,26 +1206,6 @@ static void CG_OffsetFirstPersonView( qboolean firstPersonSaber ) {
 			kickPerc = kickTime/600.0f;
 		}
 		VectorMA( angles, kickPerc, cg.kick_angles, angles );
-	}
-
-	// Add a small first-person response to the shared kick animation. This only
-	// changes presentation; movement and the kick trace use the shared state.
-	if ( PM_KickingAnim( cg.predicted_player_state.legsAnim ) &&
-		cg.predicted_player_state.legsAnimTimer > 0 && cg.snap->ps.clientNum >= 0 &&
-		cg.snap->ps.clientNum < MAX_GENTITIES && cg_entities[cg.snap->ps.clientNum].gent &&
-		cg_entities[cg.snap->ps.clientNum].gent->client )
-	{
-		const int animLength = PM_AnimLength(
-			cg_entities[cg.snap->ps.clientNum].gent->client->clientInfo.animFileIndex,
-			(animNumber_t)cg.predicted_player_state.legsAnim );
-		if ( animLength > 0 )
-		{
-			float progress = 1.0f - (float)cg.predicted_player_state.legsAnimTimer / animLength;
-			progress = Com_Clamp( 0.0f, progress, 1.0f );
-			const float response = sin( progress * M_PI );
-			angles[PITCH] += response * cg_firstPersonKickPitch.value;
-			angles[ROLL] += response * cg_firstPersonKickRoll.value;
-		}
 	}
 
 	// add angles based on damage kick

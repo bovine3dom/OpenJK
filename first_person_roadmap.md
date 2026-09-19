@@ -44,8 +44,7 @@ Completed:
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber
   is equipped.
-- [x] Add the shared kick button, kick sound, Force Push-scaled lift, and a
-  small first-person camera response.
+- [x] Add the shared kick button, kick sound, and Force Push-scaled lift.
 
 Enable the body mode with `cg_firstPersonBody 1`. The developer test path also
 accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
@@ -58,8 +57,8 @@ Open work:
 - [x] Flip the mirrored body-mode weapon in place without changing its world
   position.
 - [x] Replace the hip-fire weapon pose with a first-person aiming pose.
-- [ ] Tune camera and reticle smoothing, kick camera pitch and roll, death
-  presentation, and an optional toggleable ready pose vs hip firing.
+- [ ] Tune camera and reticle smoothing, death presentation, and an optional
+  toggleable ready pose versus hip firing.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
   mirrors, water, weapon changes, and rapid movement.
 - [ ] Decide how first-person lightsabers should render.
@@ -252,7 +251,9 @@ A true full-body camera attached to the animated head can provide strong body aw
 - Camera pitch and body pitch can fight each other.
 - Some existing animations can place the face or geometry inside the near plane.
 
-Keep the current camera system. Add a controlled kick offset first. Consider a head or camera bone only after the lower-body prototype works.
+Keep the current camera system. Let the shared body animation show the kick.
+Do not add a separate pitch or roll offset. Consider a head or camera bone only
+after the lower-body prototype works.
 
 ### Do not use the first-person render for gameplay
 
@@ -287,7 +288,7 @@ See `duke_boot_roadmap.md`.
 - [x] Apply the kick to `SETANIM_LEGS`.
 - [x] Stop normal weapon firing during the kick.
 - [x] Reuse the existing server kick trace.
-- [x] Add kick sound, Force Push-scaled lift, and first-person camera response.
+- [x] Add kick sound and Force Push-scaled lift.
 
 Directional, air, and balance tuning remain open.
 
@@ -330,7 +331,7 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Place the high-detail weapon at the animated hand and world muzzle.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
 - [x] Add configurable body neck and height offsets.
-- [x] Add the initial kick camera response and kick sound.
+- [x] Add the kick sound.
 - [x] Replace the third-person hip-fire pose with a first-person weapon-ready
   animation.
 - [ ] Decide whether the weapon should remain body-driven during aiming or use

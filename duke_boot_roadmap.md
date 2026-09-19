@@ -27,7 +27,7 @@ Relevant code now provides:
 - Kick damage, knockdown, push, and impact effects through `G_KickTrace()`.
 - A kick event and melee kick sound.
 - A small upward impulse that increases with Force Push level.
-- A first-person body camera response.
+- A first-person body view that follows the shared kick animation.
 
 The kick can run with the saber equipped. The first-person path does not create
 a kick-specific model.
@@ -130,10 +130,9 @@ playtesting.
 ### Phase 4: Polish and balance
 
 - [x] Add the kick event and start sound.
-- [x] Add the initial camera response.
 - [x] Add Force Push-scaled upward impulse.
 - [ ] Fix bug: force push does _not_ appear to scale the impulse ingame.
-- [ ] Remove the obsolete kick camera pitch and roll settings.
+- [x] Remove the obsolete kick camera pitch and roll settings.
 - [ ] Make upwards impulse tuneable ingame, and the backwards one too, separately.
 - [ ] Test demos, save games, prediction, and multiplayer behavior.
 - [ ] Tune damage, push, range, cooldown, and animation timing.
