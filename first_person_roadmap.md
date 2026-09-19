@@ -175,7 +175,7 @@ The main missing feature is a local first-person body render that can show the k
 
 ## Recommended design
 
-Use a hybrid lower-body view model.
+Use a gameplay-synced full-body view model.
 
 ### Shared animation
 
@@ -186,20 +186,20 @@ PM_SetAnim(pm, SETANIM_LEGS, BOTH_A7_KICK_F,
     SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 100);
 ```
 
-The torso can keep the rifle-ready animation. The client view model should read the predicted legs animation and timer.
+The torso can keep the rifle-ready animation. The client view model should read the predicted legs animation and timer. The kick must use the same full-body view model as other actions. Do not create a kick-only model.
 
 ### Separate local presentation
 
-Render a local first-person body component only when needed:
+Render the local full body when the first-person body mode is active:
 
-- Show the pelvis, thighs, and boot during the kick.
-- Keep the head and upper body hidden.
+- Show the torso, pelvis, legs, and boots when the player looks down.
+- Keep the head surface hidden to prevent near-camera clipping.
 - Keep the normal rifle hands and weapon model.
 - Render the local body with first-person depth handling.
 - Keep the world player model hidden from the main first-person view.
 - Keep the world player model available for mirrors and other players.
 
-The first implementation can show more of the body than intended. The final implementation should not require a visible torso at all times.
+Keep the torso visible unless it causes a clear clipping or aiming problem. Hide more surfaces only as a presentation fix, not as a separate kick model.
 
 ### Do not attach the camera to the head yet
 
@@ -249,31 +249,34 @@ Use the plan in `duke_boot_roadmap.md`:
 - Stop movement and normal firing during the kick.
 - Reuse `G_KickTrace()`.
 
-### Phase 2: Static boot view model
+### Phase 2: Static full-body view model
 
-- Render a lower-body or boot asset in front of the camera.
+- Render the existing full player model in the first-person view.
 - Use fixed offsets first.
-- Do not attempt perfect body attachment yet.
-- Add a simple camera kick.
-- Confirm that the boot is visible during the kick window.
+- Keep the gameplay origin and orientation authoritative.
+- Hide the head surface.
+- Confirm that the body is visible when looking down.
+
+Do not create a boot-only or kick-only model.
 
 ### Phase 3: Animate the view model
 
-- Drive the view model from the predicted `legsAnim` and `legsAnimTimer`.
-- Reuse the existing Ghoul2 skeleton if possible.
+- Drive the full body from the predicted legs and torso animation state.
+- Reuse the existing Ghoul2 skeleton.
 - Preserve the rifle torso pose.
 - Compare the visible boot position with the server foot bolt.
 - Correct only visual offsets. Do not change hit detection to match the view model.
 
-### Phase 4: Isolate the lower body
+### Phase 4: Isolate the first-person body
 
-Choose one of these implementations:
+Use a cloned Ghoul2 player model with the head surface disabled.
 
-1. A cloned Ghoul2 player model with upper surfaces disabled.
-2. A separate lower-body model that uses the player skeleton.
-3. A dedicated boot and leg view model.
+- Keep the torso, pelvis, legs, and boots available.
+- Keep surface changes off the live world model.
+- Hide additional surfaces only when they clip the camera or weapon.
+- Keep one view model for normal movement and kicks.
 
-Prefer option 1 for the first production attempt if Ghoul2 duplication and surface control are safe. Prefer option 2 if the existing player model cannot hide the upper body cleanly.
+Use a separate lower-body model only if the cloned full-body model cannot meet the clipping and aiming requirements.
 
 ### Phase 5: Weapon and camera polish
 
@@ -305,15 +308,13 @@ This is a larger feature. It is not required for a convincing kick.
 
 Choose one:
 
-- **Lower-body awareness:** show legs only when needed. Recommended.
-- **Full-body awareness:** show the complete body when looking down. Larger scope.
-- **Saber-style body view:** use the existing special body path for all melee actions. Fast prototype, but it changes camera behavior.
+- **Full-body awareness:** show the complete body when looking down. Recommended.
+- **Lower-body awareness:** use this only if the torso causes repeated clipping or aiming problems.
+- **Saber-style body view:** use the existing special body path for all melee actions. Do not use this as the general weapon solution.
 
 ### 2. Should the torso be visible?
 
-Recommendation: no. Keep the torso hidden in normal rifle first person. Show only enough pelvis and leg geometry to make the kick readable.
-
-User opinion: in Arma, the torso is visible, and it really helps with grounding. so we should try to keep it visible and only abandon it if it causes too many problems.
+Yes. Keep the torso visible in first person. Hide the head first. Hide more torso surfaces only if testing shows a clear clipping or aiming problem.
 
 ### 3. Should the first-person model use the same Ghoul2 instance?
 
@@ -346,14 +347,18 @@ The first production version is successful when:
 - The server hit trace matches the kick timing.
 - Other players see the normal full kick animation.
 - Prediction does not cause visible kick delay or duplicate kicks.
-- The feature works without showing the torso during normal rifle play.
+- The full body is visible when looking down.
+- The head does not clip into the first-person camera.
+- The same body presentation works during normal movement and kicks.
 
 ## Final recommendation
 
-Implement a shared gameplay animation with a separate first-person lower-body presentation. This follows the common industry split:
+Implement a shared gameplay animation with a separate first-person full-body presentation. This follows the common industry split:
 
 - Reuse the animation and gameplay truth.
 - Cheat the camera, FOV, depth, and visible geometry.
+- Hide the head while keeping the torso and legs visible.
+- Use the same body presentation for movement and kicks.
 - Keep the third-person model authoritative for other players and hit detection.
 
 This gives OpenJK the useful part of Arma-style body awareness without requiring a complete true-first-person camera system.
