@@ -91,13 +91,14 @@ controls. The current controls are:
 - `cg_firstPersonBodyNeckOffset`: neck-axis offset.
 - `cg_firstPersonBodyHeightOffset`: world height offset.
 
-The body-driven poses use the complete attached world weapon. The separate
-view-weapon pose uses the high-detail first-person weapon. Use
-`cg_firstPersonBodyWeaponPose 0` for body-driven hip fire, `1` for the separate
-view weapon, or `2` for body-driven shoulder aim. Mode `1` hides the waist-up
-body. Shoulder aim is the default. Its upper-body ready and attack animations
-move the hands and weapon recoil. A muzzle-direction correction keeps the
-weapon on the sight line during idle and recoil.
+The hip pose uses the attached world weapon. The view and shoulder poses use
+the high-detail first-person weapon. Shoulder mode puts this weapon at the
+animated body hand. Use `cg_firstPersonBodyWeaponPose 0` for body-driven hip
+fire, `1` for the separate view weapon, or `2` for body-driven shoulder aim.
+Mode `1` hides the waist-up body. Shoulder aim is the default. Its upper-body
+ready and attack animations move the hands and weapon recoil. A
+muzzle-direction correction keeps the weapon on the sight line during idle and
+recoil.
 
 The saber still uses its special player-model path. A general first-person saber
 presentation remains open.

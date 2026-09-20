@@ -7046,9 +7046,9 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 		firstPersonBodyWeaponMuzzleValid = qtrue;
 	}
 
-	// The separate view-weapon pose replaces the attached world weapon. The
-	// body-driven poses keep the complete world model unless the gun is hidden.
-	if ( ( weaponPose == FIRST_PERSON_BODY_WEAPON_VIEW ||
+	// View and shoulder poses use the high-detail first-person weapon. Keep the
+	// attached world weapon only for the body-driven hip pose.
+	if ( ( weaponPose != FIRST_PERSON_BODY_WEAPON_HIP ||
 		!cg_drawGun.integer || cg.zoomMode ) && cent->currentState.weapon != WP_SABER )
 	{
 		for ( int i = 0; i < MAX_INHAND_WEAPONS; ++i )

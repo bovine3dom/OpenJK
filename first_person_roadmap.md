@@ -38,8 +38,8 @@ Completed:
 - [x] Keep the camera on the animated neck during crouch and stand transitions.
 - [x] Add separate neck-axis and height controls:
   `cg_firstPersonBodyNeckOffset` and `cg_firstPersonBodyHeightOffset`.
-- [x] Use the complete attached world weapon for body-driven poses. Use the
-  high-detail first-person weapon for the separate view-weapon pose.
+- [x] Use the attached world weapon for the hip pose. Use the high-detail
+  first-person weapon at the animated hand for view and shoulder poses.
 - [x] Align weapon effects and attacks with the animated world muzzle.
 - [x] Add three weapon presentations: body-driven hip, a separate view weapon,
   and body-driven shoulder aim.
@@ -341,8 +341,8 @@ full-body model cannot meet the clipping and aiming requirements.
 
 ### Phase 5: Weapon and camera polish
 
-- [x] Keep the complete attached weapon in body-driven poses.
-- [x] Keep the high-detail weapon in the separate view-weapon pose.
+- [x] Keep the attached world weapon in the body-driven hip pose.
+- [x] Use the high-detail first-person weapon in view and shoulder poses.
 - [x] Hide the waist-up body in the separate view-weapon pose.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
 - [x] Correct shoulder aim in pitch and yaw from the muzzle direction during
