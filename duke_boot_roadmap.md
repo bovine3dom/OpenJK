@@ -142,6 +142,7 @@ playtesting.
 - [x] Make each Force Push level produce a visible increase in target lift.
 - [x] Increase target travel in equal Force Push level steps. The default test
   distances are approximately 10, 20, 30, and 40 units.
+- [x] Do not add the legacy random throw after the custom target impulse.
 - [x] Keep the attacker in place during the kick.
 - [x] Knock the target down before the impulse lifts it from the ground.
 - [x] Trace the forward kick toward the view direction and use a wider contact

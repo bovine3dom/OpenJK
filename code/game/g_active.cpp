@@ -2064,7 +2064,11 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 						TIMER_Set( ent, "kickSoundDebounce", 2000 );
 					}
 					TIMER_Set( hitEnt, "kickedDebounce", 1000 );
-					if ( !customKick && ent->client->ps.torsoAnim == BOTH_A7_HILT )
+					if ( customKick )
+					{
+						return hitEnt;
+					}
+					if ( ent->client->ps.torsoAnim == BOTH_A7_HILT )
 					{//hit in head
 						if ( hitEnt->health > 0 )
 						{//knock down
