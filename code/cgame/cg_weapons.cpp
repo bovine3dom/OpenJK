@@ -910,7 +910,8 @@ void CG_SetGhoul2InfoRef( refEntity_t *ent, refEntity_t	*s1)
 
 
 //--------------------------------------------------------------------------
-static void CG_DoMuzzleFlash( centity_t *cent, vec3_t org, vec3_t dir, weaponData_t *wData )
+static void CG_DoMuzzleFlash( centity_t *cent, vec3_t org, vec3_t dir,
+	weaponData_t *wData, qboolean worldSpace )
 {
 	// Handle muzzle flashes, really this could just be a qboolean instead of a time.......
 	if ( cent->muzzleFlashTime > 0 )
@@ -937,7 +938,7 @@ static void CG_DoMuzzleFlash( centity_t *cent, vec3_t org, vec3_t dir, weaponDat
 
 		if (/*( cent->currentState.eFlags & EF_FIRING || cent->currentState.eFlags & EF_ALT_FIRING ) &&*/ effect )
 		{
-			if (( cent->gent && cent->gent->NPC ) || cg.renderingThirdPerson )
+			if ( worldSpace || ( cent->gent && cent->gent->NPC ) || cg.renderingThirdPerson )
 			{
 				theFxScheduler.PlayEffect( effect, org, dir );
 			}
@@ -1092,6 +1093,8 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 	vec3_t bodyWeaponMuzzleOrigin, bodyWeaponMuzzleDir, bodyWeaponRenderOffset;
 	const qboolean bodyWeaponMuzzleValid = ( useBodyWeapon &&
 		CG_GetFirstPersonBodyWeaponMuzzle( bodyWeaponMuzzleOrigin, bodyWeaponMuzzleDir ) ) ? qtrue : qfalse;
+	const qboolean highDetailBodyWeapon = ( bodyWeaponMuzzleValid &&
+		bodyWeaponPose == FIRST_PERSON_BODY_WEAPON_SHOULDER ) ? qtrue : qfalse;
 	VectorClear( bodyWeaponRenderOffset );
 	vec3_t extraOffset;
 	extraOffset[0] = extraOffset[1] = extraOffset[2] = 0.0f;
@@ -1298,13 +1301,22 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 
 		// Seems like we should always do this in case we have an animating muzzle flash....that way we can always store the correct muzzle dir, etc.
 		CG_PositionEntityOnTag( &flash, &gun, gun.hModel, "tag_flash");
-		if ( bodyWeaponMuzzleValid )
+		if ( bodyWeaponMuzzleValid && !highDetailBodyWeapon )
 		{
 			VectorCopy( bodyWeaponMuzzleOrigin, flash.origin );
 			VectorCopy( bodyWeaponMuzzleDir, flash.axis[0] );
 		}
 
-		CG_DoMuzzleFlash( cent, flash.origin, flash.axis[0], wData );
+		// Draw shoulder flashes at the rendered barrel. World-space depth keeps
+		// the weapon in front of effects that extend behind the muzzle.
+		CG_DoMuzzleFlash( cent, flash.origin, flash.axis[0], wData,
+			highDetailBodyWeapon );
+		if ( highDetailBodyWeapon )
+		{
+			// Keep projectile placement on the corrected body muzzle.
+			VectorCopy( bodyWeaponMuzzleOrigin, flash.origin );
+			VectorCopy( bodyWeaponMuzzleDir, flash.axis[0] );
+		}
 
 		if ( cent->gent && cent->gent->client )
 		{

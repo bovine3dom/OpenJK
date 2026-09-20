@@ -347,6 +347,8 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
 - [x] Correct shoulder aim in pitch and yaw from the muzzle direction during
   idle and recoil.
+- [x] Draw shoulder muzzle flashes at the high-detail barrel. Keep the weapon
+  in front of the flash.
 - [x] Keep the shoulder pose active until the firing state ends.
 - [x] Add configurable body neck and height offsets.
 - [x] Add the kick sound.
