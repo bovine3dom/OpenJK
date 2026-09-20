@@ -1948,7 +1948,7 @@ void G_ThrownDeathAnimForDeathAnim( gentity_t *hitEnt, vec3_t impactPoint )
 }
 
 static void G_ApplyKickTargetImpulse( gentity_t *attacker, gentity_t *target,
-	const vec3_t kickDir )
+	const vec3_t kickDir, const vec3_t impactPoint )
 {
 	if ( target->flags & FL_NO_KNOCKBACK )
 	{
@@ -1963,25 +1963,29 @@ static void G_ApplyKickTargetImpulse( gentity_t *attacker, gentity_t *target,
 		( pushLevel + 1.0f ) / liftScale;
 	vec3_t horizontalDir = { kickDir[0], kickDir[1], 0.0f };
 	VectorNormalize( horizontalDir );
-	VectorMA( target->client->ps.velocity, backImpulse, horizontalDir,
-		target->client->ps.velocity );
-	target->client->ps.velocity[2] += upImpulse;
+	vec3_t kickVelocity, launchVelocity;
+	VectorScale( horizontalDir, backImpulse, kickVelocity );
+	kickVelocity[2] = upImpulse;
+	VectorAdd( target->client->ps.velocity, kickVelocity, launchVelocity );
 	if ( gi.Cvar_VariableIntegerValue( "g_debugDamage" ) )
 	{
 		gi.Printf( "kick_target_impulse target=%d level=%d up=%.1f back=%.1f velocity=%.1f,%.1f,%.1f\n",
 			target->s.number, pushLevel, upImpulse, backImpulse,
-			target->client->ps.velocity[0], target->client->ps.velocity[1],
-			target->client->ps.velocity[2] );
+			launchVelocity[0], launchVelocity[1], launchVelocity[2] );
 	}
 
 	if ( upImpulse > 0.0f || backImpulse > 0.0f )
 	{
 		target->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
 		target->client->ps.pm_time = 200;
-		G_Knockdown( target, attacker, kickDir, 300, qtrue );
-		if ( !G_JoltOwns( target ) )
+		if ( !G_JoltKick( target, kickVelocity, impactPoint ) )
 		{
-			target->client->ps.groundEntityNum = ENTITYNUM_NONE;
+			VectorCopy( launchVelocity, target->client->ps.velocity );
+			G_Knockdown( target, attacker, kickDir, 300, qtrue );
+			if ( !G_JoltOwns( target ) )
+			{
+				target->client->ps.groundEntityNum = ENTITYNUM_NONE;
+			}
 		}
 	}
 }
@@ -2039,7 +2043,7 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 					if ( customKick )
 					{
 						ent->client->ps.pm_flags &= ~PMF_KICK_TARGET_PENDING;
-						G_ApplyKickTargetImpulse( ent, hitEnt, kickDir );
+						G_ApplyKickTargetImpulse( ent, hitEnt, kickDir, trace.endpos );
 					}
 					if ( hitEnt->takedamage )
 					{//hurt it

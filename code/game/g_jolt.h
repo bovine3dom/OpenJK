@@ -38,6 +38,7 @@ bool G_JoltGrip(gentity_t* ent, int caster, const float* target, const float* he
 bool G_JoltGripping(const gentity_t* ent);
 bool G_JoltSupported(const gentity_t* ent);
 void G_JoltEndGrip(gentity_t* ent, int holdTime);
+bool G_JoltKick(gentity_t* ent, const float* velocity, const float* point);
 bool G_JoltKnockdown(gentity_t* ent, const float* direction, float strength, bool force = false);
 #else
 inline void G_JoltReset() {}
@@ -63,5 +64,6 @@ inline bool G_JoltGrip(gentity_t*, int, const float*, const float*, int) { retur
 inline bool G_JoltGripping(const gentity_t*) { return false; }
 inline bool G_JoltSupported(const gentity_t*) { return false; }
 inline void G_JoltEndGrip(gentity_t*, int) {}
+inline bool G_JoltKick(gentity_t*, const float*, const float*) { return false; }
 inline bool G_JoltKnockdown(gentity_t*, const float*, float, bool = false) { return false; }
 #endif
