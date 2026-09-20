@@ -434,3 +434,4 @@ rough notes / todo
 - jo bryar pistol should be selectable with button 1
 - force/weapon wheel should allow repeated scrolling without waiting for weapon to be drawn
 - doom_comm has the codes in the top left from the start of the level without ever seeing them anywhere
+- work out why officers can't be duke-booted
