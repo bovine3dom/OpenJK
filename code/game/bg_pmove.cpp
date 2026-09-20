@@ -14779,13 +14779,16 @@ static qboolean PM_TryKick( void )
 	// Keep each Force Push upgrade visible after gravity acts on the kick.
 	const int pushLevel = Com_Clampi( FORCE_LEVEL_0, FORCE_LEVEL_3,
 		pm->ps->forcePowerLevel[FP_PUSH] );
+	const float liftScale = 1.0f + pushLevel / 3.0f;
 	const float upImpulse = g_kickUpImpulse->value > 0.0f ? g_kickUpImpulse->value : 0.0f;
-	pm->ps->velocity[2] += upImpulse * ( 1.0f + pushLevel / 3.0f );
+	pm->ps->velocity[2] += upImpulse * liftScale;
 
 	vec3_t kickDirection = { pml.forward[0], pml.forward[1], 0.0f };
 	VectorNormalize( kickDirection );
 	const float backImpulse = g_kickBackImpulse->value > 0.0f ? g_kickBackImpulse->value : 0.0f;
-	VectorMA( pm->ps->velocity, -backImpulse, kickDirection, pm->ps->velocity );
+	// Compensate for longer airtime so backward travel increases in equal steps.
+	const float backScale = ( pushLevel + 1.0f ) / liftScale;
+	VectorMA( pm->ps->velocity, -backImpulse * backScale, kickDirection, pm->ps->velocity );
 	pm->ps->groundEntityNum = ENTITYNUM_NONE;
 	pml.groundPlane = qfalse;
 	pml.walking = qfalse;

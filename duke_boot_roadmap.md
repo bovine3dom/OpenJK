@@ -26,7 +26,7 @@ Relevant code now provides:
 - Foot bolt positions for hit detection.
 - Kick damage, knockdown, push, and impact effects through `G_KickTrace()`.
 - A kick event and melee kick sound.
-- A small upward impulse that increases with Force Push level.
+- Upward and backward kick impulses that increase with Force Push level.
 - A first-person body view that follows the shared kick animation.
 
 The kick can run with the saber equipped. The first-person path does not create
@@ -107,7 +107,7 @@ body for normal movement and kicks.
 - [x] Add shared kick selection in `bg_pmove.cpp`.
 - [x] Play `BOTH_A7_KICK_F` on `SETANIM_LEGS`.
 - [x] Reuse `G_KickTrace()`.
-- [x] Add kick sound and Force Push-scaled lift.
+- [x] Add kick sound and Force Push-scaled movement.
 
 Damage, range, knockdown, prediction, and weapon interruption still need focused
 playtesting.
@@ -133,6 +133,8 @@ playtesting.
 - [x] Add the kick event and start sound.
 - [x] Add Force Push-scaled upward impulse.
 - [x] Make each Force Push level produce a visible increase in kick lift.
+- [x] Increase backward travel in equal Force Push level steps. The default
+  test distances are 9.8, 19.4, 29.3, and 39.4 units.
 - [x] Remove the obsolete kick camera pitch and roll settings.
 - [x] Make upward and backward impulse tunable separately with
   `g_kickUpImpulse` and `g_kickBackImpulse`.
