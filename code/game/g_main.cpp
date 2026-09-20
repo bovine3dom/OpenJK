@@ -151,6 +151,7 @@ cvar_t	*g_gravity;
 cvar_t	*g_jumpHeightMultiplier;
 cvar_t	*g_kickUpImpulse;
 cvar_t	*g_kickBackImpulse;
+cvar_t	*g_kickForceExponent;
 cvar_t	*g_stepSlideFix;
 
 cvar_t	*g_sex;
@@ -640,6 +641,7 @@ void G_InitCvars( void ) {
 	g_jumpHeightMultiplier = gi.cvar( "g_jumpHeightMultiplier", "1.2", CVAR_ARCHIVE );
 	g_kickUpImpulse = gi.cvar( "g_kickUpImpulse", "200", CVAR_ARCHIVE );
 	g_kickBackImpulse = gi.cvar( "g_kickBackImpulse", "200", CVAR_ARCHIVE );
+	g_kickForceExponent = gi.cvar( "g_kickForceExponent", "1", CVAR_ARCHIVE );
 	g_stepSlideFix = gi.cvar( "g_stepSlideFix", "1", CVAR_ARCHIVE );
 	g_sex = gi.cvar ("sex", "f", CVAR_USERINFO | CVAR_ARCHIVE|CVAR_SAVEGAME|CVAR_NORESTART );
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_SAVEGAME|CVAR_NORESTART);

@@ -140,8 +140,10 @@ playtesting.
 - [x] Add the kick event and start sound.
 - [x] Apply the Force Push-scaled upward impulse to the target.
 - [x] Make each Force Push level produce a visible increase in target lift.
-- [x] Increase target travel in equal Force Push level steps. The default test
-  distances are approximately 10, 20, 30, and 40 units.
+- [x] Scale target travel as a geometric progression for each Force Push level.
+  The default progression is 1, 2, 4, and 8 times the level 0 distance.
+- [x] Make the progression exponent tunable with `g_kickForceExponent`. A value
+  of 1 doubles the distance at each level.
 - [x] Do not add the legacy random throw after the custom target impulse.
 - [x] Keep the attacker in place during the kick.
 - [x] Apply the Jolt impulse to the trunk segment nearest to the kick contact.
