@@ -28,6 +28,7 @@ Relevant code now provides:
 - A kick event and melee kick sound.
 - Separate upward and backward target impulses that increase with Force Push
   level.
+- A knockdown that starts a physics reaction for supported humanoids.
 - A first-person body view that follows the shared kick animation.
 
 The kick can run with the saber equipped. The first-person path does not create
@@ -141,6 +142,7 @@ playtesting.
 - [x] Increase target travel in equal Force Push level steps. The default test
   distances are approximately 10, 20, 30, and 40 units.
 - [x] Keep the attacker in place during the kick.
+- [x] Knock the target down before the impulse lifts it from the ground.
 - [x] Trace the forward kick toward the view direction and use a wider contact
   sweep.
 - [x] Remove the obsolete kick camera pitch and roll settings.

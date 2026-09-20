@@ -1966,19 +1966,23 @@ static void G_ApplyKickTargetImpulse( gentity_t *attacker, gentity_t *target,
 	VectorMA( target->client->ps.velocity, backImpulse, horizontalDir,
 		target->client->ps.velocity );
 	target->client->ps.velocity[2] += upImpulse;
-	if ( upImpulse > 0.0f || backImpulse > 0.0f )
-	{
-		target->client->ps.groundEntityNum = ENTITYNUM_NONE;
-		target->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
-		target->client->ps.pm_time = 200;
-	}
-
 	if ( gi.Cvar_VariableIntegerValue( "g_debugDamage" ) )
 	{
 		gi.Printf( "kick_target_impulse target=%d level=%d up=%.1f back=%.1f velocity=%.1f,%.1f,%.1f\n",
 			target->s.number, pushLevel, upImpulse, backImpulse,
 			target->client->ps.velocity[0], target->client->ps.velocity[1],
 			target->client->ps.velocity[2] );
+	}
+
+	if ( upImpulse > 0.0f || backImpulse > 0.0f )
+	{
+		target->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+		target->client->ps.pm_time = 200;
+		G_Knockdown( target, attacker, kickDir, 300, qtrue );
+		if ( !G_JoltOwns( target ) )
+		{
+			target->client->ps.groundEntityNum = ENTITYNUM_NONE;
+		}
 	}
 }
 
@@ -2032,6 +2036,11 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 						return NULL;
 					}
 					//don't hit same ent more than once per kick
+					if ( customKick )
+					{
+						ent->client->ps.pm_flags &= ~PMF_KICK_TARGET_PENDING;
+						G_ApplyKickTargetImpulse( ent, hitEnt, kickDir );
+					}
 					if ( hitEnt->takedamage )
 					{//hurt it
 						G_Damage( hitEnt, ent, ent, kickDir, trace.endpos, kickDamage, DAMAGE_NO_KNOCKBACK|DAMAGE_NO_KILL, MOD_MELEE );
@@ -2055,12 +2064,7 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 						TIMER_Set( ent, "kickSoundDebounce", 2000 );
 					}
 					TIMER_Set( hitEnt, "kickedDebounce", 1000 );
-					if ( customKick )
-					{
-						ent->client->ps.pm_flags &= ~PMF_KICK_TARGET_PENDING;
-						G_ApplyKickTargetImpulse( ent, hitEnt, kickDir );
-					}
-					else if ( ent->client->ps.torsoAnim == BOTH_A7_HILT )
+					if ( !customKick && ent->client->ps.torsoAnim == BOTH_A7_HILT )
 					{//hit in head
 						if ( hitEnt->health > 0 )
 						{//knock down
