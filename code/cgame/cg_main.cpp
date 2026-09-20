@@ -377,7 +377,7 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_firstPersonBodyTest, "cg_firstPersonBodyTest", "0", CVAR_CHEAT },
 	{ &cg_firstPersonBodyNeckOffset, "cg_firstPersonBodyNeckOffset", "-2", CVAR_CHEAT },
 	{ &cg_firstPersonBodyHeightOffset, "cg_firstPersonBodyHeightOffset", "8", CVAR_CHEAT },
-	{ &cg_firstPersonBodyWeaponPose, "cg_firstPersonBodyWeaponPose", "2", CVAR_ARCHIVE },
+	{ &cg_firstPersonBodyWeaponPose, "cg_firstPersonBodyWeaponPose", "1", CVAR_ARCHIVE },
 	{ &cg_firstPersonBodyCameraSmoothing, "cg_firstPersonBodyCameraSmoothing", "65", CVAR_ARCHIVE },
 	{ &cg_firstPersonBodyReticleSmoothing, "cg_firstPersonBodyReticleSmoothing", "35", CVAR_ARCHIVE },
 	{ &cg_torch, "cg_torch", "0", CVAR_ARCHIVE },

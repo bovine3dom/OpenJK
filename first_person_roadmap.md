@@ -59,7 +59,7 @@ accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
 `cg_firstPersonBodyHeightOffset 8`. Select the weapon pose with
 `cg_firstPersonBodyWeaponPose`: `0` is body-driven hip, `1` is the separate
 first-person view weapon, and `2` is body-driven shoulder aim. Mode `1` hides
-the waist-up body. Shoulder aim is the default. It uses upper-body ready and
+the waist-up body and is the default. Shoulder aim uses upper-body ready and
 attack animations, so the hands raise the complete weapon and animate its
 recoil. It uses the weapon muzzle direction to correct horizontal and vertical
 alignment. Camera and reticle smoothing use milliseconds
@@ -73,6 +73,7 @@ Open work:
 - [x] Replace the hip-fire weapon pose with a first-person aiming pose.
 - [x] Add camera and reticle smoothing, restore the stock death camera and
   visible head after death, and add three selectable weapon poses.
+- [ ] Tune pose 1 for weapon position, recoil, transitions, and FOV changes.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
   mirrors, water, weapon changes, and rapid movement.
 - [ ] Decide how first-person lightsabers should render.
