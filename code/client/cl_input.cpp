@@ -1015,6 +1015,20 @@ void CL_InitInput( void ) {
 	CL_InitWeaponWheel();
 #endif
 #ifndef JK2_MODE
+	// Migrate the shipped JA defaults without overwriting custom bindings.
+	if (!Cvar_Get("cg_jaDefaultBindingsInitialized", "0", CVAR_ARCHIVE)->integer) {
+		const char *kickBinding = Key_GetBinding('q');
+		if (!kickBinding || !*kickBinding || !Q_stricmp(kickBinding, "forceprev"))
+			Key_SetBinding('q', "+kick");
+#ifdef USE_RMLUI
+		const char *wheelBinding = Key_GetBinding('e');
+		if (!wheelBinding || !*wheelBinding || !Q_stricmp(wheelBinding, "forcenext"))
+			Key_SetBinding('e', "+weaponwheel");
+#endif
+		Cvar_Set("cg_jaDefaultBindingsInitialized", "1");
+	}
+#endif
+#ifndef JK2_MODE
 	hudReveal = Cvar_Get("cg_hudReveal", "0", CVAR_ROM);
 	CL_InitAutomap();
 	CL_CancelHudReveal();

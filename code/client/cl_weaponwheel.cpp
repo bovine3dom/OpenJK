@@ -28,7 +28,7 @@ void Up() {
 	if (selection.Release(Cmd_Argc() > 1 ? atoi(Cmd_Argv(1)) : -1)) CL_ClearWheelActions();
 }
 
-void DefaultBinding() { CL_DefaultWheelBinding("+weaponwheel", 'h'); }
+void DefaultBinding() { CL_DefaultWheelBinding("+weaponwheel", 'q'); }
 
 void Status() {
 	Com_Printf("weaponwheel visible=%d weapon=%d equipped=%d slot=%d count=%d forceopen=%d timescale=%.3f game=%d real=%d open=%d hovered=%d\n",
