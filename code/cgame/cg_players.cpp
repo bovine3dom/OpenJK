@@ -6832,17 +6832,24 @@ static qboolean firstPersonBodyNeckValid = qfalse;
 static qboolean firstPersonBodyWeaponHandValid = qfalse;
 static qboolean firstPersonBodyWeaponMuzzleValid = qfalse;
 
-static int CG_FirstPersonBodyWeaponAnim( int weapon, qboolean shoulder, qboolean firing )
+static void CG_HideFirstPersonBodySurface( CGhoul2Info_v &ghoul2, gentity_t *ent,
+	const char *rootSurface )
 {
-	const int rifleReady = shoulder ? TORSO_WEAPONREADY4 : TORSO_WEAPONREADY3;
+	char surface[MAX_QPATH];
+	if ( G_GetRootSurfNameWithVariant( ent, rootSurface, surface, sizeof(surface) ) )
+	{
+		gi.G2API_SetSurfaceOnOff( &ghoul2[ent->playerModel], surface,
+			G2SURFACEFLAG_OFF | G2SURFACEFLAG_NODESCENDANTS );
+	}
+}
+
+static int CG_FirstPersonBodyWeaponAnim( int weapon, qboolean firing )
+{
 	switch ( weapon )
 	{
 	case WP_BLASTER_PISTOL:
 	case WP_BRYAR_PISTOL:
 		return firing ? BOTH_ATTACK2 : TORSO_WEAPONREADY2;
-	case WP_DISRUPTOR:
-	case WP_TUSKEN_RIFLE:
-		return firing ? BOTH_ATTACK4 : TORSO_WEAPONREADY4;
 	case WP_THERMAL:
 		return firing ? BOTH_ATTACK10 : TORSO_WEAPONREADY10;
 	case WP_NONE:
@@ -6851,7 +6858,7 @@ static int CG_FirstPersonBodyWeaponAnim( int weapon, qboolean shoulder, qboolean
 	case WP_TUSKEN_STAFF:
 		return -1;
 	default:
-		return firing ? BOTH_ATTACK4 : rifleReady;
+		return BOTH_ATTACK4;
 	}
 }
 
@@ -6879,29 +6886,34 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	static CGhoul2Info_v firstPersonGhoul2;
 	firstPersonGhoul2.DeepCopy( *playerModel->ghoul2 );
 
-	char headSurface[MAX_QPATH];
-	if ( cent->gent->health > 0 &&
-		G_GetRootSurfNameWithVariant( cent->gent, "head", headSurface, sizeof(headSurface) ) )
-	{
-		gi.G2API_SetSurfaceOnOff( &firstPersonGhoul2[cent->gent->playerModel], headSurface,
-			G2SURFACEFLAG_OFF | G2SURFACEFLAG_NODESCENDANTS );
-	}
-
 	const int weaponPose = Com_Clampi( FIRST_PERSON_BODY_WEAPON_HIP,
 		FIRST_PERSON_BODY_WEAPON_SHOULDER, cg_firstPersonBodyWeaponPose.integer );
+	if ( cent->gent->health > 0 )
+	{
+		CG_HideFirstPersonBodySurface( firstPersonGhoul2, cent->gent, "head" );
+		if ( weaponPose == FIRST_PERSON_BODY_WEAPON_VIEW )
+		{
+			const char *upperBodySurfaces[] = { "torso", "r_arm", "l_arm", "r_hand", "l_hand" };
+			for ( const char *surface : upperBodySurfaces )
+			{
+				CG_HideFirstPersonBodySurface( firstPersonGhoul2, cent->gent, surface );
+			}
+		}
+	}
+
 	const qboolean shoulder =
 		( weaponPose == FIRST_PERSON_BODY_WEAPON_SHOULDER ) ? qtrue : qfalse;
-	const qboolean firing = ( shoulder &&
-		( cent->currentState.eFlags & ( EF_FIRING | EF_ALT_FIRING ) ) ) ? qtrue : qfalse;
-	const int poseAnim = CG_FirstPersonBodyWeaponAnim( cent->currentState.weapon,
-		shoulder, firing );
 	const int weaponState = cent->gent->client ? cent->gent->client->ps.weaponstate : WEAPON_IDLE;
-	const qboolean weaponPoseActive = ( weaponPose == FIRST_PERSON_BODY_WEAPON_VIEW ||
-		weaponState == WEAPON_IDLE || weaponState == WEAPON_READY ||
-		( firing && weaponState == WEAPON_FIRING ) ) ? qtrue : qfalse;
-	if ( weaponPose != FIRST_PERSON_BODY_WEAPON_HIP && weaponPoseActive &&
-		cent->gent->health > 0 && poseAnim >= 0 && cent->gent->lowerLumbarBone >= 0 &&
-		cent->gent->client )
+	const qboolean firing = ( shoulder &&
+		( ( cent->currentState.eFlags & ( EF_FIRING | EF_ALT_FIRING ) ) ||
+			weaponState == WEAPON_FIRING ) ) ? qtrue : qfalse;
+	const int poseAnim = CG_FirstPersonBodyWeaponAnim( cent->currentState.weapon, firing );
+	const qboolean shoulderAimActive = ( shoulder &&
+		( weaponState == WEAPON_IDLE || weaponState == WEAPON_READY ||
+			( firing && weaponState == WEAPON_FIRING ) ) && cent->gent->health > 0 &&
+		poseAnim >= 0 && cent->gent->lowerLumbarBone >= 0 && cent->gent->client ) ?
+		qtrue : qfalse;
+	if ( shoulderAimActive )
 	{
 		const animation_t &anim = level.knownAnimFileSets[
 			cent->gent->client->clientInfo.animFileIndex].animations[poseAnim];
@@ -6937,6 +6949,44 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	VectorCopy( playerModel->origin, viewModel.origin );
 	VectorCopy( viewModel.origin, viewModel.oldorigin );
 	VectorCopy( viewModel.origin, viewModel.lightingOrigin );
+
+	mdxaBone_t weaponBoltMatrix;
+	const int weaponModel = cent->currentState.weapon == WP_SABER ? -1 :
+		cent->gent->weaponModel[0];
+	const qboolean weaponBoltValid = ( weaponModel >= 0 &&
+		weaponModel < firstPersonGhoul2.size() &&
+		firstPersonGhoul2[weaponModel].mModelindex >= 0 &&
+		gi.G2API_GetBoltMatrix( firstPersonGhoul2, weaponModel, 0, &weaponBoltMatrix,
+			vec3_origin, vec3_origin, cg.time, cgs.model_draw,
+			cent->currentState.modelScale ) ) ? qtrue : qfalse;
+
+	// Keep the animated weapon on the sight line. Attack frames can move it
+	// sideways, so calculate the correction from its muzzle for every frame.
+	if ( shoulderAimActive && weaponBoltValid )
+	{
+		vec3_t localDirection, weaponDirection, viewDirection;
+		gi.G2API_GiveMeVectorFromMatrix( weaponBoltMatrix, NEGATIVE_Y, localDirection );
+		VectorClear( weaponDirection );
+		for ( int i = 0; i < 3; ++i )
+		{
+			VectorMA( weaponDirection, localDirection[i], viewModel.axis[i], weaponDirection );
+		}
+		VectorCopy( cg.refdef.viewaxis[0], viewDirection );
+		weaponDirection[2] = viewDirection[2] = 0.0f;
+		if ( VectorNormalize( weaponDirection ) && VectorNormalize( viewDirection ) )
+		{
+			const float yaw = Com_Clamp( -30.0f, 30.0f,
+				AngleDelta( vectoyaw( viewDirection ), vectoyaw( weaponDirection ) ) );
+			const vec3_t worldUp = { 0.0f, 0.0f, 1.0f };
+			for ( int i = 0; i < 3; ++i )
+			{
+				vec3_t rotated;
+				RotatePointAroundVector( rotated, worldUp, viewModel.axis[i], yaw );
+				VectorCopy( rotated, viewModel.axis[i] );
+			}
+			viewModel.angles[YAW] = AngleNormalize360( viewModel.angles[YAW] + yaw );
+		}
+	}
 
 	if ( cent->gent->handRBolt >= 0 )
 	{
@@ -6976,38 +7026,28 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 		}
 	}
 
-	if ( cent->currentState.weapon != WP_SABER )
+	if ( weaponBoltValid )
 	{
-		const int weaponModel = cent->gent->weaponModel[0];
-		if ( weaponModel >= 0 && weaponModel < firstPersonGhoul2.size() &&
-			firstPersonGhoul2[weaponModel].mModelindex >= 0 )
+		vec3_t localOrigin, localDirection;
+		gi.G2API_GiveMeVectorFromMatrix( weaponBoltMatrix, ORIGIN, localOrigin );
+		gi.G2API_GiveMeVectorFromMatrix( weaponBoltMatrix, NEGATIVE_Y, localDirection );
+		VectorCopy( viewModel.origin, firstPersonBodyWeaponMuzzleOrigin );
+		VectorClear( firstPersonBodyWeaponMuzzleDir );
+		for ( int i = 0; i < 3; ++i )
 		{
-			mdxaBone_t boltMatrix;
-			if ( gi.G2API_GetBoltMatrix( firstPersonGhoul2, weaponModel, 0, &boltMatrix,
-				vec3_origin, vec3_origin, cg.time, cgs.model_draw, cent->currentState.modelScale ) )
-			{
-				vec3_t localOrigin, localDirection;
-				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, ORIGIN, localOrigin );
-				gi.G2API_GiveMeVectorFromMatrix( boltMatrix, NEGATIVE_Y, localDirection );
-				VectorCopy( viewModel.origin, firstPersonBodyWeaponMuzzleOrigin );
-				VectorClear( firstPersonBodyWeaponMuzzleDir );
-				for ( int i = 0; i < 3; ++i )
-				{
-					VectorMA( firstPersonBodyWeaponMuzzleOrigin, localOrigin[i], viewModel.axis[i],
-						firstPersonBodyWeaponMuzzleOrigin );
-					VectorMA( firstPersonBodyWeaponMuzzleDir, localDirection[i], viewModel.axis[i],
-						firstPersonBodyWeaponMuzzleDir );
-				}
-				VectorNormalize( firstPersonBodyWeaponMuzzleDir );
-				firstPersonBodyWeaponMuzzleValid = qtrue;
-			}
+			VectorMA( firstPersonBodyWeaponMuzzleOrigin, localOrigin[i], viewModel.axis[i],
+				firstPersonBodyWeaponMuzzleOrigin );
+			VectorMA( firstPersonBodyWeaponMuzzleDir, localDirection[i], viewModel.axis[i],
+				firstPersonBodyWeaponMuzzleDir );
 		}
+		VectorNormalize( firstPersonBodyWeaponMuzzleDir );
+		firstPersonBodyWeaponMuzzleValid = qtrue;
 	}
 
-	// The body uses the world weapon model, while the view weapon below uses
-	// the higher-detail first-person model. Keep the saber attached because it
-	// is rendered as part of the first-person body.
-	if ( cent->currentState.weapon != WP_SABER )
+	// The separate view-weapon pose replaces the attached world weapon. The
+	// body-driven poses keep the complete world model unless the gun is hidden.
+	if ( ( weaponPose == FIRST_PERSON_BODY_WEAPON_VIEW ||
+		!cg_drawGun.integer || cg.zoomMode ) && cent->currentState.weapon != WP_SABER )
 	{
 		for ( int i = 0; i < MAX_INHAND_WEAPONS; ++i )
 		{

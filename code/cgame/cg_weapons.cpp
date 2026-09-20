@@ -1034,7 +1034,8 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 
 	// Keep calculating the view weapon when it is hidden. Its muzzle tag still
 	// supplies the correct origin for projectiles and muzzle flashes.
-	const qboolean drawGun = ( cg_drawGun.integer && !cg.zoomMode ) ? qtrue : qfalse;
+	const qboolean drawGun =
+		( cg_drawGun.integer && !cg.zoomMode && !bodyWeapon ) ? qtrue : qfalse;
 
 	// drop gun lower at higher fov
 	float actualFOV;

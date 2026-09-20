@@ -37,10 +37,14 @@ Completed:
 - [x] Re-anchor the camera to the animated neck area.
 - [x] Add separate neck-axis and height controls:
   `cg_firstPersonBodyNeckOffset` and `cg_firstPersonBodyHeightOffset`.
-- [x] Keep high-detail first-person weapons in body mode.
-- [x] Align body-mode weapons and barrels with the animated world muzzle.
+- [x] Use the complete attached world weapon for body-driven poses. Use the
+  high-detail first-person weapon for the separate view-weapon pose.
+- [x] Align weapon effects and attacks with the animated world muzzle.
 - [x] Add three weapon presentations: body-driven hip, a separate view weapon,
   and body-driven shoulder aim.
+- [x] Hide the waist-up body only for the separate view-weapon pose.
+- [x] Keep shoulder weapons on the sight line through idle, recoil, and the
+  return from firing.
 - [x] Keep muzzle calculation active when `cg_drawGun 0` hides the weapon.
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber
@@ -52,9 +56,10 @@ accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
 `cg_firstPersonBodyNeckOffset -2` and
 `cg_firstPersonBodyHeightOffset 8`. Select the weapon pose with
 `cg_firstPersonBodyWeaponPose`: `0` is body-driven hip, `1` is the separate
-first-person view weapon, and `2` is body-driven shoulder aim. Shoulder aim is
-the default. It uses upper-body ready and attack animations, so the hands raise
-the weapon and animate its recoil. Camera and reticle smoothing use milliseconds
+first-person view weapon, and `2` is body-driven shoulder aim. Mode `1` hides
+the waist-up body. Shoulder aim is the default. It uses upper-body ready and
+attack animations, so the hands raise the complete weapon and animate its
+recoil. It uses the weapon muzzle to keep the pose on the sight line. Camera and reticle smoothing use milliseconds
 in `cg_firstPersonBodyCameraSmoothing` and
 `cg_firstPersonBodyReticleSmoothing`. A value of zero disables smoothing.
 
@@ -333,8 +338,12 @@ full-body model cannot meet the clipping and aiming requirements.
 
 ### Phase 5: Weapon and camera polish
 
-- [x] Place the high-detail weapon at the animated hand and world muzzle.
+- [x] Keep the complete attached weapon in body-driven poses.
+- [x] Keep the high-detail weapon in the separate view-weapon pose.
+- [x] Hide the waist-up body in the separate view-weapon pose.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
+- [x] Correct shoulder aim from the muzzle direction during idle and recoil.
+- [x] Keep the shoulder pose active until the firing state ends.
 - [x] Add configurable body neck and height offsets.
 - [x] Add the kick sound.
 - [x] Replace the third-person hip-fire pose with a first-person weapon-ready

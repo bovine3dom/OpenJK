@@ -89,11 +89,13 @@ controls. The current controls are:
 - `cg_firstPersonBodyNeckOffset`: neck-axis offset.
 - `cg_firstPersonBodyHeightOffset`: world height offset.
 
-The high-detail weapon remains visible in body mode. Use
-`cg_firstPersonBodyWeaponPose 0` for body-driven hip fire, `1` for a separate
-first-person view weapon, or `2` for body-driven shoulder aim. Shoulder aim is
-the default. Its upper-body ready and attack animations move the hands and
-weapon recoil.
+The body-driven poses use the complete attached world weapon. The separate
+view-weapon pose uses the high-detail first-person weapon. Use
+`cg_firstPersonBodyWeaponPose 0` for body-driven hip fire, `1` for the separate
+view weapon, or `2` for body-driven shoulder aim. Mode `1` hides the waist-up
+body. Shoulder aim is the default. Its upper-body ready and attack animations
+move the hands and weapon recoil. A muzzle-direction correction keeps the
+weapon on the sight line during idle and recoil.
 
 The saber still uses its special player-model path. A general first-person saber
 presentation remains open.
@@ -137,8 +139,8 @@ playtesting.
 - [x] Make each Force Push level produce a visible increase in kick lift.
 - [x] Increase backward travel in equal Force Push level steps. The default
   test distances are 9.9, 19.6, 29.7, and 39.3 units.
-- [x] Trace the forward kick toward the view direction and delay movement until
-  after the first contact frames.
+- [x] Trace the forward kick toward the view direction, use a wider contact
+  sweep, and delay movement until after the first contact frames.
 - [x] Remove the obsolete kick camera pitch and roll settings.
 - [x] Make upward and backward impulse tunable separately with
   `g_kickUpImpulse` and `g_kickBackImpulse`.
