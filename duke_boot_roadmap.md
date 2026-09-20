@@ -71,6 +71,8 @@ The implementation:
 4. Reuses the existing kick trace because the trace checks `legsAnim`.
 5. Stops normal weapon firing during the kick.
 6. Rejects crouching, knockdown, vehicle, and weapon-change states.
+7. Applies movement after the initial contact window, so movement does not pull
+   the foot away from a nearby target.
 
 Open animation work includes air, side, and backward kicks; animation timing;
 and any first-person-only pose correction. Do not add a special kick model.
@@ -134,7 +136,9 @@ playtesting.
 - [x] Add Force Push-scaled upward impulse.
 - [x] Make each Force Push level produce a visible increase in kick lift.
 - [x] Increase backward travel in equal Force Push level steps. The default
-  test distances are 9.8, 19.4, 29.3, and 39.4 units.
+  test distances are 9.9, 19.6, 29.7, and 39.3 units.
+- [x] Trace the forward kick toward the view direction and delay movement until
+  after the first contact frames.
 - [x] Remove the obsolete kick camera pitch and roll settings.
 - [x] Make upward and backward impulse tunable separately with
   `g_kickUpImpulse` and `g_kickBackImpulse`.

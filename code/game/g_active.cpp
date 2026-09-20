@@ -1949,15 +1949,19 @@ void G_ThrownDeathAnimForDeathAnim( gentity_t *hitEnt, vec3_t impactPoint )
 
 gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t kickEnd, int kickDamage, float kickPush, qboolean doSoundOnWalls )
 {
-	vec3_t	traceOrg, traceEnd, kickMins={-2,-2,-2}, kickMaxs={2,2,2};
+	vec3_t	traceOrg, traceEnd, kickMins={-8,-8,-8}, kickMaxs={8,8,8};
 	trace_t	trace;
 	gentity_t	*hitEnt = NULL;
 	//FIXME: variable kick height?
 	if ( kickEnd && !VectorCompare( kickEnd, vec3_origin ) )
-	{//they passed us the end point of the trace, just use that
+	{//use the foot height and direction, but keep the configured kick range
 		//this makes the trace flat
 		VectorSet( traceOrg, ent->currentOrigin[0], ent->currentOrigin[1], kickEnd[2] );
 		VectorCopy( kickEnd, traceEnd );
+		if ( DistanceHorizontal( traceOrg, traceEnd ) < kickDist )
+		{
+			VectorMA( traceOrg, kickDist, kickDir, traceEnd );
+		}
 	}
 	else
 	{//extrude
@@ -3466,20 +3470,13 @@ qboolean G_CheckClampUcmd( gentity_t *ent, usercmd_t *ucmd )
 				break;
 			case BOTH_A7_KICK_F:
 				kickSoundOnWalls = qtrue;
-				//FIXME: push forward?
 				if ( elapsedTime >= 250 && remainingTime >= 250 )
 				{//front
 					doKick = qtrue;
+					AngleVectors( fwdAngs, kickDir, NULL, NULL );
 					if ( ent->footRBolt != -1 )
-					{//actually trace to a bolt
+					{//use the animated foot height
 						G_GetBoltPosition( ent, ent->footRBolt, kickEnd );
-						VectorSubtract( kickEnd, ent->currentOrigin, kickDir );
-						kickDir[2] = 0;//ah, flatten it, I guess...
-						VectorNormalize( kickDir );
-					}
-					else
-					{//guess
-						AngleVectors( fwdAngs, kickDir, NULL, NULL );
 					}
 				}
 				break;
