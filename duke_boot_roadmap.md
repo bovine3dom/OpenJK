@@ -3,8 +3,8 @@
 ## Summary
 
 A melee kick is now a working first prototype in the OpenJK code. The shared
-movement path selects the kick, plays the leg animation, raises the player, and
-emits the kick event. The existing server trace remains authoritative.
+movement path selects the kick, plays the leg animation, and emits the kick
+event. A successful server trace moves the target. The attacker stays in place.
 
 The first-person body path now shows the full body during the kick. It hides the
 head, keeps the torso and legs available, and uses the same presentation for
@@ -26,7 +26,8 @@ Relevant code now provides:
 - Foot bolt positions for hit detection.
 - Kick damage, knockdown, push, and impact effects through `G_KickTrace()`.
 - A kick event and melee kick sound.
-- Upward and backward kick impulses that increase with Force Push level.
+- Separate upward and backward target impulses that increase with Force Push
+  level.
 - A first-person body view that follows the shared kick animation.
 
 The kick can run with the saber equipped. The first-person path does not create
@@ -71,8 +72,8 @@ The implementation:
 4. Reuses the existing kick trace because the trace checks `legsAnim`.
 5. Stops normal weapon firing during the kick.
 6. Rejects crouching, knockdown, vehicle, and weapon-change states.
-7. Applies movement after the initial contact window, so movement does not pull
-   the foot away from a nearby target.
+7. Keeps the attacker in place and applies movement only to a target that the
+   server trace hits.
 
 Open animation work includes air, side, and backward kicks; animation timing;
 and any first-person-only pose correction. Do not add a special kick model.
@@ -111,7 +112,7 @@ body for normal movement and kicks.
 - [x] Add shared kick selection in `bg_pmove.cpp`.
 - [x] Play `BOTH_A7_KICK_F` on `SETANIM_LEGS`.
 - [x] Reuse `G_KickTrace()`.
-- [x] Add kick sound and Force Push-scaled movement.
+- [x] Add kick sound and Force Push-scaled target movement.
 
 Damage, range, knockdown, prediction, and weapon interruption still need focused
 playtesting.
@@ -135,14 +136,15 @@ playtesting.
 ### Phase 4: Polish and balance
 
 - [x] Add the kick event and start sound.
-- [x] Add Force Push-scaled upward impulse.
-- [x] Make each Force Push level produce a visible increase in kick lift.
-- [x] Increase backward travel in equal Force Push level steps. The default
-  test distances are 9.9, 19.6, 29.7, and 39.3 units.
-- [x] Trace the forward kick toward the view direction, use a wider contact
-  sweep, and delay movement until after the first contact frames.
+- [x] Apply the Force Push-scaled upward impulse to the target.
+- [x] Make each Force Push level produce a visible increase in target lift.
+- [x] Increase target travel in equal Force Push level steps. The default test
+  distances are approximately 10, 20, 30, and 40 units.
+- [x] Keep the attacker in place during the kick.
+- [x] Trace the forward kick toward the view direction and use a wider contact
+  sweep.
 - [x] Remove the obsolete kick camera pitch and roll settings.
-- [x] Make upward and backward impulse tunable separately with
+- [x] Make target lift and backward impulse tunable separately with
   `g_kickUpImpulse` and `g_kickBackImpulse`.
 - [ ] Test demos, save games, prediction, and multiplayer behavior.
 - [ ] Tune damage, push, range, cooldown, and animation timing.

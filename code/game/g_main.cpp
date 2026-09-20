@@ -639,7 +639,7 @@ void G_InitCvars( void ) {
 	g_gravity = gi.cvar( "g_gravity", "800", CVAR_SAVEGAME|CVAR_ROM );
 	g_jumpHeightMultiplier = gi.cvar( "g_jumpHeightMultiplier", "1.2", CVAR_ARCHIVE );
 	g_kickUpImpulse = gi.cvar( "g_kickUpImpulse", "120", CVAR_ARCHIVE );
-	g_kickBackImpulse = gi.cvar( "g_kickBackImpulse", "30", CVAR_ARCHIVE );
+	g_kickBackImpulse = gi.cvar( "g_kickBackImpulse", "33.3333", CVAR_ARCHIVE );
 	g_stepSlideFix = gi.cvar( "g_stepSlideFix", "1", CVAR_ARCHIVE );
 	g_sex = gi.cvar ("sex", "f", CVAR_USERINFO | CVAR_ARCHIVE|CVAR_SAVEGAME|CVAR_NORESTART );
 	g_spskill = gi.cvar ("g_spskill", "0", CVAR_ARCHIVE | CVAR_SAVEGAME|CVAR_NORESTART);

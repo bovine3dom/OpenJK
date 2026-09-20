@@ -49,7 +49,8 @@ Completed:
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber
   is equipped.
-- [x] Add the shared kick button, kick sound, and Force Push-scaled movement.
+- [x] Add the shared kick button, kick sound, and Force Push-scaled target
+  movement.
 
 Enable the body mode with `cg_firstPersonBody 1`. The developer test path also
 accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
@@ -298,7 +299,7 @@ See `duke_boot_roadmap.md`.
 - [x] Apply the kick to `SETANIM_LEGS`.
 - [x] Stop normal weapon firing during the kick.
 - [x] Reuse the existing server kick trace.
-- [x] Add kick sound and Force Push-scaled movement.
+- [x] Add kick sound and Force Push-scaled target movement.
 
 Directional, air, and balance tuning remain open.
 

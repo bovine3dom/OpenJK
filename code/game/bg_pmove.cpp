@@ -14769,51 +14769,13 @@ static qboolean PM_TryKick( void )
 		return qfalse;
 	}
 
-	pm->ps->pm_flags |= PMF_KICK_HELD | PMF_KICK_IMPULSE_PENDING;
+	pm->ps->pm_flags |= PMF_KICK_HELD | PMF_KICK_TARGET_PENDING;
 	PM_SetAnim( pm, SETANIM_LEGS, BOTH_A7_KICK_F,
 		SETANIM_FLAG_OVERRIDE | SETANIM_FLAG_HOLD, 100 );
 	PM_AddEvent( EV_KICK );
 	pm->ps->weaponTime = 0;
 	pm->ps->weaponstate = WEAPON_IDLE;
 	return qtrue;
-}
-
-static void PM_ApplyKickImpulse( void )
-{
-	if ( !(pm->ps->pm_flags & PMF_KICK_IMPULSE_PENDING) )
-	{
-		return;
-	}
-	if ( pm->ps->legsAnim != BOTH_A7_KICK_F || !pm->gent || !pm->gent->client )
-	{
-		pm->ps->pm_flags &= ~PMF_KICK_IMPULSE_PENDING;
-		return;
-	}
-
-	const int animLength = PM_AnimLength( pm->gent->client->clientInfo.animFileIndex,
-		BOTH_A7_KICK_F );
-	if ( animLength - pm->ps->legsAnimTimer < 350 )
-	{
-		return;
-	}
-	pm->ps->pm_flags &= ~PMF_KICK_IMPULSE_PENDING;
-
-	// Move only after the foot has had time to contact a nearby target.
-	const int pushLevel = Com_Clampi( FORCE_LEVEL_0, FORCE_LEVEL_3,
-		pm->ps->forcePowerLevel[FP_PUSH] );
-	const float liftScale = 1.0f + pushLevel / 3.0f;
-	const float upImpulse = g_kickUpImpulse->value > 0.0f ? g_kickUpImpulse->value : 0.0f;
-	pm->ps->velocity[2] += upImpulse * liftScale;
-
-	vec3_t kickDirection = { pml.forward[0], pml.forward[1], 0.0f };
-	VectorNormalize( kickDirection );
-	const float backImpulse = g_kickBackImpulse->value > 0.0f ? g_kickBackImpulse->value : 0.0f;
-	// Compensate for longer airtime so backward travel increases in equal steps.
-	const float backScale = ( pushLevel + 1.0f ) / liftScale;
-	VectorMA( pm->ps->velocity, -backImpulse * backScale, kickDirection, pm->ps->velocity );
-	pm->ps->groundEntityNum = ENTITYNUM_NONE;
-	pml.groundPlane = qfalse;
-	pml.walking = qfalse;
 }
 
 /*
@@ -14991,7 +14953,11 @@ void Pmove( pmove_t *pmove )
 	}
 
 	const qboolean startedKick = PM_TryKick();
-	PM_ApplyKickImpulse();
+	if ( (pm->ps->pm_flags & PMF_KICK_TARGET_PENDING) &&
+		pm->ps->legsAnim != BOTH_A7_KICK_F )
+	{
+		pm->ps->pm_flags &= ~PMF_KICK_TARGET_PENDING;
+	}
 	if ( startedKick || PM_KickingAnim( pm->ps->legsAnim ) )
 	{
 		pm->cmd.forwardmove = 0;

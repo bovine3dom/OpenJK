@@ -1947,6 +1947,41 @@ void G_ThrownDeathAnimForDeathAnim( gentity_t *hitEnt, vec3_t impactPoint )
 	}
 }
 
+static void G_ApplyKickTargetImpulse( gentity_t *attacker, gentity_t *target,
+	const vec3_t kickDir )
+{
+	if ( target->flags & FL_NO_KNOCKBACK )
+	{
+		return;
+	}
+
+	const int pushLevel = Com_Clampi( FORCE_LEVEL_0, FORCE_LEVEL_3,
+		attacker->client->ps.forcePowerLevel[FP_PUSH] );
+	const float liftScale = 1.0f + pushLevel / 3.0f;
+	const float upImpulse = Q_max( 0.0f, g_kickUpImpulse->value ) * liftScale;
+	const float backImpulse = Q_max( 0.0f, g_kickBackImpulse->value ) *
+		( pushLevel + 1.0f ) / liftScale;
+	vec3_t horizontalDir = { kickDir[0], kickDir[1], 0.0f };
+	VectorNormalize( horizontalDir );
+	VectorMA( target->client->ps.velocity, backImpulse, horizontalDir,
+		target->client->ps.velocity );
+	target->client->ps.velocity[2] += upImpulse;
+	if ( upImpulse > 0.0f || backImpulse > 0.0f )
+	{
+		target->client->ps.groundEntityNum = ENTITYNUM_NONE;
+		target->client->ps.pm_flags |= PMF_TIME_KNOCKBACK;
+		target->client->ps.pm_time = 200;
+	}
+
+	if ( gi.Cvar_VariableIntegerValue( "g_debugDamage" ) )
+	{
+		gi.Printf( "kick_target_impulse target=%d level=%d up=%.1f back=%.1f velocity=%.1f,%.1f,%.1f\n",
+			target->s.number, pushLevel, upImpulse, backImpulse,
+			target->client->ps.velocity[0], target->client->ps.velocity[1],
+			target->client->ps.velocity[2] );
+	}
+}
+
 gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t kickEnd, int kickDamage, float kickPush, qboolean doSoundOnWalls )
 {
 	vec3_t	traceOrg, traceEnd, kickMins={-8,-8,-8}, kickMaxs={8,8,8};
@@ -1982,6 +2017,8 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 		{//we hit an entity
 			if ( hitEnt->client )
 			{
+				const qboolean customKick =
+					( ent->client->ps.pm_flags & PMF_KICK_TARGET_PENDING ) ? qtrue : qfalse;
 				if ( !(hitEnt->client->ps.pm_flags&PMF_TIME_KNOCKBACK)
 					&& TIMER_Done( hitEnt, "kickedDebounce" ) )//not already flying through air?  Intended to stop multiple hits, but...
 				{//FIXME: this should not always work
@@ -2018,7 +2055,12 @@ gentity_t *G_KickTrace( gentity_t *ent, vec3_t kickDir, float kickDist, vec3_t k
 						TIMER_Set( ent, "kickSoundDebounce", 2000 );
 					}
 					TIMER_Set( hitEnt, "kickedDebounce", 1000 );
-					if ( ent->client->ps.torsoAnim == BOTH_A7_HILT )
+					if ( customKick )
+					{
+						ent->client->ps.pm_flags &= ~PMF_KICK_TARGET_PENDING;
+						G_ApplyKickTargetImpulse( ent, hitEnt, kickDir );
+					}
+					else if ( ent->client->ps.torsoAnim == BOTH_A7_HILT )
 					{//hit in head
 						if ( hitEnt->health > 0 )
 						{//knock down
