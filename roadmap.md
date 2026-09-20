@@ -428,5 +428,9 @@ rough notes / todo
 	- [ ] Apply a small amount of smoothing to the camera and reticle.
 	- [ ] Verify the death view has no head clipping.
 	- [ ] Add an optional Arma-style high-ready animation.
+	- [ ] fix the "pose 2" sound coming only from right ear / animation jerkiness / position
 - fix disruptor rifle aspect ratio
 - dismemberment for high damage weapons like the flechette rifle? explosions?
+- jo bryar pistol should be selectable with button 1
+- force/weapon wheel should allow repeated scrolling without waiting for weapon to be drawn
+- doom_comm has the codes in the top left from the start of the level without ever seeing them anywhere
