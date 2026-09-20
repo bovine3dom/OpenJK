@@ -32,14 +32,15 @@ The first working hybrid body view now exists in `code/`.
 Completed:
 
 - [x] Render a cloned Ghoul2 player body in first person.
-- [x] Hide the head surface in the clone. Do not create a kick-only model.
+- [x] Hide the head surface while the player is alive. Restore it for death.
 - [x] Keep the body available for mirrors while hiding the normal local world body.
 - [x] Re-anchor the camera to the animated neck area.
 - [x] Add separate neck-axis and height controls:
   `cg_firstPersonBodyNeckOffset` and `cg_firstPersonBodyHeightOffset`.
 - [x] Keep high-detail first-person weapons in body mode.
-- [x] Align body-mode weapons and barrels to the animated world muzzle. Keep
-  projectiles and the reticle aligned with that muzzle.
+- [x] Align body-mode weapons and barrels with the animated world muzzle.
+- [x] Add three weapon presentations: body-driven hip, a separate view weapon,
+  and body-driven shoulder aim.
 - [x] Keep muzzle calculation active when `cg_drawGun 0` hides the weapon.
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber
@@ -49,16 +50,21 @@ Completed:
 Enable the body mode with `cg_firstPersonBody 1`. The developer test path also
 accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
 `cg_firstPersonBodyNeckOffset -2` and
-`cg_firstPersonBodyHeightOffset 16`. The default height can be tuned in the
-console without changing the model or the kick trace.
+`cg_firstPersonBodyHeightOffset 8`. Select the weapon pose with
+`cg_firstPersonBodyWeaponPose`: `0` is body-driven hip, `1` is the separate
+first-person view weapon, and `2` is body-driven shoulder aim. Shoulder aim is
+the default. It uses upper-body ready and attack animations, so the hands raise
+the weapon and animate its recoil. Camera and reticle smoothing use milliseconds
+in `cg_firstPersonBodyCameraSmoothing` and
+`cg_firstPersonBodyReticleSmoothing`. A value of zero disables smoothing.
 
 Open work:
 
 - [x] Flip the mirrored body-mode weapon in place without changing its world
   position.
 - [x] Replace the hip-fire weapon pose with a first-person aiming pose.
-- [ ] Tune camera and reticle smoothing, death presentation, and an optional
-  toggleable ready pose versus hip firing.
+- [x] Add camera and reticle smoothing, restore the stock death camera and
+  visible head after death, and add three selectable weapon poses.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
   mirrors, water, weapon changes, and rapid movement.
 - [ ] Decide how first-person lightsabers should render.
@@ -209,9 +215,8 @@ OpenJK already has a hybrid foundation:
 - The renderer already has `RF_DEPTHHACK` and `RF_FIRST_PERSON` flags.
 - Kick traces use server-side animation and foot bolt positions.
 
-The initial local first-person body render is now implemented. The remaining
-work is presentation polish: aim poses, saber presentation, camera smoothing,
-and broader model and movement testing.
+The local first-person body render now has aim poses and camera smoothing. The
+remaining work is saber presentation and broad model and movement testing.
 
 ## Recommended design
 
@@ -316,11 +321,11 @@ movement pass. Do not change hit detection to match the view model.
 
 ### Phase 4: Isolate the first-person body — complete for the current prototype
 
-Use a cloned Ghoul2 player model with the head surface disabled.
+Use a cloned Ghoul2 player model with the head surface disabled while alive.
 
 - [x] Keep the torso, pelvis, legs, and boots available.
 - [x] Keep surface changes off the live world model.
-- [x] Hide the head without hiding the body needed by the kick.
+- [x] Hide the living head without hiding the body needed by the kick.
 - [x] Keep one view model for normal movement and kicks.
 
 Use a separate lower-body model only if later testing proves that the cloned
@@ -334,9 +339,10 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Add the kick sound.
 - [x] Replace the third-person hip-fire pose with a first-person weapon-ready
   animation.
-- [ ] Decide whether the weapon should remain body-driven during aiming or use
-  a controlled first-person hand pose.
-- [ ] Add camera and reticle smoothing.
+- [x] Add body-driven hip and shoulder poses, plus a separate first-person
+  view-weapon pose. Use the animated hands for shoulder recoil.
+- [x] Add camera and reticle smoothing.
+- [x] Restore the normal death camera and the head after death.
 - [ ] Tune view-model scale and offsets for different FOV settings.
 - [ ] Test crouching, jumping, slopes, stairs, mirrors, water, weapon changes,
   all weapons, and all player models and skins.
@@ -411,12 +417,13 @@ Keep the current shared-gameplay, separate-presentation design:
 
 - Reuse the animation and gameplay truth.
 - Cheat the camera, FOV, depth, and visible geometry.
-- Hide the head while keeping the torso and legs visible.
+- Hide the head while the player is alive. Show it after death.
 - Use the same body presentation for movement and kicks.
-- Align high-detail weapons to the animated world muzzle.
+- Use body-driven shoulder aim by default. Keep separate view-weapon and hip
+  poses as options.
 - Keep the third-person model authoritative for other players and hit detection.
 
-The next major task is a first-person weapon aim or ready pose. Do not replace
+The next major task is broad weapon, model, and movement testing. Do not replace
 the full-body view with a kick-only model.
 
 ## Source and research notes

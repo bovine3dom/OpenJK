@@ -11,8 +11,8 @@ head, keeps the torso and legs available, and uses the same presentation for
 normal movement. It does not use a special kick model.
 
 The feature is not blocked by torso animation. The kick plays on the legs while
-the weapon torso pose remains active. The remaining work is balance, camera
-polish, aim-pose work, and broader playtesting.
+the weapon torso pose remains active. The remaining work is balance and broader
+playtesting.
 
 ## Existing support
 
@@ -87,8 +87,11 @@ controls. The current controls are:
 - `cg_firstPersonBodyNeckOffset`: neck-axis offset.
 - `cg_firstPersonBodyHeightOffset`: world height offset.
 
-The high-detail weapon remains visible in body mode. The first-person ready pose
-uses the standard first-person weapon transform.
+The high-detail weapon remains visible in body mode. Use
+`cg_firstPersonBodyWeaponPose 0` for body-driven hip fire, `1` for a separate
+first-person view weapon, or `2` for body-driven shoulder aim. Shoulder aim is
+the default. Its upper-body ready and attack animations move the hands and
+weapon recoil.
 
 The saber still uses its special player-model path. A general first-person saber
 presentation remains open.
@@ -142,8 +145,7 @@ playtesting.
 1. **Body and camera clipping**
    - The full body must show the kick without placing the head in the camera.
 2. **Weapon pose**
-   - The current body-driven weapon placement works, but a first-person aim or
-     ready pose is still needed.
+   - Test the body-driven shoulder pose with every weapon and player model.
 3. **Animation suitability**
    - The existing kick animations were made for whole-body saber moves. Test
      the rifle torso pose and lower-body result.
@@ -161,5 +163,5 @@ playtesting.
 - A polished, model-independent boot view model: the largest part of the work.
 
 The first-person version is no longer blocked by body rendering. A cloned full-body
-view model works for normal movement and kicks. The remaining work is weapon aim
-presentation, camera polish, balance, and broad asset testing.
+view model works for normal movement and kicks. The remaining work is balance
+and broad asset testing.

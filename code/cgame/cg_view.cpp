@@ -2073,6 +2073,31 @@ extern void CG_BuildSolidList( void );
 extern void CG_ClearHealthBarEnts( void );
 extern vec3_t	serverViewOrg;
 static qboolean cg_rangedFogging = qfalse; //so we know if we should go back to normal fog
+static vec3_t firstPersonBodyCameraOffset;
+static int firstPersonBodyCameraTime = -1;
+
+static void CG_SmoothFirstPersonBodyCamera( vec3_t neckOrigin )
+{
+	vec3_t targetOffset;
+	VectorSubtract( neckOrigin, cg.predicted_player_state.origin, targetOffset );
+	const int elapsed = cg.time - firstPersonBodyCameraTime;
+	if ( cg_firstPersonBodyCameraSmoothing.value <= 0.0f || firstPersonBodyCameraTime < 0 ||
+		elapsed < 0 || elapsed > 200 )
+	{
+		VectorCopy( targetOffset, firstPersonBodyCameraOffset );
+	}
+	else if ( elapsed > 0 )
+	{
+		const float fraction = 1.0f - expf(
+			-elapsed / cg_firstPersonBodyCameraSmoothing.value );
+		vec3_t delta;
+		VectorSubtract( targetOffset, firstPersonBodyCameraOffset, delta );
+		VectorMA( firstPersonBodyCameraOffset, fraction, delta, firstPersonBodyCameraOffset );
+	}
+	firstPersonBodyCameraTime = cg.time;
+	VectorAdd( cg.predicted_player_state.origin, firstPersonBodyCameraOffset, neckOrigin );
+}
+
 void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 	qboolean	inwater = qfalse;
 
@@ -2229,16 +2254,26 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 		// Re-anchor the cosmetic body view after the player model updates its
 		// Ghoul2 pose. Keep the camera angles and transient view offsets.
 		if ( ( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
-			!cg.renderingThirdPerson && !cg_thirdPerson.integer )
+			!cg.renderingThirdPerson && !cg_thirdPerson.integer &&
+			cg.predicted_player_state.stats[STAT_HEALTH] > 0 )
 		{
 			vec3_t neckOrigin;
 			if ( CG_GetFirstPersonBodyNeckOrigin( neckOrigin ) )
 			{
+				CG_SmoothFirstPersonBodyCamera( neckOrigin );
 				vec3_t viewOffset;
 				VectorSubtract( cg.refdef.vieworg, cg.predicted_player_state.origin, viewOffset );
 				viewOffset[2] -= cg.predicted_player_state.viewheight;
 				VectorAdd( neckOrigin, viewOffset, cg.refdef.vieworg );
 			}
+			else
+			{
+				firstPersonBodyCameraTime = -1;
+			}
+		}
+		else
+		{
+			firstPersonBodyCameraTime = -1;
 		}
 
 		CG_AddMarks();
@@ -2289,8 +2324,13 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 		&& cg.snap->ps.weapon != WP_SABER
 		&& ( cg.snap->ps.viewEntity == 0 || cg.snap->ps.viewEntity >= ENTITYNUM_WORLD ) )
 	{
-		// Keep the normal first-person aim presentation over the full body.
-		CG_AddViewWeapon( &cg.predicted_player_state, qfalse );
+		const int weaponPose = Com_Clampi( FIRST_PERSON_BODY_WEAPON_HIP,
+			FIRST_PERSON_BODY_WEAPON_SHOULDER, cg_firstPersonBodyWeaponPose.integer );
+		const qboolean bodyDrivenWeapon =
+			( ( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
+			weaponPose != FIRST_PERSON_BODY_WEAPON_VIEW && !cg.renderingThirdPerson &&
+			!cg_thirdPerson.integer && cg.snap->ps.weapon != WP_MELEE ) ? qtrue : qfalse;
+		CG_AddViewWeapon( &cg.predicted_player_state, bodyDrivenWeapon );
 	}
 	else if( cg.snap->ps.viewEntity != 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )
 	{

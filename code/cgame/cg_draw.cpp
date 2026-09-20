@@ -2623,6 +2623,31 @@ CROSSHAIR
 CG_DrawCrosshair
 =================
 */
+static vec2_t firstPersonBodyReticlePosition;
+static int firstPersonBodyReticleTime = -1;
+
+static void CG_SmoothFirstPersonBodyReticle( float *x, float *y )
+{
+	const int elapsed = cg.time - firstPersonBodyReticleTime;
+	if ( firstPersonBodyReticleTime < 0 || elapsed < 0 || elapsed > 200 )
+	{
+		firstPersonBodyReticlePosition[0] = *x;
+		firstPersonBodyReticlePosition[1] = *y;
+	}
+	else if ( elapsed > 0 )
+	{
+		const float fraction = 1.0f - expf(
+			-elapsed / cg_firstPersonBodyReticleSmoothing.value );
+		firstPersonBodyReticlePosition[0] +=
+			( *x - firstPersonBodyReticlePosition[0] ) * fraction;
+		firstPersonBodyReticlePosition[1] +=
+			( *y - firstPersonBodyReticlePosition[1] ) * fraction;
+	}
+	firstPersonBodyReticleTime = cg.time;
+	*x = firstPersonBodyReticlePosition[0];
+	*y = firstPersonBodyReticlePosition[1];
+}
+
 static reticleHudState_t CG_ReticleHudState()
 {
 	const playerState_t& ps = cg.snap->ps;
@@ -2669,12 +2694,14 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 
 	if ( !cg_drawCrosshair.integer )
 	{
+		firstPersonBodyReticleTime = -1;
 		return;
 	}
 
 	if ( cg.zoomMode > 0 && cg.zoomMode < 3 )
 	{
 		//not while scoped
+		firstPersonBodyReticleTime = -1;
 		return;
 	}
 
@@ -2865,6 +2892,7 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	{
 		if ( !CG_WorldCoordToScreenCoordFloat( worldPoint, &x, &y ) )
 		{//off screen, don't draw it
+			firstPersonBodyReticleTime = -1;
 			cgi_R_SetColor( NULL );
 			return;
 		}
@@ -2875,6 +2903,19 @@ static void CG_DrawCrosshair( vec3_t worldPoint )
 	{
 		x = cg_crosshairX.integer;
 		y = cg_crosshairY.integer;
+	}
+
+	if ( worldPoint && VectorLength( worldPoint ) &&
+		( cg_firstPersonBody.integer || cg_firstPersonBodyTest.integer ) &&
+		!cg.renderingThirdPerson && !cg_thirdPerson.integer &&
+		cg.snap->ps.stats[STAT_HEALTH] > 0 &&
+		cg_firstPersonBodyReticleSmoothing.value > 0.0f )
+	{
+		CG_SmoothFirstPersonBodyReticle( &x, &y );
+	}
+	else
+	{
+		firstPersonBodyReticleTime = -1;
 	}
 
 	if ( cg.snap->ps.viewEntity > 0 && cg.snap->ps.viewEntity < ENTITYNUM_WORLD )

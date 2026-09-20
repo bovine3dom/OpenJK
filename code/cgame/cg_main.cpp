@@ -291,6 +291,9 @@ vmCvar_t	cg_firstPersonBody;
 vmCvar_t	cg_firstPersonBodyTest;
 vmCvar_t	cg_firstPersonBodyNeckOffset;
 vmCvar_t	cg_firstPersonBodyHeightOffset;
+vmCvar_t	cg_firstPersonBodyWeaponPose;
+vmCvar_t	cg_firstPersonBodyCameraSmoothing;
+vmCvar_t	cg_firstPersonBodyReticleSmoothing;
 vmCvar_t cg_torch, cg_torchRange, cg_torchIntensity, cg_torchFov;
 vmCvar_t cg_hudReveal;
 vmCvar_t	cg_autoswitch;
@@ -374,6 +377,9 @@ static cvarTable_t cvarTable[] = {
 	{ &cg_firstPersonBodyTest, "cg_firstPersonBodyTest", "0", CVAR_CHEAT },
 	{ &cg_firstPersonBodyNeckOffset, "cg_firstPersonBodyNeckOffset", "-2", CVAR_CHEAT },
 	{ &cg_firstPersonBodyHeightOffset, "cg_firstPersonBodyHeightOffset", "8", CVAR_CHEAT },
+	{ &cg_firstPersonBodyWeaponPose, "cg_firstPersonBodyWeaponPose", "2", CVAR_ARCHIVE },
+	{ &cg_firstPersonBodyCameraSmoothing, "cg_firstPersonBodyCameraSmoothing", "65", CVAR_ARCHIVE },
+	{ &cg_firstPersonBodyReticleSmoothing, "cg_firstPersonBodyReticleSmoothing", "35", CVAR_ARCHIVE },
 	{ &cg_torch, "cg_torch", "0", CVAR_ARCHIVE },
 	{ &cg_hudReveal, "cg_hudReveal", "0", CVAR_ROM },
 	{ &cg_torchRange, "cg_torchRange", "768", CVAR_ARCHIVE },

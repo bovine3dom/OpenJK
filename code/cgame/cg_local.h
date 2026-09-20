@@ -628,6 +628,15 @@ extern	vmCvar_t	cg_firstPersonBody;
 extern	vmCvar_t	cg_firstPersonBodyTest;
 extern	vmCvar_t	cg_firstPersonBodyNeckOffset;
 extern	vmCvar_t	cg_firstPersonBodyHeightOffset;
+enum firstPersonBodyWeaponPose_t
+{
+	FIRST_PERSON_BODY_WEAPON_HIP,
+	FIRST_PERSON_BODY_WEAPON_VIEW,
+	FIRST_PERSON_BODY_WEAPON_SHOULDER
+};
+extern	vmCvar_t	cg_firstPersonBodyWeaponPose;
+extern	vmCvar_t	cg_firstPersonBodyCameraSmoothing;
+extern	vmCvar_t	cg_firstPersonBodyReticleSmoothing;
 qboolean CG_GetFirstPersonBodyNeckOrigin( vec3_t origin );
 qboolean CG_GetFirstPersonBodyWeaponHand( vec3_t origin, vec3_t axis[3] );
 qboolean CG_GetFirstPersonBodyWeaponMuzzle( vec3_t origin, vec3_t direction );
