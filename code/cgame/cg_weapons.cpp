@@ -1113,6 +1113,9 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 		{
 			VectorCopy( bodyWeaponHandAxis[i], hand.axis[i] );
 		}
+		// Ghoul2 hand axes are left-handed. Correct the parent transform so that
+		// model surfaces and all child tags retain their normal winding.
+		VectorNegate( hand.axis[1], hand.axis[1] );
 	}
 	else
 	{
@@ -1201,9 +1204,6 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 			VectorSubtract( bodyWeaponMuzzleOrigin, muzzleProbe.origin, bodyWeaponRenderOffset );
 			VectorAdd( gun.origin, bodyWeaponRenderOffset, gun.origin );
 
-			// The body hand transform is left-handed. Restore the model without
-			// changing the position that was aligned above.
-			VectorNegate( gun.axis[1], gun.axis[1] );
 		}
 
 		// Keep the physical hand placement while retaining normal first-person
@@ -1288,7 +1288,6 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 			if ( bodyWeaponMuzzleValid )
 			{
 				VectorAdd( barrel.origin, bodyWeaponRenderOffset, barrel.origin );
-				VectorNegate( barrel.axis[1], barrel.axis[1] );
 			}
 
 			if ( drawGun )

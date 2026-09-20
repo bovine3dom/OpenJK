@@ -343,6 +343,7 @@ full-body model cannot meet the clipping and aiming requirements.
 
 - [x] Keep the attached world weapon in the body-driven hip pose.
 - [x] Use the high-detail first-person weapon in view and shoulder poses.
+- [x] Use a right-handed shoulder transform for weapon surfaces and child tags.
 - [x] Hide the waist-up body in the separate view-weapon pose.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
 - [x] Correct shoulder aim in pitch and yaw from the muzzle direction during
