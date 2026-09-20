@@ -43,8 +43,8 @@ Completed:
 - [x] Add three weapon presentations: body-driven hip, a separate view weapon,
   and body-driven shoulder aim.
 - [x] Hide the waist-up body only for the separate view-weapon pose.
-- [x] Keep shoulder weapons on the sight line through idle, recoil, and the
-  return from firing.
+- [x] Keep shoulder weapons on the sight line through idle, charging, recoil,
+  and the return from firing.
 - [x] Keep muzzle calculation active when `cg_drawGun 0` hides the weapon.
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber

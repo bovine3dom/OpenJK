@@ -6910,6 +6910,7 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 	const int poseAnim = CG_FirstPersonBodyWeaponAnim( cent->currentState.weapon, firing );
 	const qboolean shoulderAimActive = ( shoulder &&
 		( weaponState == WEAPON_IDLE || weaponState == WEAPON_READY ||
+			weaponState == WEAPON_CHARGING || weaponState == WEAPON_CHARGING_ALT ||
 			( firing && weaponState == WEAPON_FIRING ) ) && cent->gent->health > 0 &&
 		poseAnim >= 0 && cent->gent->lowerLumbarBone >= 0 && cent->gent->client ) ?
 		qtrue : qfalse;
