@@ -2081,7 +2081,10 @@ static void CG_SmoothFirstPersonBodyCamera( vec3_t neckOrigin )
 	vec3_t targetOffset;
 	VectorSubtract( neckOrigin, cg.predicted_player_state.origin, targetOffset );
 	const int elapsed = cg.time - firstPersonBodyCameraTime;
-	if ( cg_firstPersonBodyCameraSmoothing.value <= 0.0f || firstPersonBodyCameraTime < 0 ||
+	const int duckElapsed = cg.time - cg.duckTime;
+	// Follow the quick stance blend directly so that the body cannot cross the camera.
+	if ( ( duckElapsed >= 0 && duckElapsed < DUCK_TIME * 2 ) ||
+		cg_firstPersonBodyCameraSmoothing.value <= 0.0f || firstPersonBodyCameraTime < 0 ||
 		elapsed < 0 || elapsed > 200 )
 	{
 		VectorCopy( targetOffset, firstPersonBodyCameraOffset );
@@ -2264,6 +2267,13 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView ) {
 				vec3_t viewOffset;
 				VectorSubtract( cg.refdef.vieworg, cg.predicted_player_state.origin, viewOffset );
 				viewOffset[2] -= cg.predicted_player_state.viewheight;
+				const int duckElapsed = cg.time - cg.duckTime;
+				if ( duckElapsed >= 0 && duckElapsed < DUCK_TIME )
+				{
+					// The animated neck already follows the stance change. Remove the stock
+					// view-height blend so that the camera does not pass through the body.
+					viewOffset[2] += cg.duckChange * ( DUCK_TIME - duckElapsed ) / DUCK_TIME;
+				}
 				VectorAdd( neckOrigin, viewOffset, cg.refdef.vieworg );
 			}
 			else

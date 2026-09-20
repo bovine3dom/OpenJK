@@ -35,6 +35,7 @@ Completed:
 - [x] Hide the head surface while the player is alive. Restore it for death.
 - [x] Keep the body available for mirrors while hiding the normal local world body.
 - [x] Re-anchor the camera to the animated neck area.
+- [x] Keep the camera on the animated neck during crouch and stand transitions.
 - [x] Add separate neck-axis and height controls:
   `cg_firstPersonBodyNeckOffset` and `cg_firstPersonBodyHeightOffset`.
 - [x] Use the complete attached world weapon for body-driven poses. Use the
@@ -354,6 +355,8 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Add body-driven hip and shoulder poses, plus a separate first-person
   view-weapon pose. Use the animated hands for shoulder recoil.
 - [x] Add camera and reticle smoothing.
+- [x] Remove the stock view-height blend from body-mode crouch and stand
+  transitions. Follow the animated neck directly during each transition.
 - [x] Restore the normal death camera and the head after death.
 - [ ] Tune view-model scale and offsets for different FOV settings.
 - [ ] Test crouching, jumping, slopes, stairs, mirrors, water, weapon changes,
