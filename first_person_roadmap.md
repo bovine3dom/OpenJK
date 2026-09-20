@@ -43,8 +43,8 @@ Completed:
 - [x] Add three weapon presentations: body-driven hip, a separate view weapon,
   and body-driven shoulder aim.
 - [x] Hide the waist-up body only for the separate view-weapon pose.
-- [x] Keep shoulder weapons on the sight line through idle, charging, recoil,
-  and the return from firing.
+- [x] Keep shoulder weapon barrels on the sight line in pitch and yaw through
+  idle, charging, recoil, and the return from firing.
 - [x] Keep muzzle calculation active when `cg_drawGun 0` hides the weapon.
 - [x] Preserve subsurface scattering with normal model depth.
 - [x] Show the body during the shared kick animation, including when the saber
@@ -60,7 +60,8 @@ accepts `cg_firstPersonBodyTest 1`. The smoke profile uses
 first-person view weapon, and `2` is body-driven shoulder aim. Mode `1` hides
 the waist-up body. Shoulder aim is the default. It uses upper-body ready and
 attack animations, so the hands raise the complete weapon and animate its
-recoil. It uses the weapon muzzle to keep the pose on the sight line. Camera and reticle smoothing use milliseconds
+recoil. It uses the weapon muzzle direction to correct horizontal and vertical
+alignment. Camera and reticle smoothing use milliseconds
 in `cg_firstPersonBodyCameraSmoothing` and
 `cg_firstPersonBodyReticleSmoothing`. A value of zero disables smoothing.
 
@@ -343,7 +344,8 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Keep the high-detail weapon in the separate view-weapon pose.
 - [x] Hide the waist-up body in the separate view-weapon pose.
 - [x] Keep projectile and hitscan origins aligned with the world muzzle.
-- [x] Correct shoulder aim from the muzzle direction during idle and recoil.
+- [x] Correct shoulder aim in pitch and yaw from the muzzle direction during
+  idle and recoil.
 - [x] Keep the shoulder pose active until the firing state ends.
 - [x] Add configurable body neck and height offsets.
 - [x] Add the kick sound.

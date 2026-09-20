@@ -6961,31 +6961,32 @@ static void CG_AddFirstPersonBody( const refEntity_t *playerModel, const centity
 			vec3_origin, vec3_origin, cg.time, cgs.model_draw,
 			cent->currentState.modelScale ) ) ? qtrue : qfalse;
 
-	// Keep the animated weapon on the sight line. Attack frames can move it
-	// sideways, so calculate the correction from its muzzle for every frame.
+	// Keep the animated barrel parallel to the sight line. Calculate a complete
+	// pitch and yaw correction because attack frames can move it on both axes.
 	if ( shoulderAimActive && weaponBoltValid )
 	{
-		vec3_t localDirection, weaponDirection, viewDirection;
+		vec3_t localDirection, weaponDirection, correctionAxis;
 		gi.G2API_GiveMeVectorFromMatrix( weaponBoltMatrix, NEGATIVE_Y, localDirection );
 		VectorClear( weaponDirection );
 		for ( int i = 0; i < 3; ++i )
 		{
 			VectorMA( weaponDirection, localDirection[i], viewModel.axis[i], weaponDirection );
 		}
-		VectorCopy( cg.refdef.viewaxis[0], viewDirection );
-		weaponDirection[2] = viewDirection[2] = 0.0f;
-		if ( VectorNormalize( weaponDirection ) && VectorNormalize( viewDirection ) )
+		VectorNormalize( weaponDirection );
+		CrossProduct( weaponDirection, cg.refdef.viewaxis[0], correctionAxis );
+		const float sine = VectorNormalize( correctionAxis );
+		if ( sine > 0.0001f )
 		{
-			const float yaw = Com_Clamp( -30.0f, 30.0f,
-				AngleDelta( vectoyaw( viewDirection ), vectoyaw( weaponDirection ) ) );
-			const vec3_t worldUp = { 0.0f, 0.0f, 1.0f };
+			const float cosine = Com_Clamp( -1.0f, 1.0f,
+				DotProduct( weaponDirection, cg.refdef.viewaxis[0] ) );
+			const float correctionAngle = atan2f( sine, cosine ) * ( 180.0f / M_PI );
+			const float correction = Com_Clamp( -45.0f, 45.0f, correctionAngle );
 			for ( int i = 0; i < 3; ++i )
 			{
 				vec3_t rotated;
-				RotatePointAroundVector( rotated, worldUp, viewModel.axis[i], yaw );
+				RotatePointAroundVector( rotated, correctionAxis, viewModel.axis[i], correction );
 				VectorCopy( rotated, viewModel.axis[i] );
 			}
-			viewModel.angles[YAW] = AngleNormalize360( viewModel.angles[YAW] + yaw );
 		}
 	}
 
