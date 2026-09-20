@@ -353,7 +353,8 @@ full-body model cannot meet the clipping and aiming requirements.
 - [x] Replace the third-person hip-fire pose with a first-person weapon-ready
   animation.
 - [x] Add body-driven hip and shoulder poses, plus a separate first-person
-  view-weapon pose. Use the animated hands for shoulder recoil.
+  view-weapon pose. Combine body-hand and first-person hand animation for
+  stronger shoulder recoil.
 - [x] Add camera and reticle smoothing.
 - [x] Remove the stock view-height blend from body-mode crouch and stand
   transitions. Follow the animated neck directly during each transition.

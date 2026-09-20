@@ -1180,14 +1180,21 @@ void CG_AddViewWeapon( playerState_t *ps, qboolean bodyWeapon )
 
 		AnglesToAxis( angles, gun.axis );
 		CG_PositionEntityOnTag( &gun, &hand, weapon->handsModel, "tag_weapon");
-		// The first-person hand model and the world weapon use different origins.
-		// Match their muzzle positions before drawing the high-detail model.
+		// Align the idle high-detail muzzle with the body muzzle. Keep the current
+		// hand frame free so that its first-person recoil adds to the body recoil.
 		if ( bodyWeaponMuzzleValid )
 		{
+			refEntity_t alignmentHand = hand;
+			alignmentHand.frame = alignmentHand.oldframe = 0;
+			alignmentHand.backlerp = 0.0f;
+			refEntity_t alignmentGun = gun;
+			CG_PositionEntityOnTag( &alignmentGun, &alignmentHand, weapon->handsModel,
+				"tag_weapon" );
 			refEntity_t muzzleProbe;
 			memset( &muzzleProbe, 0, sizeof( muzzleProbe ) );
-			muzzleProbe.hModel = gun.hModel;
-			CG_PositionEntityOnTag( &muzzleProbe, &gun, gun.hModel, "tag_flash" );
+			muzzleProbe.hModel = alignmentGun.hModel;
+			CG_PositionEntityOnTag( &muzzleProbe, &alignmentGun, alignmentGun.hModel,
+				"tag_flash" );
 			VectorSubtract( bodyWeaponMuzzleOrigin, muzzleProbe.origin, bodyWeaponRenderOffset );
 			VectorAdd( gun.origin, bodyWeaponRenderOffset, gun.origin );
 
