@@ -73,7 +73,7 @@ Open work:
 - [x] Replace the hip-fire weapon pose with a first-person aiming pose.
 - [x] Add camera and reticle smoothing, restore the stock death camera and
   visible head after death, and add three selectable weapon poses.
-- [ ] Tune pose 1 for weapon position, recoil, transitions, and FOV changes.
+- [ ] Tune cg_firstPersonBodyWeaponPose 2 for weapon position, recoil, transitions, sound positioning, and FOV changes.
 - [ ] Test all weapons, models, skins, crouching, slopes, stairs, jumping,
   mirrors, water, weapon changes, and rapid movement.
 - [ ] Decide how first-person lightsabers should render.
