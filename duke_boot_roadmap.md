@@ -151,6 +151,8 @@ playtesting.
 - [x] Remove the obsolete kick camera pitch and roll settings.
 - [x] Make target lift and backward impulse tunable separately with
   `g_kickUpImpulse` and `g_kickBackImpulse`.
+- [x] Keep setting changes proportional up to 2000 before Force Push scaling.
+- [x] Keep Force Push level differences effective below the Jolt safety limit.
 - [ ] Test demos, save games, prediction, and multiplayer behavior.
 - [ ] Tune damage, push, range, cooldown, and animation timing.
 - [ ] Add air and directional kicks if wanted.

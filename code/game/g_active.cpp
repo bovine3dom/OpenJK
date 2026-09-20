@@ -1958,9 +1958,12 @@ static void G_ApplyKickTargetImpulse( gentity_t *attacker, gentity_t *target,
 	const int pushLevel = Com_Clampi( FORCE_LEVEL_0, FORCE_LEVEL_3,
 		attacker->client->ps.forcePowerLevel[FP_PUSH] );
 	const float liftScale = 1.0f + pushLevel / 3.0f;
-	const float upImpulse = Q_max( 0.0f, g_kickUpImpulse->value ) * liftScale;
-	const float backImpulse = Q_max( 0.0f, g_kickBackImpulse->value ) *
-		( pushLevel + 1.0f ) / liftScale;
+	// Limit base settings before level scaling so that Force Push differences
+	// remain visible below the Jolt safety limit.
+	const float upImpulse = Com_Clamp( 0.0f, 2000.0f,
+		g_kickUpImpulse->value ) * liftScale;
+	const float backImpulse = Com_Clamp( 0.0f, 2000.0f,
+		g_kickBackImpulse->value ) * ( pushLevel + 1.0f ) / liftScale;
 	vec3_t horizontalDir = { kickDir[0], kickDir[1], 0.0f };
 	VectorNormalize( horizontalDir );
 	vec3_t kickVelocity, launchVelocity;

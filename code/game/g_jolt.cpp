@@ -27,6 +27,7 @@ namespace {
 constexpr float MetresPerUnit = 0.0254f;
 constexpr size_t MaxActors = 64;
 constexpr int RecoveryBlendTime = 180;
+constexpr float MaxKickImpulse = 10000.0f;
 const mdxaBone_t identityAngles = {{{1,0,0,0}, {0,1,0,0}, {0,0,1,0}}};
 int selectedActor = -1;
 const char* demoCases[] = {"idle", "hit", "step", "leg", "run", "fall"};
@@ -259,7 +260,7 @@ bool Actor::StartFall(gentity_t* ent, const float* direction, const float* point
 	if (!PrepareRig(ent)) return false;
 	Engage(ent);
 	vec3_t hit; VectorScale(point, MetresPerUnit, hit);
-	for (float remaining = std::min(500.0f, strength); remaining > 0; remaining -= 100)
+	for (float remaining = std::min(MaxKickImpulse, strength); remaining > 0; remaining -= 100)
 		fall->Impulse(hitPart, direction, hit, std::min(100.0f, remaining));
 	fall->ReleaseControl();
 	VectorClear(ent->client->ps.velocity); // The rig already carries the native velocity.
@@ -1470,7 +1471,7 @@ bool G_JoltKick(gentity_t* ent, const float* velocity, const float* point) {
 		state->reference[2].bone.matrix[2][3] ? 2 : 1;
 
 	// The rig mass is 66 kg. Convert the requested velocity to a local impulse.
-	const float strength = std::min(500.0f, 66.0f * speed);
+	const float strength = std::min(MaxKickImpulse, 66.0f * speed);
 	if (debug->integer) gi.Printf("Jolt: kick actor=%d part=%d impulse=%.1f point=%.1f,%.1f,%.1f\n",
 		ent->s.number, hitPart, strength, point[0], point[1], point[2]);
 	return state->StartFall(ent, direction, point, strength, hitPart);
