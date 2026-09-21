@@ -1010,6 +1010,13 @@ float bentSpecularAO(float visibility, float roughness, vec3 bentNormal, vec3 re
 	float coneAO = clamp(overlap / max(1.0 - reflectionCone, 0.0001), 0.0, 1.0);
 	return mix(1.0, coneAO, smoothstep(0.01, 0.09, roughness));
 }
+
+float bentDirectionalAO(float visibility, vec3 bentNormal, vec3 lightDirection)
+{
+	float coneCosine = sqrt(max(0.0, 1.0 - visibility));
+	return smoothstep(max(0.0, coneCosine - 0.05), min(1.0, coneCosine + 0.05),
+		dot(bentNormal, lightDirection));
+}
 #endif
 
 vec3 CalcIBLContribution(
@@ -1265,10 +1272,20 @@ void main()
   #endif
 
 	vec3 reflectance = Fd + Fs;
+	vec3 directedContribution = lightColor * reflectance * (attenuation * NL);
+	vec3 directedSkinDiffuse = lightColor * Fd * (attenuation * NL);
 
-	out_Color.rgb  = lightColor * reflectance * (attenuation * NL);
-	out_Color.rgb += ambientColor * diffuse.rgb;
-	vec3 skinDiffuse = lightColor * Fd * (attenuation * NL) + ambientColor * diffuse.rgb;
+#if defined(USE_GTAO_BENT_NORMALS) && defined(USE_LIGHT_VECTOR)
+	float oldDirectionalAO = u_SSAOAmbientOnly != 0 ? 1.0 : screenAO;
+	float directionalAO = mix(oldDirectionalAO, bentDirectionalAO(screenAO, bentNormal, L), u_SSAOParams.w);
+	vec3 bentDirectionalContribution = directedContribution * directionalAO;
+	vec3 bentDirectionalSkinDiffuse = directedSkinDiffuse * directionalAO;
+	out_Color.rgb = ambientColor * diffuse.rgb;
+	vec3 skinDiffuse = ambientColor * diffuse.rgb;
+#else
+	out_Color.rgb = directedContribution + ambientColor * diffuse.rgb;
+	vec3 skinDiffuse = directedSkinDiffuse + ambientColor * diffuse.rgb;
+#endif
 
   #if defined(USE_PRIMARY_LIGHT)
 	vec3  L2   = normalize(u_PrimaryLightOrigin.xyz);
@@ -1308,6 +1325,10 @@ void main()
 	#endif
 	#if defined(USE_GTAO_BENT_NORMALS)
 	out_Color.rgb += iblContribution;
+	#if defined(USE_LIGHT_VECTOR)
+	out_Color.rgb += bentDirectionalContribution;
+	skinDiffuse += bentDirectionalSkinDiffuse;
+	#endif
 	#endif
 #else
 	lightColor = var_Color.rgb;

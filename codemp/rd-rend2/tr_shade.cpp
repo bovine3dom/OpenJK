@@ -1829,7 +1829,10 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 #ifdef REND2_SP
 			if (!backEnd.comparisonBaseline && useSsao && (!viewModel || (r_ssaoViewModel->integer && backEnd.ssaoWeaponReady)) &&
 				r_ssaoMethod->integer && r_gtaoBentNormals->integer && ssaoParams[0] > 0.0f)
+			{
 				ssaoParams[1] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalSpecular->value);
+				ssaoParams[3] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalDirectional->value);
+			}
 #endif
 			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, viewModel ? 0 : r_ssaoAmbientOnly->integer);
 			uniformDataWriter.SetUniformVec4(UNIFORM_SSAOPARAMS, ssaoParams);
