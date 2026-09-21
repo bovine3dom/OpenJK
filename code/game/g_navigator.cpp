@@ -659,6 +659,12 @@ public:
 				//-------------------------------------------------
 				else if (Edge.BlockingWall())
 				{
+					// JO uses script-moved func_static brushes as doors. Their
+					// contents stay solid after ICARUS moves them, so use the
+					// current position to determine whether the opening is clear.
+					if (!Q_stricmp(ent->classname, "func_static") && ent->script_targetname
+						&& !VectorCompare(ent->currentOrigin, ent->pos1))
+						return true;
 					return !(ent->contents&CONTENTS_SOLID);
 				}
 			}
@@ -1027,6 +1033,51 @@ bool			NAV::GoTo(gentity_t* actor, gentity_t* target, float MaxDangerLevel)
 
 	bool		HasPath		= false;
 	TNodeHandle	targetNode	= GetNearestNode(target, true);
+	const bool offGraphNavGoal = G_IsOutcast() && (target->svFlags & SVF_NAVGOAL);
+	if (offGraphNavGoal)
+	{
+		// A nearby node is not enough: it may be on the other side of a door.
+		targetNode = WAYPOINT_NONE;
+	}
+
+	// A JO script nav goal can be outside the shared graph. Move to the nearest
+	// clear graph point that advances toward it, then try the goal again.
+	if (offGraphNavGoal)
+	{
+		TNodeHandle nearby[64];
+		const int count = GetNearbyGroundNodes(target->currentOrigin, nearby, ARRAY_LEN(nearby));
+		const float actorToGoal = DistanceSquared(actor->currentOrigin, target->currentOrigin);
+		const TNodeHandle actorNode = GetNearestNode(actor, true);
+		if (actorNode > 0 && target->lastWaypoint == WAYPOINT_NONE)
+		{
+			const CVec3 point(GetNodePosition(actorNode));
+			if (point.Dist2(actor->currentOrigin) > 64.0f * 64.0f && MoveTrace(actor, point))
+			{
+				target->lastWaypoint = actorNode;
+				STEER::Seek(actor, point, 16.0f);
+				return true;
+			}
+		}
+		for (int i=0; i<count; ++i)
+		{
+			const CVec3 point(GetNodePosition(nearby[i]));
+			if (point.Dist2(target->currentOrigin) >= actorToGoal || !MoveTrace(actor, point))
+				continue;
+			target->lastWaypoint = nearby[i];
+			STEER::Seek(actor, point, 16.0f);
+			return true;
+		}
+		for (int i=0; i<count; ++i)
+		{
+			if (DistanceSquared(GetNodePosition(nearby[i]), target->currentOrigin) >= actorToGoal)
+				continue;
+			if (FindPath(actor, nearby[i], MaxDangerLevel))
+			{
+				targetNode = target->lastWaypoint = nearby[i];
+				break;
+			}
+		}
+	}
 
 	// If The Target Has No Nearest Nav Point, Go To His Last Valid Waypoint Instead
 	//-------------------------------------------------------------------------------
@@ -2698,6 +2749,7 @@ NAV::TNodeHandle		NAV::GetNearestNode(const vec3_t& position, NAV::TNodeHandle p
 			}
 		}
 	}
+
 	return WAYPOINT_NONE;
 }
 
@@ -4603,10 +4655,14 @@ bool			STEER::SafeToGoTo(gentity_t* actor, const vec3_t& targetPosition, int tar
 	int		actorNode				= NAV::GetNearestNode(actor, true, targetNode);
 	mUser.SetActor(actor);
 	float	actorToTargetDistance	= Distance(actor->currentOrigin,  targetPosition);
+	const bool outsideNavGoal = actor->NPC && targetNode == WAYPOINT_NONE && actor->NPC->goalEntity
+		&& (actor->NPC->goalEntity->svFlags & SVF_NAVGOAL);
 	// JO scene goals and script-locked enemies can lie outside the shared navigation graph.
+	// Use the graph fallback for an obstructed off-graph goal instead of steering into
+	// the first wall on a direct line.
 	if (G_IsOutcast() && actor->NPC
 		&& (actor->NPC->behaviorState == BS_CINEMATIC || (actor->svFlags & SVF_LOCKEDENEMY))
-		&& MoveTrace(actor, targetPosition, true))
+		&& MoveTrace(actor, targetPosition, !outsideNavGoal))
 		return true;
 
 
