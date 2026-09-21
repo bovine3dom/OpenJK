@@ -8,8 +8,14 @@ It does not apply to the JK2 binary.
 
 ## Current State
 
-The current GTAO path produces one scalar visibility value for each pixel.
-It does not produce a bent normal.
+The renderer has optional GTAO bent normals for the JA single-player binary.
+The `r_gtaoBentNormals` control enables them. The default value is `0`.
+The disabled path keeps the scalar R8 GTAO path.
+
+The enabled path stores scalar visibility in R and the encoded view-space bent
+normal in GBA. It uses RGBA8 images. The filter, optional upsample pass, world
+AO path, and weapon AO path process the packed value. Debug modes 5 and 6 show
+the world and weapon bent normals.
 
 The relevant code is in these files:
 
@@ -19,15 +25,10 @@ The relevant code is in these files:
 - `codemp/rd-rend2/tr_backend.cpp`
 - `codemp/rd-rend2/tr_image.cpp`
 
-`gtao()` in `ssao.glsl` returns a `float`.
-The shader writes this value to all RGB channels.
-The compact path stores the value in an `R8` image.
-`lightall.glsl` reads only the red channel.
-It uses the value as scalar AO.
-
-The GTAO shader already calculates two horizon angles for each slice.
-These angles contain most of the data that a bent-normal calculation needs.
-The new calculation does not need another geometry pass.
+The lighting shader supports direction-aware specular occlusion, dynamic-model
+diffuse environment light, and dynamic-model light-grid visibility. These
+features do not replace the material normal. The diffuse and light-grid options
+do not change baked world surfaces.
 
 ## Bent Normal Definition
 
@@ -367,14 +368,13 @@ Our shader, filter, resolution, and hardware are different.
 
 ## Recommendation
 
-Implement Phase 1 behind an optional cvar.
-Then implement direction-aware specular cubemap occlusion.
-Test this result before work starts on diffuse environment light.
-Use the existing light-grid direction only for dynamic-model experiments.
-Do not change baked world lighting in the first production version.
+The implementation includes Phases 1 through 4. Keep the master control off by
+default. Keep direction-aware specular occlusion as the first enabled lighting
+option. Enable diffuse environment light and light-grid visibility only after
+level-specific calibration.
 
-This sequence gives a useful result with limited renderer and content risk.
-It also keeps the larger probe-system work optional.
+Do not apply the diffuse or light-grid options to baked world surfaces. Keep the
+probe-system work in Phase 5 separate and optional.
 
 ## References
 

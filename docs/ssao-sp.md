@@ -27,20 +27,24 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | Control | Values and effect |
 | --- | --- |
 | `r_ssao` | Default `1`: enable screen-space AO. `0` disables it. Use `vid_restart` after a change. |
-| `r_compactAO` | Default `1`: store GTAO colour buffers in R8 when texture swizzle is available. `0` uses RGBA8. Requires `vid_restart`. Legacy SSAO keeps RGBA8. |
+| `r_compactAO` | Default `1`: store scalar GTAO buffers in R8 when texture swizzle is available. `0` uses RGBA8. Bent normals always use RGBA8. Requires `vid_restart`. Legacy SSAO keeps RGBA8. |
 | `r_ext_multisample` | `0` disables MSAA; `4` requests four samples. Use `vid_restart` after a change. |
 | `r_sampleShading` | Default `0`: ordinary MSAA. `1`: shade every scene sample. Values between `0` and `1` set a minimum sample fraction. Changes are live. Requires MSAA and sample-shading support. |
 | `r_ssaoMethod` | Default `1`: spatial GTAO. `0`: legacy SSAO. Use `vid_restart` after a change. |
 | `r_gtaoHalfRes` | Default `1`: calculate and filter GTAO at half width and half height, then upscale with full-resolution depth. `0`: native-resolution GTAO. Use `vid_restart` after a change. |
 | `r_gtaoDenoise` | Default `1`: wider spatial filtering for half-resolution GTAO. `0`: narrower filtering. Changes are live. |
 | `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |
-| `r_ssaoAmbientOnly` | Default `1`: apply SSAO to ambient light and IBL. `0`: apply SSAO once to all per-pixel Lightall lighting. No restart is required. |
+| `r_gtaoBentNormals` | Default `0`: use scalar GTAO. `1`: calculate and store bent normals. Requires `vid_restart`. |
+| `r_gtaoBentNormalSpecular` | Default `1`: set the direction-aware cubemap occlusion blend from `0` to `1`. Changes are live. |
+| `r_gtaoBentNormalDiffuse` | Default `0`: set the diffuse environment-light strength from `0` to `1`. Changes are live. |
+| `r_gtaoBentNormalDirectional` | Default `0`: set the light-grid directional visibility blend from `0` to `1`. Changes are live. |
+| `r_ssaoAmbientOnly` | Default `0`: apply SSAO once to all per-pixel Lightall lighting. `1` limits SSAO to ambient light and IBL. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
 | `r_ssaoRadius` | World radius multiplier, from `0.05` to `4`. Default `1`. |
 | `r_ssaoViewModel` | Default `1`: enable first-person weapon self-occlusion. `0` disables it. |
 | `r_ssaoViewModelStrength` | Weapon strength, from `0` to `4`. Default `0.5`; `0` removes weapon AO from lighting. |
 | `r_ssaoViewModelRadius` | Weapon radius multiplier, from `0.05` to `4`. Default `0.05`. |
-| `r_ssaoDebug` | Default `0`: scene. `1`: raw world AO. `2`: filtered world AO. `3`: weapon mask. `4`: weapon AO. No restart is required. |
+| `r_ssaoDebug` | Default `0`: scene. `1`: raw world AO. `2`: filtered world AO. `3`: weapon mask. `4`: weapon AO. `5`: world bent normals. `6`: weapon bent normals. No restart is required. |
 | `r_depthPrepass` | Use `1` for AO generation. With `0`, debug mode must show the scene, not stale AO. |
 
 For a manual check in the game console:
@@ -233,6 +237,56 @@ hardware at 1280 x 720, FOV 100, with MSAA 0 and 4. They covered firing, weapon
 changes, restart, and save/load. Legacy world AO regression checks also passed.
 
 See [benchmark-sp.md](benchmark-sp.md) for performance results and GPU timing.
+
+## Bent Normals
+
+Set `r_gtaoBentNormals 1`, and then use `vid_restart`. This control applies only
+to GTAO. The renderer keeps scalar visibility in the red channel. It stores the
+encoded view-space bent-normal components in the green, blue, and alpha
+channels. All AO work images use RGBA8 in this mode.
+
+The GTAO horizon loop calculates the bent normal without another geometry
+pass. Both depth-aware filter passes process the packed value. The optional
+full-resolution upsample pass uses the same process. Each pass rejects a short
+or invalid vector and normalizes each valid result. Sky pixels contain a safe
+packed value. Capsule shadows change only the scalar visibility channel.
+
+The lighting shader converts the bent normal to world space. It keeps the
+result in the hemisphere of the material normal. It does not replace the
+material normal. Direct-light BRDF calculations still use the material normal.
+
+The renderer supplies these lighting options:
+
+- `r_gtaoBentNormalSpecular` controls direction-aware cubemap occlusion. The
+  shader keeps the material reflection vector. It compares the roughness lobe
+  with the GTAO visibility cone. This option does not add a cubemap sample.
+- `r_gtaoBentNormalDiffuse` samples the highest-roughness cubemap mip in the
+  bent-normal direction. It adds diffuse environment light to dynamic models.
+  It does not add light to baked world surfaces.
+- `r_gtaoBentNormalDirectional` applies GTAO cone visibility to the existing
+  light-grid directional term. It keeps the constant ambient term separate.
+  It applies only to dynamic models.
+
+The master control defaults to `0`. The specular option defaults to `1`, but it
+has no effect while the master control is off. The diffuse and directional
+options default to `0` because they can change the authored lighting balance.
+
+Debug modes 5 and 6 show normalized world-space bent normals as RGB. White is
+the empty background in the weapon view. Magenta marks a short, invalid, or
+backward vector. A small number of magenta pixels can occur at rejected depth
+edges. Large solid regions indicate an error.
+
+Use these commands for validation:
+
+```sh
+python3 scripts/test-ssao-sp.py --method 1 --half-res 1 --bent-normals
+python3 scripts/test-ssao-weapons.py --hardware --method 1 --half-res 1 --bent-normals --width 1280 --height 720
+python3 scripts/test-rend2-sp.py --bent-normals
+```
+
+The 1280 x 720 P630 weapon test confirmed all three lighting options. Each
+option produced a controlled image change. The same run confirmed world and
+weapon isolation, renderer restart, save/load, and no OpenGL errors.
 
 ## First-Person Weapons
 
