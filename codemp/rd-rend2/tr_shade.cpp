@@ -1819,9 +1819,20 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 			int i;
 			vec4_t enableTextures = {};
 			const bool viewModel = R_IsViewModel(backEnd.currentEntity->e);
+			const bool useSsao = r_depthPrepass->integer && tr.world &&
+				!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
+				!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
+				!input->shader->isSky && !backEnd.framePostProcessed &&
+				backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm;
+			vec4_t ssaoParams = {backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0.0f, 4.0f,
+				viewModel ? r_ssaoViewModelStrength->value : r_ssaoStrength->value), 0, 0, 0};
+#ifdef REND2_SP
+			if (!backEnd.comparisonBaseline && useSsao && (!viewModel || (r_ssaoViewModel->integer && backEnd.ssaoWeaponReady)) &&
+				r_ssaoMethod->integer && r_gtaoBentNormals->integer && ssaoParams[0] > 0.0f)
+				ssaoParams[1] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalSpecular->value);
+#endif
 			uniformDataWriter.SetUniformInt(UNIFORM_SSAOAMBIENTONLY, viewModel ? 0 : r_ssaoAmbientOnly->integer);
-			uniformDataWriter.SetUniformVec4(UNIFORM_SSAOPARAMS,
-				backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0.0f, 4.0f, viewModel ? r_ssaoViewModelStrength->value : r_ssaoStrength->value), 0, 0, 0);
+			uniformDataWriter.SetUniformVec4(UNIFORM_SSAOPARAMS, ssaoParams);
 
 			if (!backEnd.comparisonBaseline && r_sunlightMode->integer &&
 					(backEnd.viewParms.flags & VPF_USESUNLIGHT) &&
@@ -1916,11 +1927,6 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 
 			if (r_ssao->integer)
 			{
-				const bool useSsao = r_depthPrepass->integer && tr.world &&
-					!(backEnd.refdef.rdflags & RDF_NOWORLDMODEL) &&
-					!backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
-					!input->shader->isSky && !backEnd.framePostProcessed &&
-					backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm;
 				image_t *aoImage = useSsao ? tr.screenSsaoImage : tr.whiteImage;
 				if (viewModel)
 					aoImage = useSsao && r_ssaoViewModel->integer && backEnd.ssaoWeaponReady

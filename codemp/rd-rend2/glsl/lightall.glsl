@@ -987,6 +987,31 @@ vec3 CalcDynamicLightContribution(
 	return outColor;
 }
 
+#if defined(USE_GTAO_BENT_NORMALS)
+float sphericalCapsIntersection(float cosCap1, float cosCap2, float cosDistance)
+{
+	float radius1 = acos(clamp(cosCap1, 0.0, 1.0));
+	float radius2 = acos(clamp(cosCap2, 0.0, 1.0));
+	float distance = acos(clamp(cosDistance, -1.0, 1.0));
+	if (min(radius1, radius2) <= max(radius1, radius2) - distance)
+		return 1.0 - max(cosCap1, cosCap2);
+	if (radius1 + radius2 <= distance)
+		return 0.0;
+	float delta = abs(radius1 - radius2);
+	float x = 1.0 - clamp((distance - delta) / max(radius1 + radius2 - delta, 0.0001), 0.0, 1.0);
+	return x * x * (-2.0 * x + 3.0) * (1.0 - max(cosCap1, cosCap2));
+}
+
+float bentSpecularAO(float visibility, float roughness, vec3 bentNormal, vec3 reflection)
+{
+	float visibilityCone = sqrt(max(0.0, 1.0 - visibility));
+	float reflectionCone = exp2(-3.321928 * roughness * roughness);
+	float overlap = sphericalCapsIntersection(visibilityCone, reflectionCone, dot(bentNormal, reflection));
+	float coneAO = clamp(overlap / max(1.0 - reflectionCone, 0.0001), 0.0, 1.0);
+	return mix(1.0, coneAO, smoothstep(0.01, 0.09, roughness));
+}
+#endif
+
 vec3 CalcIBLContribution(
 	in float roughness,
 	in vec3 N,
@@ -995,6 +1020,13 @@ vec3 CalcIBLContribution(
 	in vec3 viewDir,
 	in float NE,
 	in vec3 specular
+#if defined(USE_GTAO_BENT_NORMALS)
+	, in vec3 bentNormal,
+	in float visibility,
+	in float materialAO,
+	in float oldAO,
+	in float bentBlend
+#endif
 )
 {
 #if defined(PER_PIXEL_LIGHTING) && defined(USE_CUBEMAP)
@@ -1008,11 +1040,25 @@ vec3 CalcIBLContribution(
 	// Base BRDF
 	#if !defined(USE_CLOTH_BRDF)
 		vec2 EnvBRDF = texture(u_EnvBrdfMap, vec2(roughness, NE)).rg;
+	#if defined(USE_GTAO_BENT_NORMALS)
+		vec3 oldResult = cubeLightColor * (specular * oldAO * EnvBRDF.x + EnvBRDF.y);
+		oldResult *= u_SSAOAmbientOnly != 0 ? 1.0 : visibility;
+		vec3 bentResult = cubeLightColor * (specular * materialAO * EnvBRDF.x + EnvBRDF.y) *
+			bentSpecularAO(visibility, roughness, bentNormal, R);
+		return mix(oldResult, bentResult, bentBlend);
+	#else
 		return cubeLightColor * (specular.rgb * EnvBRDF.x + EnvBRDF.y);
+	#endif
 	// Cloth BRDF
 	#else
 		float EnvBRDF = texture(u_EnvBrdfMap, vec2(roughness, NE)).b;
+	#if defined(USE_GTAO_BENT_NORMALS)
+		vec3 result = cubeLightColor * EnvBRDF;
+		float oldVisibility = u_SSAOAmbientOnly != 0 ? 1.0 : visibility;
+		return result * mix(oldVisibility, bentSpecularAO(visibility, roughness, bentNormal, R), bentBlend);
+	#else
 		return cubeLightColor * EnvBRDF;
+	#endif
 	#endif
 #else
 	return vec3(0.0);
@@ -1154,8 +1200,21 @@ void main()
 	float screenAO = 1.0;
 	#if defined (USE_SSAO)
 	vec2 windowTex = gl_FragCoord.xy / r_FBufScale;
-	screenAO = texture(u_SSAOMap, windowTex).r;
+	vec4 screenAOValue = texture(u_SSAOMap, windowTex);
+	screenAO = screenAOValue.r;
 	screenAO = u_SSAOParams.x <= 0.0 ? 1.0 : pow(clamp(screenAO, 0.0, 1.0), u_SSAOParams.x);
+	#endif
+	#if defined(USE_GTAO_BENT_NORMALS)
+	vec3 bentNormal = N;
+	vec3 viewBentNormal = screenAOValue.gba * 2.0 - 1.0;
+	float bentLengthSquared = dot(viewBentNormal, viewBentNormal);
+	if (bentLengthSquared >= 1e-8 && !any(isnan(viewBentNormal)) && !any(isinf(viewBentNormal)))
+	{
+		viewBentNormal *= inversesqrt(bentLengthSquared);
+		bentNormal = normalize(-viewBentNormal.x * normalize(u_ViewLeft) +
+			viewBentNormal.y * normalize(u_ViewUp) + viewBentNormal.z * normalize(u_ViewForward));
+		bentNormal = normalize(bentNormal + N * max(0.0, 0.001 - dot(bentNormal, N)));
+	}
 	#endif
 	float materialAO = 1.0;
 
@@ -1233,7 +1292,12 @@ void main()
 	vec3 dynamicDiffuse;
 	out_Color.rgb += CalcDynamicLightContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, diffuse.rgb, specular.rgb, vertexNormal, dynamicDiffuse);
 	skinDiffuse += dynamicDiffuse;
+	#if defined(USE_GTAO_BENT_NORMALS)
+	vec3 iblContribution = CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb,
+		bentNormal, screenAO, materialAO, AO, u_SSAOParams.y) * u_MaterialParams.x;
+	#else
 	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO) * u_MaterialParams.x;
+	#endif
 	#if defined(USE_SSAO)
 	// Experimental: apply screen AO once to all completed per-pixel lighting.
 	if (u_SSAOAmbientOnly == 0)
@@ -1241,6 +1305,9 @@ void main()
 		out_Color.rgb *= screenAO;
 		skinDiffuse *= screenAO;
 	}
+	#endif
+	#if defined(USE_GTAO_BENT_NORMALS)
+	out_Color.rgb += iblContribution;
 	#endif
 #else
 	lightColor = var_Color.rgb;

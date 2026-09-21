@@ -420,7 +420,7 @@ static size_t GLSL_GetShaderHeader(
 	if (r_ssao->integer)
 		Q_strcat(dest, size, "#define USE_SSAO\n");
 #ifdef REND2_SP
-	if (r_ssaoMethod->integer && r_gtaoBentNormals->integer)
+	if (r_ssao->integer && r_ssaoMethod->integer && r_gtaoBentNormals->integer)
 		Q_strcat(dest, size, "#define USE_GTAO_BENT_NORMALS\n");
 #endif
 
