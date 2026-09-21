@@ -419,6 +419,10 @@ static size_t GLSL_GetShaderHeader(
 
 	if (r_ssao->integer)
 		Q_strcat(dest, size, "#define USE_SSAO\n");
+#ifdef REND2_SP
+	if (r_ssaoMethod->integer && r_gtaoBentNormals->integer)
+		Q_strcat(dest, size, "#define USE_GTAO_BENT_NORMALS\n");
+#endif
 
 	if (r_deluxeSpecular->value > 0.000001f)
 	{
@@ -2261,6 +2265,7 @@ static int GLSL_LoadGPUProgramSSAO(
 
 	qglUseProgram(tr.ssaoShader.program);
 	GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SCREENDEPTHMAP, TB_COLORMAP);
+	GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SCREENIMAGEMAP, TB_LIGHTMAP);
 	qglUseProgram(0);
 
 	GLSL_FinishGPUShader(&tr.ssaoShader);

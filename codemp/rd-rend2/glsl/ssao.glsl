@@ -21,9 +21,11 @@ void main()
 
 /*[Fragment]*/
 uniform sampler2D u_ScreenDepthMap;
+uniform sampler2D u_ScreenImageMap;
 uniform vec4 u_ViewInfo; // zfar / znear, zfar
 uniform vec4 u_SSAOParams; // 0 legacy or GTAO quality + 1, radius, projection scale XY
 uniform int u_SSAODebug;
+uniform vec3 u_ViewForward, u_ViewLeft, u_ViewUp;
 
 in vec2 var_ScreenTex;
 
@@ -113,23 +115,59 @@ vec3 positionAt(vec2 uv)
 	return vec3((uv * 2.0 - 1.0) * tanHalfFov * z, z);
 }
 
-float gtao(vec2 uv)
+vec3 surfaceNormalAt(vec2 uv, vec3 p, vec2 pixel)
 {
-	vec2 pixel = 1.0 / vec2(textureSize(u_ScreenDepthMap, 0));
-	vec3 p = positionAt(uv);
-	if (p.z >= u_ViewInfo.y * 0.9999)
-		return 1.0;
-	// Select the neighbour on the same surface at depth discontinuities.
 	vec3 l = p - positionAt(uv - vec2(pixel.x, 0));
 	vec3 r = positionAt(uv + vec2(pixel.x, 0)) - p;
 	vec3 b = p - positionAt(uv - vec2(0, pixel.y));
 	vec3 t = positionAt(uv + vec2(0, pixel.y)) - p;
 	vec3 normal = cross(abs(l.z) < abs(r.z) ? l : r, abs(b.z) < abs(t.z) ? b : t);
-	if (dot(normal, normal) < 1e-12)
+	float lengthSquared = dot(normal, normal);
+	if (lengthSquared < 1e-12 || any(isnan(normal)) || any(isinf(normal)))
+		return vec3(0.0);
+	normal *= inversesqrt(lengthSquared);
+	if (dot(normal, -p) < 0.0) normal = -normal;
+	return normal;
+}
+
+#if defined(USE_GTAO_BENT_NORMALS)
+vec3 safeDirection(vec3 direction, vec3 fallback)
+{
+	float lengthSquared = dot(direction, direction);
+	if (lengthSquared < 1e-8 || any(isnan(direction)) || any(isinf(direction)))
+		return fallback;
+	return direction * inversesqrt(lengthSquared);
+}
+
+vec4 packVisibility(float visibility, vec3 bentNormal)
+{
+	if (isnan(visibility) || isinf(visibility)) visibility = 1.0;
+	return vec4(clamp(visibility, 0.0, 1.0), bentNormal * 0.5 + 0.5);
+}
+
+float gtao(vec2 uv, out vec3 bentNormal)
+#else
+float gtao(vec2 uv)
+#endif
+{
+	vec2 pixel = 1.0 / vec2(textureSize(u_ScreenDepthMap, 0));
+	vec3 p = positionAt(uv);
+	if (p.z >= u_ViewInfo.y * 0.9999)
+	{
+#if defined(USE_GTAO_BENT_NORMALS)
+		bentNormal = vec3(0.0, 0.0, -1.0);
+#endif
 		return 1.0;
-	normal = normalize(normal);
+	}
 	vec3 view = normalize(-p);
-	if (dot(normal, view) < 0.0) normal = -normal;
+	vec3 normal = surfaceNormalAt(uv, p, pixel);
+	if (dot(normal, normal) < 1e-12)
+	{
+#if defined(USE_GTAO_BENT_NORMALS)
+		bentNormal = view;
+#endif
+		return 1.0;
+	}
 	int quality = int(u_SSAOParams.x) - 1;
 	int slices = quality == 3 ? 3 : 2;
 	int steps = quality == 0 ? 1 : (quality == 1 ? 2 : 4);
@@ -141,6 +179,9 @@ float gtao(vec2 uv)
 	// the latter skips noise samples and introduces a pattern at half resolution.
 	float noise = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
 	float visibility = 0.0;
+#if defined(USE_GTAO_BENT_NORMALS)
+	vec3 bentSum = vec3(0.0);
+#endif
 	for (int slice = 0; slice < slices; ++slice)
 	{
 		float angle = 3.14159265 * (float(slice) + noise) / float(slices);
@@ -150,7 +191,7 @@ float gtao(vec2 uv)
 		vec3 axis = cross(tangent, view);
 		vec3 projected = normal - axis * dot(normal, axis);
 		float lengthN = length(projected);
-		float n = atan(dot(projected, tangent), dot(projected, view));
+		float n = lengthN > 0.000001 ? atan(dot(projected, tangent), dot(projected, view)) : 0.0;
 		vec2 horizons = vec2(-1.0);
 		for (int side = 0; side < 2; ++side)
 		{
@@ -175,19 +216,59 @@ float gtao(vec2 uv)
 		h = clamp(h, n - 1.57079633, n + 1.57079633);
 		vec2 integral = cos(n) + 2.0 * h * sin(n) - cos(2.0 * h - n);
 		visibility += lengthN * 0.25 * (integral.x + integral.y);
+#if defined(USE_GTAO_BENT_NORMALS)
+		float t0 = (6.0 * sin(h.x - n) - sin(3.0 * h.x - n) +
+			6.0 * sin(h.y - n) - sin(3.0 * h.y - n) + 16.0 * sin(n) -
+			3.0 * (sin(h.x + n) + sin(h.y + n))) / 12.0;
+		float t1 = (-cos(3.0 * h.x - n) - cos(3.0 * h.y - n) + 8.0 * cos(n) -
+			3.0 * (cos(h.x + n) + cos(h.y + n))) / 12.0;
+		bentSum += (tangent * t0 + view * t1) * lengthN;
+#endif
 	}
+#if defined(USE_GTAO_BENT_NORMALS)
+	bentNormal = safeDirection(bentSum, normal);
+#endif
 	return clamp(visibility / float(slices), 0.0, 1.0);
 }
 
 void main()
 {
-	if (u_SSAODebug != 0)
+	if (u_SSAODebug == 1)
 	{
 		out_Color = vec4(vec3(texture(u_ScreenDepthMap, var_ScreenTex).r >= 1.0 ? 1.0 : 0.0), 1.0);
 		return;
 	}
+	if (u_SSAODebug == 2)
+	{
+		out_Color = vec4(vec3(texture(u_ScreenImageMap, var_ScreenTex).r), 1.0);
+		return;
+	}
+	if (u_SSAODebug == 3)
+	{
+		vec4 sampleValue = texture(u_ScreenImageMap, var_ScreenTex);
+		vec3 bentNormal = sampleValue.gba * 2.0 - 1.0;
+		float lengthSquared = dot(bentNormal, bentNormal);
+		vec3 p = positionAt(var_ScreenTex);
+		vec3 normal = surfaceNormalAt(var_ScreenTex, p, 1.0 / vec2(textureSize(u_ScreenDepthMap, 0)));
+		if (lengthSquared < 1e-8 || any(isnan(bentNormal)) || any(isinf(bentNormal)) ||
+			dot(normal, normal) < 1e-12 || dot(bentNormal, normal) < -0.01)
+		{
+			out_Color = vec4(1.0, 0.0, 1.0, 1.0);
+			return;
+		}
+		bentNormal *= inversesqrt(lengthSquared);
+		vec3 worldNormal = -bentNormal.x * normalize(u_ViewLeft) +
+			bentNormal.y * normalize(u_ViewUp) + bentNormal.z * normalize(u_ViewForward);
+		out_Color = vec4(normalize(worldNormal) * 0.5 + 0.5, 1.0);
+		return;
+	}
+#if defined(USE_GTAO_BENT_NORMALS)
+	vec3 bentNormal;
+	float result = gtao(var_ScreenTex, bentNormal);
+	out_Color = packVisibility(result, bentNormal);
+#else
 	float result = u_SSAOParams.x > 0.0 ? gtao(var_ScreenTex) :
 		ambientOcclusion(u_ScreenDepthMap, var_ScreenTex, u_ViewInfo.x, u_ViewInfo.y);
-
 	out_Color = vec4(vec3(result), 1.0);
+#endif
 }

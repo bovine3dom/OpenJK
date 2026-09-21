@@ -155,6 +155,9 @@ cvar_t  *r_ssaoAmbientOnly;
 cvar_t  *r_ssaoDebug;
 cvar_t *r_ssaoStrength, *r_ssaoRadius;
 cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoUpsample, *r_gtaoDenoise;
+#ifdef REND2_SP
+cvar_t *r_gtaoBentNormals, *r_gtaoBentNormalSpecular, *r_gtaoBentNormalDiffuse, *r_gtaoBentNormalDirectional;
+#endif
 cvar_t *r_ssaoViewModel, *r_ssaoViewModelStrength, *r_ssaoViewModelRadius;
 
 cvar_t  *r_normalMapping;
@@ -1606,8 +1609,18 @@ void R_Register( void )
 	ri.Cvar_CheckRange(r_gtaoUpsample, 0, 1, qtrue);
 	r_gtaoDenoise = ri.Cvar_Get("r_gtaoDenoise", "1", CVAR_ARCHIVE, "Use a wider spatial filter for half-resolution GTAO.");
 	ri.Cvar_CheckRange(r_gtaoDenoise, 0, 1, qtrue);
+#ifdef REND2_SP
+	r_gtaoBentNormals = ri.Cvar_Get("r_gtaoBentNormals", "0", CVAR_ARCHIVE | CVAR_LATCH, "Calculate and store GTAO bent normals.");
+	r_gtaoBentNormalSpecular = ri.Cvar_Get("r_gtaoBentNormalSpecular", "1", CVAR_ARCHIVE, "Bent-normal specular occlusion blend.");
+	r_gtaoBentNormalDiffuse = ri.Cvar_Get("r_gtaoBentNormalDiffuse", "0", CVAR_ARCHIVE, "Bent-normal diffuse environment strength.");
+	r_gtaoBentNormalDirectional = ri.Cvar_Get("r_gtaoBentNormalDirectional", "0", CVAR_ARCHIVE, "Bent-normal directional ambient blend.");
+	ri.Cvar_CheckRange(r_gtaoBentNormals, 0, 1, qtrue);
+	ri.Cvar_CheckRange(r_gtaoBentNormalSpecular, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_gtaoBentNormalDiffuse, 0, 1, qfalse);
+	ri.Cvar_CheckRange(r_gtaoBentNormalDirectional, 0, 1, qfalse);
+#endif
 	r_ssaoAmbientOnly = ri.Cvar_Get( "r_ssaoAmbientOnly", "0", CVAR_ARCHIVE, "Limit screen AO to ambient light and IBL." );
-	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO." );
+	r_ssaoDebug = ri.Cvar_Get( "r_ssaoDebug", "0", 0, "Show AO: 0 off, 1 world raw, 2 world filtered, 3 weapon mask, 4 weapon AO, 5 world bent normal, 6 weapon bent normal." );
 	r_ssaoStrength = ri.Cvar_Get("r_ssaoStrength", "1", CVAR_ARCHIVE, "World AO strength; zero removes screen AO from world lighting.");
 	r_ssaoRadius = ri.Cvar_Get("r_ssaoRadius", "1", CVAR_ARCHIVE, "World AO radius multiplier.");
 	r_ssaoViewModel = ri.Cvar_Get("r_ssaoViewModel", "1", CVAR_ARCHIVE, "Enable isolated first-person weapon AO.");

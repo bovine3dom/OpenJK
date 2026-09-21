@@ -41,6 +41,30 @@ float getLinearDepth(sampler2D depthMap, const vec2 tex, const float zFarDivZNea
 		return 1.0 / mix(zFarDivZNear, 1.0, sampleZDivW);
 }
 
+#if defined(USE_GTAO_BENT_NORMALS)
+vec4 packedSky()
+{
+	return vec4(1.0, 0.5, 0.5, 0.0);
+}
+
+vec4 normalizePackedAO(vec4 value, vec4 fallback)
+{
+	vec3 bentNormal = value.gba * 2.0 - 1.0;
+	float lengthSquared = dot(bentNormal, bentNormal);
+	if (lengthSquared < 1e-8 || any(isnan(bentNormal)) || any(isinf(bentNormal)))
+	{
+		bentNormal = fallback.gba * 2.0 - 1.0;
+		lengthSquared = dot(bentNormal, bentNormal);
+	}
+	if (lengthSquared < 1e-8 || any(isnan(bentNormal)) || any(isinf(bentNormal)))
+		bentNormal = vec3(0.0, 0.0, -1.0);
+	else
+		bentNormal *= inversesqrt(lengthSquared);
+	float visibility = isnan(value.r) || isinf(value.r) ? 1.0 : clamp(value.r, 0.0, 1.0);
+	return vec4(visibility, bentNormal * 0.5 + 0.5);
+}
+#endif
+
 vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFarDivZNear, float zFar)
 {
 	float scale = 1.0 / 256.0;
@@ -66,7 +90,12 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 	vec2 centerSlope = vec2(dFdx(planeDepth), dFdy(planeDepth)) / vec2(dFdx(tex.x), dFdy(tex.y));
 	// GTAO sky samples are white, and the filter rejects cross-sky taps.
 	// Keep derivatives above this exit for adjacent foreground fragments.
-	if (u_ViewInfo.z > 0.0 && depthCenter >= zFar * 0.9999) return vec4(1.0);
+	if (u_ViewInfo.z > 0.0 && depthCenter >= zFar * 0.9999)
+#if defined(USE_GTAO_BENT_NORMALS)
+		return packedSky();
+#else
+		return vec4(1.0);
+#endif
 	bool wide = u_ViewInfo.z > 0.0 && u_SSAOParams.x > 0.0;
 	float centerWeight = wide ? wideGauss[0] : gauss[0];
 	vec4 result = texture(imageMap, tex) * centerWeight;
@@ -96,14 +125,23 @@ vec4 depthGaussian1D(sampler2D imageMap, sampler2D depthMap, vec2 tex, float zFa
 		direction = -direction;
 	}
 
+#if defined(USE_GTAO_BENT_NORMALS)
+	return normalizePackedAO(result / total, texture(imageMap, tex));
+#else
 	return result / total;
+#endif
 }
 
 vec4 upsampleAO(vec2 uv)
 {
 	float hardwareDepth = texture(u_ScreenDepthMap, uv).r;
 	float z = u_ViewInfo.y / mix(u_ViewInfo.x, 1.0, hardwareDepth);
-	if (z >= u_ViewInfo.y * 0.9999) return vec4(1.0);
+	if (z >= u_ViewInfo.y * 0.9999)
+#if defined(USE_GTAO_BENT_NORMALS)
+		return packedSky();
+#else
+		return vec4(1.0);
+#endif
 	vec2 pixel = 1.0 / vec2(textureSize(u_ScreenDepthMap, 0));
 	vec2 slope;
 	for (int axis = 0; axis < 2; ++axis)
@@ -134,7 +172,12 @@ vec4 upsampleAO(vec2 uv)
 		result += texture(u_ScreenImageMap, tap) * weight;
 		total += weight;
 	}
+#if defined(USE_GTAO_BENT_NORMALS)
+	return normalizePackedAO(total > 0.00001 ? result / total : texture(u_ScreenImageMap, uv),
+		texture(u_ScreenImageMap, uv));
+#else
 	return total > 0.00001 ? result / total : vec4(1.0);
+#endif
 }
 
 void main()

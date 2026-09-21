@@ -3593,8 +3593,12 @@ void R_CreateBuiltinImages( void ) {
 		const int outputHeight = upsample ? height : aoHeight;
 		if (r_ssaoMethod->integer)
 			ri.Printf(PRINT_ALL, "GTAO: %dx%d -> %dx%d\n", aoWidth, aoHeight, outputWidth, outputHeight);
-		const int aoFormat = r_ssaoMethod->integer && r_compactAO->integer && glRefConfig.textureSwizzle ? GL_R8 : GL_RGBA8;
-		ri.Printf(PRINT_ALL, "AO storage: %s\n", aoFormat == GL_R8 ? "R8" : "RGBA8");
+		bool bentNormals = false;
+#ifdef REND2_SP
+		bentNormals = r_ssaoMethod->integer && r_gtaoBentNormals->integer;
+#endif
+		const int aoFormat = !bentNormals && r_ssaoMethod->integer && r_compactAO->integer && glRefConfig.textureSwizzle ? GL_R8 : GL_RGBA8;
+		ri.Printf(PRINT_ALL, "AO storage: %s%s\n", aoFormat == GL_R8 ? "R8" : "RGBA8", bentNormals ? " with bent normals" : "");
 		for (int i = 0; i < 2; ++i)
 			tr.aoScratchImage[i] = R_CreateImage(va("*aoScratch%d", i), NULL, aoWidth, aoHeight,
 				IMGTYPE_COLORALPHA, IMGFLAG_NO_COMPRESSION | IMGFLAG_CLAMPTOEDGE, aoFormat);

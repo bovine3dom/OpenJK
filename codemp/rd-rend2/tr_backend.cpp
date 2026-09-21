@@ -2125,6 +2125,15 @@ static bool RB_SSAOEnabledForView()
 		(!backEnd.viewParms.targetFbo || backEnd.viewParms.targetFbo == tr.renderFbo);
 }
 
+static bool RB_GTAOBentNormals()
+{
+#ifdef REND2_SP
+	return r_ssaoMethod->integer && r_gtaoBentNormals->integer;
+#else
+	return false;
+#endif
+}
+
 static bool RB_FullMainView()
 {
 	return !backEnd.viewParms.isPortal && !backEnd.viewParms.isSkyPortal &&
@@ -2260,6 +2269,7 @@ static void RB_RenderCapsules()
 	qglViewport(0, 0, tr.screenSsaoFbo->width, tr.screenSsaoFbo->height);
 	GL_State(GLS_DEPTHTEST_DISABLE | GLS_SRCBLEND_DST_COLOR | GLS_DSTBLEND_ZERO);
 	GL_Cull(CT_TWO_SIDED);
+	if (RB_GTAOBentNormals()) qglColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE);
 	GLSL_BindProgram(&tr.capsuleShader);
 	GL_BindToTMU(tr.hdrDepthImage, 0);
 	const vec4_t info = {view.zFar / r_znear->value, view.zFar, tanf(DEG2RAD(view.fovX * 0.5f)), tanf(DEG2RAD(view.fovY * 0.5f))};
@@ -2373,6 +2383,8 @@ static void RB_RenderCapsules()
 		RB_InstantTriangle();
 		++actors;
 	}
+	if (RB_GTAOBentNormals())
+		qglColorMask(!backEnd.colorMask[0], !backEnd.colorMask[1], !backEnd.colorMask[2], !backEnd.colorMask[3]);
 	if (timed) ri.Printf(PRINT_ALL, "Capsule CPU: total=%d prepare=%d actors=%d\n", ri.Milliseconds() - startTime, prepareMsec, actors);
 #endif
 }
@@ -3655,18 +3667,25 @@ const void *RB_PostProcess(const void *data)
 	RB_SMAA();
 	if (RB_SSAOEnabledForView() &&
 		backEnd.ssaoViewParm == backEnd.viewParms.currentViewParm &&
-		(r_ssaoDebug->integer >= 1 && r_ssaoDebug->integer <= 4))
+		(r_ssaoDebug->integer >= 1 && r_ssaoDebug->integer <= 6))
 	{
-		FBO_t *aoFbo = r_ssaoDebug->integer == 1 ? tr.ssaoRawFbo : tr.screenSsaoFbo;
-		if (r_ssaoDebug->integer == 4)
+		const int debug = r_ssaoDebug->integer;
+		FBO_t *aoFbo = debug == 1 ? tr.ssaoRawFbo : tr.screenSsaoFbo;
+		image_t *depthImage = tr.hdrDepthImage;
+		if (debug == 4 || debug == 6)
+		{
 			aoFbo = backEnd.ssaoWeaponReady ? tr.weaponSsaoFbo : nullptr;
+			depthImage = tr.weaponDepthFloatImage;
+		}
+		if (debug == 3 || ((debug == 5 || debug == 6) && !RB_GTAOBentNormals())) aoFbo = nullptr;
 		FBO_t *oldFbo = glState.currentFBO;
 		const uint32_t oldState = glState.glStateBits;
 		const int oldCull = glState.faceCulling;
 		GLint viewport[4], scissor[4];
 		qglGetIntegerv(GL_VIEWPORT, viewport);
 		qglGetIntegerv(GL_SCISSOR_BOX, scissor);
-		if (r_ssaoDebug->integer == 3)
+		const bool shaderDebug = debug == 3 || (aoFbo && RB_GTAOBentNormals());
+		if (shaderDebug)
 		{
 			FBO_Bind(nullptr);
 			qglViewport(0, 0, glConfig.vidWidth, glConfig.vidHeight);
@@ -3674,9 +3693,23 @@ const void *RB_PostProcess(const void *data)
 			GL_State(GLS_DEPTHTEST_DISABLE);
 			GL_Cull(CT_TWO_SIDED);
 			GLSL_BindProgram(&tr.ssaoShader);
-			GL_BindToTMU(backEnd.ssaoWeaponViewParm == backEnd.viewParms.currentViewParm
-				? tr.weaponDepthImage : tr.whiteImage, TB_COLORMAP);
-			GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG, 1);
+			if (debug == 3)
+				depthImage = backEnd.ssaoWeaponViewParm == backEnd.viewParms.currentViewParm
+					? tr.weaponDepthImage : tr.whiteImage;
+			GL_BindToTMU(depthImage, TB_COLORMAP);
+			GL_BindToTMU(aoFbo ? aoFbo->colorImage[0] : tr.whiteImage, TB_LIGHTMAP);
+			const float reference = tanf(DEG2RAD(40.0f));
+			const vec4_t params = {0, 0,
+				reference / tanf(DEG2RAD(backEnd.viewParms.fovX * 0.5f)),
+				0.75f * reference / tanf(DEG2RAD(backEnd.viewParms.fovY * 0.5f))};
+			const vec4_t viewInfo = {backEnd.viewParms.zFar / r_znear->value, backEnd.viewParms.zFar, 1, 0};
+			GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_VIEWINFO, viewInfo);
+			GLSL_SetUniformVec4(&tr.ssaoShader, UNIFORM_SSAOPARAMS, params);
+			GLSL_SetUniformVec3(&tr.ssaoShader, UNIFORM_VIEWFORWARD, backEnd.viewParms.ori.axis[0]);
+			GLSL_SetUniformVec3(&tr.ssaoShader, UNIFORM_VIEWLEFT, backEnd.viewParms.ori.axis[1]);
+			GLSL_SetUniformVec3(&tr.ssaoShader, UNIFORM_VIEWUP, backEnd.viewParms.ori.axis[2]);
+			GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG,
+				debug == 3 ? 1 : (debug >= 5 ? 3 : 2));
 			RB_InstantTriangle();
 			GLSL_SetUniformInt(&tr.ssaoShader, UNIFORM_SSAODEBUG, 0);
 		}
