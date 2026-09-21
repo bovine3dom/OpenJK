@@ -1072,6 +1072,20 @@ vec3 CalcIBLContribution(
 #endif
 }
 
+#if defined(USE_GTAO_BENT_NORMALS)
+vec3 CalcBentDiffuseContribution(vec3 bentNormal, vec3 viewDir, vec3 diffuse, float visibility, float materialAO)
+{
+#if defined(PER_PIXEL_LIGHTING) && defined(USE_CUBEMAP) && defined(USE_LIGHT_VECTOR)
+	if (u_SSAOParams.z <= 0.0) return vec3(0.0);
+	vec3 parallax = u_CubeMapInfo.xyz + u_CubeMapInfo.w * viewDir;
+	vec3 environment = textureLod(u_CubeMap, bentNormal - parallax, ROUGHNESS_MIPS).rgb * u_EnableTextures.w;
+	return environment * diffuse * min(materialAO, visibility) * u_SSAOParams.z;
+#else
+	return vec3(0.0);
+#endif
+}
+#endif
+
 vec3 CalcNormal( in vec3 vertexNormal, in vec4 vertexTangent, in vec2 texCoords )
 {
 #if defined(USE_NORMALMAP)
@@ -1312,6 +1326,7 @@ void main()
 	#if defined(USE_GTAO_BENT_NORMALS)
 	vec3 iblContribution = CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb,
 		bentNormal, screenAO, materialAO, AO, u_SSAOParams.y) * u_MaterialParams.x;
+	vec3 bentDiffuseContribution = CalcBentDiffuseContribution(bentNormal, viewDir, diffuse.rgb, screenAO, materialAO);
 	#else
 	out_Color.rgb += CalcIBLContribution(roughness, N, E, u_ViewOrigin, viewDir, NE, specular.rgb * AO) * u_MaterialParams.x;
 	#endif
@@ -1324,7 +1339,8 @@ void main()
 	}
 	#endif
 	#if defined(USE_GTAO_BENT_NORMALS)
-	out_Color.rgb += iblContribution;
+	out_Color.rgb += iblContribution + bentDiffuseContribution;
+	skinDiffuse += bentDiffuseContribution;
 	#if defined(USE_LIGHT_VECTOR)
 	out_Color.rgb += bentDirectionalContribution;
 	skinDiffuse += bentDirectionalSkinDiffuse;

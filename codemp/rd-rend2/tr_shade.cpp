@@ -1831,6 +1831,7 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 				r_ssaoMethod->integer && r_gtaoBentNormals->integer && ssaoParams[0] > 0.0f)
 			{
 				ssaoParams[1] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalSpecular->value);
+				ssaoParams[2] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalDiffuse->value);
 				ssaoParams[3] = Com_Clamp(0.0f, 1.0f, r_gtaoBentNormalDirectional->value);
 			}
 #endif
