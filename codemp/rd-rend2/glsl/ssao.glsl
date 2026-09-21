@@ -245,6 +245,11 @@ void main()
 	}
 	if (u_SSAODebug == 3)
 	{
+		if (texture(u_ScreenDepthMap, var_ScreenTex).r >= 0.9999)
+		{
+			out_Color = vec4(1.0);
+			return;
+		}
 		vec4 sampleValue = texture(u_ScreenImageMap, var_ScreenTex);
 		vec3 bentNormal = sampleValue.gba * 2.0 - 1.0;
 		float lengthSquared = dot(bentNormal, bentNormal);

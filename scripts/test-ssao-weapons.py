@@ -28,6 +28,12 @@ def check(label, condition, detail):
         raise RuntimeError(label)
 
 
+def rgb_pixels(path):
+    return subprocess.run(["ffmpeg", "-v", "error", "-xerror", "-i", str(path),
+                           "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
+                          capture_output=True, check=True).stdout
+
+
 def main():
     root = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
@@ -42,9 +48,12 @@ def main():
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
     parser.add_argument("--geometry-validate", action="store_true")
     parser.add_argument("--gpu-skinning", action="store_true")
+    parser.add_argument("--bent-normals", action="store_true")
     args = parser.parse_args()
     if args.geometry_validate and args.gpu_skinning:
         parser.error("Choose CPU cache validation or GPU skinning validation")
+    if args.bent_normals and args.method != 1:
+        parser.error("Bent normals require GTAO")
     if not (64 <= args.width <= 16384 and 64 <= args.height <= 16384):
         parser.error("Invalid dimensions")
     if not 20 <= args.fov <= 140:
@@ -63,8 +72,9 @@ def main():
         profile.mkdir(parents=True)
         settings = dict(cl_renderer="rdsp-rend2", r_fullscreen=0, s_initsound=0, developer=1,
                         r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res,
-                        r_sampleShading=args.sample_shading, r_ext_multisample=msaa,
-                        r_normalMapping=1, r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0,
+                        r_gtaoBentNormals=int(args.bent_normals), r_sampleShading=args.sample_shading, r_ext_multisample=msaa,
+                        r_cubeMapping=int(args.bent_normals), r_normalMapping=1, r_specularMapping=1,
+                        r_debugContext=1, r_ignoreGLErrors=0,
                         r_g2GeometryValidate=int(args.geometry_validate), com_maxfps=10,
                         r_g2GpuValidate=int(args.gpu_skinning),
                         r_mode=-1, r_customwidth=args.width, r_customheight=args.height, cg_fov=args.fov)
@@ -99,14 +109,31 @@ def main():
             check("hardware renderer", bool(gpu) and not re.search(r"llvmpipe|softpipe", gpu[-1], re.I), gpu)
         check("fixture and GL", "OJK_WEAPON_AO_DONE" in text and not re.search(
             r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]|GL_INVALID_|ERROR:|Unknown command|Cheats are not enabled", text), log)
+        if args.bent_normals:
+            check("bent-normal storage", "AO storage: RGBA8 with bent normals" in text, log)
         images = log.parent / "profile/OpenJK/screenshots"
         data = {name: pixels(images / f"{name}.png", args.width, args.height) for name in (
-            "weapon_mask", "weapon_ao", "weapon_plain", "weapon_shaded", "world_with_weapon",
+            "weapon_mask", "weapon_ao", "weapon_bent", "weapon_plain", "weapon_shaded", "world_with_weapon",
             "world_without_weapon", "weapon_hidden", "weapon_near_wall", "pistol_mask", "pistol_ao", "repeater_ao",
             "weapon_radius_small", "weapon_radius_large", "weapon_disabled", "weapon_disabled_ao",
             "weapon_restarted", "weapon_loaded")}
         mask = {i for i, p in enumerate(data["weapon_mask"]) if p < 128}
         check("weapon mask", 30 < len(mask) < 8000, len(mask))
+        bent = rgb_pixels(images / "weapon_bent.png")
+        colored = sum(max(bent[i:i + 3]) - min(bent[i:i + 3]) > 8 for i in range(0, len(bent), 3))
+        magenta = sum(bent[i] > 245 and bent[i + 1] < 10 and bent[i + 2] > 245
+                      for i in range(0, len(bent), 3))
+        check("weapon bent normals", colored > 10 and magenta <= max(5, colored * 0.01) if args.bent_normals
+              else min(data["weapon_bent"]) >= 254, dict(colored=colored, magenta=magenta))
+        if args.bent_normals:
+            options = {name: rgb_pixels(images / f"{name}.png") for name in
+                       ("bent_options_base", "bent_specular", "bent_diffuse", "bent_directional", "bent_options_restored")}
+            def option_delta(name):
+                return sum(abs(a - b) for a, b in zip(options["bent_options_base"], options[name])) / len(options[name])
+            effects = {name: option_delta(name) for name in ("bent_specular", "bent_diffuse", "bent_directional")}
+            restore = option_delta("bent_options_restored")
+            check("bent-normal lighting options", min(effects.values()) > 0.01 and restore < 0.5,
+                  dict(effects=effects, restore=restore))
         occluded = {i for i, p in enumerate(data["weapon_ao"]) if p < 245}
         check("weapon self-occlusion", len(occluded) > 10, len(occluded))
         expanded = {i + dy * 160 + dx for i in mask for dx in (-2, -1, 0, 1, 2) for dy in (-2, -1, 0, 1, 2)}

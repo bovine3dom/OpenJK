@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--method", type=int, choices=(0, 1), default=0)
     parser.add_argument("--half-res", type=int, choices=(0, 1), default=0)
     parser.add_argument("--sample-shading", type=float, choices=(0, 1), default=0)
+    parser.add_argument("--bent-normals", action="store_true")
     args = parser.parse_args()
     package = args.package.resolve()
     fixture = package / "OpenJK/rend2-ssao.cfg"
@@ -44,17 +45,18 @@ def main():
     x0, y0, x1, y1 = 56, 56, 104, 112
     print(f"Scene ROI at 160 x 120: {(x0, y0, x1, y1)}; AO masks use the full image", flush=True)
     phases = ("ambient", "broad", "strength_zero", "strength_high", "radius_small", "radius_large",
-              "raw", "filtered", "restored", "prepass", "prepass_scene")
+              "raw", "filtered", "bent_world", "restored", "prepass", "prepass_scene")
     for msaa in (0, 4):
         case = suite / f"msaa{msaa}"
         command = ["bash", str(root / "scripts/smoke-sp.sh"), str(package), "t2_wedge"]
-        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res, r_sampleShading=args.sample_shading,
-                                r_ext_multisample=msaa, r_normalMapping=1,
-                                r_specularMapping=1, r_debugContext=1, r_ignoreGLErrors=0).items():
+        for name, value in dict(r_ssao=1, r_ssaoMethod=args.method, r_gtaoHalfRes=args.half_res,
+                                r_gtaoBentNormals=int(args.bent_normals), r_sampleShading=args.sample_shading,
+                                r_ext_multisample=msaa, r_debugContext=1, r_ignoreGLErrors=0).items():
             command += ["+set", name, str(value)]
         command += ["+exec", "rend2-ssao.cfg"]
         env = dict(os.environ, OJK_SMOKE_ROOT=str(case), OJK_SMOKE_RENDERER="rdsp-rend2",
-                   OJK_SMOKE_TIMEOUT="600", OJK_SMOKE_WAIT="10", OJK_SMOKE_DISPLAY="640x480")
+                   OJK_SMOKE_TIMEOUT="1200" if args.bent_normals else "600",
+                   OJK_SMOKE_WAIT="10", OJK_SMOKE_DISPLAY="640x480")
         # Do not inherit the benchmark's offscreen SDL/EGL selection.
         env["SDL_VIDEODRIVER"] = "x11"
         env.pop("EGL_PLATFORM", None)
@@ -70,6 +72,8 @@ def main():
             raise RuntimeError(f"GL error or fixture failure: {log}")
         if not re.search(rf'Cvar r_ext_multisample = "{msaa}"', text):
             raise RuntimeError(f"MSAA {msaa} was not confirmed: {log}")
+        if args.bent_normals and "AO storage: RGBA8 with bent normals" not in text:
+            raise RuntimeError(f"Bent-normal storage was not enabled: {log}")
         images = {}
         start = 0
         for phase in phases:
@@ -104,6 +108,13 @@ def main():
             ao = phase in ("raw", "filtered", "radius_small", "radius_large")
             mask = {(i % 160, i // 160) for i, value in enumerate(gray) if value < 250}
             coverage = len(mask) / len(gray)
+            if phase == "bent_world":
+                magenta = sum(rgb[i] > 245 and rgb[i + 1] < 10 and rgb[i + 2] > 245
+                              for i in range(0, len(rgb), 3)) / (640 * 480)
+                check(f"MSAA {msaa} {phase}", dict(colored=colored, magenta=magenta),
+                      colored >= 0.01 and magenta <= 0.005 if args.bent_normals
+                      else min(gray) >= 254)
+                continue
             check(f"MSAA {msaa} {phase}", dict(colored=colored, span=span, below_250=coverage),
                   (colored <= 0.0001 and span >= 4 and coverage >= 0.001) if ao
                   else (colored >= 0.01 and span >= 16))

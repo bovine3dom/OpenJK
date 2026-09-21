@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--buffer-storage", action="store_true")
     parser.add_argument("--geometry-validate", action="store_true")
     parser.add_argument("--gpu-skinning", action="store_true", help="Validate GPU positions through restart, load, and map change")
+    parser.add_argument("--bent-normals", action="store_true")
     args = parser.parse_args()
     package = args.package.resolve()
     if args.geometry_validate and args.gpu_skinning:
@@ -34,6 +35,7 @@ def main():
                     "+set", "r_debugContext", "1",
                     "+set", "cg_shadows", str(args.shadows), "+set", "r_patchStitching", "0",
                     "+set", "r_arb_buffer_storage", str(int(args.buffer_storage)),
+                    "+set", "r_gtaoBentNormals", str(int(args.bent_normals)),
                     "+set", "r_ignoreGLErrors", "0", "+exec", fixture_name],
                    env=dict(os.environ, OJK_SMOKE_ROOT=str(suite), OJK_SMOKE_RENDERER="rdsp-rend2",
                             OJK_SMOKE_TIMEOUT="600", OJK_SMOKE_WAIT="10", OJK_SMOKE_DISPLAY="640x480"),
@@ -48,6 +50,8 @@ def main():
         raise RuntimeError(f"No geometry/tangent reference checks: {logs[0]}")
     if args.buffer_storage and "...using GL_ARB_buffer_storage" not in text:
         raise RuntimeError(f"Buffer storage was not enabled: {logs[0]}")
+    if args.bent_normals and "AO storage: RGBA8 with bent normals" not in text:
+        raise RuntimeError(f"Bent-normal storage was not enabled: {logs[0]}")
     if re.search(r"OpenGL -> [^\n]*\[(?:Error|Undefined)\]|GL_INVALID_\w+|GL_OUT_OF_MEMORY|"
                  r"aimemory event=rejected|Cheats are not enabled", text):
         raise RuntimeError(f"GL error or fixture failure: {logs[0]}")
