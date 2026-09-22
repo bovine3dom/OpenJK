@@ -89,6 +89,15 @@ The shared navigation graph does not cover every JO scene goal. JO cinematic
 actors and actors with script-locked enemies can use a clear direct path.
 Collision checks still apply. This also lets Desann approach Kyle after knockback.
 
+### Debug Scripted Movement
+
+When a JO NPC does not move during a scripted scene, inspect the loaded IBI
+script and run `cinematic_status <targetname>`. Check the `cinematic_goal`
+line and its `waypoint` value. A pending navigation task does not prove that
+the goal has a graph waypoint. A value of `waypoint=0` can mean that the script
+goal lies outside the shared graph. Check direct steering and door collision
+state before changing animation tasks.
+
 JA's foot-slide correction could start a held walk animation at near-zero speed.
 The actor then moved without a visible gait. JO cinematic and noclip actors now
 use the authored animation rate. Kyle's aiming and startled poses have separate
