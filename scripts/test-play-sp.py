@@ -95,8 +95,7 @@ class DesktopUpdateTests(unittest.TestCase):
     def package(self, name, server=None):
         package = (server / "build/packages" if server else self.packages) / name
         (package / "OpenJK/maps").mkdir(parents=True)
-        for map_name in ("t1_sour", "kejim_post"):
-            (package / f"OpenJK/maps/{map_name}.irrprobe").write_text(f"{name} {map_name} probes")
+        (package / "OpenJK/irradiance-probes.pk3").write_text(f"{name} campaign probes")
         (package / "launch-sp.sh").write_bytes((ROOT / "scripts/launch-sp.sh").read_bytes())
         (package / "openjedvibe-import-jo").write_text(
             '#!/usr/bin/env python3\nimport json, os, sys\nfrom pathlib import Path\n'
@@ -166,10 +165,8 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertEqual((self.destination / blob.name).read_bytes(), blob.read_bytes())
         self.assertEqual((self.destination / "rdsp-rend2_x86_64.so").read_bytes(),
                          (second / "rdsp-rend2_x86_64.so").read_bytes())
-        self.assertEqual((self.destination / "OpenJK/maps/t1_sour.irrprobe").read_bytes(),
-                         (second / "OpenJK/maps/t1_sour.irrprobe").read_bytes())
-        self.assertEqual((self.destination / "OpenJK/maps/kejim_post.irrprobe").read_bytes(),
-                         (second / "OpenJK/maps/kejim_post.irrprobe").read_bytes())
+        self.assertEqual((self.destination / "OpenJK/irradiance-probes.pk3").read_bytes(),
+                         (second / "OpenJK/irradiance-probes.pk3").read_bytes())
         self.assertFalse((self.destination / "obsolete.so").exists())
         self.assertEqual((profile / "keep.cfg").read_text(), "user configuration")
         matched = re.search(r"Matched data: ([\d,]+) bytes", result.stdout)
