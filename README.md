@@ -6,7 +6,7 @@ slopped up features:
 
 rendering:
 - rend2 to singleplayer (so fake hdr, bump mapping)
-- gtao ssao
+- gtao ssao with bent normals and light probes for colour (working out how to distribute these is an exercise for the reader)
 - capsule shadows
 - subsurface scattering for skin
 - smaa
@@ -32,14 +32,17 @@ audio:
 - occlusion of sound through walls
 
 animations:
-- experimental jolt physics ragdoll - enemies stumble and fall when damaged
+- experimental jolt physics ragdoll - enemies stumble and fall when damaged. also for lightning/grip
+- nukem/dark messiah style kick. needs tweaking because it's hilarious but also op.
 
 unification:
-- play jedi outcast in the jedi academy engine. mostly to make my life easier for all the improvements without maintaining two codebases, but you can also use weapons and force powers from JA. every time i reach a new level i find a broken thing so don't play it faster than me.
+- play jedi outcast in the jedi academy engine. mostly to make my life easier for all the improvements without maintaining two codebases, but you can also use weapons and force powers from JA. every time i reach a new level i find a broken thing so don't play it faster than me. (update: i just finished it. it therefore now has zero bugs. right?)
 
 quality of life:
-- off-thread autosaves every ~3 minutes when you aren't in combat or midair
+- off-thread autosaves every ~3 minutes when you aren't in combat or midair. the game says you are not in combat when you die, so it saves for you then too.
 - easier to trigger special attacks/moves
+- jump height increased by 20% to make platforming easier for old people like me
+- codes in jedi outcast are added to the UI once seen
 - launcher to make first time config easier
 
 ---

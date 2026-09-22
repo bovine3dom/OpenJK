@@ -432,3 +432,4 @@ rough notes / todo
 - decide how to distribute light probes
 - 'p' with a lightsaber mode probably shouldn't be bound to "make your torso invisible"
 - add taa to deal with SSAO 'stripes' on edges? also, work out what to do with the glow where shadows don't quite attach to edges
+- crackling sound on final yavin level
