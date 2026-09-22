@@ -268,18 +268,56 @@ R_ComputeFogNum
 =================
 */
 int R_ComputeFogNum( mdvModel_t *model, trRefEntity_t *ent ) {
-	int				i, j;
+	int				i;
+#ifndef REND2_SP
+	int				j;
 	fog_t			*fog;
+#endif
 	mdvFrame_t		*mdvFrame;
 	vec3_t			localOrigin;
 
+#ifdef REND2_SP
+	if ( !tr.world || ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) )
+		return 0;
+#else
 	if ( tr.refdef.rdflags & RDF_NOWORLDMODEL ) {
 		return 0;
 	}
+#endif
 
 	// FIXME: non-normalized axis issues
 	mdvFrame = model->frames + ent->e.frame;
 	VectorAdd( ent->e.origin, mdvFrame->localOrigin, localOrigin );
+
+#ifdef REND2_SP
+	int partialFog = 0;
+	for ( i = 1; i < tr.world->numfogs; ++i )
+	{
+		const fog_t *currentFog = &tr.world->fogs[i];
+		bool fullyInside = true;
+		bool intersects = true;
+		for ( int axis = 0; axis < 3; ++axis )
+		{
+			const float mins = localOrigin[axis] - mdvFrame->radius;
+			const float maxs = localOrigin[axis] + mdvFrame->radius;
+			if ( mins >= currentFog->bounds[1][axis] || maxs <= currentFog->bounds[0][axis] )
+			{
+				intersects = false;
+				break;
+			}
+			if ( mins < currentFog->bounds[0][axis] || maxs > currentFog->bounds[1][axis] )
+				fullyInside = false;
+		}
+
+		if ( !intersects )
+			continue;
+		if ( fullyInside )
+			return i;
+		if ( !partialFog )
+			partialFog = i;
+	}
+	return partialFog;
+#else
 	for ( i = 1 ; i < tr.world->numfogs ; i++ ) {
 		fog = &tr.world->fogs[i];
 		for ( j = 0 ; j < 3 ; j++ ) {
@@ -296,6 +334,7 @@ int R_ComputeFogNum( mdvModel_t *model, trRefEntity_t *ent ) {
 	}
 
 	return 0;
+#endif
 }
 
 /*
