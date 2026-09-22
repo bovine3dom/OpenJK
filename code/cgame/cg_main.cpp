@@ -1124,6 +1124,19 @@ void CG_RegisterClientRenderInfo(clientInfo_t *ci, renderInfo_t *ri)
 extern void CG_InitGlass( void );
 extern void	cgi_R_WorldEffectCommand( const char *command );
 
+static void CG_ReplayWorldEffects()
+{
+	cgi_R_WorldEffectCommand( "clear" );
+	for ( int i = 1; i < MAX_WORLD_FX; ++i )
+	{
+		const char *effectName = CG_ConfigString( CS_WORLD_FX + i );
+		if ( !effectName[0] )
+			break;
+
+		cgi_R_WorldEffectCommand( effectName );
+	}
+}
+
 extern cvar_t *g_delayedShutdown;
 static void CG_RegisterEffects( void )
 {
@@ -1376,6 +1389,7 @@ static void CG_RegisterGraphics( void ) {
 	CG_LoadingString( cgs.mapname );
 
 	cgi_R_LoadWorldMap( cgs.mapname );
+	CG_ReplayWorldEffects();
 
 	cg.loadLCARSStage = 4;
 	CG_LoadingString( "game media shaders" );
