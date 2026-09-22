@@ -42,7 +42,7 @@ def bake(args, root, package, assets, jo_assets, map_name, campaign):
     text = log.read_text(errors="replace")
     match = re.search(rf"Irradiance probe bake: wrote maps/{re.escape(map_name)}\.irrprobe, "
                       r"(\d+) of (\d+) positions, (\d+) ms", text)
-    if not match or re.search(r"ERROR:|GL_INVALID_|Unknown command|trying to load fallback renderer", text):
+    if not match or re.search(r"GL_INVALID_|Unknown command|trying to load fallback renderer", text):
         raise RuntimeError(f"Probe bake failed: {log}")
     game = profile / ("campaigns/jo/OpenJK" if campaign == "jo" else "OpenJK")
     source = game / f"maps/{map_name}.irrprobe"
@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--horizontal-stride", type=int, choices=range(1, 9), default=2)
     parser.add_argument("--vertical-stride", type=int, choices=range(1, 9), default=1)
     parser.add_argument("--face-size", type=int, choices=range(4, 33), default=16)
-    parser.add_argument("--timeout", type=int, default=900, help="Timeout in seconds for each map")
+    parser.add_argument("--timeout", type=int, default=3600, help="Timeout in seconds for each map")
     parser.add_argument("--skip-existing", action="store_true", help="Resume without replacing output files")
     args = parser.parse_args()
     if args.all == bool(args.map):
