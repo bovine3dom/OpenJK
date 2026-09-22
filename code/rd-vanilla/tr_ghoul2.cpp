@@ -837,20 +837,34 @@ static int R_GComputeFogNum( trRefEntity_t *ent ) {
 #ifdef REND2_SP
 	if (!tr.world || (tr.refdef.rdflags & RDF_NOWORLDMODEL))
 		return 0;
+
+	int partialFog = 0;
 	for (int i = 1; i < tr.world->numfogs; ++i)
 	{
 		const fog_t *fog = &tr.world->fogs[i];
-		int axis;
-		for (axis = 0; axis < 3; ++axis)
+		bool fullyInside = true;
+		bool intersects = true;
+		for (int axis = 0; axis < 3; ++axis)
 		{
-			if (ent->e.origin[axis] - ent->e.radius >= fog->bounds[1][axis] ||
-				ent->e.origin[axis] + ent->e.radius <= fog->bounds[0][axis])
+			const float mins = ent->e.origin[axis] - ent->e.radius;
+			const float maxs = ent->e.origin[axis] + ent->e.radius;
+			if (mins >= fog->bounds[1][axis] || maxs <= fog->bounds[0][axis])
+			{
+				intersects = false;
 				break;
+			}
+			if (mins < fog->bounds[0][axis] || maxs > fog->bounds[1][axis])
+				fullyInside = false;
 		}
-		if (axis == 3)
+
+		if (!intersects)
+			continue;
+		if (fullyInside)
 			return i;
+		if (!partialFog)
+			partialFog = i;
 	}
-	return 0;
+	return partialFog;
 #else
 	int				i;
 	fog_t			*fog;
