@@ -299,9 +299,14 @@ This phase is the recommended first visual feature.
 
 ### Phase 5: Probe Upgrade
 
-Evaluate spherical harmonics or other directional probes only if Phase 4 shows
-clear value.
-Keep this work separate from the initial bent-normal patch.
+Evaluate first-order spherical harmonics on dynamic models. Use pre-baked
+spatial probe files for the first `t1_sour` and `kejim_post` comparison. Do not
+index this data by unique BSP light-grid records because those records can be
+reused at unrelated positions.
+
+Keep the probe work optional and separate from the Phase 1 through 4 controls.
+See [Directional Irradiance Probes](docs/irradiance-probes.md) for the format,
+distribution decision, bake tradeoffs, and evaluation plan.
 
 ## Validation
 
