@@ -98,7 +98,7 @@ if $local_sky_assets; then
     python3 scripts/build-sky-assets.py "${OJK_ASSETS:-$root/GameData}" "$package/OpenJK/sky-hd.pk3"
 fi
 mkdir -p "$package/OpenJK/maps"
-cp probe-data/maps/*.irrprobe "$package/OpenJK/maps/"
+python3 scripts/build-irradiance-probes.py --output "$package/OpenJK/irradiance-probes.pk3"
 cp scripts/maps/*.haze "$package/OpenJK/maps/"
 cp scripts/maps/*.volfog "$package/OpenJK/maps/"
 cp -a scripts/maps/shared "$package/OpenJK/maps/"
