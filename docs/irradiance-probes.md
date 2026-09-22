@@ -184,7 +184,24 @@ play.
 
 ## Evaluation
 
-Compare the same camera and exposure with the probe blend at zero and one.
+Publish the package with `scripts/build-sp.sh`. Start each test map through the
+desktop updater:
+
+```sh
+openjk-play --worktree rmlui --campaign ja \
+  +set cl_renderer rdsp-rend2 +set r_ssao 1 +set r_ssaoMethod 1 \
+  +set r_gtaoBentNormals 1 +set r_gtaoBentNormalDirectional 0.25 \
+  +devmap t1_sour
+openjk-play --worktree rmlui --campaign jo \
+  +set cl_renderer rdsp-rend2 +set r_ssao 1 +set r_ssaoMethod 1 \
+  +set r_gtaoBentNormals 1 +set r_gtaoBentNormalDirectional 0.25 \
+  +devmap kejim_post
+```
+
+Use `r_gtaoBentNormalProbes 0` and `r_gtaoBentNormalProbes 1` in the console.
+The change is live. Keep the same camera and exposure. Focus on characters and
+other lit entity surfaces. The probes do not change the level geometry.
+
 Inspect these subjects:
 
 - Faces and heads near colored openings
@@ -195,4 +212,4 @@ Inspect these subjects:
 
 Reject the method if it causes visible light leaks, abrupt color changes,
 unstable brightness, or stronger mesh seams. If the result is useful but too
-coarse, test stride two before changing the representation.
+coarse, test horizontal stride one before changing the representation.
