@@ -1573,7 +1573,7 @@ void R_Register( void )
 	r_g2GeometryValidate = ri.Cvar_Get("r_g2GeometryValidate", "0", 0, "Compare cached SP geometry with uncached skinning and MikkTSpace.");
 	ri.Cvar_CheckRange(r_compareEnhancements, 0, 2, qtrue);
 	r_smaaDebug = ri.Cvar_Get("r_smaaDebug", "0", 0, "SMAA debug: 0 scene, 1 edges, 2 weights.");
-	r_sss = ri.Cvar_Get("r_sss", "1", CVAR_ARCHIVE, "Skin diffusion strength; values above 1 exaggerate the correction.");
+	r_sss = ri.Cvar_Get("r_sss", "0.5", CVAR_ARCHIVE, "Skin diffusion strength; values above 1 exaggerate the correction.");
 	r_sssRadius = ri.Cvar_Get("r_sssRadius", "1", CVAR_ARCHIVE, "Skin diffusion radius in world units.");
 	r_sssDebug = ri.Cvar_Get("r_sssDebug", "0", 0, "SSS views: 0 scene, 1 mask, 2 raw irradiance, 3 filtered irradiance, 4 difference, 5 split scene.");
 	r_sssDebugGain = ri.Cvar_Get("r_sssDebugGain", "16", 0, "Gain for the SSS difference view.");
