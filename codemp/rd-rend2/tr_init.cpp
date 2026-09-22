@@ -1456,6 +1456,9 @@ typedef struct consoleCommand_s {
 
 static consoleCommand_t	commands[] = {
 	{ "r_atmosphereReload", R_AtmosphereReload_f },
+#ifdef REND2_SP
+	{ "r_bakeIrradianceProbes", R_BakeIrradianceProbes_f },
+#endif
 	{ "imagelist",			R_ImageList_f },
 	{ "shaderlist",			R_ShaderList_f },
 	{ "skinlist",			R_SkinList_f },

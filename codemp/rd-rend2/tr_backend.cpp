@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "tr_allocator.h"
 #include "glext.h"
 #include <algorithm>
+#include <cmath>
 
 backEndData_t	*backEndData;
 backEndState_t	backEnd;
@@ -565,9 +566,11 @@ void RB_BeginDrawingView (void) {
 	// clear relevant buffers
 	clearBits = GL_DEPTH_BUFFER_BIT;
 
-	if ( r_clear->integer )
+	if ( r_clear->integer || (backEnd.viewParms.flags & VPF_PROBE_CAPTURE) )
 	{
 		clearBits |= GL_COLOR_BUFFER_BIT;
+		if (backEnd.viewParms.flags & VPF_PROBE_CAPTURE)
+			qglClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	}
 
 	if ( r_measureOverdraw->integer || r_shadows->integer == 2 )
@@ -2115,6 +2118,54 @@ static const void *RB_PrefilterEnvMap(const void *data) {
 	return (const void *)(cmd + 1);
 }
 
+
+#ifdef REND2_SP
+static const void *RB_ReadIrradianceFace(const void *data)
+{
+	const auto *cmd = (const readIrradianceFaceCommand_t *)data;
+	if (tess.numIndexes) RB_EndSurface();
+	if (cmd->side < 0 || cmd->side >= 6 || cmd->size < 1 || cmd->size > 32)
+		return cmd + 1;
+
+	static const float axes[6][3][3] = {
+		{{ 1, 0, 0}, { 0, 0, 1}, { 0,-1, 0}},
+		{{-1, 0, 0}, { 0, 0,-1}, { 0,-1, 0}},
+		{{ 0, 1, 0}, {-1, 0, 0}, { 0, 0, 1}},
+		{{ 0,-1, 0}, {-1, 0, 0}, { 0, 0,-1}},
+		{{ 0, 0, 1}, {-1, 0, 0}, { 0,-1, 0}},
+		{{ 0, 0,-1}, { 1, 0, 0}, { 0,-1, 0}}
+	};
+	float pixels[32 * 32 * 3];
+	FBO_Bind(tr.renderCubeFbo[cmd->side]);
+	qglReadPixels(0, 0, cmd->size, cmd->size, GL_RGB, GL_FLOAT, pixels);
+
+	const float *forward = axes[cmd->side][0];
+	const float *left = axes[cmd->side][1];
+	const float *up = axes[cmd->side][2];
+	for (int y = 0; y < cmd->size; ++y)
+		for (int x = 0; x < cmd->size; ++x)
+		{
+			const float u = 2.0f * (x + 0.5f) / cmd->size - 1.0f;
+			const float v = 2.0f * (y + 0.5f) / cmd->size - 1.0f;
+			vec3_t direction;
+			for (int axis = 0; axis < 3; ++axis)
+				direction[axis] = forward[axis] - u * left[axis] + v * up[axis];
+			const float lengthSquared = 1.0f + u * u + v * v;
+			VectorScale(direction, 1.0f / sqrtf(lengthSquared), direction);
+			const float weight = 4.0f / (cmd->size * cmd->size * lengthSquared * sqrtf(lengthSquared));
+			const float *pixel = pixels + (y * cmd->size + x) * 3;
+			for (int color = 0; color < 3; ++color)
+			{
+				const float value = std::isfinite(pixel[color]) ? MAX(pixel[color], 0.0f) : 0.0f;
+				cmd->accumulation[color] += value * weight;
+				for (int axis = 0; axis < 3; ++axis)
+					cmd->accumulation[3 + color * 3 + axis] += value * direction[axis] * weight;
+			}
+			cmd->accumulation[12] += weight;
+		}
+	return cmd + 1;
+}
+#endif
 
 static bool RB_SSAOEnabledForView()
 {
@@ -3929,6 +3980,11 @@ void RB_ExecuteRenderCommands( const void *data ) {
 		case RC_CONVOLVECUBEMAP:
 			data = RB_PrefilterEnvMap( data );
 			break;
+#ifdef REND2_SP
+		case RC_READ_IRRADIANCE_FACE:
+			data = RB_ReadIrradianceFace(data);
+			break;
+#endif
 		case RC_POSTPROCESS:
 			data = RB_PostProcess(data);
 			break;

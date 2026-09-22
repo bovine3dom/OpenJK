@@ -1654,6 +1654,7 @@ enum viewParmFlag_t {
 	VPF_SHADOWCASCADES	= 0x100,// Rendering sun shadow cascades
 	VPF_NOCLEAR			= 0x200,
 	VPF_GLASS_CAPTURE  = 0x400,
+	VPF_PROBE_CAPTURE  = 0x800,
 };
 using viewParmFlags_t = uint32_t;
 
@@ -3882,6 +3883,13 @@ typedef struct convolveCubemapCommand_s {
 	int			cubemapId;
 } convolveCubemapCommand_t;
 
+#ifdef REND2_SP
+typedef struct {
+	int commandId, side, size;
+	float *accumulation;
+} readIrradianceFaceCommand_t;
+#endif
+
 typedef struct postProcessCommand_s {
 	int		commandId;
 	trRefdef_t	refdef;
@@ -3916,6 +3924,9 @@ typedef enum {
 	RC_COLORMASK,
 	RC_CLEARDEPTH,
 	RC_CONVOLVECUBEMAP,
+#ifdef REND2_SP
+	RC_READ_IRRADIANCE_FACE,
+#endif
 	RC_POSTPROCESS,
 	RC_BEGIN_TIMED_BLOCK,
 	RC_END_TIMED_BLOCK
@@ -4014,6 +4025,11 @@ void R_IssuePendingRenderCommands( void );
 
 void R_AddDrawSurfCmd( drawSurf_t *drawSurfs, int numDrawSurfs );
 void R_AddConvolveCubemapCmd(cubemap_t *cubemap, int cubemapId);
+#ifdef REND2_SP
+void R_AddReadIrradianceFaceCmd(int side, int size, float *accumulation);
+int R_RenderIrradianceProbeSide(const vec3_t origin, int side, int size);
+void R_BakeIrradianceProbes_f();
+#endif
 void R_AddPostProcessCmd (void);
 qhandle_t R_BeginTimedBlockCmd( const char *name );
 void R_EndTimedBlockCmd( qhandle_t timerHandle );

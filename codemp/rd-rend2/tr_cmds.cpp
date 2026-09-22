@@ -269,6 +269,18 @@ void	R_AddConvolveCubemapCmd( cubemap_t *cubemap , int cubemapId ) {
 	cmd->cubemapId = cubemapId;
 }
 
+#ifdef REND2_SP
+void R_AddReadIrradianceFaceCmd(int side, int size, float *accumulation)
+{
+	auto *cmd = (readIrradianceFaceCommand_t *)R_GetCommandBuffer(sizeof(readIrradianceFaceCommand_t));
+	if (!cmd) return;
+	cmd->commandId = RC_READ_IRRADIANCE_FACE;
+	cmd->side = side;
+	cmd->size = size;
+	cmd->accumulation = accumulation;
+}
+#endif
+
 /*
 =============
 R_PostProcessingCmd

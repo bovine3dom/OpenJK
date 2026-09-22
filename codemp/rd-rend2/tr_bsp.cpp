@@ -3068,6 +3068,104 @@ static void R_LoadIrradianceGrid(world_t *world)
 		ri.Printf(PRINT_ALL, "Irradiance probes: %d of %u positions loaded from %s\n", loaded, count, filename);
 	ri.FS_FreeFile(buffer);
 }
+
+void R_BakeIrradianceProbes_f()
+{
+	if (!tr.world || !tr.renderCubeFbo[0])
+	{
+		ri.Printf(PRINT_ALL, "Load a map with cubemap capture resources before baking irradiance probes.\n");
+		return;
+	}
+	if (ri.Cmd_Argc() > 4)
+	{
+		ri.Printf(PRINT_ALL, "Usage: r_bakeIrradianceProbes [horizontal stride 1-8] [vertical stride 1-8] [face size 4-32]\n");
+		return;
+	}
+	const int horizontalStride = ri.Cmd_Argc() > 1 ? atoi(ri.Cmd_Argv(1)) : 2;
+	const int verticalStride = ri.Cmd_Argc() > 2 ? atoi(ri.Cmd_Argv(2)) : 1;
+	const int size = ri.Cmd_Argc() > 3 ? atoi(ri.Cmd_Argv(3)) : 16;
+	if (horizontalStride < 1 || horizontalStride > 8 || verticalStride < 1 || verticalStride > 8 ||
+		size < 4 || size > 32)
+	{
+		ri.Printf(PRINT_ALL, "Use grid strides from 1 to 8 and a face size from 4 to 32.\n");
+		return;
+	}
+
+	const int stride[3] = {horizontalStride, horizontalStride, verticalStride};
+	uint32_t bounds[3], count = 1;
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		bounds[axis] = (tr.world->lightGridBounds[axis] + stride[axis] - 1) / stride[axis];
+		count *= bounds[axis];
+	}
+	std::vector<byte> file(sizeof(irradianceProbeHeader_t) + count * sizeof(irradianceProbeDisk_t));
+	Com_Memset(file.data(), 0, file.size());
+	auto *header = (irradianceProbeHeader_t *)file.data();
+	auto *records = (irradianceProbeDisk_t *)(header + 1);
+	memcpy(header->magic, "OIP1", 4);
+	header->version = LittleLong(1);
+	header->checksum = LittleLong((uint32_t)strtoul(sv_mapChecksum->string, nullptr, 10));
+	header->count = LittleLong(count);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		header->bounds[axis] = LittleLong(bounds[axis]);
+		header->origin[axis] = LittleFloat(tr.world->lightGridOrigin[axis]);
+		header->size[axis] = LittleFloat(tr.world->lightGridSize[axis] * stride[axis]);
+	}
+
+	R_IssuePendingRenderCommands();
+	const int startTime = ri.Milliseconds();
+	int progressTime = startTime;
+	uint32_t validCount = 0;
+	for (uint32_t z = 0; z < bounds[2]; ++z)
+		for (uint32_t y = 0; y < bounds[1]; ++y)
+			for (uint32_t x = 0; x < bounds[0]; ++x)
+			{
+				const uint32_t index = x + bounds[0] * (y + bounds[1] * z);
+				vec3_t origin = {
+					tr.world->lightGridOrigin[0] + x * stride[0] * tr.world->lightGridSize[0],
+					tr.world->lightGridOrigin[1] + y * stride[1] * tr.world->lightGridSize[1],
+					tr.world->lightGridOrigin[2] + z * stride[2] * tr.world->lightGridSize[2]
+				};
+				if (!R_inPVS(origin, origin, nullptr)) continue;
+
+				float accumulation[13] = {};
+				int surfaces = 0;
+				for (int side = 0; side < 6; ++side)
+				{
+					surfaces += R_RenderIrradianceProbeSide(origin, side, size);
+					R_AddReadIrradianceFaceCmd(side, size, accumulation);
+					R_IssuePendingRenderCommands();
+				}
+				if (!surfaces || !(accumulation[12] > 0.0f) || !std::isfinite(accumulation[12])) continue;
+
+				irradianceProbeDisk_t &record = records[index];
+				for (int color = 0; color < 3; ++color)
+					for (int coefficient = 0; coefficient < 4; ++coefficient)
+					{
+						float value = coefficient ? 2.0f * accumulation[3 + color * 3 + coefficient - 1] /
+							accumulation[12] : accumulation[color] / accumulation[12];
+						value = std::isfinite(value) ? Com_Clamp(-65504.0f, 65504.0f, value) : 0.0f;
+						record.coefficients[color * 4 + coefficient] = LittleShort(FloatToHalf(value));
+					}
+				record.valid = LittleShort(1);
+				++validCount;
+
+				const int now = ri.Milliseconds();
+				if (now - progressTime >= 2000)
+				{
+					ri.Printf(PRINT_ALL, "Irradiance probe bake: %u of %u positions, %u captured\n",
+						index + 1, count, validCount);
+					progressTime = now;
+				}
+			}
+
+	header->validCount = LittleLong(validCount);
+	const char *filename = va("maps/%s.irrprobe", tr.world->baseName);
+	ri.FS_WriteFile(filename, file.data(), (int)file.size());
+	ri.Printf(PRINT_ALL, "Irradiance probe bake: wrote %s, %u of %u positions, %d ms\n",
+		filename, validCount, count, ri.Milliseconds() - startTime);
+}
 #endif
 
 /*

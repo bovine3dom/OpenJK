@@ -2423,16 +2423,15 @@ void R_SetupPshadowMaps(trRefdef_t *refdef)
 	}
 }
 
-void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
+static int R_RenderCubemapView(const vec3_t origin, int cubemapSide, bool bounce, bool glass, int size)
 {
 	refdef_t refdef = {};
-	float oldColorScale = tr.refdef.colorScale;
-
-	VectorCopy(tr.cubemaps[cubemapIndex].origin, refdef.vieworg);
+	int surfaces = 0;
+	VectorCopy(origin, refdef.vieworg);
 	refdef.fov_x = 90;
 	refdef.fov_y = 90;
-	refdef.width = tr.renderCubeFbo[cubemapSide]->width;
-	refdef.height = tr.renderCubeFbo[cubemapSide]->height;
+	refdef.width = size;
+	refdef.height = size;
 	refdef.x = 0;
 	refdef.y = 0;
 
@@ -2478,7 +2477,7 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 
 	RE_BeginFrame(STEREO_CENTER);
 	RE_ClearScene();
-	if (tr.cubemaps[cubemapIndex].glass && tr.world)
+	if (glass && tr.world)
 		for (int i = 0; i < tr.world->numGlassCaptureEntities; ++i)
 		{
 			const refEntity_t &entity = tr.world->glassCaptureEntities[i];
@@ -2491,25 +2490,46 @@ void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
 
 	for (int i = 0; i < tr.numCachedViewParms; i++)
 	{
-		if (tr.cubemaps[cubemapIndex].glass)
+		if (glass)
 			tr.cachedViewParms[i].flags |= VPF_GLASS_CAPTURE | VPF_NOCUBEMAPS;
 		if (!tr.cachedViewParms[i].targetFbo)
 		{
 			tr.cachedViewParms[i].targetFbo = tr.renderCubeFbo[cubemapSide];
 			tr.cachedViewParms[i].targetFboLayer = 0;
 			tr.cachedViewParms[i].flags |= VPF_NOVIEWMODEL;
+			if (size != CUBE_MAP_SIZE)
+				tr.cachedViewParms[i].flags |= VPF_PROBE_CAPTURE;
 			if (!bounce)
 				tr.cachedViewParms[i].flags |= VPF_NOCUBEMAPS;
 		}
 		R_RenderView(&tr.cachedViewParms[i]);
 		R_IssuePendingRenderCommands();
+		surfaces += tr.refdef.numDrawSurfs;
 		tr.refdef.numDrawSurfs = 0;
 	}
 
 	RE_EndScene();
 
 	R_NewFrameSync();
+	return surfaces;
 }
+
+void R_RenderCubemapSide(int cubemapIndex, int cubemapSide, bool bounce)
+{
+	const cubemap_t &cubemap = tr.cubemaps[cubemapIndex];
+	R_RenderCubemapView(cubemap.origin, cubemapSide, bounce, cubemap.glass, CUBE_MAP_SIZE);
+}
+
+#ifdef REND2_SP
+int R_RenderIrradianceProbeSide(const vec3_t origin, int side, int size)
+{
+	const int skyboxPortal = tr.world->skyboxportal;
+	tr.world->skyboxportal = 0;
+	const int surfaces = R_RenderCubemapView(origin, side, false, false, size);
+	tr.world->skyboxportal = skyboxPortal;
+	return surfaces;
+}
+#endif
 
 void R_SetupViewParms(const trRefdef_t *refdef)
 {

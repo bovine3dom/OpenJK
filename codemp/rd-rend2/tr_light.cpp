@@ -129,25 +129,25 @@ static void R_SetupEntityIrradianceProbe(trRefEntity_t *ent, const world_t *worl
 	if (!world->irradianceGrid) return;
 
 	int lower[3];
-	float fraction[3];
+	float gridPosition[3], fraction[3];
 	for (int axis = 0; axis < 3; ++axis)
 	{
-		const float position = (origin[axis] - world->irradianceGridOrigin[axis]) *
+		gridPosition[axis] = (origin[axis] - world->irradianceGridOrigin[axis]) *
 			world->irradianceGridInverseSize[axis];
-		if (position <= 0.0f || world->irradianceGridBounds[axis] == 1)
+		if (gridPosition[axis] <= 0.0f || world->irradianceGridBounds[axis] == 1)
 		{
 			lower[axis] = 0;
 			fraction[axis] = 0.0f;
 		}
-		else if (position >= world->irradianceGridBounds[axis] - 1)
+		else if (gridPosition[axis] >= world->irradianceGridBounds[axis] - 1)
 		{
 			lower[axis] = world->irradianceGridBounds[axis] - 2;
 			fraction[axis] = 1.0f;
 		}
 		else
 		{
-			lower[axis] = (int)floorf(position);
-			fraction[axis] = position - lower[axis];
+			lower[axis] = (int)floorf(gridPosition[axis]);
+			fraction[axis] = gridPosition[axis] - lower[axis];
 		}
 	}
 
@@ -170,6 +170,37 @@ static void R_SetupEntityIrradianceProbe(trRefEntity_t *ent, const world_t *worl
 				ent->irradianceProbe[color][coefficient] += factor *
 					world->irradianceGrid[index].coefficients[color][coefficient];
 		total += factor;
+	}
+	if (total == 0.0f)
+	{
+		int center[3];
+		for (int axis = 0; axis < 3; ++axis)
+			center[axis] = Com_Clampi(0, world->irradianceGridBounds[axis] - 1,
+				(int)floorf(gridPosition[axis] + 0.5f));
+		for (int z = MAX(0, center[2] - 2); z <= MIN(world->irradianceGridBounds[2] - 1, center[2] + 2); ++z)
+			for (int y = MAX(0, center[1] - 2); y <= MIN(world->irradianceGridBounds[1] - 1, center[1] + 2); ++y)
+				for (int x = MAX(0, center[0] - 2); x <= MIN(world->irradianceGridBounds[0] - 1, center[0] + 2); ++x)
+				{
+					const int index = x + step[1] * y + step[2] * z;
+					if (!world->irradianceGrid[index].valid) continue;
+					vec3_t probeOrigin;
+					float distanceSquared = 0.25f;
+					const int position[3] = {x, y, z};
+					for (int axis = 0; axis < 3; ++axis)
+					{
+						probeOrigin[axis] = world->irradianceGridOrigin[axis] +
+							position[axis] * world->irradianceGridSize[axis];
+						const float delta = gridPosition[axis] - position[axis];
+						distanceSquared += delta * delta;
+					}
+					if (!R_inPVS(origin, probeOrigin, nullptr)) continue;
+					const float factor = 1.0f / distanceSquared;
+					for (int color = 0; color < 3; ++color)
+						for (int coefficient = 0; coefficient < 4; ++coefficient)
+							ent->irradianceProbe[color][coefficient] += factor *
+								world->irradianceGrid[index].coefficients[color][coefficient];
+					total += factor;
+				}
 	}
 	if (total > 0.0f)
 		for (vec4_t &coefficient : ent->irradianceProbe)
