@@ -21,6 +21,9 @@
 *.rtf	 diff=astextplain
 *.RTF	 diff=astextplain
 
+# Generated directional-light data must not receive line-ending conversion.
+*.irrprobe binary
+
 # Set line endings to LF, even on Windows. Otherwise, execution within Docker fails.
 # See https://help.github.com/articles/dealing-with-line-endings/
 *.sh text eol=lf
