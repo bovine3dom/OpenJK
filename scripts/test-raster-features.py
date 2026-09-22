@@ -54,7 +54,7 @@ def main():
     defaults = dict(cl_renderer="rdsp-rend2", r_ssao=1, r_ssaoMethod=1, r_gtaoQuality=1,
                     r_gtaoHalfRes=1, r_gtaoDenoise=1, r_gtaoBentNormals=1, r_gtaoBentNormalSpecular=1,
                     r_gtaoBentNormalDiffuse=0, r_gtaoBentNormalDirectional=0.25, r_gtaoBentNormalProbes=1,
-                    r_capsuleShadows=1, r_capsuleShadowWalls=1, r_smaa=1, r_sss=1, r_sssRadius=0.5, r_softParticles=1, r_softParticleDistance=8,
+                    r_capsuleShadows=1, r_capsuleShadowWalls=1, r_smaa=1, r_sss=1, r_sssRadius=1, r_softParticles=1, r_softParticleDistance=8,
                     r_genNormalMaps=1, r_normalStrength=1, r_generatedNormalStrength=0.25,
                     r_generatedNormalBrighten=0, r_normalMapCache=1, r_sampleShading=0,
                     r_compactAO=1, r_g2GeometryCache=1, r_g2GpuSkinning=1,

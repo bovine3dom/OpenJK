@@ -17,7 +17,7 @@ its shadowed beam; it starts off in a new profile.
 | `r_capsuleShadowWalls` | `1` | Surface-normal proximity occlusion, including walls. Set to `0` for ground receivers only. |
 | `r_capsuleShadowDebug` | `0` | Set to `1` to report model, root surface, and capsule count for one frame. |
 | `r_sss` | `1` | Skin diffusion strength, from `0` to `4`. Values above `1` exaggerate the correction for testing. |
-| `r_sssRadius` | `0.5` | Diffusion radius in world units, from `0` to `8`. Zero disables diffusion. |
+| `r_sssRadius` | `1` | Diffusion radius in world units, from `0` to `8`. Zero disables diffusion. |
 | `r_sssDebug` | `0` | `1` mask, `2` raw irradiance, `3` filtered irradiance, `4` difference, `5` split scene. |
 | `r_sssDebugGain` | `16` | Difference-view gain, from `1` to `128`. Does not change scene lighting. |
 | `r_softParticles` | `1` | Enable depth fading for blended sprite particles. Requires `vid_restart` after a change. |
