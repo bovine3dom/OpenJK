@@ -51,6 +51,8 @@ def bake(args, root, package, assets, jo_assets, map_name, campaign):
         raise RuntimeError(f"Invalid probe file: {source}")
     args.output.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
+    if not args.keep_profiles:
+        shutil.rmtree(profile)
     seconds = int(match[3]) / 1000
     print(f"Wrote {destination}: {len(data)} bytes, {match[1]} valid positions, {seconds:.1f} seconds",
           flush=True)
@@ -76,6 +78,7 @@ def main():
     parser.add_argument("--face-size", type=int, choices=range(4, 33), default=16)
     parser.add_argument("--timeout", type=int, default=3600, help="Timeout in seconds for each map")
     parser.add_argument("--skip-existing", action="store_true", help="Resume without replacing output files")
+    parser.add_argument("--keep-profiles", action="store_true", help="Keep large temporary game profiles")
     args = parser.parse_args()
     if args.all == bool(args.map):
         parser.error("Specify map names or --all")
