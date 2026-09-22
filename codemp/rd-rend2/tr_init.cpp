@@ -1614,10 +1614,10 @@ void R_Register( void )
 	r_gtaoDenoise = ri.Cvar_Get("r_gtaoDenoise", "1", CVAR_ARCHIVE, "Use a wider spatial filter for half-resolution GTAO.");
 	ri.Cvar_CheckRange(r_gtaoDenoise, 0, 1, qtrue);
 #ifdef REND2_SP
-	r_gtaoBentNormals = ri.Cvar_Get("r_gtaoBentNormals", "0", CVAR_ARCHIVE | CVAR_LATCH, "Calculate and store GTAO bent normals.");
+	r_gtaoBentNormals = ri.Cvar_Get("r_gtaoBentNormals", "1", CVAR_ARCHIVE | CVAR_LATCH, "Calculate and store GTAO bent normals.");
 	r_gtaoBentNormalSpecular = ri.Cvar_Get("r_gtaoBentNormalSpecular", "1", CVAR_ARCHIVE, "Bent-normal specular occlusion blend.");
 	r_gtaoBentNormalDiffuse = ri.Cvar_Get("r_gtaoBentNormalDiffuse", "0", CVAR_ARCHIVE, "Bent-normal diffuse environment strength.");
-	r_gtaoBentNormalDirectional = ri.Cvar_Get("r_gtaoBentNormalDirectional", "0", CVAR_ARCHIVE, "Bent-normal directional ambient blend.");
+	r_gtaoBentNormalDirectional = ri.Cvar_Get("r_gtaoBentNormalDirectional", "0.25", CVAR_ARCHIVE, "Bent-normal directional ambient blend.");
 	r_gtaoBentNormalProbes = ri.Cvar_Get("r_gtaoBentNormalProbes", "1", CVAR_ARCHIVE, "Pre-baked bent-normal irradiance probe blend.");
 	ri.Cvar_CheckRange(r_gtaoBentNormals, 0, 1, qtrue);
 	ri.Cvar_CheckRange(r_gtaoBentNormalSpecular, 0, 1, qfalse);
