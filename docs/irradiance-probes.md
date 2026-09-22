@@ -52,19 +52,20 @@ Do not store one probe for each unique BSP light-grid record. The BSP light-grid
 array reuses equal records at unrelated positions. A directional result from
 one reused position would be wrong at the other positions.
 
-Use a separate regular spatial grid. The evaluation grid samples every third
-BSP light-grid position:
+Use a separate regular spatial grid. The evaluation grid samples every second
+horizontal BSP light-grid position and every vertical position. Its spacing is
+128 world units on each axis.
 
-- Horizontal spacing: 192 world units
-- Vertical spacing: 384 world units
-
-Skip positions in solid BSP leaves. Keep an invalid marker in the regular grid
-so that runtime lookup stays constant-time. Runtime trilinear interpolation
-uses valid corners only. It falls back to the original ambient light when no
-valid corner is available.
+Skip positions in solid BSP leaves or positions that render no world surfaces.
+Keep an invalid marker in the regular grid so that runtime lookup stays
+constant-time. Runtime trilinear interpolation uses valid corners only. If all
+eight corners are invalid, search two grid positions in each direction. Use
+only fallback positions in the potential visibility set. Fall back to the
+original ambient light when this search finds no valid probe.
 
 This spacing is a quality and bake-time compromise. It can miss a small room or
-blend light across a thin wall. A later version can use a finer grid, visibility
+blend light across a thin wall. The fallback search can also produce a visible
+change when its nearest valid set changes. A later version can use visibility
 cells, adaptive placement, or probe tetrahedra.
 
 ## Probe Representation
@@ -115,11 +116,11 @@ The probe option requires all of these conditions:
 - GTAO
 - `r_gtaoBentNormals 1`
 - A valid probe file for the current map
-- A nonzero probe blend control
+- `r_gtaoBentNormalProbes` above zero
 
-A live blend control must support direct comparison between the original
-ambient term and probe lighting. A value of zero must reproduce the original
-ambient path.
+`r_gtaoBentNormalProbes` defaults to `1`. It is a live blend from zero to one.
+Zero uses the original ambient term. One uses the directional probe term. The
+master bent-normal control still requires `vid_restart`.
 
 ## Bake Design
 
@@ -132,36 +133,54 @@ The offline in-engine baker must:
 5. Project the pixels directly into first-order irradiance coefficients.
 6. Write the probe file to the profile.
 
-The bake must exclude the view model and dynamic scene entities. It must not
-store cubemap images or run reflection convolution.
+The bake excludes the view model and dynamic scene entities. It does not store
+cubemap images or run reflection convolution. It temporarily disables a map's
+fixed sky-portal view during each capture. Without this step, the fixed portal
+camera contaminates every probe with the same image. Review outdoor probes for
+missing sky energy.
 
-A developer command is sufficient for the first evaluation. A general client
-baker would also need progress reporting, cancellation, resume data, hardware
-fallbacks, deterministic settings, and cache management.
+Use this command to bake the current map with the default grid and 16 by 16
+faces:
+
+```text
+r_bakeIrradianceProbes
+```
+
+The optional arguments are horizontal stride, vertical stride, and face size.
+The supported ranges are 1 through 8 for each stride and 4 through 32 for face
+size. Use the collection script for the two evaluation maps:
+
+```sh
+python3 scripts/bake-irradiance-probes.py t1_sour --package build/ready
+python3 scripts/bake-irradiance-probes.py kejim_post --package build/ready
+```
+
+A general client baker would also need cancellation, resume data, hardware
+fallbacks, and cache management. The current command reports progress but runs
+synchronously.
 
 ## Size and Time Tradeoffs
 
 The earlier estimate of one record per unique BSP light-grid value was too low.
 Spatial probes cannot use that deduplication safely.
 
-At stride three, the two evaluation maps contain approximately this many grid
-positions before solid positions are skipped:
+The distributed files use horizontal stride two, vertical stride one, and 16
+by 16 cubemap faces. The Intel P630 produced these results:
 
-| Map | Grid positions | Non-solid positions |
-| --- | ---: | ---: |
-| `t1_sour` | 11,210 | 5,757 |
-| `kejim_post` | 18,720 | 7,915 |
+| Map | Grid positions | Captured positions | File size | Bake time |
+| --- | ---: | ---: | ---: | ---: |
+| `t1_sour` | 75,240 | 31,063 | 1,956,296 bytes | 90.3 seconds |
+| `kejim_post` | 125,280 | 36,486 | 3,257,336 bytes | 138.1 seconds |
 
-The packed files are approximately 285 KiB and 475 KiB before general file
-compression. Invalid records are retained for direct indexing.
+The two files use 5,213,632 bytes, or 4.97 MiB. Invalid records are retained for
+direct indexing. The unpacked runtime grids use approximately 3.7 MiB and 6.2
+MiB.
 
-A finer stride-two grid would contain 40,128 and 62,640 positions. It would use
-approximately 1.0 MiB and 1.6 MiB, but it would require about 3.4 times as many
-captures.
-
-Bake time depends mainly on scene submission and readback, not only pixel count.
-Measure the real baker before setting a production budget. Pre-baking removes
-this cost from normal play.
+The capture time confirms that a synchronous client bake is too slow for a
+normal map load. A background bake would submit six extra scene views for each
+captured position. It would need a strict frame budget and would take much
+longer than the synchronous figures. Pre-baking removes this work from normal
+play.
 
 ## Evaluation
 

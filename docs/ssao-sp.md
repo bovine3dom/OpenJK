@@ -38,6 +38,7 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | `r_gtaoBentNormalSpecular` | Default `1`: set the direction-aware cubemap occlusion blend from `0` to `1`. Changes are live. |
 | `r_gtaoBentNormalDiffuse` | Default `0`: set the diffuse environment-light strength from `0` to `1`. Changes are live. |
 | `r_gtaoBentNormalDirectional` | Default `0`: set the light-grid directional visibility blend from `0` to `1`. Changes are live. |
+| `r_gtaoBentNormalProbes` | Default `1`: blend pre-baked directional irradiance from `0` to `1`. Changes are live. It has no effect without valid map data or bent normals. |
 | `r_ssaoAmbientOnly` | Default `0`: apply SSAO once to all per-pixel Lightall lighting. `1` limits SSAO to ambient light and IBL. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
 | `r_ssaoRadius` | World radius multiplier, from `0.05` to `4`. Default `1`. |
@@ -266,6 +267,13 @@ The renderer supplies these lighting options:
 - `r_gtaoBentNormalDirectional` applies GTAO cone visibility to the existing
   light-grid directional term. It keeps the constant ambient term separate.
   It applies only to dynamic models.
+- `r_gtaoBentNormalProbes` evaluates a pre-baked first-order irradiance probe
+  in the bent-normal direction. It replaces, rather than adds to, the dynamic
+  model ambient term by the selected blend. The package contains data for
+  `t1_sour` and `kejim_post`.
+
+See [Directional Irradiance Probes](irradiance-probes.md) for the file format,
+bake command, distribution tradeoffs, and measured bake results.
 
 The master control defaults to `0`. The specular option defaults to `1`, but it
 has no effect while the master control is off. The diffuse and directional
