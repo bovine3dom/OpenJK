@@ -5222,7 +5222,7 @@ static void PM_GroundTrace( void ) {
 	}
 
 	// if the trace didn't hit anything, we are in free fall
-	if ( trace.fraction == 1.0 || g_gravity->value <= 0 )
+	if ( trace.fraction == 1.0 || pm->ps->gravity <= 0 )
 	{
 		PM_GroundTraceMissed();
 		pml.groundPlane = qfalse;
