@@ -94,7 +94,9 @@ class DesktopUpdateTests(unittest.TestCase):
 
     def package(self, name, server=None):
         package = (server / "build/packages" if server else self.packages) / name
-        (package / "OpenJK").mkdir(parents=True)
+        (package / "OpenJK/maps").mkdir(parents=True)
+        for map_name in ("t1_sour", "kejim_post"):
+            (package / f"OpenJK/maps/{map_name}.irrprobe").write_text(f"{name} {map_name} probes")
         (package / "launch-sp.sh").write_bytes((ROOT / "scripts/launch-sp.sh").read_bytes())
         (package / "openjedvibe-import-jo").write_text(
             '#!/usr/bin/env python3\nimport json, os, sys\nfrom pathlib import Path\n'
@@ -164,6 +166,10 @@ class DesktopUpdateTests(unittest.TestCase):
         self.assertEqual((self.destination / blob.name).read_bytes(), blob.read_bytes())
         self.assertEqual((self.destination / "rdsp-rend2_x86_64.so").read_bytes(),
                          (second / "rdsp-rend2_x86_64.so").read_bytes())
+        self.assertEqual((self.destination / "OpenJK/maps/t1_sour.irrprobe").read_bytes(),
+                         (second / "OpenJK/maps/t1_sour.irrprobe").read_bytes())
+        self.assertEqual((self.destination / "OpenJK/maps/kejim_post.irrprobe").read_bytes(),
+                         (second / "OpenJK/maps/kejim_post.irrprobe").read_bytes())
         self.assertFalse((self.destination / "obsolete.so").exists())
         self.assertEqual((profile / "keep.cfg").read_text(), "user configuration")
         matched = re.search(r"Matched data: ([\d,]+) bytes", result.stdout)
@@ -175,7 +181,7 @@ class DesktopUpdateTests(unittest.TestCase):
         for name in ("setup-atmosphere-review.py", "atmosphere_profiles.py"):
             (self.first / name).write_bytes((ROOT / "scripts" / name).read_bytes())
         maps = self.first / "OpenJK/maps"
-        shutil.copytree(ROOT / "scripts/maps", maps, symlinks=True)
+        shutil.copytree(ROOT / "scripts/maps", maps, symlinks=True, dirs_exist_ok=True)
         subprocess.run(["python3", str(ROOT / "scripts/build-atmosphere-review.py"),
                         "--output", str(self.first / "OpenJK")], check=True, capture_output=True)
         home = Path(self.env["OJK_PROFILE"])
