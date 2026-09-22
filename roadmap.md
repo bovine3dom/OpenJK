@@ -400,24 +400,19 @@ rough notes / todo
   world weapon muzzle.
 - [ ] Replace hip-fire weapon presentation with a first-person aim or ready
   pose.
-- JO force-picking screen needs story-progression powers to be more obviously marked. especially where they have gained levels
 - force-picking screen should have the blue-striped background expand across the whole screen rather than being a little box in the middle of a sea of black
 - speed up loading times
 - low-key kind of mad but ... use gamefaqs walkthroughs or interest peaks on youtube walkthroughs to identify confusing bits of the game and improve them somehow? we can more or less change anything we want. my shortlist of examples:
 	- bespin 'lift' at the beginning once you break the vent that is timed perfectly to kill you, or confuse you by not being there
 	- artus mines, having to drop down to the tiny platform that sticks out, to get under the
-	- kejim_port, having to read and find the codes
-	- ns_starpad, also having to read and find the codes. and the very well hidden entrances to the roof switches
 	- having to jump through the glass ceiling on ns_streets after the bridge explodes
 	- cairn bay jump from shuttle up to platform, very hard to make
 	- mind trick on the guy behind the glass on cairn_assembly
 	- cairn_assembly, blow up the pipes to ... blow up the robot to blow a hole in the wall !? maybe let's have the reticule go yellow when you're aiming at something that can be destroyed
 	- cairn_reactor, the jumping between the platforms getting shot by missiles, and before that, jumping between platforms timed with laser beams
-- game doesn't really tell you about new force powers? highlight them somehow?
+- game doesn't really tell you about new force powers in JO? highlight them somehow?
 - [x] Use live launcher note data to animate a five-member pixel-art band.
 - fix JO initial loading screen before the level loading screen, it says jedi academy. alternatively replace that with our own openjedvibe
-- not convinced ragdolling jolt enemies take fall damage, even from crazy heights, or into walls
-- in JO, at least, we don't seem to be able to switch between lightsaber styles - check JA too. it's bound to mouse3
 - disable 'switch to better weapon' by default?
 - make force jump transition at the top a bit less harsh
 - [x] Add nukem-boot with Force Push-scaled lift.
@@ -429,8 +424,11 @@ rough notes / todo
 	- [ ] Verify the death view has no head clipping.
 	- [ ] Add an optional Arma-style high-ready animation.
 	- [ ] fix the "pose 2" sound coming only from right ear / animation jerkiness / position
-- fix disruptor rifle aspect ratio
+- fix disruptor rifle zoomed in sight picture aspect ratio
 - dismemberment for high damage weapons like the flechette rifle? explosions?
 - jo bryar pistol should be selectable with button 1
 - force/weapon wheel should allow repeated scrolling without waiting for weapon to be drawn
-- work out why officers can't be duke-booted
+- work out why officers can't be duke-booted. and why sith/reborn can be
+- decide how to distribute light probes
+- 'p' with a lightsaber mode probably shouldn't be bound to "make your torso invisible"
+- add taa to deal with SSAO 'stripes' on edges? also, work out what to do with the glow where shadows don't quite attach to edges
