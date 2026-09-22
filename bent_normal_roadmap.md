@@ -8,8 +8,8 @@ It does not apply to the JK2 binary.
 
 ## Current State
 
-The renderer has optional GTAO bent normals for the JA single-player binary.
-The `r_gtaoBentNormals` control enables them. The default value is `0`.
+The renderer has GTAO bent normals for the single-player Rend2 binary.
+The `r_gtaoBentNormals` control enables them. The default value is `1`.
 The disabled path keeps the scalar R8 GTAO path.
 
 The enabled path stores scalar visibility in R and the encoded view-space bent
@@ -237,12 +237,12 @@ Complexity: high.
 Risk: high.
 Recommended: only after the smaller options show sufficient value.
 
-## Proposed Controls
+## Controls
 
-Add this latched control:
+Use this latched control:
 
 ```text
-r_gtaoBentNormals 0
+r_gtaoBentNormals 1
 ```
 
 Use these values:
@@ -250,8 +250,9 @@ Use these values:
 - `0`: Scalar GTAO only
 - `1`: Calculate and store bent normals
 
-Keep the default at `0` during development.
-Change the default only after visual and performance tests pass.
+Bent normals are enabled by default after visual and performance tests passed.
+The default directional-light blend is `0.25`. Directional irradiance probes
+use a full blend when a valid map file is available.
 
 Extend `r_ssaoDebug` with bent-normal views.
 Provide separate world and weapon views.
@@ -300,9 +301,9 @@ This phase is the recommended first visual feature.
 ### Phase 5: Probe Upgrade
 
 Evaluate first-order spherical harmonics on dynamic models. Use pre-baked
-spatial probe files for the first `t1_sour` and `kejim_post` comparison. Do not
-index this data by unique BSP light-grid records because those records can be
-reused at unrelated positions.
+spatial probe files for all 60 JA and JO campaign maps. Do not index this data
+by unique BSP light-grid records because those records can be reused at
+unrelated positions.
 
 Keep the probe work optional and separate from the Phase 1 through 4 controls.
 See [Directional Irradiance Probes](docs/irradiance-probes.md) for the format,

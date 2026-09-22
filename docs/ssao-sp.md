@@ -34,10 +34,10 @@ MSAA value. Use a driver that supports 4x MSAA for this comparison.
 | `r_gtaoHalfRes` | Default `1`: calculate and filter GTAO at half width and half height, then upscale with full-resolution depth. `0`: native-resolution GTAO. Use `vid_restart` after a change. |
 | `r_gtaoDenoise` | Default `1`: wider spatial filtering for half-resolution GTAO. `0`: narrower filtering. Changes are live. |
 | `r_gtaoQuality` | `0` low, `1` medium (default), `2` high, `3` ultra. Changes are live. Applies to GTAO only. |
-| `r_gtaoBentNormals` | Default `0`: use scalar GTAO. `1`: calculate and store bent normals. Requires `vid_restart`. |
+| `r_gtaoBentNormals` | Default `1`: calculate and store bent normals. `0`: use scalar GTAO. Requires `vid_restart`. |
 | `r_gtaoBentNormalSpecular` | Default `1`: set the direction-aware cubemap occlusion blend from `0` to `1`. Changes are live. |
 | `r_gtaoBentNormalDiffuse` | Default `0`: set the diffuse environment-light strength from `0` to `1`. Changes are live. |
-| `r_gtaoBentNormalDirectional` | Default `0`: set the light-grid directional visibility blend from `0` to `1`. Changes are live. |
+| `r_gtaoBentNormalDirectional` | Default `0.25`: set the light-grid directional visibility blend from `0` to `1`. Changes are live. |
 | `r_gtaoBentNormalProbes` | Default `1`: blend pre-baked directional irradiance from `0` to `1`. Changes are live. It has no effect without valid map data or bent normals. |
 | `r_ssaoAmbientOnly` | Default `0`: apply SSAO once to all per-pixel Lightall lighting. `1` limits SSAO to ambient light and IBL. No restart is required. |
 | `r_ssaoStrength` | World strength, from `0` to `4`. Default `1`; `0` removes screen AO from world lighting. |
