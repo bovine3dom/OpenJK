@@ -118,7 +118,11 @@ selected proxies' actual radii, including large creatures.
 `python3 scripts/test-capsule-npcs.py` checks twenty stock droid, creature, and
 walker models. `--msaa 4 --walls 1` checks wall occlusion with MSAA. Both passed,
 including visible droid occlusion, a detached protocol hand, and a scenery
-exclusion. These are approximate local shadows, not a full light-shadow system.
+exclusion. A separate JO `kejim_post` capture found 12 capsules for Kyle and a
+stormtrooper. Changing `r_capsuleShadowWalls` from `0` to `1` added the expected
+ceiling occlusion, and changing it back removed the occlusion. The JO campaign
+uses the same working wall mode. These are approximate local shadows, not a
+full light-shadow system.
 
 Physical animation remains
 deferred in `animation_todo.md`.
