@@ -239,6 +239,22 @@ unsigned short FloatToHalf(float in)
 	return out;
 }
 
+float HalfToFloat(unsigned short in)
+{
+	const int exponent = (in >> 10) & 0x1f;
+	const int fraction = in & 0x3ff;
+	float value;
+
+	if (exponent == 0)
+		value = ldexpf((float)fraction, -24);
+	else if (exponent == 0x1f)
+		value = fraction ? NAN : INFINITY;
+	else
+		value = ldexpf(1.0f + fraction / 1024.0f, exponent - 15);
+
+	return in & 0x8000 ? -value : value;
+}
+
 uint32_t ReverseBits(uint32_t v)
 {
 	v = ((v >> 1) & 0x55555555) | ((v & 0x55555555) << 1);

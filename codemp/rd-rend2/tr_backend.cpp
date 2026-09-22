@@ -2774,10 +2774,13 @@ static void RB_UpdateEntityLightConstants(
 	VectorScale(refEntity->ambientLight, normalizeFactor, entityBlock.ambientLight);
 	VectorScale(refEntity->directedLight, normalizeFactor, entityBlock.directedLight);
 #ifdef REND2_SP
+	for (int color = 0; color < 3; ++color)
+		VectorCopy4(refEntity->irradianceProbe[color], entityBlock.irradianceProbe[color]);
 	if (tr.refdef.rdflags & RDF_doFullbright)
 	{
 		VectorSet(entityBlock.ambientLight, 1.0f, 1.0f, 1.0f);
 		VectorClear(entityBlock.directedLight);
+		Com_Memset(entityBlock.irradianceProbe, 0, sizeof(entityBlock.irradianceProbe));
 	}
 #endif
 	VectorCopy(refEntity->lightDir, entityBlock.lightOrigin);

@@ -2972,6 +2972,104 @@ void R_LoadLightGridArray( world_t *worldData, lump_t *l ) {
 	memcpy( worldData->lightGridArray, (void *)(fileBase + l->fileofs), l->filelen );
 }
 
+#ifdef REND2_SP
+#pragma pack(push, 1)
+struct irradianceProbeHeader_t
+{
+	char magic[4];
+	uint32_t version, checksum, bounds[3];
+	float origin[3], size[3];
+	uint32_t count, validCount;
+};
+
+struct irradianceProbeDisk_t
+{
+	uint16_t coefficients[12];
+	uint16_t valid;
+};
+#pragma pack(pop)
+
+static_assert(sizeof(irradianceProbeHeader_t) == 56, "Unexpected irradiance probe header size");
+static_assert(sizeof(irradianceProbeDisk_t) == 26, "Unexpected irradiance probe record size");
+
+static void R_LoadIrradianceGrid(world_t *world)
+{
+	void *buffer = nullptr;
+	const char *filename = va("maps/%s.irrprobe", world->baseName);
+	const long length = ri.FS_ReadFile(filename, &buffer);
+	if (!buffer) return;
+
+	const auto *header = (const irradianceProbeHeader_t *)buffer;
+	bool valid = length >= (long)sizeof(*header) && !memcmp(header->magic, "OIP1", 4) &&
+		LittleLong(header->version) == 1;
+	uint32_t bounds[3] = {};
+	vec3_t origin = {}, size = {};
+	uint32_t count = 0, validCount = 0;
+	for (int axis = 0; valid && axis < 3; ++axis)
+	{
+		bounds[axis] = LittleLong(header->bounds[axis]);
+		origin[axis] = LittleFloat(header->origin[axis]);
+		size[axis] = LittleFloat(header->size[axis]);
+		const int stride = (int)lroundf(size[axis] / world->lightGridSize[axis]);
+		valid = bounds[axis] > 0 && stride > 0 && stride <= 16 &&
+			fabsf(origin[axis] - world->lightGridOrigin[axis]) < 0.01f &&
+			fabsf(size[axis] - stride * world->lightGridSize[axis]) < 0.01f &&
+			bounds[axis] == (uint32_t)((world->lightGridBounds[axis] + stride - 1) / stride);
+	}
+	if (valid)
+	{
+		count = LittleLong(header->count);
+		validCount = LittleLong(header->validCount);
+		const uint64_t expectedCount = (uint64_t)bounds[0] * bounds[1] * bounds[2];
+		const uint64_t expectedLength = sizeof(*header) + expectedCount * sizeof(irradianceProbeDisk_t);
+		const uint32_t checksum = (uint32_t)strtoul(sv_mapChecksum->string, nullptr, 10);
+		valid = expectedCount == count && validCount <= count && expectedLength == (uint64_t)length &&
+			LittleLong(header->checksum) == checksum;
+	}
+	if (!valid)
+	{
+		ri.Printf(PRINT_WARNING, "Ignored invalid irradiance probes: %s\n", filename);
+		ri.FS_FreeFile(buffer);
+		return;
+	}
+
+	world->irradianceGrid = (irradianceProbe_t *)R_BSPAlloc(count * sizeof(*world->irradianceGrid), h_low);
+	world->numIrradianceGridElements = count;
+	VectorCopy(origin, world->irradianceGridOrigin);
+	VectorCopy(size, world->irradianceGridSize);
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		world->irradianceGridInverseSize[axis] = 1.0f / size[axis];
+		world->irradianceGridBounds[axis] = bounds[axis];
+	}
+
+	const auto *input = (const irradianceProbeDisk_t *)(header + 1);
+	int loaded = 0;
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		irradianceProbe_t &probe = world->irradianceGrid[i];
+		probe.valid = (qboolean)(LittleShort(input[i].valid) != 0);
+		for (int color = 0; color < 3; ++color)
+			for (int coefficient = 0; coefficient < 4; ++coefficient)
+			{
+				probe.coefficients[color][coefficient] = HalfToFloat(
+					LittleShort(input[i].coefficients[color * 4 + coefficient]));
+				probe.valid = (qboolean)(probe.valid && std::isfinite(probe.coefficients[color][coefficient]));
+			}
+		loaded += probe.valid;
+	}
+	if (loaded != (int)validCount)
+	{
+		ri.Printf(PRINT_WARNING, "Ignored irradiance probes with an invalid record count: %s\n", filename);
+		world->irradianceGrid = nullptr;
+		world->numIrradianceGridElements = 0;
+	}
+	else
+		ri.Printf(PRINT_ALL, "Irradiance probes: %d of %u positions loaded from %s\n", loaded, count, filename);
+	ri.FS_FreeFile(buffer);
+}
+#endif
+
 /*
 ================
 R_LoadEntities
@@ -4719,6 +4817,9 @@ world_t *R_LoadBSP(const char *name, int *bspIndex)
 	R_LoadVisibility(worldData, &header->lumps[LUMP_VISIBILITY]);
 	R_LoadLightGrid(worldData, &header->lumps[LUMP_LIGHTGRID]);
 	R_LoadLightGridArray(worldData, &header->lumps[LUMP_LIGHTARRAY]);
+#ifdef REND2_SP
+	R_LoadIrradianceGrid(worldData);
+#endif
 
 	// determine vertex light directions
 	R_CalcVertexLightDirs(worldData);

@@ -185,6 +185,7 @@ extern cvar_t  *r_ssaoStrength;
 extern cvar_t *r_sampleShading, *r_ssaoMethod, *r_gtaoQuality, *r_gtaoHalfRes, *r_gtaoUpsample, *r_gtaoDenoise;
 #ifdef REND2_SP
 extern cvar_t *r_gtaoBentNormals, *r_gtaoBentNormalSpecular, *r_gtaoBentNormalDiffuse, *r_gtaoBentNormalDirectional;
+extern cvar_t *r_gtaoBentNormalProbes;
 #endif
 extern cvar_t  *r_ssaoRadius;
 extern cvar_t  *r_ssaoViewModel;
@@ -473,6 +474,7 @@ typedef struct trRefEntity_s {
 	vec3_t		ambientLight;	// color normalized to 0-255
 	int			ambientLightInt;	// 32 bit rgba packed
 	vec3_t		directedLight;
+	vec4_t		irradianceProbe[3];
 } trRefEntity_t;
 
 
@@ -834,6 +836,7 @@ struct EntityBlock
 	float vertexLerp;
 	vec3_t localViewOrigin;
 	float entityTime;
+	vec4_t irradianceProbe[3];
 };
 
 struct ShaderInstanceBlock
@@ -2086,6 +2089,12 @@ typedef struct
 //	byte		pad[2];								// to align to a cache line
 } mgrid_t;
 
+struct irradianceProbe_t
+{
+	vec4_t coefficients[3];
+	qboolean valid;
+};
+
 typedef struct {
 	char		name[MAX_QPATH];		// ie: maps/tim_dm2.bsp
 	char		baseName[MAX_QPATH];	// ie: tim_dm2
@@ -2152,6 +2161,13 @@ typedef struct {
 	mgrid_t		*lightGridData;
 	word		*lightGridArray;
 	int			numGridArrayElements;
+
+	vec3_t irradianceGridOrigin;
+	vec3_t irradianceGridSize;
+	vec3_t irradianceGridInverseSize;
+	int irradianceGridBounds[3];
+	irradianceProbe_t *irradianceGrid;
+	int numIrradianceGridElements;
 
 
 	int			skyboxportal;

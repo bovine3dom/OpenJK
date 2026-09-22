@@ -122,6 +122,61 @@ extern	cvar_t	*r_ambientScale;
 extern	cvar_t	*r_directedScale;
 extern	cvar_t	*r_debugLight;
 
+#ifdef REND2_SP
+static void R_SetupEntityIrradianceProbe(trRefEntity_t *ent, const world_t *world, const vec3_t origin)
+{
+	Com_Memset(ent->irradianceProbe, 0, sizeof(ent->irradianceProbe));
+	if (!world->irradianceGrid) return;
+
+	int lower[3];
+	float fraction[3];
+	for (int axis = 0; axis < 3; ++axis)
+	{
+		const float position = (origin[axis] - world->irradianceGridOrigin[axis]) *
+			world->irradianceGridInverseSize[axis];
+		if (position <= 0.0f || world->irradianceGridBounds[axis] == 1)
+		{
+			lower[axis] = 0;
+			fraction[axis] = 0.0f;
+		}
+		else if (position >= world->irradianceGridBounds[axis] - 1)
+		{
+			lower[axis] = world->irradianceGridBounds[axis] - 2;
+			fraction[axis] = 1.0f;
+		}
+		else
+		{
+			lower[axis] = (int)floorf(position);
+			fraction[axis] = position - lower[axis];
+		}
+	}
+
+	const int step[3] = {1, world->irradianceGridBounds[0],
+		world->irradianceGridBounds[0] * world->irradianceGridBounds[1]};
+	float total = 0.0f;
+	for (int corner = 0; corner < 8; ++corner)
+	{
+		float factor = 1.0f;
+		int index = 0;
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			const bool high = (corner & (1 << axis)) != 0;
+			factor *= high ? fraction[axis] : 1.0f - fraction[axis];
+			index += (lower[axis] + (high && world->irradianceGridBounds[axis] > 1)) * step[axis];
+		}
+		if (factor <= 0.0f || !world->irradianceGrid[index].valid) continue;
+		for (int color = 0; color < 3; ++color)
+			for (int coefficient = 0; coefficient < 4; ++coefficient)
+				ent->irradianceProbe[color][coefficient] += factor *
+					world->irradianceGrid[index].coefficients[color][coefficient];
+		total += factor;
+	}
+	if (total > 0.0f)
+		for (vec4_t &coefficient : ent->irradianceProbe)
+			VectorScale4(coefficient, 1.0f / total, coefficient);
+}
+#endif
+
 /*
 =================
 R_SetupEntityLightingGrid
@@ -147,6 +202,9 @@ static void R_SetupEntityLightingGrid( trRefEntity_t *ent, world_t *world ) {
 		VectorCopy( ent->e.origin, lightOrigin );
 	}
 
+#ifdef REND2_SP
+	R_SetupEntityIrradianceProbe(ent, world, lightOrigin);
+#endif
 	VectorSubtract( lightOrigin, world->lightGridOrigin, lightOrigin );
 	for ( i = 0 ; i < 3 ; i++ ) {
 		float	v;
@@ -358,6 +416,9 @@ void R_SetupEntityLighting( const trRefdef_t *refdef, trRefEntity_t *ent ) {
 		&& tr.world && tr.world->lightGridData ) {
 		R_SetupEntityLightingGrid( ent, tr.world );
 	} else {
+#ifdef REND2_SP
+		Com_Memset(ent->irradianceProbe, 0, sizeof(ent->irradianceProbe));
+#endif
 		ent->ambientLight[0] = ent->ambientLight[1] =
 			ent->ambientLight[2] = tr.identityLight * 150;
 		ent->directedLight[0] = ent->directedLight[1] =

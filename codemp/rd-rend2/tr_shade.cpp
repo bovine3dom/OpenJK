@@ -1736,8 +1736,12 @@ static void RB_IterateStagesGeneric( shaderCommands_t *input, const VertexArrays
 		}
 #endif
 		uniformDataWriter.SetUniformVec4(UNIFORM_SPECULARSCALE, pStage->specularScale);
+		float probeBlend = 0.0f;
+#ifdef REND2_SP
+		probeBlend = backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0, 1, r_gtaoBentNormalProbes->value);
+#endif
 		const vec4_t materialParams = {backEnd.comparisonBaseline ? 0.0f : Com_Clamp(0, 4, r_specularStrength->value),
-			Com_Clamp(0, 1, r_roughnessFloor->value), Com_Clamp(0.05f, 4, r_roughnessScale->value), 0};
+			Com_Clamp(0, 1, r_roughnessFloor->value), Com_Clamp(0.05f, 4, r_roughnessScale->value), probeBlend};
 		uniformDataWriter.SetUniformVec4(UNIFORM_MATERIALPARAMS, materialParams);
 		const vec4_t sssParams = {backEnd.sssFill ? 1.0f : 0.0f, 0, 0, 0};
 		uniformDataWriter.SetUniformVec4(UNIFORM_SSSPARAMS, sssParams);

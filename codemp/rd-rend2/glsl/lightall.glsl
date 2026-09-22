@@ -52,6 +52,7 @@ layout(std140) uniform Entity
 	float u_VertexLerp;
 	vec3 u_LocalViewOrigin;
 	float u_entityTime;
+	vec4 u_IrradianceProbe[3];
 };
 
 #if defined(USE_SKELETAL_ANIMATION)
@@ -359,6 +360,7 @@ layout(std140) uniform Entity
 	float u_VertexLerp;
 	vec3 u_LocalViewOrigin;
 	float u_entityTime;
+	vec4 u_IrradianceProbe[3];
 };
 
 struct Light
@@ -424,7 +426,7 @@ uniform vec4 u_EnableTextures;
 
 uniform vec4 u_NormalScale;
 uniform vec4 u_SpecularScale;
-uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale
+uniform vec4 u_MaterialParams; // specular strength, minimum roughness, roughness scale, irradiance probe blend
 uniform vec4 u_SSSParams;
 uniform vec4 u_SkinBounds;
 uniform sampler2D u_TorchShadowMap;
@@ -1235,6 +1237,19 @@ void main()
 		bentNormal = normalize(-viewBentNormal.x * normalize(u_ViewLeft) +
 			viewBentNormal.y * normalize(u_ViewUp) + viewBentNormal.z * normalize(u_ViewForward));
 		bentNormal = normalize(bentNormal + N * max(0.0, 0.001 - dot(bentNormal, N)));
+	}
+	#endif
+	#if defined(USE_GTAO_BENT_NORMALS) && defined(USE_LIGHT_VECTOR)
+	vec4 probeDirection = vec4(1.0, bentNormal);
+	vec3 probeAmbient = max(vec3(dot(u_IrradianceProbe[0], probeDirection),
+		dot(u_IrradianceProbe[1], probeDirection), dot(u_IrradianceProbe[2], probeDirection)), 0.0);
+	vec3 probeMean = vec3(u_IrradianceProbe[0].x, u_IrradianceProbe[1].x, u_IrradianceProbe[2].x);
+	const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
+	float probeLuminance = dot(probeMean, luminanceWeights);
+	if (probeLuminance > 1e-5)
+	{
+		probeAmbient *= dot(ambientColor, luminanceWeights) / probeLuminance;
+		ambientColor = mix(ambientColor, probeAmbient, u_MaterialParams.w);
 	}
 	#endif
 	float materialAO = 1.0;
